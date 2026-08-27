@@ -1,0 +1,31 @@
+# Frontend
+node_modules/
+dist/
+.vite/
+
+# .NET
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Secrets / environment
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
