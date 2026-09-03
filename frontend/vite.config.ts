@@ -6,6 +6,12 @@ import { fileURLToPath } from 'node:url'
 
 const rootDir = fileURLToPath(new URL('.', import.meta.url))
 
+function registerRoute(): Plugin {
+  return {
+    name: 'stocklab-register-route',
+    configureServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        if (request.url === '/register') request.url = '/register/'
 function loginRoute(): Plugin {
   return {
     name: 'stocklab-login-route',
@@ -17,6 +23,7 @@ function loginRoute(): Plugin {
     },
     configurePreviewServer(server) {
       server.middlewares.use((request, _response, next) => {
+        if (request.url === '/register') request.url = '/register/'
         if (request.url === '/login') request.url = '/login/'
         next()
       })
@@ -26,11 +33,13 @@ function loginRoute(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
+  plugins: [react(), registerRoute()],
   plugins: [react(), loginRoute()],
   build: {
     rollupOptions: {
       input: {
         main: resolve(rootDir, 'index.html'),
+        register: resolve(rootDir, 'register/index.html'),
         login: resolve(rootDir, 'login/index.html'),
       },
     },
