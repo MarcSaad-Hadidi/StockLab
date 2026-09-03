@@ -27,7 +27,7 @@ final result: passed
 - Crypto filter: 5 results and Crypto-specific overview sections.
 - US Market filter: visible result count updates to 30 market assets and the control becomes pressed.
 - Favorites filter: 2 results.
-- AAPL symbol action: opens `market.html?symbol=aapl`; Back to Market returns to `market.html`.
+- AAPL symbol action: opens `/market?symbol=aapl`; Back to Market returns to `/market`.
 - Browser console: no warnings or errors during the final interaction pass.
 
 ## Review history

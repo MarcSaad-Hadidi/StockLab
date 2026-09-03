@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MarketPage } from './MarketPage'
 import { getStockBySymbol, marketStocks } from './marketData'
+import { marketRoute, stockDetailsRoute } from './marketRoutes'
 import { StockDetailsPage } from './StockDetailsPage'
 
 function requestedSymbolFromUrl() {
@@ -22,13 +23,13 @@ export function MarketApp() {
   }, [selectedStock])
 
   const openStock = (symbol: string) => {
-    window.history.pushState({}, '', `market.html?symbol=${encodeURIComponent(symbol.toLowerCase())}`)
+    window.history.pushState({}, '', stockDetailsRoute(symbol))
     setRequestedSymbol(symbol)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const goBackToMarket = () => {
-    window.history.pushState({}, '', 'market.html')
+    window.history.pushState({}, '', marketRoute)
     setRequestedSymbol(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }

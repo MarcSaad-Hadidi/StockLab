@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { MarketIcon, type MarketIconName } from './marketIcons'
+import { marketRoute } from './marketRoutes'
 
 type MarketShellProps = {
   children: ReactNode
@@ -48,7 +49,7 @@ export function MarketShell({
   return (
     <div className="market-app-shell">
       <aside className={`market-sidebar ${sidebarOpen ? 'market-sidebar-open' : ''}`}>
-        <a className="market-brand" href="market.html" onClick={() => setSidebarOpen(false)}>
+        <a className="market-brand" href={marketRoute} onClick={() => setSidebarOpen(false)}>
           <BrandIcon />
           <span>
             Stock<span>Lab</span>
@@ -62,7 +63,7 @@ export function MarketShell({
               <div className="market-navigation-items">
                 {section.items.map((item) => {
                   const isActive = item.id === 'market'
-                  const href = isActive ? 'market.html' : '#'
+                  const href = isActive ? marketRoute : '#'
 
                   return (
                     <a

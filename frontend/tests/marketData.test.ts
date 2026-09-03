@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { marketRoute, stockDetailsRoute } from '../src/market/marketRoutes.ts'
 import { filterMarketStocks, getMarketSections, getStockBySymbol, marketStocks, paginateMarketStocks } from '../src/market/marketData.ts'
 
 test('filters market stocks by symbol or company name without changing the source list', () => {
@@ -7,6 +8,11 @@ test('filters market stocks by symbol or company name without changing the sourc
 
   assert.deepEqual(results.map((stock) => stock.symbol), ['MSFT'])
   assert.equal(marketStocks.length, 35)
+})
+
+test('builds the canonical Market and Stock Details routes', () => {
+  assert.equal(marketRoute, '/market')
+  assert.equal(stockDetailsRoute('BRK.B'), '/market?symbol=brk.b')
 })
 
 test('filters market stocks by the selected asset type', () => {
