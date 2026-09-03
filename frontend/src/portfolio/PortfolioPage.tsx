@@ -1,11 +1,11 @@
-import { useState } from 'react'
-import type { PointerEvent, ReactNode } from 'react'
-import { chartPoints, chartSeries, positions } from './portfolioData'
-import type { PerformancePoint, Position } from './portfolioData'
+﻿import { useState } from 'react'
+import type { ReactNode } from 'react'
+import { performanceSeries, positions } from './portfolioData'
+import type { Position } from './portfolioData'
 import './portfolio.css'
 
 type IconName = 'grid' | 'globe' | 'briefcase' | 'sliders' | 'star' | 'bell' | 'brain' | 'user' | 'logout' | 'search' | 'chevron' | 'download' | 'arrowUp' | 'arrowDown' | 'info' | 'menu'
-type TimeRange = keyof typeof chartPoints
+type TimeRange = keyof typeof performanceSeries
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
@@ -38,22 +38,39 @@ function MetricCard({ label, value, detail, tone = 'neutral' }: { label: string;
   return <article className={`metric-card ${tone}`}><p>{label}</p><strong>{value}</strong>{detail && <span>{detail}</span>}</article>
 }
 
-function PerformanceChart({ range, onRangeChange }: { range: TimeRange; onRangeChange: (range: TimeRange) => void }) {
-  const points = chartPoints[range]
-  const series = chartSeries[range] ?? []
-  const [hoveredPoint, setHoveredPoint] = useState<PerformancePoint | null>(null)
-  const endY = series.at(-1)?.y ?? 46
-  function handlePointerMove(event: PointerEvent<SVGSVGElement>) {
-    if (!series.length) return
-    const bounds = event.currentTarget.getBoundingClientRect()
-    const viewX = ((event.clientX - bounds.left) / bounds.width) * 720
-    const nearest = series.reduce((closest, point) => Math.abs(point.x - viewX) < Math.abs(closest.x - viewX) ? point : closest)
-    setHoveredPoint(nearest)
-  }
+function PerformanceChart({ range }: { range: TimeRange }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
+  const [pinnedIndex, setPinnedIndex] = useState<number | null>(null)
+  const series = performanceSeries[range]
+  const width = 760
+  const height = 250
+  const padding = { top: 18, right: 14, bottom: 34, left: 14 }
+  const min = Math.min(...series.values) - 0.7
+  const max = Math.max(...series.values) + 0.7
+  const usableWidth = width - padding.left - padding.right
+  const usableHeight = height - padding.top - padding.bottom
+  const points = series.values.map((value, index) => ({
+    x: padding.left + (index / Math.max(series.values.length - 1, 1)) * usableWidth,
+    y: padding.top + ((max - value) / Math.max(max - min, 1)) * usableHeight,
+  }))
+  const linePath = points.map((point, index) => (index === 0 ? 'M' : 'L') + ' ' + point.x + ' ' + point.y).join(' ')
+  const baseline = height - padding.bottom
+  const areaPath = linePath + ' L ' + (points.at(-1)?.x ?? width) + ' ' + baseline + ' L ' + (points[0]?.x ?? padding.left) + ' ' + baseline + ' Z'
+  const yTicks = [0, 1, 2, 3]
+  const activeIndex = hoveredIndex ?? focusedIndex ?? pinnedIndex
+  const activePoint = activeIndex === null ? null : points[activeIndex]
+  const activeValue = activeIndex === null ? null : series.values[activeIndex]
+  const pointHitRadius = 44
+  const tooltipWidth = 134
+  const tooltipHeight = 52
+  const tooltipX = activePoint ? Math.min(Math.max(activePoint.x - tooltipWidth / 2, padding.left), width - padding.right - tooltipWidth) : 0
+  const tooltipY = activePoint
+    ? Math.min(Math.max(activePoint.y < tooltipHeight + 24 ? activePoint.y + 17 : activePoint.y - tooltipHeight - 17, 8), height - tooltipHeight - 8)
+    : 0
+  const formatCurrency = (value: number) => '$' + value.toFixed(2) + 'K'
 
-  const tooltipX = hoveredPoint ? Math.min(Math.max(hoveredPoint.x - 45, 42), 610) : 0
-  const tooltipY = hoveredPoint ? Math.max(hoveredPoint.y - 58, 8) : 0
-  return <section className="panel performance-panel"><div className="panel-header"><div><h2>Portfolio Performance <Icon name="info" /></h2><div className="chart-summary"><strong>$128,547.32</strong><span>↗ $7,812.45 (6.47%)</span></div></div><div className="range-switch" role="group" aria-label="Performance range">{(Object.keys(chartPoints) as TimeRange[]).map((option) => <button key={option} type="button" className={range === option ? 'active' : ''} aria-pressed={range === option} onClick={() => { setHoveredPoint(null); onRangeChange(option) }}>{option}</button>)}</div></div><div className="chart-wrap"><svg className="performance-chart" viewBox="0 0 720 230" preserveAspectRatio="none" aria-label="Portfolio performance chart. Move across the line to inspect values." role="img" onPointerMove={handlePointerMove} onPointerDown={handlePointerMove} onPointerLeave={() => setHoveredPoint(null)} onPointerCancel={() => setHoveredPoint(null)}><defs><pattern id="performance-fill" patternUnits="userSpaceOnUse" width="8" height="8"><rect width="8" height="8" fill="#5870ff" fillOpacity=".045" /><circle cx="2" cy="2" r="1" fill="#5870ff" fillOpacity=".2" /></pattern></defs><g className="chart-grid"><line x1="0" y1="20" x2="700" y2="20" /><line x1="0" y1="65" x2="700" y2="65" /><line x1="0" y1="110" x2="700" y2="110" /><line x1="0" y1="155" x2="700" y2="155" /><line x1="0" y1="200" x2="700" y2="200" /></g><text x="695" y="19" textAnchor="end">$140K</text><text x="695" y="64" textAnchor="end">$120K</text><text x="695" y="109" textAnchor="end">$100K</text><text x="695" y="154" textAnchor="end">$80K</text><text x="695" y="199" textAnchor="end">$60K</text><g key={range} className="chart-visual"><polygon points={`${points} 680,205 0,205`} fill="url(#performance-fill)" /><polyline points={points} pathLength="1" fill="none" stroke="#5870ff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /><circle className="chart-end-halo" cx="680" cy={endY} r="9" /><circle className="chart-end-point" cx="680" cy={endY} r="4" fill="#fff" stroke="#5870ff" strokeWidth="2" /></g>{hoveredPoint && <g className="chart-hover" pointerEvents="none"><line x1={hoveredPoint.x} y1="20" x2={hoveredPoint.x} y2="205" /><g className="hover-tooltip" transform={`translate(${tooltipX} ${tooltipY})`}><rect width="90" height="45" rx="6" /><text className="hover-date" x="9" y="17">{hoveredPoint.date}</text><text className="hover-value" x="9" y="34">{hoveredPoint.value}</text></g></g>}</svg><div className="chart-x-axis"><span>Feb 24</span><span>Mar 10</span><span>Mar 24</span><span>Apr 7</span><span>Apr 21</span><span>May 5</span><span>May 19</span></div>{hoveredPoint && <p className="chart-hover-readout" aria-live="polite">{hoveredPoint.date} · {hoveredPoint.value}</p>}</div><div className="performance-stats"><div><span>YTD Return</span><strong>↗ 6.47%</strong></div><div><span>1Y Return</span><strong>↗ 18.92%</strong></div><div><span>Best Day</span><strong>↗ $2,341.22</strong></div><div className="negative"><span>Worst Day</span><strong>↘ -$1,124.36</strong></div></div></section>
+  return <div className="chart-wrap"><div className="chart-summary"><div><span className="chart-eyebrow">Portfolio value</span><strong>{formatCurrency(series.values.at(-1) ?? 0)}</strong></div><div className="chart-change"><span>{series.change}</span><small>{series.changeLabel}</small></div></div><svg aria-label={'Portfolio performance chart for ' + range} className="performance-chart" key={range} role="img" viewBox={'0 0 ' + width + ' ' + height}><defs><linearGradient id={'portfolio-fill-' + range} x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#2f7bf0" stopOpacity=".22" /><stop offset="100%" stopColor="#2f7bf0" stopOpacity="0" /></linearGradient></defs>{yTicks.map((tick) => { const y = padding.top + (tick / (yTicks.length - 1)) * usableHeight; const value = max - (tick / (yTicks.length - 1)) * (max - min); return <g key={'y-tick-' + tick}><line className="chart-grid-line" x1={padding.left} x2={width - padding.right} y1={y} y2={y} /><text className="chart-y-label" textAnchor="end" x={width - padding.right} y={y - 7}>{formatCurrency(value)}</text></g> })}<path className="chart-area" d={areaPath} fill={'url(#portfolio-fill-' + range + ')'} /><path className="chart-line" d={linePath} />{points.map((point, index) => <g aria-label={series.labels[index] + ': ' + formatCurrency(series.values[index]) + ' portfolio value'} aria-pressed={pinnedIndex === index} className={'chart-point-group ' + (activeIndex === index ? 'active' : '')} key={point.x + '-' + index} onBlur={() => setFocusedIndex(null)} onClick={() => setPinnedIndex((current) => current === index ? null : index)} onFocus={() => setFocusedIndex(index)} onKeyDown={(event) => { if (event.key === 'Escape') setPinnedIndex(null); if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setPinnedIndex((current) => current === index ? null : index) } }} onPointerEnter={() => setHoveredIndex(index)} onPointerLeave={() => setHoveredIndex(null)} role="button" tabIndex={0}><circle className="chart-point-hit" cx={point.x} cy={point.y} r={pointHitRadius} /><circle className="chart-point" cx={point.x} cy={point.y} r={index === points.length - 1 ? 4 : 2.5} style={{ animationDelay: (index * 45) + 'ms' }} /></g>)}{activePoint && <line className="chart-crosshair" x1={activePoint.x} x2={activePoint.x} y1={padding.top} y2={baseline} />}{activePoint && activeIndex !== null && activeValue !== null && <g className="chart-tooltip" pointerEvents="none" transform={'translate(' + tooltipX + ' ' + tooltipY + ')'}><rect height={tooltipHeight} rx="7" width={tooltipWidth} /><text className="chart-tooltip-label" x="10" y="18">{series.labels[activeIndex]}</text><text className="chart-tooltip-value" x="10" y="38">{formatCurrency(activeValue)}</text></g>}{series.labels.map((label, index) => <text className="chart-x-label" key={label + '-' + index} textAnchor={index === 0 ? 'start' : index === series.labels.length - 1 ? 'end' : 'middle'} x={points[index].x} y={height - 7}>{label}</text>)}</svg><span className="chart-tooltip-announcement" aria-live="polite">{activeIndex !== null && activeValue !== null ? series.labels[activeIndex] + ': ' + formatCurrency(activeValue) : ''}</span></div>
 }
 
 function AllocationPanel() {
@@ -88,5 +105,5 @@ function Sidebar() {
 export default function PortfolioPage() {
   const [range, setRange] = useState<TimeRange>('3M')
 
-  return <div className="portfolio-app"><Sidebar /><div className="portfolio-main"><header className="portfolio-topbar"><div className="topbar-title"><button className="mobile-menu" type="button" aria-label="Open navigation"><Icon name="menu" /></button><h1>Portfolio</h1></div><div className="topbar-actions"><label className="search-box"><Icon name="search" /><input type="search" placeholder="Search stocks, ETFs, news..." aria-label="Search stocks, ETFs, news" /></label><button className="notification-button" type="button" aria-label="Notifications"><Icon name="bell" /></button><button className="avatar-button" type="button" aria-label="Open profile"><span>MS</span><Icon name="chevron" /></button></div></header><main className="portfolio-content"><section className="metrics-grid"><MetricCard label="Total Portfolio Value" value="$128,547.32" detail="↗ $7,812.45 (6.47%)" tone="positive" /><MetricCard label="Available Cash" value="$12,430.18" /><MetricCard label="Invested Capital" value="$116,117.14" /><MetricCard label="Total Return (YTD)" value="+$7,812.45" detail="6.47%" tone="positive" /></section><section className="overview-grid"><PerformanceChart range={range} onRangeChange={setRange} /><AllocationPanel /></section><PositionsTable /></main></div></div>
+  return <div className="portfolio-app"><Sidebar /><div className="portfolio-main"><header className="portfolio-topbar"><div className="topbar-title"><button className="mobile-menu" type="button" aria-label="Open navigation"><Icon name="menu" /></button><h1>Portfolio</h1></div><div className="topbar-actions"><label className="search-box"><Icon name="search" /><input type="search" placeholder="Search stocks, ETFs, news..." aria-label="Search stocks, ETFs, news" /></label><button className="notification-button" type="button" aria-label="Notifications"><Icon name="bell" /></button><button className="avatar-button" type="button" aria-label="Open profile"><span>MS</span><Icon name="chevron" /></button></div></header><main className="portfolio-content"><section className="metrics-grid"><MetricCard label="Total Portfolio Value" value="$128,547.32" detail="↗ $7,812.45 (6.47%)" tone="positive" /><MetricCard label="Available Cash" value="$12,430.18" /><MetricCard label="Invested Capital" value="$116,117.14" /><MetricCard label="Total Return (YTD)" value="+$7,812.45" detail="6.47%" tone="positive" /></section><section className="overview-grid"><section className="panel performance-panel"><div className="panel-header"><h2>Portfolio Performance <Icon name="info" /></h2></div><div className="range-switch" role="group" aria-label="Performance range">{(Object.keys(performanceSeries) as TimeRange[]).map((option) => <button key={option} type="button" className={range === option ? 'active' : ''} aria-pressed={range === option} onClick={() => setRange(option)}>{option}</button>)}</div><PerformanceChart key={range} range={range} /></section><AllocationPanel /></section><PositionsTable /></main></div></div>
 }

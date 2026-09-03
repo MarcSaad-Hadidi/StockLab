@@ -386,22 +386,46 @@ a {
 }
 
 .chart-summary {
-  display: grid;
-  gap: 3px;
-  margin-top: 5px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 1px 7px;
 }
 
 .chart-summary strong {
-  color: #202a42;
-  font-size: 20px;
+  display: block;
+  color: #192743;
+  font-size: 18px;
   line-height: 1;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
 }
 
-.chart-summary span {
-  color: #20a77b;
+.chart-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: #a1abbb;
   font-size: 9px;
-  font-weight: 800;
+}
+
+.chart-change {
+  text-align: right;
+}
+
+.chart-change span,
+.chart-change small {
+  display: block;
+}
+
+.chart-change span {
+  color: #26a278;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.chart-change small {
+  margin-top: 3px;
+  color: #a1abbb;
+  font-size: 9px;
 }
 
 .range-switch {
@@ -439,13 +463,17 @@ a {
 }
 
 .chart-wrap {
+  margin-top: 8px;
+}
+
+.performance-panel > .range-switch {
   margin-top: 12px;
 }
 
 .performance-chart {
   display: block;
   width: 100%;
-  height: 184px;
+  height: 221px;
   overflow: visible;
   cursor: crosshair;
   touch-action: none;
@@ -457,60 +485,98 @@ a {
   font-family: inherit;
 }
 
-.performance-chart .chart-grid line {
-  stroke: #f0f2f6;
+.chart-grid-line {
+  stroke: #edf1f6;
   stroke-width: 1;
-  stroke-dasharray: 2 6;
+  stroke-dasharray: 3 5;
 }
 
-.performance-chart .chart-end-halo {
-  fill: #5870ff;
-  opacity: 0.14;
-  animation: none;
+.chart-y-label,
+.chart-x-label {
+  fill: #a8b1bf;
+  font-family: inherit;
+  font-size: 9px;
 }
 
-.performance-chart .chart-end-point {
-  opacity: 1;
-  animation: none;
-}
-
-.chart-hover {
+.chart-area {
   pointer-events: none;
 }
 
-.chart-hover > line {
-  stroke: #8b9cff;
+.chart-line {
+  fill: none;
+  stroke: var(--blue);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.chart-crosshair {
+  stroke: #a9c7f8;
+  stroke-dasharray: 3 4;
   stroke-width: 1;
-  stroke-dasharray: 4 4;
-  opacity: 0.86;
 }
 
-.chart-hover .hover-tooltip rect {
-  fill: #172541;
-  filter: drop-shadow(0 4px 8px rgba(23, 37, 65, 0.18));
+.chart-point-group {
+  cursor: crosshair;
+  outline: none;
 }
 
-.chart-hover .hover-tooltip text {
-  font-family: inherit;
+.chart-point-group:focus-visible .chart-point-hit {
+  fill: rgba(47, 123, 240, 0.1);
+  stroke: var(--blue);
+  stroke-width: 2;
 }
 
-.chart-hover .hover-tooltip .hover-date {
-  fill: #bfc8e9;
-  font-size: 8px;
+.chart-point-hit {
+  fill: transparent;
+  pointer-events: all;
 }
 
-.chart-hover .hover-tooltip .hover-value {
+.chart-point {
+  animation: chart-point-in 0.34s ease-out both;
   fill: #fff;
-  font-size: 10px;
+  stroke: var(--blue);
+  stroke-width: 2;
+  transition: r 0.18s ease, stroke-width 0.18s ease;
+}
+
+.chart-point-group:hover .chart-point,
+.chart-point-group.active .chart-point {
+  r: 5.5;
+  stroke-width: 2.5;
+}
+
+.chart-point-group.active .chart-point {
+  animation: chart-point-pulse 1.3s ease-in-out infinite;
+}
+
+.chart-tooltip {
+  animation: chart-tooltip-in 0.18s ease-out both;
+}
+
+.chart-tooltip rect {
+  fill: #1e2d4a;
+  filter: drop-shadow(0 6px 12px rgba(20, 33, 61, 0.16));
+}
+
+.chart-tooltip-label {
+  fill: #afc3e7;
+  font-size: 9px;
+}
+
+.chart-tooltip-value {
+  fill: #fff;
+  font-size: 13px;
   font-weight: 800;
 }
 
-.chart-hover-readout {
-  min-height: 12px;
-  margin: 3px 0 -2px;
-  color: #6673a8;
-  font-size: 8px;
-  text-align: right;
+.chart-tooltip-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }
 
 .chart-x-axis {
@@ -1189,26 +1255,15 @@ tfoot td {
   transform-origin: center bottom;
 }
 
-.chart-visual {
-  transform-origin: center;
-  animation: portfolio-fade-up 0.55s 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.performance-chart polyline {
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
+.performance-chart .chart-line {
+  stroke-dasharray: 1200;
+  stroke-dashoffset: 1200;
   animation: chart-line-draw 1.35s 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-.performance-chart polygon {
+.performance-chart .chart-area {
   opacity: 0;
   animation: chart-fill-reveal 0.75s 0.76s ease-out forwards;
-}
-
-.performance-chart .chart-visual > circle,
-.performance-chart .chart-callout {
-  opacity: 0;
-  animation: chart-marker-pop 0.45s 1.36s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .donut {

@@ -34,6 +34,7 @@ export const chartPoints: Record<string, string> = {
 export type PerformancePoint = {
   x: number
   y: number
+  amount: number
   date: string
   value: string
 }
@@ -48,8 +49,22 @@ function buildChartSeries(points: string, range: string): PerformancePoint[] {
     const elapsedDays = Math.round((index / Math.max(coordinates.length - 1, 1)) * rangeDays)
     const date = new Date(chartStart + elapsedDays * 86_400_000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
     const value = 140 - ((y - 20) / 180) * 80
-    return { x, y, date, value: `$${value.toFixed(2)}K` }
+    return { x, y, amount: value, date, value: `$${value.toFixed(2)}K` }
   })
 }
 
 export const chartSeries: Record<string, PerformancePoint[]> = Object.fromEntries(Object.entries(chartPoints).map(([range, points]) => [range, buildChartSeries(points, range)]))
+
+export type PerformanceSeries = {
+  labels: string[]
+  values: number[]
+  change: string
+  changeLabel: string
+}
+
+const performanceSampleIndices = (length: number) => Array.from(new Set([0, Math.round((length - 1) * 0.16), Math.round((length - 1) * 0.33), Math.round((length - 1) * 0.5), Math.round((length - 1) * 0.67), Math.round((length - 1) * 0.84), Math.max(length - 1, 0)]))
+
+export const performanceSeries: Record<string, PerformanceSeries> = Object.fromEntries(Object.entries(chartSeries).map(([range, points]) => {
+  const samples = performanceSampleIndices(points.length).map((index) => points[index])
+  return [range, { labels: samples.map((point) => point.date), values: samples.map((point) => point.amount), change: '+$7,812.45', changeLabel: '6.47% overall' }]
+}))
