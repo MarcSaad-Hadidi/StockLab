@@ -11,8 +11,8 @@ test('filters market stocks by symbol or company name without changing the sourc
 })
 
 test('builds the canonical Market and Stock Details routes', () => {
-  assert.equal(marketRoute, '/market')
-  assert.equal(stockDetailsRoute('BRK.B'), '/market?symbol=brk.b')
+  assert.equal(marketRoute, '/market.html')
+  assert.equal(stockDetailsRoute('BRK.B'), '/market.html?symbol=brk.b')
 })
 
 test('filters market stocks by the selected asset type', () => {
