@@ -33,6 +33,12 @@ function loginRoute(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
+  plugins: [react()],
+  build: {
+    rollupOptions: {
+      input: {
+        app: 'index.html',
+        market: 'market.html',
   plugins: [react(), registerRoute()],
   plugins: [react(), loginRoute()],
   build: {
