@@ -395,16 +395,16 @@ a {
 .chart-summary strong {
   display: block;
   color: #192743;
+  font-family: Manrope, sans-serif;
   font-size: 18px;
-  line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.5px;
 }
 
 .chart-eyebrow {
   display: block;
   margin-bottom: 4px;
   color: #a1abbb;
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .chart-change {
@@ -418,7 +418,7 @@ a {
 
 .chart-change span {
   color: #26a278;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -428,46 +428,44 @@ a {
   font-size: 9px;
 }
 
-.range-switch {
+.range-tabs {
   display: flex;
-  align-items: center;
-  gap: 3px;
+  gap: 2px;
+  width: fit-content;
+  margin-top: 22px;
   padding: 3px;
-  border: 1px solid #edf0f5;
-  border-radius: 999px;
-  background: #f7f8fb;
+  border-radius: 6px;
+  background: #f7f9fc;
 }
 
-.range-switch button {
-  min-width: 30px;
-  height: 25px;
-  padding: 0 8px;
-  color: #8a94a9;
+.range-tabs button {
+  padding: 5px 10px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 4px;
   background: transparent;
-  font-size: 8px;
+  color: #9ba5b5;
+  font-size: 10px;
   font-weight: 700;
   cursor: pointer;
+  transition: background 0.18s ease, box-shadow 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 
-.range-switch button:hover {
-  color: var(--blue);
-  background: #f3f6ff;
+.range-tabs button:active {
+  transform: scale(0.95);
 }
 
-.range-switch button.active {
-  color: var(--blue);
+.range-tabs button:hover {
+  color: #52627b;
+}
+
+.range-tabs button.selected {
   background: #fff;
-  box-shadow: 0 2px 7px rgba(42, 55, 93, 0.12);
+  box-shadow: 0 1px 3px rgba(32, 50, 80, 0.08);
+  color: var(--blue);
 }
 
 .chart-wrap {
   margin-top: 8px;
-}
-
-.performance-panel > .range-switch {
-  margin-top: 12px;
 }
 
 .performance-chart {
@@ -488,21 +486,27 @@ a {
 .chart-grid-line {
   stroke: #edf1f6;
   stroke-width: 1;
-  stroke-dasharray: 3 5;
+  stroke-dasharray: 3 4;
 }
 
 .chart-y-label,
 .chart-x-label {
   fill: #a8b1bf;
-  font-family: inherit;
+  font-family: 'DM Sans', sans-serif;
   font-size: 9px;
 }
 
 .chart-area {
+  animation: chart-area-in 0.9s 0.1s ease-out both;
   pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center bottom;
 }
 
 .chart-line {
+  animation: chart-line-draw 1.15s cubic-bezier(0.22, 1, 0.36, 1) both;
+  stroke-dasharray: 1200;
+  stroke-dashoffset: 1200;
   fill: none;
   stroke: var(--blue);
   stroke-linecap: round;
@@ -511,6 +515,7 @@ a {
 }
 
 .chart-crosshair {
+  animation: chart-crosshair-in 0.2s ease-out both;
   stroke: #a9c7f8;
   stroke-dasharray: 3 4;
   stroke-width: 1;
@@ -566,6 +571,7 @@ a {
 
 .chart-tooltip-value {
   fill: #fff;
+  font-family: Manrope, sans-serif;
   font-size: 13px;
   font-weight: 800;
 }
@@ -1067,15 +1073,14 @@ tfoot td {
     gap: 10px;
   }
 
-  .performance-panel .range-switch {
-    width: 100%;
-    justify-content: space-between;
+  .performance-panel .range-tabs {
+    max-width: 100%;
+    overflow-x: auto;
   }
 
-  .performance-panel .range-switch button {
-    flex: 1;
-    min-width: 0;
-    padding-inline: 5px;
+  .performance-panel .range-tabs button {
+    padding-left: 8px;
+    padding-right: 8px;
   }
 
   .chart-summary strong {
@@ -1132,16 +1137,55 @@ tfoot td {
 }
 
 @keyframes chart-line-draw {
-  from {
-    stroke-dashoffset: 1;
-  }
-
   to {
     stroke-dashoffset: 0;
   }
 }
 
+@keyframes chart-area-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0.12);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
 @keyframes chart-fill-reveal {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes chart-point-pulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 rgba(47, 123, 240, 0));
+  }
+
+  50% {
+    filter: drop-shadow(0 0 5px rgba(47, 123, 240, 0.4));
+  }
+}
+
+@keyframes chart-crosshair-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes chart-tooltip-in {
   from {
     opacity: 0;
   }
@@ -1255,17 +1299,6 @@ tfoot td {
   transform-origin: center bottom;
 }
 
-.performance-chart .chart-line {
-  stroke-dasharray: 1200;
-  stroke-dashoffset: 1200;
-  animation: chart-line-draw 1.35s 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-.performance-chart .chart-area {
-  opacity: 0;
-  animation: chart-fill-reveal 0.75s 0.76s ease-out forwards;
-}
-
 .donut {
   animation: donut-reveal 1s 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -1299,7 +1332,7 @@ tbody tr:nth-child(6) { animation-delay: 0.94s; }
 tbody tr:nth-child(7) { animation-delay: 1s; }
 
 .table-actions button,
-.range-switch button,
+.range-tabs button,
 .notification-button,
 .avatar-button,
 .mobile-menu {
@@ -1307,7 +1340,7 @@ tbody tr:nth-child(7) { animation-delay: 1s; }
 }
 
 .table-actions button:hover,
-.range-switch button:hover,
+.range-tabs button:hover,
 .notification-button:hover,
 .avatar-button:hover,
 .mobile-menu:hover {
