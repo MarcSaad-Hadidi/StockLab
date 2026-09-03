@@ -95,6 +95,7 @@ function PerformanceChart({ range }: { range: PerformanceRange }) {
   const activeIndex = hoveredIndex ?? focusedIndex ?? pinnedIndex
   const activePoint = activeIndex === null ? null : points[activeIndex]
   const activeValue = activeIndex === null ? null : series.values[activeIndex]
+  const pointHitRadius = 44
   const tooltipWidth = 134
   const tooltipHeight = 52
   const tooltipX = activePoint ? Math.min(Math.max(activePoint.x - tooltipWidth / 2, padding.left), width - padding.right - tooltipWidth) : 0
@@ -155,7 +156,7 @@ function PerformanceChart({ range }: { range: PerformanceRange }) {
             role="button"
             tabIndex={0}
           >
-            <circle className="chart-point-hit" cx={point.x} cy={point.y} r={14} />
+            <circle className="chart-point-hit" cx={point.x} cy={point.y} r={pointHitRadius} />
             <circle className="chart-point" cx={point.x} cy={point.y} key={`${point.x}-${index}`} r={index === points.length - 1 ? 4 : 2.5} style={{ animationDelay: `${index * 45}ms` }} />
           </g>
         ))}
