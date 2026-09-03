@@ -459,15 +459,6 @@ a {
   opacity: 0.86;
 }
 
-.chart-hover .hover-dot {
-  fill: #fff;
-  stroke: #4353f5;
-  stroke-width: 3;
-  opacity: 1;
-  filter: drop-shadow(0 1px 3px rgba(67, 83, 245, 0.28));
-  animation: hover-dot-pulse 1.2s ease-in-out infinite;
-}
-
 .chart-hover .hover-tooltip rect {
   fill: #172541;
   filter: drop-shadow(0 4px 8px rgba(23, 37, 65, 0.18));
@@ -1091,19 +1082,6 @@ tfoot td {
 
   50% {
     box-shadow: 0 0 0 4px rgba(69, 98, 244, 0.07);
-  }
-}
-
-@keyframes hover-dot-pulse {
-  0%,
-  100% {
-    transform: scale(0.9);
-    transform-origin: center;
-  }
-
-  50% {
-    transform: scale(1.12);
-    transform-origin: center;
   }
 }
 
