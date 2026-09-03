@@ -834,6 +834,19 @@ input:focus-visible {
   background: #f7f8ff;
 }
 
+.market-page-button:disabled,
+.market-page-arrow:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.market-page-button:disabled:hover,
+.market-page-arrow:disabled:hover {
+  border-color: #e7eaf0;
+  color: #7e8aa0;
+  background: #fff;
+}
+
 .market-page-button-active {
   border-color: #cdd3ff;
   color: #5262f6;

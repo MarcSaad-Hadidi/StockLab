@@ -79,6 +79,27 @@ export function filterMarketStocks(
   })
 }
 
+export function paginateMarketStocks(stocks: MarketStock[], page: number, pageSize = 10): {
+  items: MarketStock[]
+  currentPage: number
+  totalPages: number
+  startIndex: number
+  endIndex: number
+} {
+  const totalPages = Math.max(1, Math.ceil(stocks.length / pageSize))
+  const currentPage = Math.min(Math.max(1, page), totalPages)
+  const startOffset = (currentPage - 1) * pageSize
+  const endOffset = Math.min(startOffset + pageSize, stocks.length)
+
+  return {
+    items: stocks.slice(startOffset, endOffset),
+    currentPage,
+    totalPages,
+    startIndex: stocks.length === 0 ? 0 : startOffset + 1,
+    endIndex: endOffset,
+  }
+}
+
 function signedChangeValue(stock: MarketStock): number {
   const value = Number.parseFloat(stock.changePercent)
   return stock.tone === 'positive' ? value : -value

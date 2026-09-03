@@ -5,6 +5,7 @@ import {
   filterMarketStocks,
   getMarketSections,
   marketStocks,
+  paginateMarketStocks,
   type MarketFilter,
   type MarketStock,
 } from './marketData'
@@ -15,6 +16,7 @@ type MarketPageProps = {
 }
 
 const filterOptions: MarketFilter[] = ['All', 'Stocks', 'ETFs', 'Indices', 'Crypto']
+const resultsPerPage = 10
 const filterNounByFilter: Record<MarketFilter, string> = {
   All: 'Stocks',
   Stocks: 'Stocks',
@@ -111,6 +113,7 @@ function SearchResultRow({
 export function MarketPage({ onOpenStock }: MarketPageProps) {
   const [query, setQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState<MarketFilter>('All')
+  const [currentPage, setCurrentPage] = useState(1)
   const [favoriteSymbols, setFavoriteSymbols] = useState<Set<string>>(() => new Set(['AAPL', 'MSFT']))
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
   const [favoriteOnly, setFavoriteOnly] = useState(false)
@@ -127,7 +130,11 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
     return favoriteOnly ? results.filter((stock) => favoriteSymbols.has(stock.symbol)) : results
   }, [activeFilter, favoriteOnly, favoriteSymbols, query])
 
-  const visibleResults = filteredResults.slice(0, 10)
+  const pagination = useMemo(
+    () => paginateMarketStocks(filteredResults, currentPage, resultsPerPage),
+    [currentPage, filteredResults],
+  )
+  const visibleResults = pagination.items
 
   const toggleFavorite = (symbol: string) => {
     setFavoriteSymbols((current) => {
@@ -144,13 +151,14 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
   const clearFilters = () => {
     setQuery('')
     setActiveFilter('All')
+    setCurrentPage(1)
     setFavoriteOnly(false)
     setMoreFiltersOpen(false)
   }
 
-  const showAllStocks = () => {
+  const showAllResults = () => {
     setQuery('')
-    setActiveFilter('All')
+    setCurrentPage(1)
     setFavoriteOnly(false)
   }
 
@@ -169,7 +177,10 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
           placeholder="Search for stocks, companies or keywords..."
           type="search"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            setCurrentPage(1)
+          }}
         />
         <MarketIcon name="search" size={16} />
       </label>
@@ -182,7 +193,10 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
               className={`market-filter-tab ${activeFilter === filter ? 'market-filter-tab-active' : ''}`}
               key={filter}
               type="button"
-              onClick={() => setActiveFilter(filter)}
+              onClick={() => {
+                setActiveFilter(filter)
+                setCurrentPage(1)
+              }}
             >
               {filter}
             </button>
@@ -193,7 +207,10 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
             aria-pressed={activeFilter === 'US Market'}
             className={`market-market-select ${activeFilter === 'US Market' ? 'market-market-select-active' : ''}`}
             type="button"
-            onClick={() => setActiveFilter(activeFilter === 'US Market' ? 'All' : 'US Market')}
+            onClick={() => {
+              setActiveFilter(activeFilter === 'US Market' ? 'All' : 'US Market')
+              setCurrentPage(1)
+            }}
           >
             <span>US Market</span>
             <MarketIcon name="chevronDown" size={13} />
@@ -211,7 +228,14 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
             {moreFiltersOpen && (
               <div aria-label="More filters" className="market-more-filter-menu" role="dialog">
                 <label className="market-checkbox-row">
-                  <input checked={favoriteOnly} type="checkbox" onChange={(event) => setFavoriteOnly(event.target.checked)} />
+                  <input
+                    checked={favoriteOnly}
+                    type="checkbox"
+                    onChange={(event) => {
+                      setFavoriteOnly(event.target.checked)
+                      setCurrentPage(1)
+                    }}
+                  />
                   <span>Only show favorites</span>
                 </label>
                 <button className="market-clear-filters" type="button" onClick={clearFilters}>Clear filters</button>
@@ -222,24 +246,50 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
       </div>
 
       <div className="market-overview-grid">
-        <MarketOverviewCard title={overviewTitles.popular} tone="popular" stocks={sections.popular} onOpenStock={onOpenStock} onViewAll={showAllStocks} />
-        <MarketOverviewCard title={overviewTitles.gainers} tone="positive" stocks={sections.gainers} onOpenStock={onOpenStock} onViewAll={showAllStocks} />
-        <MarketOverviewCard title={overviewTitles.losers} tone="negative" stocks={sections.losers} onOpenStock={onOpenStock} onViewAll={showAllStocks} />
+        <MarketOverviewCard title={overviewTitles.popular} tone="popular" stocks={sections.popular} onOpenStock={onOpenStock} onViewAll={showAllResults} />
+        <MarketOverviewCard title={overviewTitles.gainers} tone="positive" stocks={sections.gainers} onOpenStock={onOpenStock} onViewAll={showAllResults} />
+        <MarketOverviewCard title={overviewTitles.losers} tone="negative" stocks={sections.losers} onOpenStock={onOpenStock} onViewAll={showAllResults} />
       </div>
 
       <section aria-labelledby="search-results-title" className="market-results-panel">
         <div className="market-results-heading">
           <h2 id="search-results-title">Search Results</h2>
           <div className="market-results-meta">
-            <span>Showing {visibleResults.length > 0 ? 1 : 0}-{visibleResults.length} of {filteredResults.length} results</span>
-            <div aria-label="Search results pages" className="market-pagination">
-              <button aria-current="page" className="market-page-button market-page-button-active" type="button">1</button>
-              <button className="market-page-button" type="button">2</button>
-              <button className="market-page-button" type="button">3</button>
-              <span>...</span>
-              <button className="market-page-button" type="button">25</button>
-              <button aria-label="Next results page" className="market-page-arrow" type="button"><MarketIcon name="chevronRight" size={13} /></button>
-            </div>
+            <span>Showing {pagination.startIndex}-{pagination.endIndex} of {filteredResults.length} results</span>
+            {pagination.totalPages > 1 && (
+              <div aria-label="Search results pages" className="market-pagination">
+                <button
+                  aria-label="Previous results page"
+                  className="market-page-arrow"
+                  disabled={pagination.currentPage === 1}
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                >
+                  <MarketIcon name="arrowLeft" size={13} />
+                </button>
+                {Array.from({ length: pagination.totalPages }, (_, index) => index + 1).map((page) => (
+                  <button
+                    aria-current={page === pagination.currentPage ? 'page' : undefined}
+                    aria-label={`Go to results page ${page}`}
+                    className={`market-page-button ${page === pagination.currentPage ? 'market-page-button-active' : ''}`}
+                    key={page}
+                    type="button"
+                    onClick={() => setCurrentPage(page)}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  aria-label="Next results page"
+                  className="market-page-arrow"
+                  disabled={pagination.currentPage === pagination.totalPages}
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(pagination.totalPages, page + 1))}
+                >
+                  <MarketIcon name="chevronRight" size={13} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
