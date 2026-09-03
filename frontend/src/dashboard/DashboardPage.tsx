@@ -73,6 +73,9 @@ function formatCurrency(value: number) {
 }
 
 function PerformanceChart({ range }: { range: PerformanceRange }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
+  const [pinnedIndex, setPinnedIndex] = useState<number | null>(null)
   const series = performanceSeries[range]
   const width = 760
   const height = 250
@@ -89,6 +92,15 @@ function PerformanceChart({ range }: { range: PerformanceRange }) {
   const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
   const areaPath = `${linePath} L ${points.at(-1)?.x ?? width} ${height - padding.bottom} L ${points[0].x} ${height - padding.bottom} Z`
   const yTicks = [0, 1, 2, 3]
+  const activeIndex = hoveredIndex ?? focusedIndex ?? pinnedIndex
+  const activePoint = activeIndex === null ? null : points[activeIndex]
+  const activeValue = activeIndex === null ? null : series.values[activeIndex]
+  const tooltipWidth = 134
+  const tooltipHeight = 52
+  const tooltipX = activePoint ? Math.min(Math.max(activePoint.x - tooltipWidth / 2, padding.left), width - padding.right - tooltipWidth) : 0
+  const tooltipY = activePoint
+    ? Math.min(Math.max(activePoint.y < tooltipHeight + 24 ? activePoint.y + 17 : activePoint.y - tooltipHeight - 17, 8), height - tooltipHeight - 8)
+    : 0
 
   return (
     <div className="chart-wrap">
@@ -102,7 +114,7 @@ function PerformanceChart({ range }: { range: PerformanceRange }) {
           <small>{series.changeLabel}</small>
         </div>
       </div>
-      <svg aria-label={`Portfolio performance chart for ${range}`} className="performance-chart" role="img" viewBox={`0 0 ${width} ${height}`}>
+      <svg aria-label={`Portfolio performance chart for ${range}`} className="performance-chart" key={range} role="img" viewBox={`0 0 ${width} ${height}`}>
         <defs>
           <linearGradient id={`portfolio-fill-${range}`} x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor="#2f7bf0" stopOpacity=".22" />
@@ -121,14 +133,43 @@ function PerformanceChart({ range }: { range: PerformanceRange }) {
         })}
         <path className="chart-area" d={areaPath} fill={`url(#portfolio-fill-${range})`} />
         <path className="chart-line" d={linePath} />
+        {activePoint && <line className="chart-crosshair" x1={activePoint.x} x2={activePoint.x} y1={padding.top} y2={height - padding.bottom} />}
         {points.map((point, index) => (
-          <circle className="chart-point" cx={point.x} cy={point.y} key={`${point.x}-${index}`} r={index === points.length - 1 ? 4 : 2.5} />
+          <g
+            aria-label={`${series.labels[index]}: ${formatCurrency(point.value)} portfolio value`}
+            aria-pressed={pinnedIndex === index}
+            className={`chart-point-group ${activeIndex === index ? 'active' : ''}`}
+            key={`${point.x}-${index}`}
+            onBlur={() => setFocusedIndex(null)}
+            onClick={() => setPinnedIndex((current) => current === index ? null : index)}
+            onFocus={() => setFocusedIndex(index)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') setPinnedIndex(null)
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                setPinnedIndex((current) => current === index ? null : index)
+              }
+            }}
+            onPointerEnter={() => setHoveredIndex(index)}
+            onPointerLeave={() => setHoveredIndex(null)}
+            role="button"
+            tabIndex={0}
+          >
+            <circle className="chart-point-hit" cx={point.x} cy={point.y} r={14} />
+            <circle className="chart-point" cx={point.x} cy={point.y} key={`${point.x}-${index}`} r={index === points.length - 1 ? 4 : 2.5} style={{ animationDelay: `${index * 45}ms` }} />
+          </g>
         ))}
+        {activePoint && activeIndex !== null && activeValue !== null && <g className="chart-tooltip" pointerEvents="none" transform={`translate(${tooltipX} ${tooltipY})`}>
+          <rect height={tooltipHeight} rx="7" width={tooltipWidth} />
+          <text className="chart-tooltip-label" x="10" y="18">{series.labels[activeIndex]}</text>
+          <text className="chart-tooltip-value" x="10" y="38">{formatCurrency(activeValue)}</text>
+        </g>}
         {series.labels.map((label, index) => {
           const point = points[index]
           return <text className="chart-x-label" key={label} textAnchor={index === 0 ? 'start' : index === series.labels.length - 1 ? 'end' : 'middle'} x={point.x} y={height - 7}>{label}</text>
         })}
       </svg>
+      <span aria-live="polite" className="chart-tooltip-announcement">{activeIndex !== null && activeValue !== null ? `${series.labels[activeIndex]}: ${formatCurrency(activeValue)}` : ''}</span>
     </div>
   )
 }
@@ -151,8 +192,8 @@ function Sparkline() {
           <stop offset="100%" stopColor="#8b6df6" stopOpacity="0" />
         </linearGradient>
       </defs>
-      <polyline fill="url(#ai-fill)" points={`0,${height} ${points.join(' ')} ${width},${height}`} stroke="none" />
-      <polyline fill="none" points={points.join(' ')} stroke="#896df1" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
+      <polyline className="ai-sparkline-area" fill="url(#ai-fill)" points={`0,${height} ${points.join(' ')} ${width},${height}`} stroke="none" />
+      <polyline className="ai-sparkline-line" fill="none" points={points.join(' ')} stroke="#896df1" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
       <circle cx={width} cy={Number(points.at(-1)?.split(',')[1])} fill="#896df1" r="3.5" />
     </svg>
   )
@@ -279,7 +320,7 @@ export function DashboardPage() {
           <section aria-label="Portfolio summary" className="metrics-grid">{metrics.map((metric) => <MetricCard key={metric.label} metric={metric} />)}</section>
 
           <div className="dashboard-grid dashboard-grid-top">
-            <section aria-labelledby="performance-title" className="panel performance-panel"><PanelHeading id="performance-title" subtitle="Your portfolio value over time" title="Portfolio performance" /><div className="range-tabs" role="tablist" aria-label="Performance time range">{ranges.map((item) => <button aria-selected={range === item} className={range === item ? 'selected' : ''} key={item} onClick={() => setRange(item)} role="tab" type="button">{item}</button>)}</div><PerformanceChart range={range} /></section>
+            <section aria-labelledby="performance-title" className="panel performance-panel"><PanelHeading id="performance-title" subtitle="Your portfolio value over time" title="Portfolio performance" /><div className="range-tabs" role="tablist" aria-label="Performance time range">{ranges.map((item) => <button aria-selected={range === item} className={range === item ? 'selected' : ''} key={item} onClick={() => setRange(item)} role="tab" type="button">{item}</button>)}</div><PerformanceChart key={range} range={range} /></section>
             <section aria-labelledby="watchlist-title" className="panel watchlist-panel"><PanelHeading action="View all" id="watchlist-title" subtitle="Stocks you’re keeping an eye on" title="Watchlist" /><div className="watchlist-filter"><Icon name="search" size={15} /><input aria-label="Filter watchlist" onChange={(event) => setQuery(event.target.value)} placeholder="Filter by symbol or name" value={query} /></div>{filteredWatchlist.length > 0 ? <ul className="watchlist-list">{filteredWatchlist.map((item) => <WatchlistRow item={item} key={item.symbol} />)}</ul> : <div className="empty-state">No stocks match “{query}”.</div>}<button className="add-watchlist" onClick={() => showToast('Search the market to add a stock.')} type="button"><span>+</span> Add to watchlist</button></section>
           </div>
 
