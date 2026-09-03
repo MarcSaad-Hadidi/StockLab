@@ -385,19 +385,42 @@ a {
   color: #adb5c3;
 }
 
+.chart-summary {
+  display: grid;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.chart-summary strong {
+  color: #202a42;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+
+.chart-summary span {
+  color: #20a77b;
+  font-size: 9px;
+  font-weight: 800;
+}
+
 .range-switch {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid #edf0f5;
+  border-radius: 999px;
+  background: #f7f8fb;
 }
 
 .range-switch button {
-  min-width: 25px;
-  height: 22px;
-  padding: 0 5px;
+  min-width: 30px;
+  height: 25px;
+  padding: 0 8px;
   color: #8a94a9;
   border: 0;
-  border-radius: 5px;
+  border-radius: 999px;
   background: transparent;
   font-size: 8px;
   font-weight: 700;
@@ -411,7 +434,8 @@ a {
 
 .range-switch button.active {
   color: var(--blue);
-  background: #edf1ff;
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(42, 55, 93, 0.12);
 }
 
 .chart-wrap {
@@ -434,18 +458,20 @@ a {
 }
 
 .performance-chart .chart-grid line {
-  stroke: #eef0f5;
+  stroke: #f0f2f6;
   stroke-width: 1;
+  stroke-dasharray: 2 6;
 }
 
-.performance-chart .chart-callout rect {
-  fill: #4562f4;
+.performance-chart .chart-end-halo {
+  fill: #5870ff;
+  opacity: 0.14;
+  animation: none;
 }
 
-.performance-chart .chart-callout text {
-  fill: #fff;
-  font-size: 8px;
-  font-weight: 800;
+.performance-chart .chart-end-point {
+  opacity: 1;
+  animation: none;
 }
 
 .chart-hover {
@@ -969,6 +995,27 @@ tfoot td {
     padding: 14px 12px;
   }
 
+  .performance-panel .panel-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .performance-panel .range-switch {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .performance-panel .range-switch button {
+    flex: 1;
+    min-width: 0;
+    padding-inline: 5px;
+  }
+
+  .chart-summary strong {
+    font-size: 18px;
+  }
+
   .performance-chart {
     height: 160px;
   }
@@ -1158,7 +1205,7 @@ tfoot td {
   animation: chart-fill-reveal 0.75s 0.76s ease-out forwards;
 }
 
-.performance-chart circle,
+.performance-chart .chart-visual > circle,
 .performance-chart .chart-callout {
   opacity: 0;
   animation: chart-marker-pop 0.45s 1.36s cubic-bezier(0.22, 1, 0.36, 1) forwards;

@@ -38,14 +38,18 @@ export type PerformancePoint = {
   value: string
 }
 
-const chartDates = ['Feb 24', 'Feb 28', 'Mar 4', 'Mar 10', 'Mar 14', 'Mar 18', 'Mar 24', 'Mar 28', 'Apr 2', 'Apr 7', 'Apr 12', 'Apr 17', 'Apr 21', 'Apr 26', 'May 1', 'May 5', 'May 9', 'May 14', 'May 19']
+const chartRangeDays: Record<string, number> = { '1D': 1, '1W': 7, '1M': 30, '3M': 85, '1Y': 365, YTD: 145, ALL: 730 }
+const chartStart = Date.UTC(2024, 1, 24)
 
-function buildChartSeries(points: string): PerformancePoint[] {
-  return points.split(' ').map((point, index) => {
-    const [x, y] = point.split(',').map(Number)
+function buildChartSeries(points: string, range: string): PerformancePoint[] {
+  const coordinates = points.split(' ').map((point) => point.split(',').map(Number))
+  const rangeDays = chartRangeDays[range] ?? 85
+  return coordinates.map(([x, y], index) => {
+    const elapsedDays = Math.round((index / Math.max(coordinates.length - 1, 1)) * rangeDays)
+    const date = new Date(chartStart + elapsedDays * 86_400_000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
     const value = 140 - ((y - 20) / 180) * 80
-    return { x, y, date: chartDates[Math.min(index, chartDates.length - 1)], value: `$${value.toFixed(2)}K` }
+    return { x, y, date, value: `$${value.toFixed(2)}K` }
   })
 }
 
-export const chartSeries: Record<string, PerformancePoint[]> = Object.fromEntries(Object.entries(chartPoints).map(([range, points]) => [range, buildChartSeries(points)]))
+export const chartSeries: Record<string, PerformancePoint[]> = Object.fromEntries(Object.entries(chartPoints).map(([range, points]) => [range, buildChartSeries(points, range)]))
