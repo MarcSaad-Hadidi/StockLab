@@ -200,6 +200,8 @@ a { text-decoration: none; }
 .profile-info-row strong { min-width: 0; overflow: hidden; color: #34445b; font-size: 9px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .profile-info-row input { width: 100%; min-width: 0; height: 29px; padding: 0 8px; color: #2b3c54; font-size: 9px; background: #fbfcfe; border: 1px solid #dce4f1; border-radius: 5px; outline: 0; }
 .profile-info-row input:focus { border-color: #8296f3; box-shadow: 0 0 0 3px rgba(67, 87, 237, .1); }
+.profile-info-row select { width: 100%; min-width: 0; height: 29px; padding: 0 26px 0 8px; color: #2b3c54; font-size: 9px; background: #fbfcfe; border: 1px solid #dce4f1; border-radius: 5px; outline: 0; appearance: auto; }
+.profile-info-row select:focus { border-color: #8296f3; box-shadow: 0 0 0 3px rgba(67, 87, 237, .1); }
 .row-edit-button { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; color: #8694a9; background: transparent; border: 0; border-radius: 5px; }
 .row-edit-button:hover { color: #4357ed; background: #f0f3ff; }
 .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
