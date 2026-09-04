@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const rootDir = fileURLToPath(new URL('.', import.meta.url))
-const routePaths = new Set(['/register', '/login', '/profile'])
+const routePaths = new Set(['/register', '/login', '/profile', '/alerts'])
 
 function pageRoutes(): Plugin {
   const normalizeRoute = (url: string | undefined) => {
@@ -44,6 +44,7 @@ export default defineConfig({
         register: resolve(rootDir, 'register/index.html'),
         login: resolve(rootDir, 'login/index.html'),
         profile: resolve(rootDir, 'profile/index.html'),
+        alerts: resolve(rootDir, 'alerts/index.html'),
       },
     },
   },
