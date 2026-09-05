@@ -1,3 +1,4 @@
+import { routeFor } from '../navigation/routes'
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { watchlistItems, type WatchlistItem } from './watchlistData'
 import './watchlist.css'
@@ -115,11 +116,11 @@ function AlertModal({ item, onClose, onSave }: { item: WatchlistItem; onClose: (
 }
 
 const navigation = [
-  { label: 'Dashboard', icon: 'grid' as IconName, href: '/dashboard.html' },
-  { label: 'Market', icon: 'chart' as IconName, href: '/market.html' },
-  { label: 'Portfolio', icon: 'briefcase' as IconName, href: '/portfolio/' },
-  { label: 'Watchlist', icon: 'star' as IconName, href: '/watchlist/' },
-  { label: 'Alerts', icon: 'bell' as IconName, href: '#alerts' },
+  { label: 'Dashboard', icon: 'grid' as IconName, href: routeFor('dashboard') },
+  { label: 'Market', icon: 'chart' as IconName, href: routeFor('market') },
+  { label: 'Portfolio', icon: 'briefcase' as IconName, href: routeFor('portfolio') },
+  { label: 'Watchlist', icon: 'star' as IconName, href: routeFor('watchlist') },
+  { label: 'Alerts', icon: 'bell' as IconName, href: routeFor('alerts') },
 ]
 
 export default function WatchlistPage() {
@@ -155,8 +156,8 @@ export default function WatchlistPage() {
       <aside className="watchlist-sidebar">
         <Brand />
         <div className="workspace-switcher"><span className="workspace-avatar">MS</span><span><strong>My portfolio</strong><small>Personal account</small></span><Icon name="chevron-down" size={15} /></div>
-        <nav aria-label="Primary navigation" className="sidebar-nav"><span className="nav-label">Overview</span>{navigation.map((item) => <a aria-current={item.label === 'Watchlist' ? 'page' : undefined} className={`nav-item ${item.label === 'Watchlist' ? 'active' : ''}`} href={item.href} key={item.label} onClick={() => setSidebarOpen(false)}><Icon name={item.icon} size={18} /><span>{item.label}</span></a>)}<span className="nav-label nav-label-spaced">Manage</span><a className="nav-item" href="#analytics"><Icon name="pie-chart" size={18} /><span>Analytics</span></a><a className="nav-item" href="#settings"><Icon name="settings" size={18} /><span>Settings</span></a></nav>
-        <div className="sidebar-footer"><div className="help-card"><span className="help-icon"><Icon name="activity" size={17} /></span><span><strong>Need a hand?</strong><small>Explore StockLab tips</small></span><Icon name="chevron-right" size={16} /></div><div className="user-card"><span className="user-avatar">MS</span><span><strong>Mina Seliman</strong><small>Free plan</small></span><button aria-label="More profile options" className="icon-button" type="button"><Icon name="more" size={18} /></button></div></div>
+        <nav aria-label="Primary navigation" className="sidebar-nav"><span className="nav-label">Overview</span>{navigation.map((item) => <a aria-current={item.label === 'Watchlist' ? 'page' : undefined} className={`nav-item ${item.label === 'Watchlist' ? 'active' : ''}`} href={item.href} key={item.label} onClick={() => setSidebarOpen(false)}><Icon name={item.icon} size={18} /><span>{item.label}</span></a>)}<span className="nav-label nav-label-spaced">Manage</span><a className="nav-item" href="#analytics"><Icon name="pie-chart" size={18} /><span>Analytics</span></a><a className="nav-item" href={routeFor('settings')}><Icon name="settings" size={18} /><span>Settings</span></a></nav>
+        <div className="sidebar-footer"><div className="help-card"><span className="help-icon"><Icon name="activity" size={17} /></span><span><strong>Need a hand?</strong><small>Explore StockLab tips</small></span><Icon name="chevron-right" size={16} /></div><div className="user-card"><span className="user-avatar">MS</span><span><strong>Mina Seliman</strong><small>Free plan</small></span><button aria-label="More profile options" className="icon-button" onClick={() => window.location.assign(routeFor('profile'))} type="button"><Icon name="more" size={18} /></button></div></div>
       </aside>
 
       <main className="watchlist-main">

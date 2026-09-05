@@ -1,4 +1,5 @@
-﻿import { useState } from 'react'
+import { isCurrentPage, routeFor } from '../navigation/routes'
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { performanceSeries, positions } from './portfolioData'
 import type { Position } from './portfolioData'
@@ -99,7 +100,7 @@ const navSections = [
 ]
 
 function Sidebar() {
-  return <aside className="portfolio-sidebar"><Brand /><nav>{navSections.map((section) => <div className="nav-section" key={section.label || 'main'}>{section.label && <p className="nav-section-label">{section.label}</p>}{section.items.map((item) => <a className={`nav-item ${item.active ? 'active' : ''}`} href={`#${item.text.toLowerCase().replace(' ', '-')}`} key={item.text}><Icon name={item.icon} /><span>{item.text}</span></a>)}</div>)}</nav><div className="sidebar-footer"><span className="market-status" /><span>Market open</span></div></aside>
+  return <aside className="portfolio-sidebar"><Brand /><nav>{navSections.map((section) => <div className="nav-section" key={section.label || 'main'}>{section.label && <p className="nav-section-label">{section.label}</p>}{section.items.map((item) => <a className={`nav-item ${isCurrentPage(item.text, window.location.pathname) ? 'active' : ''}`} aria-current={isCurrentPage(item.text, window.location.pathname) ? 'page' : undefined} href={routeFor(item.text)} key={item.text}><Icon name={item.icon} /><span>{item.text}</span></a>)}</div>)}</nav><div className="sidebar-footer"><span className="market-status" /><span>Market open</span></div></aside>
 }
 
 export default function PortfolioPage() {

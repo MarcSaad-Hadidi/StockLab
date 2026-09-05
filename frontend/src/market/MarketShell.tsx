@@ -1,3 +1,4 @@
+import { isCurrentPage, routeFor } from '../navigation/routes'
 import { useState, type ReactNode } from 'react'
 import { MarketIcon, type MarketIconName } from './marketIcons'
 import { marketRoute } from './marketRoutes'
@@ -62,8 +63,8 @@ export function MarketShell({
               {section.label && <p className="market-navigation-label">{section.label}</p>}
               <div className="market-navigation-items">
                 {section.items.map((item) => {
-                  const isActive = item.id === 'market'
-                  const href = isActive ? marketRoute : '#'
+                  const isActive = isCurrentPage(item.id, window.location.pathname)
+                  const href = routeFor(item.id)
 
                   return (
                     <a
@@ -71,12 +72,7 @@ export function MarketShell({
                       className={`market-navigation-item ${isActive ? 'market-navigation-item-active' : ''}`}
                       href={href}
                       key={item.id}
-                      onClick={(event) => {
-                        setSidebarOpen(false)
-                        if (!isActive) {
-                          event.preventDefault()
-                        }
-                      }}
+                      onClick={() => setSidebarOpen(false)}
                     >
                       <MarketIcon name={item.icon} size={15} />
                       <span>{item.label}</span>
@@ -111,8 +107,8 @@ export function MarketShell({
             <button aria-label="Open messages" className="market-topbar-icon" type="button">
               <MarketIcon name="mail" size={17} />
             </button>
-            <button aria-label="Open Alex Johnson profile" className="market-avatar" type="button">AJ</button>
-            <button aria-label="Open account menu" className="market-account-chevron" type="button">
+            <button aria-label="Open Alex Johnson profile" className="market-avatar" onClick={() => window.location.assign(routeFor('profile'))} type="button">AJ</button>
+            <button aria-label="Open account menu" className="market-account-chevron" onClick={() => window.location.assign(routeFor('profile'))} type="button">
               <MarketIcon name="chevronDown" size={14} />
             </button>
           </div>

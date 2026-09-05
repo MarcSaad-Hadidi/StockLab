@@ -1,3 +1,4 @@
+import { isCurrentPage, routeFor } from '../navigation/routes'
 import { useMemo, useState, type ReactNode } from 'react'
 import {
   filterTransactions,
@@ -76,7 +77,7 @@ function Icon({ name, size = 16, strokeWidth = 1.65, className }: IconProps) {
 }
 
 function Brand() {
-  return <a aria-label="StockLab home" className="brand" href="/transactions/"><span aria-hidden="true" className="brand-mark"><i /><i /><i /></span><span>Stock<span>Lab</span></span></a>
+  return <a aria-label="StockLab home" className="brand" href={routeFor('transactions')}><span aria-hidden="true" className="brand-mark"><i /><i /><i /></span><span>Stock<span>Lab</span></span></a>
 }
 
 type ToastHandler = (message: string) => void
@@ -106,10 +107,9 @@ const navigationSections: Array<{
 
 type SidebarProps = {
   onClose: () => void
-  onToast: ToastHandler
 }
 
-function Sidebar({ onClose, onToast }: SidebarProps) {
+function Sidebar({ onClose }: SidebarProps) {
   return (
     <aside className="transactions-sidebar">
       <Brand />
@@ -118,20 +118,14 @@ function Sidebar({ onClose, onToast }: SidebarProps) {
           <div className="nav-section" key={section.label ?? 'overview'}>
             {section.label && <p className="nav-label">{section.label}</p>}
             {section.items.map((item) => {
-              const active = item.id === 'transactions'
+              const active = isCurrentPage(item.id, window.location.pathname)
               return (
                 <a
                   aria-current={active ? 'page' : undefined}
                   className={`nav-item ${active ? 'active' : ''}`}
-                  href={active ? '/transactions/' : '#'}
+                  href={routeFor(item.id)}
                   key={item.id}
-                  onClick={(event) => {
-                    onClose()
-                    if (!active) {
-                      event.preventDefault()
-                      onToast(`${item.label} is not part of this frontend preview.`)
-                    }
-                  }}
+                  onClick={onClose}
                 >
                   <Icon name={item.icon} size={16} />
                   <span>{item.label}</span>
@@ -157,7 +151,7 @@ function Topbar({ onMenuOpen, onQueryChange, onToast, query }: TopbarProps) {
     <header className="transactions-topbar">
       <div className="breadcrumb">
         <button aria-label="Open navigation" className="mobile-menu-button icon-button" onClick={onMenuOpen} type="button"><Icon name="menu" size={20} /></button>
-        <strong>Transactions</strong><span>—</span><a href="/transactions/">/transactions</a>
+        <strong>Transactions</strong><span>—</span><a href={routeFor('transactions')}>/transactions</a>
       </div>
       <div className="topbar-actions">
         <label className="global-search">
@@ -166,7 +160,7 @@ function Topbar({ onMenuOpen, onQueryChange, onToast, query }: TopbarProps) {
         </label>
         <button aria-label="Notifications" className="icon-button notification-button" onClick={() => onToast('You are all caught up.')} type="button"><Icon name="bell" size={18} /><i>2</i></button>
         <button aria-label="Open messages" className="icon-button mail-button" onClick={() => onToast('No new messages.')} type="button"><Icon name="mail" size={17} /></button>
-        <button aria-label="Open account menu" className="topbar-account" onClick={() => onToast('Account menu is simulated in this preview.')} type="button"><span className="topbar-avatar">GA</span><Icon name="chevron-down" size={14} /></button>
+        <button aria-label="Open account menu" className="topbar-account" onClick={() => window.location.assign(routeFor('profile'))} type="button"><span className="topbar-avatar">GA</span><Icon name="chevron-down" size={14} /></button>
       </div>
     </header>
   )
@@ -333,7 +327,7 @@ export function TransactionsPage() {
   return (
     <div className={`transactions-page ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <button aria-label="Close navigation" className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} type="button" />
-      <Sidebar onClose={() => setSidebarOpen(false)} onToast={showToast} />
+      <Sidebar onClose={() => setSidebarOpen(false)} />
       <main className="transactions-main">
         <Topbar onMenuOpen={() => setSidebarOpen(true)} onQueryChange={(query) => updateFilter('query', query)} onToast={showToast} query={filters.query} />
         <div className="transactions-content">

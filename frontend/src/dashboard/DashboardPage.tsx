@@ -1,3 +1,4 @@
+import { routeFor } from '../navigation/routes'
 import { useMemo, useState, type ReactNode } from 'react'
 import {
   aiPerformance,
@@ -200,14 +201,14 @@ function Sparkline() {
   )
 }
 
-function PanelHeading({ title, subtitle, action, id }: { title: string; subtitle?: string; action?: string; id?: string }) {
+function PanelHeading({ title, subtitle, action, id, destination }: { title: string; subtitle?: string; action?: string; id?: string; destination?: string }) {
   return (
     <div className="panel-heading">
       <div>
         <h2 id={id}>{title}</h2>
         {subtitle && <p>{subtitle}</p>}
       </div>
-      {action && <button className="text-action" type="button">{action}<Icon name="chevron-right" size={16} /></button>}
+      {action && <button className="text-action" onClick={() => destination && window.location.assign(routeFor(destination))} type="button">{action}<Icon name="chevron-right" size={16} /></button>}
     </div>
   )
 }
@@ -269,7 +270,7 @@ export function DashboardPage() {
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [toast, setToast] = useState('')
-  const [activeNav, setActiveNav] = useState('Dashboard')
+  const activeNav = 'Dashboard'
 
   const filteredWatchlist = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -283,9 +284,12 @@ export function DashboardPage() {
   }
 
   const handleNavClick = (label: string) => {
-    setActiveNav(label)
     setSidebarOpen(false)
-    if (label !== 'Dashboard') showToast(`${label} view is coming soon.`)
+    if (label === 'Analytics') {
+      showToast(`${label} view is coming soon.`)
+      return
+    }
+    window.location.assign(routeFor(label))
   }
 
   return (
@@ -305,7 +309,7 @@ export function DashboardPage() {
           <span className="nav-label nav-label-spaced">Manage</span>
           {secondaryNavigation.map((item) => <button className="nav-item" key={item.label} onClick={() => handleNavClick(item.label)} type="button"><Icon name={item.icon} size={18} /><span>{item.label}</span></button>)}
         </nav>
-        <div className="sidebar-footer"><div className="help-card"><span className="help-icon"><Icon name="sparkles" size={17} /></span><span><strong>Need a hand?</strong><small>Explore StockLab tips</small></span><Icon name="chevron-right" size={16} /></div><div className="user-card"><span className="user-avatar">GA</span><span><strong>Ghaith Alali</strong><small>Free plan</small></span><button aria-label="More profile options" className="icon-button" type="button"><Icon name="more" size={18} /></button></div></div>
+        <div className="sidebar-footer"><div className="help-card"><span className="help-icon"><Icon name="sparkles" size={17} /></span><span><strong>Need a hand?</strong><small>Explore StockLab tips</small></span><Icon name="chevron-right" size={16} /></div><div className="user-card"><span className="user-avatar">GA</span><span><strong>Ghaith Alali</strong><small>Free plan</small></span><button aria-label="More profile options" className="icon-button" onClick={() => window.location.assign(routeFor('profile'))} type="button"><Icon name="more" size={18} /></button></div></div>
       </aside>
 
       <main className="dashboard-main">
@@ -322,15 +326,15 @@ export function DashboardPage() {
 
           <div className="dashboard-grid dashboard-grid-top">
             <section aria-labelledby="performance-title" className="panel performance-panel"><PanelHeading id="performance-title" subtitle="Your portfolio value over time" title="Portfolio performance" /><div className="range-tabs" role="tablist" aria-label="Performance time range">{ranges.map((item) => <button aria-selected={range === item} className={range === item ? 'selected' : ''} key={item} onClick={() => setRange(item)} role="tab" type="button">{item}</button>)}</div><PerformanceChart key={range} range={range} /></section>
-            <section aria-labelledby="watchlist-title" className="panel watchlist-panel"><PanelHeading action="View all" id="watchlist-title" subtitle="Stocks you’re keeping an eye on" title="Watchlist" /><div className="watchlist-filter"><Icon name="search" size={15} /><input aria-label="Filter watchlist" onChange={(event) => setQuery(event.target.value)} placeholder="Filter by symbol or name" value={query} /></div>{filteredWatchlist.length > 0 ? <ul className="watchlist-list">{filteredWatchlist.map((item) => <WatchlistRow item={item} key={item.symbol} />)}</ul> : <div className="empty-state">No stocks match “{query}”.</div>}<button className="add-watchlist" onClick={() => showToast('Search the market to add a stock.')} type="button"><span>+</span> Add to watchlist</button></section>
+            <section aria-labelledby="watchlist-title" className="panel watchlist-panel"><PanelHeading action="View all" destination="watchlist" id="watchlist-title" subtitle="Stocks you’re keeping an eye on" title="Watchlist" /><div className="watchlist-filter"><Icon name="search" size={15} /><input aria-label="Filter watchlist" onChange={(event) => setQuery(event.target.value)} placeholder="Filter by symbol or name" value={query} /></div>{filteredWatchlist.length > 0 ? <ul className="watchlist-list">{filteredWatchlist.map((item) => <WatchlistRow item={item} key={item.symbol} />)}</ul> : <div className="empty-state">No stocks match “{query}”.</div>}<button className="add-watchlist" onClick={() => showToast('Search the market to add a stock.')} type="button"><span>+</span> Add to watchlist</button></section>
           </div>
 
           <div className="dashboard-grid dashboard-grid-bottom">
-            <section aria-labelledby="positions-title" className="panel positions-panel"><PanelHeading action="View portfolio" id="positions-title" subtitle="Your biggest holdings by value" title="Key positions" /><div className="table-scroll"><table><thead><tr><th>Asset</th><th>Holdings</th><th>Value</th><th>Allocation</th><th>Today</th></tr></thead><tbody>{positions.map((position) => <PositionRow key={position.symbol} position={position} />)}</tbody></table></div></section>
-            <section aria-labelledby="transactions-title" className="panel transactions-panel"><PanelHeading action="View all" id="transactions-title" subtitle="Your latest activity" title="Recent transactions" /><ul className="transaction-list">{transactions.map((transaction) => <TransactionRow key={`${transaction.symbol}-${transaction.time}`} transaction={transaction} />)}</ul></section>
+            <section aria-labelledby="positions-title" className="panel positions-panel"><PanelHeading action="View portfolio" destination="portfolio" id="positions-title" subtitle="Your biggest holdings by value" title="Key positions" /><div className="table-scroll"><table><thead><tr><th>Asset</th><th>Holdings</th><th>Value</th><th>Allocation</th><th>Today</th></tr></thead><tbody>{positions.map((position) => <PositionRow key={position.symbol} position={position} />)}</tbody></table></div></section>
+            <section aria-labelledby="transactions-title" className="panel transactions-panel"><PanelHeading action="View all" destination="transactions" id="transactions-title" subtitle="Your latest activity" title="Recent transactions" /><ul className="transaction-list">{transactions.map((transaction) => <TransactionRow key={`${transaction.symbol}-${transaction.time}`} transaction={transaction} />)}</ul></section>
           </div>
 
-          <section aria-labelledby="ai-trader-title" className="panel ai-panel"><div className="ai-heading"><div className="ai-title"><span className="ai-badge"><Icon name="sparkles" size={18} /></span><div><h2 id="ai-trader-title">AI Trader</h2><p>Autonomous portfolio insights and signals</p></div><span className="status-badge"><i /> Live</span></div><button className="text-action" onClick={() => showToast('AI Trader details opened.')} type="button">Open AI Trader <Icon name="chevron-right" size={16} /></button></div><div className="ai-content"><div className="ai-stat ai-stat-primary"><span>AI return</span><strong>{aiPerformance.return}</strong><small><Icon name="trending-up" size={13} /> outperforming the market</small></div><div className="ai-stat"><span>Net P&L</span><strong>{aiPerformance.pnl}</strong><small>Since activation</small></div><div className="ai-stat"><span>Win rate</span><strong>{aiPerformance.winRate}</strong><small>{aiPerformance.trades} trades executed</small></div><div className="ai-chart-wrap"><span>7-day performance</span><Sparkline /><div className="ai-chart-labels"><small>Mon</small><small>Today</small></div></div></div></section>
+          <section aria-labelledby="ai-trader-title" className="panel ai-panel"><div className="ai-heading"><div className="ai-title"><span className="ai-badge"><Icon name="sparkles" size={18} /></span><div><h2 id="ai-trader-title">AI Trader</h2><p>Autonomous portfolio insights and signals</p></div><span className="status-badge"><i /> Live</span></div><button className="text-action" onClick={() => window.location.assign(routeFor('ai-trader'))} type="button">Open AI Trader <Icon name="chevron-right" size={16} /></button></div><div className="ai-content"><div className="ai-stat ai-stat-primary"><span>AI return</span><strong>{aiPerformance.return}</strong><small><Icon name="trending-up" size={13} /> outperforming the market</small></div><div className="ai-stat"><span>Net P&L</span><strong>{aiPerformance.pnl}</strong><small>Since activation</small></div><div className="ai-stat"><span>Win rate</span><strong>{aiPerformance.winRate}</strong><small>{aiPerformance.trades} trades executed</small></div><div className="ai-chart-wrap"><span>7-day performance</span><Sparkline /><div className="ai-chart-labels"><small>Mon</small><small>Today</small></div></div></div></section>
           <p className="simulation-note"><span><Icon name="activity" size={14} /> Simulated data</span> Connect a brokerage account to see your live portfolio.</p>
         </div>
       </main>
