@@ -1,3 +1,4 @@
+import { routeFor } from '../navigation/routes'
 import './not-found.css'
 
 function Brand() {
@@ -9,5 +10,5 @@ function NotFoundGraphic() {
 }
 
 export default function NotFoundPage() {
-  return <div className="not-found-page"><header className="not-found-header"><Brand /><span className="status-pill"><i /> Workspace online</span></header><main className="not-found-main"><section aria-labelledby="not-found-title" className="not-found-card"><div className="not-found-copy"><p className="not-found-eyebrow">Error 404 <span /> StockLab workspace</p><h1 id="not-found-title">Page not found</h1><p className="not-found-message">The page you’re looking for has moved, expired, or doesn’t exist anymore.</p><a className="dashboard-button" href="/dashboard.html"><span className="button-arrow">←</span> Back to Dashboard</a><p className="not-found-hint">Return to your workspace and continue exploring your portfolio.</p></div><NotFoundGraphic /></section></main><footer className="not-found-footer"><span>© 2026 StockLab</span><span>Simulated investing workspace</span></footer></div>
+  return <div className="not-found-page"><header className="not-found-header"><Brand /><span className="status-pill"><i /> Workspace online</span></header><main className="not-found-main"><section aria-labelledby="not-found-title" className="not-found-card"><div className="not-found-copy"><p className="not-found-eyebrow">Error 404 <span /> StockLab workspace</p><h1 id="not-found-title">Page not found</h1><p className="not-found-message">The page you’re looking for has moved, expired, or doesn’t exist anymore.</p><a className="dashboard-button" href={routeFor('dashboard')}><span className="button-arrow">←</span> Back to Dashboard</a><p className="not-found-hint">Return to your workspace and continue exploring your portfolio.</p></div><NotFoundGraphic /></section></main><footer className="not-found-footer"><span>© 2026 StockLab</span><span>Simulated investing workspace</span></footer></div>
 }

@@ -1,3 +1,4 @@
+import { routeFor } from '../navigation/routes'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import './login.css'
@@ -141,7 +142,7 @@ export default function LoginPage() {
           </form>
           <div className="form-divider"><span>{copy.divider}</span></div>
           <button className="google-button" type="button"><Icon name="google" /><span>{copy.google}</span></button>
-          <p className="register-prompt">{copy.prompt} <a href="/register">{copy.register}</a></p>
+          <p className="register-prompt">{copy.prompt} <a href={routeFor('register')}>{copy.register}</a></p>
         </section>
       </div>
     </main>
