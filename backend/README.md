@@ -25,6 +25,8 @@ backend/
 |   |-- MarketData/
 |   |-- Azure/
 |   `-- AWS/
+|-- StockLab.UnitTests/
+|   `-- MarketData/
 `-- README.md
 ```
 
@@ -175,7 +177,27 @@ or resources are required by this foundation.
 
 ## Verification
 
-Restore and build the solution, then check health, Development OpenAPI and the
-absence of WeatherForecast. Verify that the local frontend origin receives the
-CORS header and an unlisted origin does not. There is no automated test project
-yet; its creation belongs to issue #86, so `dotnet test` is not applicable here.
+Run all backend unit tests from the repository root with one command:
+
+```powershell
+dotnet test backend/StockLab.sln
+```
+
+`StockLab.UnitTests` uses xUnit and the .NET test SDK, references Application and
+Infrastructure, and groups tests by domain under `MarketData/`. Production projects
+do not reference the test project. Initial tests exercise the existing local mock:
+quotes, searches, historical date boundaries and consistency, invalid input and
+cancellation. They use fixed fixture dates without network calls, credentials,
+cloud resources or wall-clock dependencies. Comprehensive Market Data coverage
+and tests of future protection layers remain in issue #88.
+
+For separate restore, build and test steps:
+
+```powershell
+dotnet restore backend/StockLab.sln
+dotnet build backend/StockLab.sln --no-restore
+dotnet test backend/StockLab.sln --no-build
+```
+
+For API changes, also check health, Development OpenAPI, absence of WeatherForecast
+and CORS behavior with the API running.
