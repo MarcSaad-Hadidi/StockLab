@@ -5,6 +5,8 @@ import { marketRoute } from './marketRoutes'
 
 type MarketShellProps = {
   children: ReactNode
+  breadcrumb?: ReactNode
+  topbarSearch?: boolean
 }
 
 const navigationSections: Array<{
@@ -44,11 +46,15 @@ function BrandIcon() {
 
 export function MarketShell({
   children,
+  breadcrumb,
+  topbarSearch = false,
 }: MarketShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <div className="market-app-shell">
+    <div className={`market-shell-frame ${breadcrumb ? 'market-shell-frame-context' : ''}`}>
+      {breadcrumb && <div className="market-context-bar"><div className="market-breadcrumb-copy">{breadcrumb}</div></div>}
+      <div className="market-app-shell">
       <aside className={`market-sidebar ${sidebarOpen ? 'market-sidebar-open' : ''}`}>
         <a className="market-brand" href={marketRoute} onClick={() => setSidebarOpen(false)}>
           <BrandIcon />
@@ -99,6 +105,14 @@ export function MarketShell({
             </button>
           </div>
 
+          {topbarSearch && (
+            <label className="market-shell-search">
+              <MarketIcon name="search" size={15} />
+              <span className="market-sr-only">Search stocks, ETFs or news</span>
+              <input aria-label="Search stocks, ETFs or news" placeholder="Search stocks, ETFs, news..." type="search" />
+            </label>
+          )}
+
           <div className="market-topbar-actions">
             <button aria-label="View notifications" className="market-topbar-icon has-notification" type="button">
               <MarketIcon name="bell" size={17} />
@@ -116,6 +130,7 @@ export function MarketShell({
 
         <main className="market-content">{children}</main>
       </div>
+    </div>
     </div>
   )
 }
