@@ -1,6 +1,6 @@
 @StockLab.Api_HostAddress = http://localhost:5274
 
-GET {{StockLab.Api_HostAddress}}/weatherforecast/
+GET {{StockLab.Api_HostAddress}}/openapi/v1.json
 Accept: application/json
 
 ###
