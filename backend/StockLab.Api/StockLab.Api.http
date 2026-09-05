@@ -9,3 +9,13 @@ GET {{StockLab.Api_HostAddress}}/openapi/v1.json
 Accept: application/json
 
 ###
+
+GET {{StockLab.Api_HostAddress}}/api/stocks/AAPL/quote
+Accept: application/json
+
+###
+
+GET {{StockLab.Api_HostAddress}}/api/stocks/INVALID/quote
+Accept: application/json
+
+###

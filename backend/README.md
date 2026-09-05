@@ -9,6 +9,7 @@ backend/
 |-- StockLab.sln
 |-- StockLab.Api/
 |   |-- Controllers/
+|   |-- DTOs/
 |   `-- Properties/
 |-- StockLab.Application/
 |   |-- Interfaces/
@@ -37,7 +38,8 @@ backend/
 Domain is the innermost layer. Application depends on Domain, and Infrastructure
 depends on Application and Domain. The API references Application and
 Infrastructure to compose the application. Domain and Application must not depend
-on the API or Infrastructure. Controllers will delegate use cases to Application.
+on the API or Infrastructure. Controllers use application contracts rather than
+concrete provider implementations.
 
 `Program.cs` is the composition root and registers the available ASP.NET Core
 services. Register future application interfaces and implementations here as their
@@ -113,6 +115,27 @@ The HTTP launch profile selects Development and listens on
 `https://localhost:7247` and requires a local development certificate.
 HTTPS redirection remains enabled; the HTTP-only profile can log that no HTTPS
 port is configured. Stop the API with Ctrl+C.
+
+## Stock quote HTTP API
+
+`GET /api/stocks/{symbol}/quote` delegates to `IMarketDataProvider` through
+`StocksController`, passing the HTTP request cancellation token. The current DI
+registration supplies the local mock. HTTP response DTOs live in `StockLab.Api/DTOs`.
+
+```powershell
+Invoke-RestMethod http://localhost:5274/api/stocks/AAPL/quote
+```
+
+The response contains only `symbol`, `price`, `change`, `changePercent` and `volume`.
+Financial values are JSON numbers; unavailable optional values remain null.
+Symbols are trimmed and uppercased. AAPL, MSFT and NVDA return 200 with simulated
+fixture quotes. Unknown symbols return 404 with `error: stock_not_found` and a
+message. Blank symbols reaching the action, or argument errors from the provider,
+return 400 with `error: invalid_symbol`. A URL missing the symbol segment does not
+match this route and returns 404. Cancellation is allowed to propagate.
+
+This route and its 200/400/404 response schemas appear in Development OpenAPI.
+No search/history HTTP endpoints or frontend integration are included.
 
 ## Health and OpenAPI
 
