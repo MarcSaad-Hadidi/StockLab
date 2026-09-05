@@ -41,9 +41,35 @@ on the API or Infrastructure. Controllers will delegate use cases to Application
 
 `Program.cs` is the composition root and registers the available ASP.NET Core
 services. Register future application interfaces and implementations here as their
-issues introduce them. The library projects currently contain only project files
-and tracked folder placeholders: no sample classes or business functionality.
+issues introduce them. Application defines the market-data contracts below;
+Domain and Infrastructure still contain only project files and folder placeholders.
 There are no EF Core, Azure, AWS, Twelve Data or authentication integrations.
+
+## Market-data contracts
+
+`StockLab.Application/Interfaces/IMarketDataProvider.cs` defines asynchronous
+quote, ticker/company search and historical OHLCV retrieval. Every operation
+accepts a cancellation token. DTOs live in `StockLab.Application/DTOs/MarketData`.
+No provider is implemented or registered yet; Infrastructure will implement this
+interface in the dedicated provider issues.
+
+- Prices and price changes use `decimal`; volumes use nullable `long` share counts.
+  Missing optional values stay null; zero means a measured zero. Stock prices must
+  be positive and reported volumes nonnegative. Currency codes use ISO 4217.
+- Timestamps use `DateTimeOffset` with UTC offset zero. Quote timestamps describe
+  when the price was observed, not when the backend received it.
+- History requests use an inclusive start and exclusive end, filtering by bar
+  opening time. Intervals are provider-neutral enum values; unsupported intervals
+  fail explicitly rather than being substituted. Bars are unadjusted, ordered
+  chronologically and unique by timestamp, with no synthetic market-closure bars.
+- Unknown symbols return null for quote/history. A known symbol with no historical
+  data in the range returns an empty Bars list. Search with no matches returns an
+  empty list. Invalid arguments, cancellation and retrieval failures are distinct
+  from these normal absence results.
+
+These are contracts, not executable validation or retrieval logic. Future provider
+implementations must enforce the documented preconditions and output invariants
+and keep provider-specific types and failures behind the application boundary.
 
 ## Restore, build and run
 
