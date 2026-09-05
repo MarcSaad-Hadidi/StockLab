@@ -167,9 +167,49 @@ function aiTraderRoute(): Plugin {
   }
 }
 
+function notFoundRoute(): Plugin {
+  const routePaths = new Set(['/register', '/login', '/profile', '/alerts', '/portfolio', '/watchlist', '/ai-trader', '/not-found'])
+  const documentPaths = new Set(['/', '/market.html', '/dashboard.html'])
+  const assetPrefixes = ['/@', '/src/', '/node_modules/', '/assets/']
+
+  const rewriteRequest = (request: { url?: string }) => {
+    if (!request.url) return
+    const parsedUrl = new URL(request.url, 'http://localhost')
+    const pathname = parsedUrl.pathname
+    const routePath = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname
+
+    if (routePath === '/not-found') {
+      request.url = `/not-found/${parsedUrl.search}`
+      return
+    }
+
+    const isAsset = assetPrefixes.some((prefix) => pathname.startsWith(prefix))
+    const isFile = pathname.includes('.')
+    if (!routePaths.has(routePath) && !documentPaths.has(pathname) && !isAsset && !isFile) {
+      request.url = '/not-found/'
+    }
+  }
+
+  return {
+    name: 'stocklab-not-found-route',
+    configureServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        rewriteRequest(request)
+        next()
+      })
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        rewriteRequest(request)
+        next()
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), registerRoute(), loginRoute(), profileRoute(), alertsRoute(), portfolioRoute(), watchlistRoute(), aiTraderRoute()],
+  plugins: [react(), registerRoute(), loginRoute(), profileRoute(), alertsRoute(), portfolioRoute(), watchlistRoute(), aiTraderRoute(), notFoundRoute()],
   build: {
     rollupOptions: {
       input: {
@@ -183,6 +223,7 @@ export default defineConfig({
         portfolio: resolve(rootDir, 'portfolio/index.html'),
         watchlist: resolve(rootDir, 'watchlist/index.html'),
         aiTrader: resolve(rootDir, 'ai-trader/index.html'),
+        notFound: resolve(rootDir, 'not-found/index.html'),
       },
     },
   },
