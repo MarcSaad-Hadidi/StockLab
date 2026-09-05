@@ -201,7 +201,7 @@ JSON metrics contain named values and their evaluation window, not credentials.
 | Signal | `varchar(4)`: BUY, SELL or HOLD |
 | Symbol | Normalized symbol |
 | Confidence | `decimal(9,8)`, between 0 and 1 inclusive |
-| ProposedQuantity | `decimal(19,8)`, > 0 for BUY/SELL; NULL for HOLD |
+| ApprovedQuantity | `decimal(19,8)`, > 0 only for Approved BUY/SELL; otherwise NULL |
 | RiskStatus | `varchar(13)`: Pending, Approved, Rejected or NotApplicable |
 | RejectionReason | `nvarchar(1000)`, nonblank only when Rejected, otherwise NULL |
 | CreatedAtUtc | `datetime2(7)` |
@@ -216,6 +216,13 @@ even after another version becomes active. Signal, model and confidence are
 immutable; only risk evaluation fields transition. Risk approval alone is not
 evidence of execution: execution is represented by an AiTrades row.
 
+The ML model supplies only BUY/SELL/HOLD and confidence, not a trade quantity.
+The Risk Manager approves or rejects the decision and determines ApprovedQuantity
+for an approved BUY/SELL before forwarding it to the Paper Trading Engine.
+CHECK: Pending, Rejected and HOLD/NotApplicable require ApprovedQuantity = NULL;
+Approved BUY/SELL require ApprovedQuantity > 0. ApprovedQuantity is part of the
+risk evaluation fields, not the immutable ML output.
+
 ### AiTrades
 
 Id, AiPortfolioId (FK AiPortfolios.Id), Side, Symbol, Quantity, ExecutionPrice,
@@ -226,7 +233,8 @@ to prevent attaching a decision from another AI portfolio. It also serves as the
 retry key for execution.
 
 The application must check that the decision is Approved, is BUY/SELL, and matches
-the trade's side, symbol and approved quantity. A foreign key alone cannot enforce
+the trade's side and symbol. AiTrades.Quantity must equal the decision's
+ApprovedQuantity determined by the Risk Manager. A foreign key alone cannot enforce
 these cross-table rules. Execution checks current cash and positions again, even
 after risk approval; failure leaves no trade row and no financial updates.
 
