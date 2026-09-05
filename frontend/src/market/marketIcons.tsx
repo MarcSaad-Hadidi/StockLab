@@ -4,8 +4,12 @@ export type MarketIconName =
   | 'arrowLeft'
   | 'bell'
   | 'briefcase'
+  | 'chart'
+  | 'check'
   | 'chevronDown'
   | 'chevronRight'
+  | 'close'
+  | 'expand'
   | 'filter'
   | 'globe'
   | 'grid'
@@ -13,10 +17,13 @@ export type MarketIconName =
   | 'list'
   | 'mail'
   | 'menu'
+  | 'plus'
   | 'robot'
   | 'search'
   | 'star'
+  | 'sparkles'
   | 'user'
+  | 'wallet'
   | 'logout'
 
 type MarketIconProps = SVGProps<SVGSVGElement> & {
@@ -39,8 +46,18 @@ const iconPaths: Record<MarketIconName, ReactNode> = {
       <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M9 12v2h6v-2" />
     </>
   ),
+  chart: (
+    <>
+      <path d="M4 19V5M4 19h17" />
+      <path d="m7 15 3-4 3 2 5-7" />
+      <path d="M16 6h2v2" />
+    </>
+  ),
+  check: <path d="m5 12 4 4L19 6" />,
   chevronDown: <path d="m6 9 6 6 6-6" />,
   chevronRight: <path d="m9 6 6 6-6 6" />,
+  close: <path d="m6 6 12 12M18 6 6 18" />,
+  expand: <path d="M8 4H4v4M16 4h4v4M20 16v4h-4M4 16v4h4M4 4l5 5M20 4l-5 5M20 20l-5-5M4 20l5-5" />,
   filter: (
     <>
       <path d="M4 6h16M7 12h10M10 18h4" />
@@ -82,6 +99,7 @@ const iconPaths: Record<MarketIconName, ReactNode> = {
     </>
   ),
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  plus: <path d="M12 5v14M5 12h14" />,
   robot: (
     <>
       <rect x="4" y="6" width="16" height="13" rx="3" />
@@ -95,10 +113,22 @@ const iconPaths: Record<MarketIconName, ReactNode> = {
     </>
   ),
   star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" />,
+  sparkles: (
+    <>
+      <path d="m12 3-1.4 5.6L5 10l5.6 1.4L12 17l1.4-5.6L19 10l-5.6-1.4L12 3Z" />
+      <path d="m19 16-.7 2.3L16 19l2.3.7L19 22l.7-2.3L22 19l-2.3-.7L19 16Z" />
+    </>
+  ),
   user: (
     <>
       <circle cx="12" cy="8" r="3.5" />
       <path d="M5 20a7 7 0 0 1 14 0" />
+    </>
+  ),
+  wallet: (
+    <>
+      <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6.5A2.5 2.5 0 0 1 4 16.5v-9Z" />
+      <path d="M4 8h14a3 3 0 0 1 3 3v2h-5a2 2 0 0 1 0-4h5M16 11h.01" />
     </>
   ),
   logout: (
