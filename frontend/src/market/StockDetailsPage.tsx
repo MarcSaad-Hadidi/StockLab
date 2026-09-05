@@ -5,9 +5,14 @@ import { type MarketStock } from './marketData'
 import { StockLogo } from './StockLogo'
 import {
   calculateTradeTotal,
+  chartRanges,
   getStockDetails,
+  getTradeExecutionPrice,
+  getVisibleHistory,
   type AiTraderRecommendation,
+  type ChartRange,
   type StockDetails,
+  type TradeOrderType,
 } from './stockDetailsData'
 
 type StockDetailsPageProps = {
@@ -18,9 +23,14 @@ type StockDetailsPageProps = {
 
 type TradeSide = 'BUY' | 'SELL'
 type AlertCondition = 'above' | 'below'
-
-const chartRanges = ['1D', '5D', '1M', '3M', '6M', 'YTD', '1Y', '5Y', 'MAX'] as const
-type ChartRange = typeof chartRanges[number]
+type TradeConfirmation = {
+  side: TradeSide
+  quantity: number
+  total: number
+  orderType: TradeOrderType
+  limitPrice?: number
+  executionPrice: number
+}
 
 const detailTabs = ['Overview', 'Chart', 'Financials', 'News', 'Key Metrics', 'Forecast', 'AI Insights'] as const
 type DetailTab = typeof detailTabs[number]
@@ -34,15 +44,8 @@ function changeLabel(details: StockDetails) {
   return `${sign}${formatCurrency(Math.abs(details.changeAmount))} (${details.changePercent}) today`
 }
 
-function getVisibleHistory(details: StockDetails, range: ChartRange) {
-  if (range === '1D') return details.history.slice(-2)
-  if (range === '5D') return details.history.slice(-5)
-  if (range === '1M') return details.history.slice(-6)
-  return details.history
-}
-
 function PriceChart({ details, range }: { details: StockDetails; range: ChartRange }) {
-  const history = getVisibleHistory(details, range)
+  const history = getVisibleHistory(details.history, range)
   const width = 720
   const height = 270
   const plotLeft = 52
@@ -63,6 +66,7 @@ function PriceChart({ details, range }: { details: StockDetails; range: ChartRan
   const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ')
   const areaPath = `${linePath} L ${points.at(-1)?.x.toFixed(2)} ${plotTop + plotHeight} L ${points[0]?.x.toFixed(2)} ${plotTop + plotHeight} Z`
   const yTicks = Array.from({ length: 4 }, (_, index) => maxValue - (valueRange / 3) * index)
+  const markerValue = history.at(-1)?.value ?? details.price
   const labelIndexes = [...new Set([
     0,
     Math.floor((history.length - 1) * 0.25),
@@ -89,8 +93,8 @@ function PriceChart({ details, range }: { details: StockDetails; range: ChartRan
           <g>
             <line className="stock-chart-guide" x1={points.at(-1)?.x} x2={points.at(-1)?.x} y1={points.at(-1)?.y} y2={plotTop + plotHeight} />
             <circle className="stock-chart-point" cx={points.at(-1)?.x} cy={points.at(-1)?.y} r="4" />
-            <rect className="stock-chart-value-pill" height="22" rx="5" width="56" x={Math.min(width - 62, Math.max(plotLeft, (points.at(-1)?.x ?? width) - 26))} y={Math.max(5, (points.at(-1)?.y ?? 20) - 30)} />
-            <text className="stock-chart-value-label" x={Math.min(width - 34, Math.max(plotLeft + 28, (points.at(-1)?.x ?? width)))} y={Math.max(20, (points.at(-1)?.y ?? 20) - 15)}>$191.45</text>
+            <rect className="stock-chart-value-pill" height="22" rx="5" width="68" x={Math.min(width - 74, Math.max(plotLeft, (points.at(-1)?.x ?? width) - 34))} y={Math.max(5, (points.at(-1)?.y ?? 20) - 30)} />
+            <text className="stock-chart-value-label" x={Math.min(width - 40, Math.max(plotLeft + 34, (points.at(-1)?.x ?? width)))} y={Math.max(20, (points.at(-1)?.y ?? 20) - 15)}>{formatCurrency(markerValue)}</text>
           </g>
         )}
         {labelIndexes.map((index) => {
@@ -278,8 +282,9 @@ function AlertModal({ details, onClose, onCreated }: { details: StockDetails; on
   )
 }
 
-function TradeConfirmationModal({ details, side, quantity, total, onClose, onConfirm }: { details: StockDetails; side: TradeSide; quantity: number; total: number; onClose: () => void; onConfirm: () => void }) {
+function TradeConfirmationModal({ details, side, quantity, total, orderType, limitPrice, executionPrice, onClose, onConfirm }: { details: StockDetails; side: TradeSide; quantity: number; total: number; orderType: TradeOrderType; limitPrice?: number; executionPrice: number; onClose: () => void; onConfirm: () => void }) {
   const isBuy = side === 'BUY'
+  const isLimitOrder = orderType === 'limit'
   const dialogRef = useRef<HTMLElement | null>(null)
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 
@@ -294,8 +299,10 @@ function TradeConfirmationModal({ details, side, quantity, total, onClose, onCon
         <p>Review the simulated order before placing it.</p>
         <div className="stock-confirmation-list">
           <div><span>Asset</span><strong>{details.symbol} · {details.company}</strong></div>
-          <div><span>Order type</span><strong>Market Order</strong></div>
+          <div><span>Order type</span><strong>{isLimitOrder ? 'Limit Order' : 'Market Order'}</strong></div>
+          {isLimitOrder && <div><span>Limit price</span><strong>{formatCurrency(limitPrice ?? executionPrice)}</strong></div>}
           <div><span>Quantity</span><strong>{quantity} shares</strong></div>
+          <div><span>Estimated price</span><strong>{formatCurrency(executionPrice)}</strong></div>
           <div><span>Estimated total</span><strong>{formatCurrency(total)}</strong></div>
         </div>
         <div className="stock-modal-actions"><button className="stock-secondary-button" onClick={onClose} type="button">Go Back</button><button className={`stock-primary-button ${isBuy ? '' : 'stock-primary-button-sell'}`} onClick={onConfirm} type="button">Confirm {isBuy ? 'Buy' : 'Sell'}</button></div>
@@ -304,9 +311,10 @@ function TradeConfirmationModal({ details, side, quantity, total, onClose, onCon
   )
 }
 
-function TradeTicket({ details, side, quantity, quantityError, onSideChange, onQuantityChange, onSubmit }: { details: StockDetails; side: TradeSide; quantity: string; quantityError: string; onSideChange: (side: TradeSide) => void; onQuantityChange: (quantity: string) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+function TradeTicket({ details, side, quantity, quantityError, orderType, limitPrice, limitPriceError, onSideChange, onQuantityChange, onOrderTypeChange, onLimitPriceChange, onSubmit }: { details: StockDetails; side: TradeSide; quantity: string; quantityError: string; orderType: TradeOrderType; limitPrice: string; limitPriceError: string; onSideChange: (side: TradeSide) => void; onQuantityChange: (quantity: string) => void; onOrderTypeChange: (orderType: TradeOrderType) => void; onLimitPriceChange: (limitPrice: string) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   const parsedQuantity = Number(quantity)
-  const estimatedTotal = calculateTradeTotal(details.price, parsedQuantity)
+  const estimatedPrice = getTradeExecutionPrice(orderType, details.price, Number(limitPrice))
+  const estimatedTotal = calculateTradeTotal(estimatedPrice, parsedQuantity)
   const isBuy = side === 'BUY'
 
   return (
@@ -319,10 +327,12 @@ function TradeTicket({ details, side, quantity, quantityError, onSideChange, onQ
         <button aria-pressed={isBuy} className={isBuy ? 'stock-trade-tab-active stock-trade-tab-buy' : ''} onClick={() => onSideChange('BUY')} type="button">BUY</button>
         <button aria-pressed={!isBuy} className={!isBuy ? 'stock-trade-tab-active stock-trade-tab-sell' : ''} onClick={() => onSideChange('SELL')} type="button">SELL</button>
       </div>
-      <div className="stock-trade-field"><label htmlFor="stock-order-type">Order Type</label><select id="stock-order-type" defaultValue="market"><option value="market">Market Order</option><option value="limit">Limit Order</option></select></div>
+      <div className="stock-trade-field"><label htmlFor="stock-order-type">Order Type</label><select id="stock-order-type" onChange={(event) => onOrderTypeChange(event.target.value as TradeOrderType)} value={orderType}><option value="market">Market Order</option><option value="limit">Limit Order</option></select></div>
+      {orderType === 'limit' && <div className="stock-trade-field"><label htmlFor="stock-limit-price">Limit Price</label><div className="stock-trade-input"><input aria-describedby={limitPriceError ? 'stock-limit-price-error' : undefined} id="stock-limit-price" inputMode="decimal" min="0.01" onChange={(event) => onLimitPriceChange(event.target.value)} step="0.01" type="number" value={limitPrice} /><span>USD</span></div></div>}
       <div className="stock-trade-field"><label htmlFor="stock-quantity">Quantity</label><div className="stock-trade-input"><input id="stock-quantity" inputMode="numeric" min="1" onChange={(event) => onQuantityChange(event.target.value)} type="number" value={quantity} /><span>Shares</span></div></div>
       {quantityError && <p className="stock-form-error" role="alert">{quantityError}</p>}
-      <div className="stock-trade-summary"><div><span>Est. Price</span><strong>{formatCurrency(details.price)}</strong></div><div><span>Est. Total</span><strong>{formatCurrency(estimatedTotal)}</strong></div></div>
+      {limitPriceError && <p className="stock-form-error" id="stock-limit-price-error" role="alert">{limitPriceError}</p>}
+      <div className="stock-trade-summary"><div><span>Est. Price</span><strong>{estimatedPrice > 0 ? formatCurrency(estimatedPrice) : '—'}</strong></div><div><span>Est. Total</span><strong>{estimatedPrice > 0 ? formatCurrency(estimatedTotal) : '—'}</strong></div></div>
       <button className={`stock-trade-submit ${isBuy ? 'stock-trade-submit-buy' : 'stock-trade-submit-sell'}`} type="submit">{isBuy ? 'Place Buy Order' : 'Place Sell Order'}</button>
       <div className="stock-cash-row"><span>Available Cash (Paper)</span><strong>$12,430.18</strong></div>
     </form>
@@ -334,9 +344,12 @@ export function StockDetailsPage({ requestedSymbol, stock, onBack }: StockDetail
   const [isWatchlisted, setIsWatchlisted] = useState(false)
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false)
   const [tradeSide, setTradeSide] = useState<TradeSide>('BUY')
+  const [orderType, setOrderType] = useState<TradeOrderType>('market')
+  const [limitPrice, setLimitPrice] = useState('')
   const [quantity, setQuantity] = useState('10')
   const [quantityError, setQuantityError] = useState('')
-  const [tradeConfirmation, setTradeConfirmation] = useState<{ side: TradeSide; quantity: number; total: number } | null>(null)
+  const [limitPriceError, setLimitPriceError] = useState('')
+  const [tradeConfirmation, setTradeConfirmation] = useState<TradeConfirmation | null>(null)
   const [activeRange, setActiveRange] = useState<ChartRange>('3M')
   const [activeTab, setActiveTab] = useState<DetailTab>('Overview')
   const [toast, setToast] = useState('')
@@ -366,7 +379,21 @@ export function StockDetailsPage({ requestedSymbol, stock, onBack }: StockDetail
       return
     }
     setQuantityError('')
-    setTradeConfirmation({ side: tradeSide, quantity: parsedQuantity, total: calculateTradeTotal(details.price, parsedQuantity) })
+    const parsedLimitPrice = Number(limitPrice)
+    if (orderType === 'limit' && (!Number.isFinite(parsedLimitPrice) || parsedLimitPrice <= 0)) {
+      setLimitPriceError('Enter a limit price greater than zero.')
+      return
+    }
+    setLimitPriceError('')
+    const executionPrice = getTradeExecutionPrice(orderType, details.price, parsedLimitPrice)
+    setTradeConfirmation({
+      side: tradeSide,
+      quantity: parsedQuantity,
+      total: calculateTradeTotal(executionPrice, parsedQuantity),
+      orderType,
+      limitPrice: orderType === 'limit' ? parsedLimitPrice : undefined,
+      executionPrice,
+    })
   }
 
   return (
@@ -426,13 +453,26 @@ export function StockDetailsPage({ requestedSymbol, stock, onBack }: StockDetail
 
           <aside className="stock-details-side-column">
             <AiInsightCard details={details} />
-            <TradeTicket details={details} onQuantityChange={(value) => { setQuantity(value); setQuantityError('') }} onSideChange={setTradeSide} onSubmit={submitTrade} quantity={quantity} quantityError={quantityError} side={tradeSide} />
+            <TradeTicket
+              details={details}
+              limitPrice={limitPrice}
+              limitPriceError={limitPriceError}
+              onLimitPriceChange={(value) => { setLimitPrice(value); setLimitPriceError('') }}
+              onOrderTypeChange={(value) => { setOrderType(value); setLimitPriceError('') }}
+              onQuantityChange={(value) => { setQuantity(value); setQuantityError('') }}
+              onSideChange={setTradeSide}
+              onSubmit={submitTrade}
+              orderType={orderType}
+              quantity={quantity}
+              quantityError={quantityError}
+              side={tradeSide}
+            />
           </aside>
         </div>
       </section>
 
       {isAlertModalOpen && <AlertModal details={details} onClose={() => setIsAlertModalOpen(false)} onCreated={() => { setIsAlertModalOpen(false); showToast(`${details.symbol} price alert created.`) }} />}
-      {tradeConfirmation && <TradeConfirmationModal details={details} onClose={() => setTradeConfirmation(null)} onConfirm={() => { setTradeConfirmation(null); showToast(`${tradeConfirmation.side} order for ${tradeConfirmation.quantity} ${details.symbol} shares placed.`) }} quantity={tradeConfirmation.quantity} side={tradeConfirmation.side} total={tradeConfirmation.total} />}
+      {tradeConfirmation && <TradeConfirmationModal details={details} executionPrice={tradeConfirmation.executionPrice} limitPrice={tradeConfirmation.limitPrice} onClose={() => setTradeConfirmation(null)} onConfirm={() => { setTradeConfirmation(null); showToast(`${tradeConfirmation.side} ${tradeConfirmation.orderType} order for ${tradeConfirmation.quantity} ${details.symbol} shares placed.`) }} orderType={tradeConfirmation.orderType} quantity={tradeConfirmation.quantity} side={tradeConfirmation.side} total={tradeConfirmation.total} />}
       {toast && <div aria-live="polite" className="stock-toast">{toast}</div>}
     </MarketShell>
   )

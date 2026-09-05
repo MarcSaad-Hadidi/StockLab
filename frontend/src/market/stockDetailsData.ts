@@ -33,6 +33,11 @@ export type AiTraderInsight = {
   updatedAt: string
 }
 
+export const chartRanges = ['1D', '5D', '1M', '3M', '6M', 'YTD', '1Y', '5Y', 'MAX'] as const
+export type ChartRange = typeof chartRanges[number]
+
+export type TradeOrderType = 'market' | 'limit'
+
 export type StockDetails = {
   symbol: string
   company: string
@@ -54,6 +59,38 @@ type StockDetailsOverrides = Partial<Omit<StockDetails, 'stats' | 'aiInsight' | 
   history?: StockDetailHistoryPoint[]
   stats?: Partial<StockDetailStats>
   aiInsight?: Partial<AiTraderInsight>
+}
+
+const chartRangePointCounts: Record<ChartRange, number> = {
+  '1D': 2,
+  '5D': 5,
+  '1M': 6,
+  '3M': 10,
+  '6M': 12,
+  YTD: 13,
+  '1Y': 16,
+  '5Y': 20,
+  MAX: 24,
+}
+
+export function getVisibleHistory(history: StockDetailHistoryPoint[], range: ChartRange) {
+  const pointCount = chartRangePointCounts[range]
+  if (history.length >= pointCount) return history.slice(-pointCount)
+
+  const firstPoint = history[0]
+  if (!firstPoint) return []
+
+  const missingPointCount = pointCount - history.length
+  const extension = Array.from({ length: missingPointCount }, (_, index) => {
+    const distanceFromCurrentHistory = missingPointCount - index
+    const value = Math.max(0.01, firstPoint.value * (1 - distanceFromCurrentHistory * 0.01))
+    return {
+      label: `Earlier ${distanceFromCurrentHistory}`,
+      value: Number(value.toFixed(2)),
+    }
+  })
+
+  return [...extension, ...history]
 }
 
 const aaplHistory: StockDetailHistoryPoint[] = [
@@ -182,4 +219,11 @@ export function getStockDetails(stock: MarketStock): StockDetails {
 export function calculateTradeTotal(price: number, quantity: number) {
   if (!Number.isFinite(price) || !Number.isFinite(quantity) || price <= 0 || quantity <= 0) return 0
   return Math.round(price * quantity * 100) / 100
+}
+
+export function getTradeExecutionPrice(orderType: TradeOrderType, marketPrice: number, limitPrice?: number) {
+  if (!Number.isFinite(marketPrice) || marketPrice <= 0) return 0
+  if (orderType === 'limit' && typeof limitPrice === 'number' && Number.isFinite(limitPrice) && limitPrice > 0) return limitPrice
+  if (orderType === 'limit') return 0
+  return marketPrice
 }
