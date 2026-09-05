@@ -117,9 +117,34 @@ function portfolioRoute(): Plugin {
   }
 }
 
+function watchlistRoute(): Plugin {
+  const normalizeRoute = (url: string | undefined) => {
+    if (!url) return url
+    const parsedUrl = new URL(url, 'http://localhost')
+    if (parsedUrl.pathname !== '/watchlist' && parsedUrl.pathname !== '/watchlist/') return url
+    return `/watchlist/${parsedUrl.search}`
+  }
+
+  return {
+    name: 'stocklab-watchlist-route',
+    configureServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        request.url = normalizeRoute(request.url)
+        next()
+      })
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        request.url = normalizeRoute(request.url)
+        next()
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), registerRoute(), loginRoute(), profileRoute(), alertsRoute(), portfolioRoute()],
+  plugins: [react(), registerRoute(), loginRoute(), profileRoute(), alertsRoute(), portfolioRoute(), watchlistRoute()],
   build: {
     rollupOptions: {
       input: {
@@ -130,6 +155,7 @@ export default defineConfig({
         profile: resolve(rootDir, 'profile/index.html'),
         alerts: resolve(rootDir, 'alerts/index.html'),
         portfolio: resolve(rootDir, 'portfolio/index.html'),
+        watchlist: resolve(rootDir, 'watchlist/index.html'),
       },
     },
   },
