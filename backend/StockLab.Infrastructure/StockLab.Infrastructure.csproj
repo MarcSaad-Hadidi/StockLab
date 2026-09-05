@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\StockLab.Application\StockLab.Application.csproj" />
+    <ProjectReference Include="..\StockLab.Domain\StockLab.Domain.csproj" />
+  </ItemGroup>
+</Project>
