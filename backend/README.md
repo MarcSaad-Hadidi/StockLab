@@ -42,7 +42,7 @@ on the API or Infrastructure. Controllers will delegate use cases to Application
 `Program.cs` is the composition root and registers the available ASP.NET Core
 services. Register future application interfaces and implementations here as their
 issues introduce them. Application defines the market-data contracts below;
-Domain and Infrastructure still contain only project files and folder placeholders.
+Infrastructure implements the local mock provider, while Domain remains a placeholder.
 There are no EF Core, Azure, AWS, Twelve Data or authentication integrations.
 
 ## Market-data contracts
@@ -50,8 +50,9 @@ There are no EF Core, Azure, AWS, Twelve Data or authentication integrations.
 `StockLab.Application/Interfaces/IMarketDataProvider.cs` defines asynchronous
 quote, ticker/company search and historical OHLCV retrieval. Every operation
 accepts a cancellation token. DTOs live in `StockLab.Application/DTOs/MarketData`.
-No provider is implemented or registered yet; Infrastructure will implement this
-interface in the dedicated provider issues.
+The API currently registers Infrastructure's `MockMarketDataProvider` as a singleton
+implementation. Replacing that registration will select a future provider without
+changing application contracts.
 
 - Prices and price changes use `decimal`; volumes use nullable `long` share counts.
   Missing optional values stay null; zero means a measured zero. Stock prices must
@@ -67,9 +68,35 @@ interface in the dedicated provider issues.
   empty list. Invalid arguments, cancellation and retrieval failures are distinct
   from these normal absence results.
 
-These are contracts, not executable validation or retrieval logic. Future provider
+These DTOs define contracts rather than executable validation logic. Provider
 implementations must enforce the documented preconditions and output invariants
 and keep provider-specific types and failures behind the application boundary.
+
+### Local mock provider
+
+`StockLab.Infrastructure/MarketData/MockMarketDataProvider.cs` contains only local
+simulated fixtures for AAPL (Apple Inc.), MSFT (Microsoft Corporation) and NVDA
+(NVIDIA Corporation), all in USD on NASDAQ. There are no network calls or API keys.
+Quotes are fixed at the simulated August 28, 2026 session close, not current prices.
+Their prices, changes and volumes agree with the final daily historical bars.
+
+The mock provides five unadjusted daily OHLCV bars, August 24-28, 2026, opening at
+13:30 UTC. Only `StockHistoryInterval.Day` is supported. Other defined intervals
+throw `NotSupportedException`; undefined enum values throw
+`ArgumentOutOfRangeException`. A known symbol outside the fixture dates returns an
+empty history. Date filtering uses `[FromUtc, ToUtc)` on bar opening times and
+does not regenerate prices relative to the requested range.
+
+Symbols are trimmed and normalized to uppercase. Search matches partial symbols
+or company names case-insensitively and returns each matching stock once.
+Unknown symbols return null for quote/history; unmatched searches return an empty
+read-only collection. Returned history collections are also read-only.
+
+Null/blank inputs, non-UTC history bounds and invalid ranges are rejected with
+argument exceptions. Unsupported intervals are checked before symbol lookup.
+Cancellation is checked before validation and while constructing results, with
+the caller's token preserved in `OperationCanceledException`. No artificial delay,
+randomness or wall-clock dependency is used.
 
 ## Restore, build and run
 

@@ -1,3 +1,6 @@
+using StockLab.Application.Interfaces;
+using StockLab.Infrastructure.MarketData;
+
 var builder = WebApplication.CreateBuilder(args);
 
 const string frontendCorsPolicy = "Frontend";
@@ -5,6 +8,7 @@ const string frontendCorsPolicy = "Frontend";
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
+builder.Services.AddSingleton<IMarketDataProvider, MockMarketDataProvider>();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(frontendCorsPolicy, policy =>
