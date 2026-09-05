@@ -167,8 +167,33 @@ function aiTraderRoute(): Plugin {
   }
 }
 
+function transactionsRoute(): Plugin {
+  const normalizeRoute = (url: string | undefined) => {
+    if (!url) return url
+    const parsedUrl = new URL(url, 'http://localhost')
+    if (parsedUrl.pathname !== '/transactions' && parsedUrl.pathname !== '/transactions/') return url
+    return `/transactions/${parsedUrl.search}`
+  }
+
+  return {
+    name: 'stocklab-transactions-route',
+    configureServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        request.url = normalizeRoute(request.url)
+        next()
+      })
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        request.url = normalizeRoute(request.url)
+        next()
+      })
+    },
+  }
+}
+
 function notFoundRoute(): Plugin {
-  const routePaths = new Set(['/register', '/login', '/profile', '/alerts', '/portfolio', '/watchlist', '/ai-trader', '/not-found'])
+  const routePaths = new Set(['/register', '/login', '/profile', '/alerts', '/portfolio', '/watchlist', '/ai-trader', '/transactions', '/not-found'])
   const documentPaths = new Set(['/', '/market.html', '/dashboard.html'])
   const assetPrefixes = ['/@', '/src/', '/node_modules/', '/assets/']
 
@@ -209,7 +234,7 @@ function notFoundRoute(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), registerRoute(), loginRoute(), profileRoute(), alertsRoute(), portfolioRoute(), watchlistRoute(), aiTraderRoute(), notFoundRoute()],
+  plugins: [react(), registerRoute(), loginRoute(), profileRoute(), alertsRoute(), portfolioRoute(), watchlistRoute(), aiTraderRoute(), transactionsRoute(), notFoundRoute()],
   build: {
     rollupOptions: {
       input: {
@@ -224,6 +249,7 @@ export default defineConfig({
         watchlist: resolve(rootDir, 'watchlist/index.html'),
         aiTrader: resolve(rootDir, 'ai-trader/index.html'),
         notFound: resolve(rootDir, 'not-found/index.html'),
+        transactions: resolve(rootDir, 'transactions/index.html'),
       },
     },
   },
