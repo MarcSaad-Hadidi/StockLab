@@ -142,13 +142,39 @@ function watchlistRoute(): Plugin {
   }
 }
 
+function aiTraderRoute(): Plugin {
+  const normalizeRoute = (url: string | undefined) => {
+    if (!url) return url
+    const parsedUrl = new URL(url, 'http://localhost')
+    if (parsedUrl.pathname !== '/ai-trader' && parsedUrl.pathname !== '/ai-trader/') return url
+    return `/ai-trader/${parsedUrl.search}`
+  }
+
+  return {
+    name: 'stocklab-ai-trader-route',
+    configureServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        request.url = normalizeRoute(request.url)
+        next()
+      })
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        request.url = normalizeRoute(request.url)
+        next()
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), registerRoute(), loginRoute(), profileRoute(), alertsRoute(), portfolioRoute(), watchlistRoute()],
+  plugins: [react(), registerRoute(), loginRoute(), profileRoute(), alertsRoute(), portfolioRoute(), watchlistRoute(), aiTraderRoute()],
   build: {
     rollupOptions: {
       input: {
         main: resolve(rootDir, 'index.html'),
+        dashboard: resolve(rootDir, 'dashboard.html'),
         market: resolve(rootDir, 'market.html'),
         register: resolve(rootDir, 'register/index.html'),
         login: resolve(rootDir, 'login/index.html'),
@@ -156,6 +182,7 @@ export default defineConfig({
         alerts: resolve(rootDir, 'alerts/index.html'),
         portfolio: resolve(rootDir, 'portfolio/index.html'),
         watchlist: resolve(rootDir, 'watchlist/index.html'),
+        aiTrader: resolve(rootDir, 'ai-trader/index.html'),
       },
     },
   },
