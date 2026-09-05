@@ -12,6 +12,18 @@ function registerRoute(): Plugin {
     configureServer(server) {
       server.middlewares.use((request, _response, next) => {
         if (request.url === '/register') request.url = '/register/'
+        next()
+      })
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        if (request.url === '/register') request.url = '/register/'
+        next()
+      })
+    },
+  }
+}
+
 function loginRoute(): Plugin {
   return {
     name: 'stocklab-login-route',
@@ -23,7 +35,6 @@ function loginRoute(): Plugin {
     },
     configurePreviewServer(server) {
       server.middlewares.use((request, _response, next) => {
-        if (request.url === '/register') request.url = '/register/'
         if (request.url === '/login') request.url = '/login/'
         next()
       })
@@ -33,18 +44,12 @@ function loginRoute(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
-  build: {
-    rollupOptions: {
-      input: {
-        app: 'index.html',
-        market: 'market.html',
-  plugins: [react(), registerRoute()],
-  plugins: [react(), loginRoute()],
+  plugins: [react(), registerRoute(), loginRoute()],
   build: {
     rollupOptions: {
       input: {
         main: resolve(rootDir, 'index.html'),
+        market: resolve(rootDir, 'market.html'),
         register: resolve(rootDir, 'register/index.html'),
         login: resolve(rootDir, 'login/index.html'),
       },
