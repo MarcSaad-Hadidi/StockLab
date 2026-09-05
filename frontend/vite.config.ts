@@ -42,9 +42,34 @@ function loginRoute(): Plugin {
   }
 }
 
+function profileRoute(): Plugin {
+  const normalizeRoute = (url: string | undefined) => {
+    if (!url) return url
+    const parsedUrl = new URL(url, 'http://localhost')
+    if (parsedUrl.pathname !== '/profile' && parsedUrl.pathname !== '/profile/') return url
+    return `/profile/${parsedUrl.search}`
+  }
+
+  return {
+    name: 'stocklab-profile-route',
+    configureServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        request.url = normalizeRoute(request.url)
+        next()
+      })
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        request.url = normalizeRoute(request.url)
+        next()
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), registerRoute(), loginRoute()],
+  plugins: [react(), registerRoute(), loginRoute(), profileRoute()],
   build: {
     rollupOptions: {
       input: {
@@ -52,6 +77,7 @@ export default defineConfig({
         market: resolve(rootDir, 'market.html'),
         register: resolve(rootDir, 'register/index.html'),
         login: resolve(rootDir, 'login/index.html'),
+        profile: resolve(rootDir, 'profile/index.html'),
       },
     },
   },
