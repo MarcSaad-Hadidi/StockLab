@@ -14,7 +14,8 @@ import {
   type WatchlistItem,
   watchlist,
 } from './dashboardData'
-import { getMillisecondsUntilNextGreetingChange, getTimeBasedGreeting } from './dashboardGreeting'
+import { getTimeBasedGreeting } from './dashboardGreeting'
+import { startDashboardGreetingTimer } from './dashboardGreetingTimer'
 
 type IconProps = {
   name: IconName
@@ -274,19 +275,7 @@ export function DashboardPage() {
   const [greeting, setGreeting] = useState(() => getTimeBasedGreeting(new Date(), dashboardUserName))
 
   useEffect(() => {
-    let timeoutId: number
-
-    const scheduleGreetingUpdate = () => {
-      const now = new Date()
-      setGreeting(getTimeBasedGreeting(now, dashboardUserName))
-      timeoutId = window.setTimeout(scheduleGreetingUpdate, getMillisecondsUntilNextGreetingChange(now))
-    }
-
-    timeoutId = window.setTimeout(() => {
-      scheduleGreetingUpdate()
-    }, getMillisecondsUntilNextGreetingChange(new Date()))
-
-    return () => window.clearTimeout(timeoutId)
+    return startDashboardGreetingTimer(setGreeting, dashboardUserName)
   }, [])
 
   const filteredWatchlist = useMemo(() => {
