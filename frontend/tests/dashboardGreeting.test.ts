@@ -31,6 +31,8 @@ test('changes periods exactly at 05:00, 12:00, and 18:00', () => {
 })
 
 test('schedules the next update at the next period boundary', () => {
+  assert.equal(getMillisecondsUntilNextGreetingChange(localDate(4, 59, 59, 999)), 1)
+  assert.equal(getMillisecondsUntilNextGreetingChange(localDate(5, 0)), 7 * 60 * 60 * 1000)
   assert.equal(getMillisecondsUntilNextGreetingChange(localDate(11, 59, 59, 999)), 1)
   assert.equal(getMillisecondsUntilNextGreetingChange(localDate(17, 59, 59, 999)), 1)
   assert.equal(getMillisecondsUntilNextGreetingChange(localDate(23, 0)), 6 * 60 * 60 * 1000)
