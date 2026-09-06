@@ -361,7 +361,7 @@ export function StockDetailsPage({ requestedSymbol, stock, onBack }: StockDetail
 
   if (!details) {
     return (
-      <MarketShell breadcrumb={<><strong>Stock Details</strong><span>—</span><span>/stocks/{requestedSymbol.toUpperCase()}</span></>} topbarSearch>
+      <MarketShell breadcrumb={<strong>Stock Details</strong>} topbarSearch>
         <section aria-labelledby="missing-stock-title" className="stock-details-empty">
           <button className="stock-details-back" onClick={onBack} type="button"><MarketIcon name="arrowLeft" size={16} /> Back to Market</button>
           <h1 id="missing-stock-title">Stock not found</h1>
@@ -397,7 +397,7 @@ export function StockDetailsPage({ requestedSymbol, stock, onBack }: StockDetail
   }
 
   return (
-    <MarketShell breadcrumb={<><strong>Stock Details</strong><span>—</span><span>/stocks/{details.symbol}</span></>} topbarSearch>
+    <MarketShell breadcrumb={<strong>Stock Details</strong>} topbarSearch>
       <section aria-labelledby="stock-details-title" className="stock-details-page">
         <header className="stock-details-hero">
           <div className="stock-details-identity">
