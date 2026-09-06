@@ -715,6 +715,14 @@ input:focus-visible {
   table-layout: fixed;
 }
 
+.market-results-table tbody tr {
+  transition: background 150ms ease;
+}
+
+.market-results-table tbody tr:hover {
+  background: #e7ebff;
+}
+
 .market-results-table th {
   border-bottom: 1px solid #eef1f5;
   padding: 0 8px 8px;
