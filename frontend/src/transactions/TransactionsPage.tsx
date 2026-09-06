@@ -1,4 +1,5 @@
-import { isCurrentPage, routeFor } from '../navigation/routes'
+import { Sidebar } from '../components/layout/Sidebar'
+import { routeFor } from '../navigation/routes'
 import { useMemo, useState, type ReactNode } from 'react'
 import {
   filterTransactions,
@@ -76,68 +77,7 @@ function Icon({ name, size = 16, strokeWidth = 1.65, className }: IconProps) {
   return <svg aria-hidden="true" className={className} height={size} viewBox="0 0 24 24" width={size}>{paths[name]}</svg>
 }
 
-function Brand() {
-  return <a aria-label="StockLab home" className="brand" href={routeFor('transactions')}><span aria-hidden="true" className="brand-mark"><i /><i /><i /></span><span>Stock<span>Lab</span></span></a>
-}
-
 type ToastHandler = (message: string) => void
-
-const navigationSections: Array<{
-  label?: string
-  items: Array<{ id: string; label: string; icon: IconName }>
-}> = [
-  {
-    items: [
-      { id: 'dashboard', label: 'Dashboard', icon: 'grid' },
-      { id: 'market', label: 'Market', icon: 'globe' },
-    ],
-  },
-  {
-    label: 'Your trading',
-    items: [
-      { id: 'portfolio', label: 'Portfolio', icon: 'briefcase' },
-      { id: 'transactions', label: 'Transactions', icon: 'list' },
-      { id: 'watchlist', label: 'Watchlist', icon: 'star' },
-      { id: 'alerts', label: 'Alerts', icon: 'bell' },
-    ],
-  },
-  { label: 'AI', items: [{ id: 'ai-trader', label: 'AI Trader', icon: 'robot' }] },
-  { label: 'Account', items: [{ id: 'profile', label: 'Profile', icon: 'user' }, { id: 'logout', label: 'Logout', icon: 'arrow-right' }] },
-]
-
-type SidebarProps = {
-  onClose: () => void
-}
-
-function Sidebar({ onClose }: SidebarProps) {
-  return (
-    <aside className="transactions-sidebar">
-      <Brand />
-      <nav aria-label="Primary navigation" className="sidebar-nav">
-        {navigationSections.map((section) => (
-          <div className="nav-section" key={section.label ?? 'overview'}>
-            {section.label && <p className="nav-label">{section.label}</p>}
-            {section.items.map((item) => {
-              const active = isCurrentPage(item.id, window.location.pathname)
-              return (
-                <a
-                  aria-current={active ? 'page' : undefined}
-                  className={`nav-item ${active ? 'active' : ''}`}
-                  href={routeFor(item.id)}
-                  key={item.id}
-                  onClick={onClose}
-                >
-                  <Icon name={item.icon} size={16} />
-                  <span>{item.label}</span>
-                </a>
-              )
-            })}
-          </div>
-        ))}
-      </nav>
-    </aside>
-  )
-}
 
 type TopbarProps = {
   onMenuOpen: () => void
@@ -325,9 +265,8 @@ export function TransactionsPage() {
   }
 
   return (
-    <div className={`transactions-page ${sidebarOpen ? 'sidebar-open' : ''}`}>
-      <button aria-label="Close navigation" className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} type="button" />
-      <Sidebar onClose={() => setSidebarOpen(false)} />
+    <div className="transactions-page stocklab-layout">
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="transactions-main">
         <Topbar onMenuOpen={() => setSidebarOpen(true)} onQueryChange={(query) => updateFilter('query', query)} onToast={showToast} query={filters.query} />
         <div className="transactions-content">

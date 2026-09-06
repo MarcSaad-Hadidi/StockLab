@@ -1,12 +1,11 @@
+import { Sidebar } from '../components/layout/Sidebar'
 import { routeFor } from '../navigation/routes'
 import { useMemo, useState, type ReactNode } from 'react'
 import {
   aiPerformance,
   metrics,
-  navigation,
   performanceSeries,
   positions,
-  secondaryNavigation,
   transactions,
   type IconName,
   type PerformanceRange,
@@ -270,7 +269,6 @@ export function DashboardPage() {
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [toast, setToast] = useState('')
-  const activeNav = 'Dashboard'
 
   const filteredWatchlist = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -283,34 +281,9 @@ export function DashboardPage() {
     window.setTimeout(() => setToast(''), 2200)
   }
 
-  const handleNavClick = (label: string) => {
-    setSidebarOpen(false)
-    if (label === 'Analytics') {
-      showToast(`${label} view is coming soon.`)
-      return
-    }
-    window.location.assign(routeFor(label))
-  }
-
   return (
-    <div className={`dashboard-page ${sidebarOpen ? 'sidebar-open' : ''}`}>
-      <button aria-label="Close navigation" className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} type="button" />
-      <aside className="dashboard-sidebar">
-        <div className="brand"><span className="brand-mark"><i /><i /><i /></span><span>Stock<span>Lab</span></span></div>
-        <div className="workspace-switcher"><span className="workspace-avatar">GH</span><span><strong>Ghaith's portfolio</strong><small>Personal account</small></span><Icon name="chevron-down" size={15} /></div>
-        <nav aria-label="Primary navigation" className="sidebar-nav">
-          <span className="nav-label">Overview</span>
-          {navigation.map((item) => (
-            <button aria-current={activeNav === item.label ? 'page' : undefined} className={`nav-item ${activeNav === item.label ? 'active' : ''}`} key={item.label} onClick={() => handleNavClick(item.label)} type="button">
-              <Icon name={item.icon} size={18} /><span>{item.label}</span>
-              {item.label === 'AI Trader' && <span className="new-badge">New</span>}
-            </button>
-          ))}
-          <span className="nav-label nav-label-spaced">Manage</span>
-          {secondaryNavigation.map((item) => <button className="nav-item" key={item.label} onClick={() => handleNavClick(item.label)} type="button"><Icon name={item.icon} size={18} /><span>{item.label}</span></button>)}
-        </nav>
-        <div className="sidebar-footer"><div className="help-card"><span className="help-icon"><Icon name="sparkles" size={17} /></span><span><strong>Need a hand?</strong><small>Explore StockLab tips</small></span><Icon name="chevron-right" size={16} /></div><div className="user-card"><span className="user-avatar">GA</span><span><strong>Ghaith Alali</strong><small>Free plan</small></span><button aria-label="More profile options" className="icon-button" onClick={() => window.location.assign(routeFor('profile'))} type="button"><Icon name="more" size={18} /></button></div></div>
-      </aside>
+    <div className="dashboard-page stocklab-layout">
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <main className="dashboard-main">
         <header className="dashboard-topbar">

@@ -1,47 +1,12 @@
-import { isCurrentPage, routeFor } from '../navigation/routes'
+import { Sidebar } from '../components/layout/Sidebar'
+import { routeFor } from '../navigation/routes'
 import { useState, type ReactNode } from 'react'
-import { MarketIcon, type MarketIconName } from './marketIcons'
-import { marketRoute } from './marketRoutes'
+import { MarketIcon } from './marketIcons'
 
 type MarketShellProps = {
   children: ReactNode
   breadcrumb?: ReactNode
   topbarSearch?: boolean
-}
-
-const navigationSections: Array<{
-  label?: string
-  items: Array<{ id: string; label: string; icon: MarketIconName }>
-}> = [
-  { items: [{ id: 'dashboard', label: 'Dashboard', icon: 'grid' }] },
-  {
-    label: 'Your trading',
-    items: [
-      { id: 'market', label: 'Market', icon: 'globe' },
-      { id: 'portfolio', label: 'Portfolio', icon: 'briefcase' },
-      { id: 'transactions', label: 'Transactions', icon: 'list' },
-      { id: 'watchlist', label: 'Watchlist', icon: 'star' },
-      { id: 'alerts', label: 'Alerts', icon: 'bell' },
-    ],
-  },
-  { label: 'AI', items: [{ id: 'ai-trader', label: 'AI Trader', icon: 'robot' }] },
-  {
-    label: 'Account',
-    items: [
-      { id: 'profile', label: 'Profile', icon: 'user' },
-      { id: 'logout', label: 'Logout', icon: 'logout' },
-    ],
-  },
-]
-
-function BrandIcon() {
-  return (
-    <span aria-hidden="true" className="market-brand-mark">
-      <i />
-      <i />
-      <i />
-    </span>
-  )
 }
 
 export function MarketShell({
@@ -52,50 +17,10 @@ export function MarketShell({
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <div className={`market-shell-frame ${breadcrumb ? 'market-shell-frame-context' : ''}`}>
+    <div className={`market-shell-frame stocklab-layout ${breadcrumb ? 'market-shell-frame-context' : ''}`}>
       {breadcrumb && <div className="market-context-bar"><div className="market-breadcrumb-copy">{breadcrumb}</div></div>}
       <div className="market-app-shell">
-      <aside className={`market-sidebar ${sidebarOpen ? 'market-sidebar-open' : ''}`}>
-        <a className="market-brand" href={marketRoute} onClick={() => setSidebarOpen(false)}>
-          <BrandIcon />
-          <span>
-            Stock<span>Lab</span>
-          </span>
-        </a>
-
-        <nav aria-label="Main navigation" className="market-sidebar-navigation">
-          {navigationSections.map((section) => (
-            <div className="market-navigation-section" key={section.label ?? 'primary'}>
-              {section.label && <p className="market-navigation-label">{section.label}</p>}
-              <div className="market-navigation-items">
-                {section.items.map((item) => {
-                  const isActive = isCurrentPage(item.id, window.location.pathname)
-                  const href = routeFor(item.id)
-
-                  return (
-                    <a
-                      aria-current={isActive ? 'page' : undefined}
-                      className={`market-navigation-item ${isActive ? 'market-navigation-item-active' : ''}`}
-                      href={href}
-                      key={item.id}
-                      onClick={() => setSidebarOpen(false)}
-                    >
-                      <MarketIcon name={item.icon} size={15} />
-                      <span>{item.label}</span>
-                    </a>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        <button aria-label="Collapse navigation" className="market-sidebar-collapse" type="button" onClick={() => setSidebarOpen(false)}>
-          <MarketIcon name="logout" size={16} />
-        </button>
-      </aside>
-
-      {sidebarOpen && <button aria-label="Close navigation" className="market-sidebar-backdrop" type="button" onClick={() => setSidebarOpen(false)} />}
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="market-main">
         <header className="market-topbar">

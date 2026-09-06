@@ -1,4 +1,4 @@
-import { isCurrentPage, routeFor } from '../navigation/routes'
+import { Sidebar } from '../components/layout/Sidebar'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { performanceSeries, positions } from './portfolioData'
@@ -29,10 +29,6 @@ function Icon({ name }: { name: IconName }) {
   }
 
   return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
-}
-
-function Brand() {
-  return <div className="brand" aria-label="StockLab"><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span><span>Stock<span>Lab</span></span></div>
 }
 
 function MetricCard({ label, value, detail, tone = 'neutral' }: { label: string; value: string; detail?: string; tone?: 'neutral' | 'positive' }) {
@@ -93,18 +89,9 @@ function PositionsTable() {
   return <section className="panel positions-panel"><div className="panel-header positions-header"><h2>Positions <span>(7)</span></h2><div className="table-actions"><button type="button" onClick={() => setShowAll((visible) => !visible)}>{showAll ? 'Show Less' : 'View All'}</button><button type="button"><Icon name="download" /> Download</button></div></div><div className="table-wrap"><table><thead><tr><th>Symbol</th><th>Name</th><th>Quantity</th><th>Avg. Price</th><th>Current Price</th><th>Market Value</th><th>P&amp;L</th><th>P&amp;L %</th><th>Weight</th></tr></thead><tbody>{visiblePositions.map((position) => <tr key={position.symbol}><td><div className="symbol-cell"><SymbolBadge position={position} /><strong>{position.symbol}</strong></div></td><td>{position.name}</td><td>{position.quantity ?? '—'}</td><td>{formatMoney(position.averagePrice)}</td><td>{formatMoney(position.currentPrice)}</td><td>{formatMoney(position.marketValue)}</td><td className={position.pnl !== null && position.pnl < 0 ? 'negative' : position.pnl !== null ? 'positive' : ''}>{formatMoney(position.pnl)}</td><td className={position.pnlPercent !== null && position.pnlPercent < 0 ? 'negative' : position.pnlPercent !== null ? 'positive' : ''}>{position.pnlPercent === null ? '—' : `${position.pnlPercent > 0 ? '+' : ''}${position.pnlPercent.toFixed(2)}%`}</td><td>{position.weight.toFixed(1)}%</td></tr>)}</tbody><tfoot><tr><td colSpan={5}>Total</td><td>$116,117.14</td><td className="positive">+$7,812.45</td><td className="positive">+6.47%</td><td>100%</td></tr></tfoot></table></div></section>
 }
 
-const navSections = [
-  { label: '', items: [{ icon: 'grid' as IconName, text: 'Dashboard' }, { icon: 'globe' as IconName, text: 'Market' }, { icon: 'briefcase' as IconName, text: 'Portfolio', active: true }, { icon: 'sliders' as IconName, text: 'Transactions' }, { icon: 'star' as IconName, text: 'Watchlist' }, { icon: 'bell' as IconName, text: 'Alerts' }] },
-  { label: 'AI', items: [{ icon: 'brain' as IconName, text: 'AI Trader' }] },
-  { label: 'ACCOUNT', items: [{ icon: 'user' as IconName, text: 'Profile' }, { icon: 'logout' as IconName, text: 'Logout' }] },
-]
-
-function Sidebar() {
-  return <aside className="portfolio-sidebar"><Brand /><nav>{navSections.map((section) => <div className="nav-section" key={section.label || 'main'}>{section.label && <p className="nav-section-label">{section.label}</p>}{section.items.map((item) => <a className={`nav-item ${isCurrentPage(item.text, window.location.pathname) ? 'active' : ''}`} aria-current={isCurrentPage(item.text, window.location.pathname) ? 'page' : undefined} href={routeFor(item.text)} key={item.text}><Icon name={item.icon} /><span>{item.text}</span></a>)}</div>)}</nav><div className="sidebar-footer"><span className="market-status" /><span>Market open</span></div></aside>
-}
-
 export default function PortfolioPage() {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [range, setRange] = useState<TimeRange>('3M')
 
-  return <div className="portfolio-app"><Sidebar /><div className="portfolio-main"><header className="portfolio-topbar"><div className="topbar-title"><button className="mobile-menu" type="button" aria-label="Open navigation"><Icon name="menu" /></button><h1>Portfolio</h1></div><div className="topbar-actions"><label className="search-box"><Icon name="search" /><input type="search" placeholder="Search stocks, ETFs, news..." aria-label="Search stocks, ETFs, news" /></label><button className="notification-button" type="button" aria-label="Notifications"><Icon name="bell" /></button><button className="avatar-button" type="button" aria-label="Open profile"><span>MS</span><Icon name="chevron" /></button></div></header><main className="portfolio-content"><section className="metrics-grid"><MetricCard label="Total Portfolio Value" value="$128,547.32" detail="↗ $7,812.45 (6.47%)" tone="positive" /><MetricCard label="Available Cash" value="$12,430.18" /><MetricCard label="Invested Capital" value="$116,117.14" /><MetricCard label="Total Return (YTD)" value="+$7,812.45" detail="6.47%" tone="positive" /></section><section className="overview-grid"><section className="panel performance-panel"><div className="panel-header"><h2>Portfolio Performance <Icon name="info" /></h2></div><div className="range-tabs" role="tablist" aria-label="Performance time range">{(Object.keys(performanceSeries) as TimeRange[]).map((option) => <button key={option} type="button" className={range === option ? 'selected' : ''} aria-selected={range === option} onClick={() => setRange(option)} role="tab">{option}</button>)}</div><PerformanceChart key={range} range={range} /></section><AllocationPanel /></section><PositionsTable /></main></div></div>
+  return <div className="portfolio-app stocklab-layout"><Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} /><div className="portfolio-main"><header className="portfolio-topbar"><div className="topbar-title"><button className="mobile-menu" type="button" aria-label="Open navigation" onClick={() => setSidebarOpen(true)}><Icon name="menu" /></button><h1>Portfolio</h1></div><div className="topbar-actions"><label className="search-box"><Icon name="search" /><input type="search" placeholder="Search stocks, ETFs, news..." aria-label="Search stocks, ETFs, news" /></label><button className="notification-button" type="button" aria-label="Notifications"><Icon name="bell" /></button><button className="avatar-button" type="button" aria-label="Open profile"><span>MS</span><Icon name="chevron" /></button></div></header><main className="portfolio-content"><section className="metrics-grid"><MetricCard label="Total Portfolio Value" value="$128,547.32" detail="↗ $7,812.45 (6.47%)" tone="positive" /><MetricCard label="Available Cash" value="$12,430.18" /><MetricCard label="Invested Capital" value="$116,117.14" /><MetricCard label="Total Return (YTD)" value="+$7,812.45" detail="6.47%" tone="positive" /></section><section className="overview-grid"><section className="panel performance-panel"><div className="panel-header"><h2>Portfolio Performance <Icon name="info" /></h2></div><div className="range-tabs" role="tablist" aria-label="Performance time range">{(Object.keys(performanceSeries) as TimeRange[]).map((option) => <button key={option} type="button" className={range === option ? 'selected' : ''} aria-selected={range === option} onClick={() => setRange(option)} role="tab">{option}</button>)}</div><PerformanceChart key={range} range={range} /></section><AllocationPanel /></section><PositionsTable /></main></div></div>
 }

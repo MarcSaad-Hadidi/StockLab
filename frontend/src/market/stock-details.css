@@ -25,10 +25,6 @@
   min-height: calc(100svh - 39px);
 }
 
-.market-shell-frame-context .market-sidebar {
-  height: calc(100svh - 39px);
-}
-
 .market-shell-frame-context .market-topbar {
   top: 39px;
 }

@@ -1,4 +1,4 @@
-import { routeFor } from '../navigation/routes'
+import { Sidebar } from '../components/layout/Sidebar'
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { watchlistItems, type WatchlistItem } from './watchlistData'
 import './watchlist.css'
@@ -50,10 +50,6 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   }
 
   return <svg aria-hidden="true" className="icon" height={size} viewBox="0 0 24 24" width={size}>{paths[name]}</svg>
-}
-
-function Brand() {
-  return <div aria-label="StockLab" className="brand"><span aria-hidden="true" className="brand-mark"><i /><i /><i /></span><span>Stock<span>Lab</span></span></div>
 }
 
 function StockMark({ item }: { item: WatchlistItem }) {
@@ -115,14 +111,6 @@ function AlertModal({ item, onClose, onSave }: { item: WatchlistItem; onClose: (
   return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="alert-title" aria-modal="true" className="alert-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label="Close create alert dialog" className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="alert-icon"><Icon name="bell" size={21} /></div><h2 id="alert-title">Create an alert</h2><p>Get notified when <strong>{item.symbol}</strong> reaches your target price.</p><form onSubmit={submit}><label htmlFor="alert-threshold">Target price</label><div className="alert-input"><span>$</span><input id="alert-threshold" inputMode="decimal" min="0" onChange={(event) => setThreshold(event.target.value)} required step="0.01" type="number" value={threshold} /></div><div className="alert-form-actions"><button className="cancel-button" onClick={onClose} type="button">Cancel</button><button className="modal-primary" type="submit">Save alert</button></div></form></section></div>
 }
 
-const navigation = [
-  { label: 'Dashboard', icon: 'grid' as IconName, href: routeFor('dashboard') },
-  { label: 'Market', icon: 'chart' as IconName, href: routeFor('market') },
-  { label: 'Portfolio', icon: 'briefcase' as IconName, href: routeFor('portfolio') },
-  { label: 'Watchlist', icon: 'star' as IconName, href: routeFor('watchlist') },
-  { label: 'Alerts', icon: 'bell' as IconName, href: routeFor('alerts') },
-]
-
 export default function WatchlistPage() {
   const [items, setItems] = useState(watchlistItems)
   const [query, setQuery] = useState('')
@@ -151,14 +139,8 @@ export default function WatchlistPage() {
   }
 
   return (
-    <div className={`watchlist-page ${sidebarOpen ? 'sidebar-open' : ''}`}>
-      <button aria-label="Close navigation" className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} type="button" />
-      <aside className="watchlist-sidebar">
-        <Brand />
-        <div className="workspace-switcher"><span className="workspace-avatar">MS</span><span><strong>My portfolio</strong><small>Personal account</small></span><Icon name="chevron-down" size={15} /></div>
-        <nav aria-label="Primary navigation" className="sidebar-nav"><span className="nav-label">Overview</span>{navigation.map((item) => <a aria-current={item.label === 'Watchlist' ? 'page' : undefined} className={`nav-item ${item.label === 'Watchlist' ? 'active' : ''}`} href={item.href} key={item.label} onClick={() => setSidebarOpen(false)}><Icon name={item.icon} size={18} /><span>{item.label}</span></a>)}<span className="nav-label nav-label-spaced">Manage</span><a className="nav-item" href="#analytics"><Icon name="pie-chart" size={18} /><span>Analytics</span></a><a className="nav-item" href={routeFor('settings')}><Icon name="settings" size={18} /><span>Settings</span></a></nav>
-        <div className="sidebar-footer"><div className="help-card"><span className="help-icon"><Icon name="activity" size={17} /></span><span><strong>Need a hand?</strong><small>Explore StockLab tips</small></span><Icon name="chevron-right" size={16} /></div><div className="user-card"><span className="user-avatar">MS</span><span><strong>Mina Seliman</strong><small>Free plan</small></span><button aria-label="More profile options" className="icon-button" onClick={() => window.location.assign(routeFor('profile'))} type="button"><Icon name="more" size={18} /></button></div></div>
-      </aside>
+    <div className="watchlist-page stocklab-layout">
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <main className="watchlist-main">
         <header className="watchlist-topbar"><button aria-label="Open navigation" className="mobile-menu-button icon-button" onClick={() => setSidebarOpen(true)} type="button"><Icon name="menu" size={22} /></button><div className="breadcrumb"><span>Workspace</span><Icon name="chevron-right" size={14} /><strong>Watchlist</strong></div><div className="topbar-actions"><label className="global-search"><Icon name="search" size={17} /><input aria-label="Search watchlist" onChange={(event) => setQuery(event.target.value)} placeholder="Search stocks..." value={query} /></label><button aria-label="Notifications" className="icon-button notification-button" onClick={() => showToast('You are all caught up.')} type="button"><Icon name="bell" size={19} /><i /></button><span className="topbar-avatar">MS</span></div></header>

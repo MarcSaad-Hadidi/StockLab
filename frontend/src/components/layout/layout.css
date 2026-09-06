@@ -1,0 +1,19 @@
+/* Reserve the same space for the fixed Alerts reference on every page. */
+.stocklab-layout.stocklab-layout {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0 0 0 180px;
+  gap: 0;
+}
+.stocklab-layout > :is(main, .portfolio-main, .market-main) {
+  flex: 1;
+  min-width: 0;
+  margin-left: 0;
+}
+.stocklab-layout button[aria-label="Open navigation"] { display: none; }
+@media (max-width: 760px) {
+  .stocklab-layout.stocklab-layout { padding-left: 0; }
+  .stocklab-layout button[aria-label="Open navigation"] { display: inline-flex; }
+}

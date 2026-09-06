@@ -66,19 +66,6 @@ export type Transaction = {
   time: string
 }
 
-export const navigation: Array<{ label: string; icon: IconName }> = [
-  { label: 'Dashboard', icon: 'grid' },
-  { label: 'Portfolio', icon: 'briefcase' },
-  { label: 'Market', icon: 'chart' },
-  { label: 'AI Trader', icon: 'sparkles' },
-  { label: 'Watchlist', icon: 'star' },
-]
-
-export const secondaryNavigation: Array<{ label: string; icon: IconName }> = [
-  { label: 'Analytics', icon: 'pie-chart' },
-  { label: 'Settings', icon: 'settings' },
-]
-
 export const metrics: Metric[] = [
   {
     label: 'Total portfolio value',

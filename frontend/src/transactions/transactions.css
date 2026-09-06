@@ -68,121 +68,6 @@ select:focus-visible {
   background: var(--page);
 }
 
-.transactions-sidebar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  width: 180px;
-  height: 100vh;
-  flex: 0 0 180px;
-  flex-direction: column;
-  padding: 19px 11px 20px;
-  background: var(--surface);
-  border-right: 1px solid var(--line);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin: 0 8px 30px;
-  color: #172541;
-  font-family: Manrope, sans-serif;
-  font-size: 19px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  text-decoration: none;
-}
-
-.brand > span:last-child span {
-  color: #2f7bf0;
-}
-
-.brand-mark {
-  display: inline-flex;
-  width: 22px;
-  height: 20px;
-  gap: 2px;
-  transform: skew(-15deg);
-}
-
-.brand-mark i {
-  display: block;
-  width: 5px;
-  border-radius: 2px;
-  background: #2f7bf0;
-}
-
-.brand-mark i:first-child {
-  height: 11px;
-  margin-top: 9px;
-  opacity: 0.55;
-}
-
-.brand-mark i:nth-child(2) {
-  height: 16px;
-  margin-top: 4px;
-  opacity: 0.78;
-}
-
-.brand-mark i:last-child {
-  height: 20px;
-}
-
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.nav-section {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.nav-label {
-  margin: 0 10px 6px;
-  color: #a0aabd;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.nav-item {
-  display: flex;
-  width: 100%;
-  min-height: 36px;
-  align-items: center;
-  gap: 11px;
-  padding: 0 10px;
-  color: #718098;
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 600;
-  text-decoration: none;
-  transition: color 160ms ease, background 160ms ease, transform 160ms ease;
-}
-
-.nav-item:hover {
-  color: #2f5fd2;
-  background: #f2f6ff;
-  transform: translateX(1px);
-}
-
-.nav-item.active {
-  color: var(--blue);
-  background: #e9eeff;
-  font-weight: 800;
-}
-
-.nav-item svg {
-  flex: 0 0 auto;
-}
-
 .transactions-main {
   display: flex;
   min-width: 0;
@@ -920,10 +805,6 @@ select:focus-visible {
   transform: translateY(0);
 }
 
-.sidebar-backdrop {
-  display: none;
-}
-
 .sr-only {
   position: absolute;
   overflow: hidden;
@@ -942,10 +823,6 @@ select:focus-visible {
 }
 
 @media (max-width: 1060px) {
-  .transactions-sidebar {
-    width: 170px;
-    flex-basis: 170px;
-  }
 
   .transactions-topbar {
     padding: 0 22px;
@@ -1065,37 +942,6 @@ select:focus-visible {
 }
 
 @media (max-width: 760px) {
-  .transactions-sidebar {
-    position: fixed;
-    left: 0;
-    width: 180px;
-    transform: translateX(-102%);
-    transition: transform 220ms ease;
-  }
-
-  .sidebar-open .transactions-sidebar {
-    box-shadow: 12px 0 32px rgba(20, 38, 68, 0.12);
-    transform: translateX(0);
-  }
-
-  .sidebar-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 19;
-    display: block;
-    width: 100%;
-    padding: 0;
-    background: rgba(18, 32, 55, 0.3);
-    border: 0;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 220ms ease;
-  }
-
-  .sidebar-open .sidebar-backdrop {
-    opacity: 1;
-    pointer-events: auto;
-  }
 
   .mobile-menu-button {
     display: inline-flex;
