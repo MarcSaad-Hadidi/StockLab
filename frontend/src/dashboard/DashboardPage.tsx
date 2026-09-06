@@ -1,6 +1,6 @@
 import { Sidebar } from '../components/layout/Sidebar'
 import { routeFor } from '../navigation/routes'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   aiPerformance,
   metrics,
@@ -14,6 +14,8 @@ import {
   type WatchlistItem,
   watchlist,
 } from './dashboardData'
+import { getTimeBasedGreeting } from './dashboardGreeting'
+import { startDashboardGreetingTimer } from './dashboardGreetingTimer'
 
 type IconProps = {
   name: IconName
@@ -269,6 +271,12 @@ export function DashboardPage() {
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [toast, setToast] = useState('')
+  const dashboardUserName = 'Ghaith'
+  const [greeting, setGreeting] = useState(() => getTimeBasedGreeting(new Date(), dashboardUserName))
+
+  useEffect(() => {
+    return startDashboardGreetingTimer(setGreeting, dashboardUserName)
+  }, [])
 
   const filteredWatchlist = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -293,7 +301,7 @@ export function DashboardPage() {
         </header>
 
         <div className="dashboard-content">
-          <section className="welcome-row"><div><p className="eyebrow">Monday, June 1, 2026</p><h1>Good morning, Ghaith <span>✦</span></h1><p className="welcome-copy">Here’s what’s happening with your portfolio today.</p></div><button className="primary-button" onClick={() => showToast('New investment flow opened.')} type="button"><span>+</span> Add investment</button></section>
+          <section className="welcome-row"><div><p className="eyebrow">Monday, June 1, 2026</p><h1>{greeting} <span>👋</span></h1><p className="welcome-copy">Here’s what’s happening with your portfolio today.</p></div><button className="primary-button" onClick={() => showToast('New investment flow opened.')} type="button"><span>+</span> Add investment</button></section>
 
           <section aria-label="Portfolio summary" className="metrics-grid">{metrics.map((metric) => <MetricCard key={metric.label} metric={metric} />)}</section>
 

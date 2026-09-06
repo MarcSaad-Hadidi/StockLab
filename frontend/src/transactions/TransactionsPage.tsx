@@ -91,7 +91,7 @@ function Topbar({ onMenuOpen, onQueryChange, onToast, query }: TopbarProps) {
     <header className="transactions-topbar">
       <div className="breadcrumb">
         <button aria-label="Open navigation" className="mobile-menu-button icon-button" onClick={onMenuOpen} type="button"><Icon name="menu" size={20} /></button>
-        <strong>Transactions</strong><span>—</span><a href={routeFor('transactions')}>/transactions</a>
+        <strong>Transactions</strong>
       </div>
       <div className="topbar-actions">
         <label className="global-search">
