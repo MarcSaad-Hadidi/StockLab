@@ -126,7 +126,8 @@ export function FinancialLineChart(props: FinancialLineChartProps) {
             <stop offset="95%" stopColor="#2f7bf0" stopOpacity="0.01" />
           </linearGradient>
         </defs>
-        <ChartInteraction {...props} overlay={overlay} />
+        {/* Index-based interactions must reset when the series changes length. */}
+        <ChartInteraction key={values.length} {...props} overlay={overlay} />
       </LineChart>
       <div className="financial-chart-overlay" ref={setOverlay} />
     </div>
