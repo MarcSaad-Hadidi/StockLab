@@ -22,6 +22,7 @@ public sealed class MockMarketDataProviderTests
         Assert.Equal("USD", quote.Currency);
         Assert.Equal((decimal)price, quote.Price);
         Assert.Equal(volume, quote.Volume);
+        Assert.Equal(quote, await provider.GetQuoteAsync(input));
     }
 
     [Fact]
@@ -114,6 +115,21 @@ public sealed class MockMarketDataProviderTests
         Assert.Equal(source.Token, historyError.CancellationToken);
     }
 
+    [Fact]
+    public async Task History_contract_preconditions_are_enforced_by_mock_itself()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(() => provider.GetHistoryAsync(null!));
+        var invalidRequests = new[]
+        {
+            Request(" "),
+            Request("AAPL") with { FromUtc = FirstOpen.ToOffset(TimeSpan.FromHours(2)) },
+            Request("AAPL") with { ToUtc = FirstOpen.AddDays(5).ToOffset(TimeSpan.FromHours(2)) },
+            Request("AAPL") with { ToUtc = FirstOpen },
+            Request("AAPL") with { Interval = (StockHistoryInterval)999 }
+        };
+        foreach (var request in invalidRequests)
+            await Assert.ThrowsAnyAsync<ArgumentException>(() => provider.GetHistoryAsync(request));
+    }
     private static StockHistoryRequest Request(string symbol) =>
         new(symbol, FirstOpen, FirstOpen.AddDays(5), StockHistoryInterval.Day);
 }
