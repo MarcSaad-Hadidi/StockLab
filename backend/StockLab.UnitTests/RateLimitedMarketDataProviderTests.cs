@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using StockLab.Application.DTOs.MarketData;
@@ -141,23 +142,33 @@ public sealed class RateLimitedMarketDataProviderTests
     [InlineData("history")]
     public async Task Cache_and_dedup_consume_only_one_permit_for_a_blocked_burst(string operation)
     {
-        using var limiter = Limiter(2);
-        using var memory = new MemoryCache(new MemoryCacheOptions { SizeLimit = 8 * 1024 * 1024 });
+        using var limiter = Limiter(3);
+        var clock = new TestClock();
+        using var memory = new MemoryCache(new MemoryCacheOptions { Clock = clock, SizeLimit = 8 * 1024 * 1024 });
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         inner.Gate = gate.Task;
         var provider = new CachingMarketDataProvider(new DeduplicatingMarketDataProvider(Wrap(limiter)),
-            memory, Options.Create(new MarketDataCacheOptions()));
+            memory, Options.Create(new MarketDataCacheOptions { QuoteTtl = TimeSpan.FromSeconds(10), SearchTtl = TimeSpan.FromSeconds(10), HistoryTtl = TimeSpan.FromSeconds(10) }));
         var tasks = Enumerable.Range(0, 10).Select(_ => Call(provider, operation)).ToArray();
         Assert.All(tasks, task => Assert.False(task.IsCompleted));
         Assert.Equal(1, inner.Calls);
-        Assert.Equal(1, limiter.GetStatistics()!.CurrentAvailablePermits);
+        Assert.Equal(2, limiter.GetStatistics()!.CurrentAvailablePermits);
         gate.SetResult();
         await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(5));
         await Task.WhenAll(Enumerable.Range(0, 10).Select(_ => Call(provider, operation)));
         Assert.Equal(1, inner.Calls);
-        Assert.Equal(1, limiter.GetStatistics()!.CurrentAvailablePermits);
-        await provider.GetQuoteAsync("MSFT");
+        Assert.Equal(2, limiter.GetStatistics()!.CurrentAvailablePermits);
+        clock.UtcNow += TimeSpan.FromSeconds(10);
+        var renewedGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        inner.Gate = renewedGate.Task;
+        var expiredBurst = Enumerable.Range(0, 10).Select(_ => Call(provider, operation)).ToArray();
+        Assert.All(expiredBurst, task => Assert.False(task.IsCompleted));
         Assert.Equal(2, inner.Calls);
+        Assert.Equal(1, limiter.GetStatistics()!.CurrentAvailablePermits);
+        renewedGate.SetResult();
+        await Task.WhenAll(expiredBurst).WaitAsync(TimeSpan.FromSeconds(10));
+        await provider.GetQuoteAsync("MSFT");
+        Assert.Equal(3, inner.Calls);
         Assert.Equal(0, limiter.GetStatistics()!.CurrentAvailablePermits);
     }
 
@@ -177,6 +188,10 @@ public sealed class RateLimitedMarketDataProviderTests
         Assert.Throws<OptionsValidationException>(() => options.CreateLimiter());
     }
 
+    private sealed class TestClock : ISystemClock
+    {
+        public DateTimeOffset UtcNow { get; set; } = DateTimeOffset.Parse("2026-09-01T00:00:00Z");
+    }
     private sealed class CountingProvider : IMarketDataProvider
     {
         private readonly MockMarketDataProvider mock = new();
