@@ -311,7 +311,7 @@ History bounds require an explicit UTC suffix (Z or +00:00). Each history parame
 ## Market data cache
 
 The API registers IMarketDataProvider as a singleton CachingMarketDataProvider
-wrapping the singleton MockMarketDataProvider. Controllers remain unaware of caching.
+wrapping DeduplicatingMarketDataProvider, then the singleton MockMarketDataProvider. Controllers remain unaware of these decorators.
 Replace only the inner provider registration when a real provider is introduced.
 Infrastructure uses the native Microsoft.Extensions.Caching.Memory package;
 Application and Domain remain independent of cache and HTTP libraries.
@@ -341,11 +341,43 @@ Already-cancelled requests fail even on a hit. Misses forward the caller's token
 check cancellation again before insertion.
 
 IMemoryCache is thread-safe and local to this process. Entries may be evicted and
-are lost on restart. Concurrent misses can each call the provider; this implementation
-does not share in-flight tasks or implement request deduplication (#31).
+are lost on restart. The cache itself allows independent concurrent misses; it
+delegates those misses to the single-flight decorator described below.
 
 Permanent cache tests use a counting provider and MemoryCache's native controllable
 clock to verify call counts and expiration without delays. HTTP checks verify the
 public contracts, not cache hits.
 
 MarketDataCache:SizeLimit defaults to 8388608 accounting units (approximately 8 MiB). A dedicated keyed MemoryCache enforces this positive budget. Each entry accounts for fixed overhead, UTF-16 key strings and result strings/collection elements. This is an estimated retained-size budget, not an exact CLR heap limit. Empty results still consume units; oversized entries are returned without being cached. Other application caches are unaffected.
+
+## Concurrent market data requests
+
+Program.cs composes Cache -> Dedup -> Mock behind IMarketDataProvider. Cache hits
+bypass the deduplication layer. On a miss, DeduplicatingMarketDataProvider shares
+one in-progress provider task per normalized key, separately for quote, search and
+history. Keys use trimmed uppercase symbols/search terms and complete validated
+UTC history requests (symbol, from, to, interval), matching cache equivalences.
+
+ConcurrentDictionary atomically chooses one owner before the provider starts;
+other callers await its TaskCompletionSource. No global provider lock, blocking
+wait, rate limiting or quota logic is used. Distinct keys remain independent.
+
+Shared provider calls use CancellationToken.None; individual callers use
+Task.WaitAsync with their own cancellation token. Cancelling even the first caller
+only abandons that caller's wait. Shared work continues even if all callers leave,
+until the provider completes or fails. No caller CTS or registration is retained by
+the decorator; WaitAsync manages its own registrations. Future network providers
+must bound their own I/O duration. This implementation does not introduce a timeout
+or cancellation policy for the underlying provider.
+
+A finally block removes only the completed flight before notifying waiters, for
+success, failure and provider cancellation, including synchronous completions.
+Faults are observed even if no waiters remain, and still propagate to active callers.
+Later calls can retry. Null and empty results are shared while in progress; the
+outer cache keeps its existing null/empty caching rules. Successful results are
+not retained by the deduplication dictionary after completion.
+
+Tests use a counting provider blocked by TaskCompletionSource, guaranteeing ten
+active waiters before release. Coverage includes thread-pool contention, distinct
+keys, cancellation isolation, retry/cleanup, null/empty results and cache expiration
+with a controllable clock. HTTP checks only verify public contract regressions.

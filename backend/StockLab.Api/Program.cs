@@ -22,8 +22,10 @@ builder.Services.AddKeyedSingleton<Microsoft.Extensions.Caching.Memory.IMemoryCa
         SizeLimit = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<MarketDataCacheOptions>>().Value.SizeLimit
     }));
 builder.Services.AddSingleton<MockMarketDataProvider>();
+builder.Services.AddSingleton<DeduplicatingMarketDataProvider>(services =>
+    new DeduplicatingMarketDataProvider(services.GetRequiredService<MockMarketDataProvider>()));
 builder.Services.AddSingleton<IMarketDataProvider>(services => new CachingMarketDataProvider(
-    services.GetRequiredService<MockMarketDataProvider>(),
+    services.GetRequiredService<DeduplicatingMarketDataProvider>(),
     services.GetRequiredKeyedService<Microsoft.Extensions.Caching.Memory.IMemoryCache>("MarketData"),
     services.GetRequiredService<Microsoft.Extensions.Options.IOptions<MarketDataCacheOptions>>()));
 builder.Services.AddCors(options =>
