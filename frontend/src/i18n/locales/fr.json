@@ -71,7 +71,22 @@
     },
     "days": {
       "mon": "Lun"
-    }
+    },
+    "technologyLogo": "Logo {{name}}",
+    "timeRanges": {
+      "1D": "1 j",
+      "5D": "5 j",
+      "1W": "1 sem.",
+      "1M": "1 mois",
+      "3M": "3 mois",
+      "6M": "6 mois",
+      "YTD": "Année",
+      "1Y": "1 an",
+      "5Y": "5 ans",
+      "ALL": "Tout",
+      "MAX": "Max."
+    },
+    "editField": "Modifier {{field}}"
   },
   "dashboard": {
     "greeting": {
@@ -138,6 +153,57 @@
       "todayAt": "Aujourd’hui à {{time}}",
       "yesterdayAt": "Hier à {{time}}",
       "may28": "28 mai 2026"
+    },
+    "chartPoint": "{{label}} : valeur du portefeuille de {{value}}",
+    "chartLabels": {
+      "2022": "2022",
+      "2023": "2023",
+      "2024": "2024",
+      "9:30": "9 h 30",
+      "10:30": "10 h 30",
+      "11:30": "11 h 30",
+      "12:30": "12 h 30",
+      "1:30": "13 h 30",
+      "2:30": "14 h 30",
+      "3:30": "15 h 30",
+      "4:00": "16 h",
+      "Mon": "Lun.",
+      "Tue": "Mar.",
+      "Wed": "Mer.",
+      "Thu": "Jeu.",
+      "Fri": "Ven.",
+      "Sat": "Sam.",
+      "Sun": "Dim.",
+      "May 1": "1 mai",
+      "May 6": "6 mai",
+      "May 11": "11 mai",
+      "May 16": "16 mai",
+      "May 21": "21 mai",
+      "May 26": "26 mai",
+      "May 31": "31 mai",
+      "Mar 1": "1 mars",
+      "Mar 15": "15 mars",
+      "Apr 1": "1 avr.",
+      "Apr 15": "15 avr.",
+      "May 15": "15 mai",
+      "Jun 25": "Juin 25",
+      "Aug 25": "Août 25",
+      "Oct 25": "Oct. 25",
+      "Dec 25": "Déc. 25",
+      "Feb 26": "Févr. 26",
+      "Apr 26": "Avr. 26",
+      "Jun 26": "Juin 26",
+      "Jan": "Janv.",
+      "Feb": "Févr.",
+      "Mar": "Mars",
+      "Apr": "Avr.",
+      "May": "Mai",
+      "Jun": "Juin",
+      "Jul": "Juil.",
+      "Q1 25": "T1 25",
+      "Q2 25": "T2 25",
+      "Q1 26": "T1 26",
+      "Today": "Aujourd’hui"
     }
   },
   "market": {
@@ -184,12 +250,13 @@
       "favorite": "Favori"
     },
     "noStocksFound": "Aucune action trouvée",
-    "noStocksHint": "Essayez un autre symbole, nom d’entreprise ou filtre."
+    "noStocksHint": "Essayez un autre symbole, nom d’entreprise ou filtre.",
+    "indexValue": "Indice"
   },
   "stockDetails": {
     "title": "Détails de l’action",
     "historicalPriceChart": "Graphique historique du prix de {{symbol}} pour {{range}}",
-    "aiConfidence": "{{confidence}} % de confiance de l’IA",
+    "aiConfidence": "{{confidence}} de confiance de l’IA",
     "aiInsight": "Analyse IA",
     "byStockLabAi": "par StockLab IA",
     "highConfidence": "Confiance élevée",
@@ -301,6 +368,11 @@
       "keyMetrics": "Indicateurs clés",
       "forecast": "Prévisions",
       "aiInsights": "Analyses IA"
+    },
+    "globalExchange": "Bourse mondiale",
+    "chartLabels": {
+      "week": "Semaine {{count}}",
+      "earlier": "Antérieur {{count}}"
     }
   },
   "portfolio": {
@@ -313,13 +385,13 @@
     "chartPoint": "{{label}} : valeur du portefeuille {{value}}",
     "performance": {
       "change": {
-        "1D": "6,47 % au total",
-        "1W": "6,47 % au total",
-        "1M": "6,47 % au total",
-        "3M": "6,47 % au total",
-        "1Y": "6,47 % au total",
-        "YTD": "6,47 % au total",
-        "ALL": "6,47 % au total"
+        "1D": "{{change}} au total",
+        "1W": "{{change}} au total",
+        "1M": "{{change}} au total",
+        "3M": "{{change}} au total",
+        "1Y": "{{change}} au total",
+        "YTD": "{{change}} au total",
+        "ALL": "{{change}} au total"
       }
     },
     "assetAllocation": "Répartition des actifs",
@@ -411,7 +483,8 @@
     "noStocksHint": "Essayez un autre symbole ou nom d’entreprise.",
     "liveUpdateNote": "Les prix se mettent à jour automatiquement avec un compte en direct",
     "assetsShown": "{{shown}} actif(s) affiché(s) sur {{total}}",
-    "alertSet": "Alerte définie pour {{symbol}} à {{threshold}} $."
+    "alertSet": "Alerte définie pour {{symbol}} à {{threshold}} $.",
+    "alertSetFormatted": "Alerte définie pour {{symbol}} à {{price}}."
   },
   "alerts": {
     "createAlert": "Créer une alerte",
@@ -690,6 +763,25 @@
       "save": "Enregistrer le mot de passe",
       "shortPassword": "Utilisez au moins 8 caractères pour votre nouveau mot de passe.",
       "mismatch": "Les mots de passe ne correspondent pas."
+    },
+    "countries": {
+      "us": "États-Unis",
+      "ca": "Canada",
+      "gb": "Royaume-Uni",
+      "fr": "France",
+      "de": "Allemagne",
+      "au": "Australie",
+      "jp": "Japon"
+    },
+    "timezones": {
+      "americaPacific": "(UTC-8) Heure du Pacifique (États-Unis et Canada)",
+      "americaMountain": "(UTC-7) Heure des Rocheuses (États-Unis et Canada)",
+      "americaCentral": "(UTC-6) Heure du Centre (États-Unis et Canada)",
+      "americaEasternStandard": "(UTC-5) Heure de l’Est (États-Unis et Canada)",
+      "americaEasternDaylight": "(UTC-4) Heure de l’Est (États-Unis et Canada)",
+      "greenwich": "(UTC+0) Heure moyenne de Greenwich",
+      "europeCentral": "(UTC+1) Heure d’Europe centrale",
+      "japan": "(UTC+9) Heure normale du Japon"
     }
   },
   "notFound": {
@@ -757,5 +849,16 @@
     "hidePassword": "Masquer le mot de passe",
     "showConfirmation": "Afficher la confirmation",
     "hideConfirmation": "Masquer la confirmation"
+  },
+  "starter": {
+    "getStarted": "Premiers pas",
+    "editHint": "Modifiez <file>src/App.tsx</file> et enregistrez pour tester <technology>HMR</technology>",
+    "count": "Le compteur vaut {{value}}",
+    "documentation": "Documentation",
+    "questionsAnswered": "Les réponses à vos questions",
+    "exploreVite": "Découvrir Vite",
+    "learnMore": "En savoir plus",
+    "connect": "Restons en contact",
+    "joinCommunity": "Rejoignez la communauté Vite"
   }
 }

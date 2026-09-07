@@ -1,5 +1,6 @@
 import { routeFor } from '../navigation/routes'
 import { LanguageSelector } from '../components/LanguageSelector'
+import { formatSignedPercent } from '../i18n/formatters'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -49,9 +50,9 @@ export default function LoginPage() {
     const password = String(form.get('password') ?? '')
     const nextErrors: FieldErrors = {}
 
-    if (!email) nextErrors.email = t('login.errors.email')
-    else if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = t('login.errors.emailInvalid')
-    if (!password) nextErrors.password = t('login.errors.password')
+    if (!email) nextErrors.email = 'login.errors.email'
+    else if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = 'login.errors.emailInvalid'
+    if (!password) nextErrors.password = 'login.errors.password'
 
     setErrors(nextErrors)
     setSubmitted(Object.keys(nextErrors).length === 0)
@@ -61,12 +62,12 @@ export default function LoginPage() {
     <main className="login-page">
       <div className="page-frame">
         <div className="market-decoration market-decoration-left" aria-hidden="true">
-          <div className="quote-card quote-aapl"><strong>AAPL</strong><span>↗ +1.35%</span></div>
-          <div className="quote-card quote-tsla"><strong>TSLA</strong><span>↘ -0.41%</span></div>
+          <div className="quote-card quote-aapl"><strong>AAPL</strong><span>↗ {formatSignedPercent(1.35)}</span></div>
+          <div className="quote-card quote-tsla"><strong>TSLA</strong><span>↘ {formatSignedPercent(-0.41)}</span></div>
         </div>
         <div className="market-decoration market-decoration-right" aria-hidden="true">
-          <div className="quote-card quote-msft"><strong>MSFT</strong><span>↗ +0.82%</span></div>
-          <div className="quote-card quote-nvda"><strong>NVDA</strong><span>↗ +2.18%</span></div>
+          <div className="quote-card quote-msft"><strong>MSFT</strong><span>↗ {formatSignedPercent(0.82)}</span></div>
+          <div className="quote-card quote-nvda"><strong>NVDA</strong><span>↗ {formatSignedPercent(2.18)}</span></div>
         </div>
         <svg className="background-chart" viewBox="0 0 560 330" preserveAspectRatio="none" aria-hidden="true">
           <defs>
@@ -86,8 +87,8 @@ export default function LoginPage() {
           </div>
           <header className="card-heading"><h1 id="login-heading">{t('login.title')}</h1><p>{t('login.subtitle')}</p></header>
           <form className="login-form" onSubmit={handleSubmit} noValidate>
-            <div className="field-group"><label htmlFor="email">{t('login.emailLabel')}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={t('login.emailPlaceholder')} autoComplete="email" aria-invalid={Boolean(errors.email)} /></div>{errors.email && <p className="field-error">{errors.email}</p>}</div>
-            <div className="field-group"><div className="label-row"><label htmlFor="password">{t('login.passwordLabel')}</label><a href="#forgot-password">{t('login.forgot')}</a></div><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={t('login.passwordPlaceholder')} autoComplete="current-password" aria-invalid={Boolean(errors.password)} /><button className="visibility-button" type="button" aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{errors.password}</p>}</div>
+            <div className="field-group"><label htmlFor="email">{t('login.emailLabel')}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={t('login.emailPlaceholder')} autoComplete="email" aria-invalid={Boolean(errors.email)} /></div>{errors.email && <p className="field-error">{t(errors.email)}</p>}</div>
+            <div className="field-group"><div className="label-row"><label htmlFor="password">{t('login.passwordLabel')}</label><a href="#forgot-password">{t('login.forgot')}</a></div><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={t('login.passwordPlaceholder')} autoComplete="current-password" aria-invalid={Boolean(errors.password)} /><button className="visibility-button" type="button" aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{t(errors.password)}</p>}</div>
             <button className="primary-button" type="submit">{t('login.signIn')}</button>
             {submitted && <p className="form-success" role="status">{t('login.success')}</p>}
           </form>

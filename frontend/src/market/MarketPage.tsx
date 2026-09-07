@@ -11,6 +11,7 @@ import {
   type MarketStock,
 } from './marketData'
 import { StockLogo } from './StockLogo'
+import { formatCompactCurrency, formatCurrency, formatSignedPercent } from '../i18n/formatters'
 
 type MarketPageProps = {
   onOpenStock: (symbol: string) => void
@@ -36,8 +37,25 @@ const filterNounKeys: Record<MarketFilter, string> = {
   'US Market': 'market.filterNouns.usMarket',
 }
 
+function numericQuote(value: string) {
+  const parsed = Number.parseFloat(value.replace(/[$,]/g, ''))
+  if (!Number.isFinite(parsed)) return null
+  const suffix = value.at(-1)
+  return parsed * (suffix === 'T' ? 1e12 : suffix === 'B' ? 1e9 : suffix === 'M' ? 1e6 : 1)
+}
+
 function changeLabel(stock: MarketStock) {
-  return `${stock.tone === 'positive' ? '↑' : '↓'} ${stock.changePercent}`
+  const value = Number.parseFloat(stock.changePercent) * (stock.tone === 'positive' ? 1 : -1)
+  return `${stock.tone === 'positive' ? '↑' : '↓'} ${formatSignedPercent(value)}`
+}
+
+function priceLabel(stock: MarketStock) {
+  return formatCurrency(numericQuote(stock.price))
+}
+
+function marketCapLabel(stock: MarketStock, indexLabel: string) {
+  const value = numericQuote(stock.marketCap)
+  return value === null ? indexLabel : formatCompactCurrency(value)
 }
 
 function MarketOverviewCard({
@@ -69,7 +87,7 @@ function MarketOverviewCard({
               <small>{stock.description}</small>
             </span>
             <span className="market-stock-quote">
-              <strong>{stock.price}</strong>
+              <strong>{priceLabel(stock)}</strong>
               <span className={`market-stock-change ${stock.tone === 'positive' ? 'market-positive' : 'market-negative'}`}>{changeLabel(stock)}</span>
             </span>
           </button>
@@ -102,11 +120,11 @@ function SearchResultRow({
       <td>
         <button className="market-company-cell" type="button" onClick={() => onOpenStock(stock.symbol)}>{stock.company}</button>
       </td>
-      <td className="market-number-cell">{stock.price}</td>
+      <td className="market-number-cell">{priceLabel(stock)}</td>
       <td className="market-number-cell">
         <span className={`market-table-change ${stock.tone === 'positive' ? 'market-positive' : 'market-negative'}`}>{changeLabel(stock)}</span>
       </td>
-      <td className="market-number-cell">{stock.marketCap}</td>
+      <td className="market-number-cell">{marketCapLabel(stock, t('market.indexValue'))}</td>
       <td className="market-favorite-cell">
         <button
           aria-label={favorite ? t('market.removeFavorite', { symbol: stock.symbol }) : t('market.addFavorite', { symbol: stock.symbol })}

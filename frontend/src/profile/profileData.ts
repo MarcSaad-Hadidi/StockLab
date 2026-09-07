@@ -11,9 +11,9 @@ export type ProfileData = {
 export const initialProfile: ProfileData = {
   name: 'Alex Johnson',
   email: 'alex.johnson@example.com',
-  createdAt: 'May 20, 2024',
+  createdAt: '2024-05-20',
   initialCapital: 100000,
   phone: '+1 (555) 123-4567',
-  country: 'United States',
-  timezone: '(UTC-4) Eastern Time (US & Canada)',
+  country: 'us',
+  timezone: 'americaEasternDaylight',
 }

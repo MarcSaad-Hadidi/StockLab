@@ -35,9 +35,9 @@ export const transactionSummary = {
   totalInvested: 48752.19,
   totalProceeds: 41685.32,
   netPnl: 6812.87,
-  investedChange: '+8.7%',
-  proceedsChange: '+11.2%',
-  pnlChange: '+13.6%',
+  investedChange: 8.7,
+  proceedsChange: 11.2,
+  pnlChange: 13.6,
 } as const
 
 const firstPageTransactions: Transaction[] = [
