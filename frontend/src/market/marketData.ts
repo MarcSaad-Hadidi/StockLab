@@ -1,5 +1,13 @@
 export type AssetType = 'Stock' | 'ETF' | 'Index' | 'Crypto'
-export type MarketFilter = 'All' | 'Stocks' | 'ETFs' | 'Indices' | 'Crypto' | 'US Market'
+export type AssetTypeFilter = 'All' | 'Stocks' | 'ETFs' | 'Indices' | 'Crypto'
+export type MarketFilter = 'All' | 'US Market'
+export type MarketFilters = {
+  query?: string
+  assetType?: AssetTypeFilter
+  market?: MarketFilter
+  favoriteOnly?: boolean
+  favoriteSymbols?: ReadonlySet<string>
+}
 export type MarketSection = 'popular' | 'gainers' | 'losers' | 'search'
 export type StockTone = 'positive' | 'negative'
 
@@ -54,7 +62,7 @@ export const marketStocks: MarketStock[] = [
   { symbol: 'DOGE', company: 'Dogecoin', description: 'Dogecoin', assetType: 'Crypto', market: 'Global Market', price: '$0.14', changePercent: '1.43%', marketCap: '$20.41B', tone: 'negative', section: 'search' },
 ]
 
-const assetTypeByFilter: Partial<Record<MarketFilter, AssetType>> = {
+const assetTypeByFilter: Record<Exclude<AssetTypeFilter, 'All'>, AssetType> = {
   Stocks: 'Stock',
   ETFs: 'ETF',
   Indices: 'Index',
@@ -63,19 +71,19 @@ const assetTypeByFilter: Partial<Record<MarketFilter, AssetType>> = {
 
 export function filterMarketStocks(
   stocks: MarketStock[],
-  query: string,
-  filter: MarketFilter = 'All',
+  filters: MarketFilters = {},
 ): MarketStock[] {
-  const normalizedQuery = query.trim().toLowerCase()
-  const assetType = assetTypeByFilter[filter]
+  const normalizedQuery = (filters.query ?? '').trim().toLowerCase()
+  const assetType = filters.assetType && filters.assetType !== 'All' ? assetTypeByFilter[filters.assetType] : undefined
 
   return stocks.filter((stock) => {
     const matchesQuery = normalizedQuery.length === 0
       || `${stock.symbol} ${stock.company} ${stock.description}`.toLowerCase().includes(normalizedQuery)
     const matchesAssetType = assetType ? stock.assetType === assetType : true
-    const matchesMarket = filter === 'US Market' ? stock.market === 'US Market' : true
+    const matchesMarket = !filters.market || filters.market === 'All' || stock.market === filters.market
+    const matchesFavorite = !filters.favoriteOnly || filters.favoriteSymbols?.has(stock.symbol) === true
 
-    return matchesQuery && matchesAssetType && matchesMarket
+    return matchesQuery && matchesAssetType && matchesMarket && matchesFavorite
   })
 }
 
@@ -105,14 +113,14 @@ function signedChangeValue(stock: MarketStock): number {
   return stock.tone === 'positive' ? value : -value
 }
 
-export function getMarketSections(stocks: MarketStock[], filter: MarketFilter = 'All'): {
+export function getMarketSections(stocks: MarketStock[], filters: Pick<MarketFilters, 'assetType' | 'market'> = {}): {
   popular: MarketStock[]
   gainers: MarketStock[]
   losers: MarketStock[]
 } {
-  const eligibleStocks = filterMarketStocks(stocks, '', filter)
+  const eligibleStocks = filterMarketStocks(stocks, filters)
 
-  if (filter === 'All' || filter === 'Stocks') {
+  if ((!filters.assetType || filters.assetType === 'All' || filters.assetType === 'Stocks') && filters.market !== 'US Market') {
     return {
       popular: eligibleStocks.filter((stock) => stock.section === 'popular').slice(0, 5),
       gainers: eligibleStocks.filter((stock) => stock.section === 'gainers').slice(0, 5),
