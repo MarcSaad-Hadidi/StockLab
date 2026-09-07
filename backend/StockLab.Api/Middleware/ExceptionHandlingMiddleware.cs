@@ -1,4 +1,5 @@
 using StockLab.Api.DTOs;
+using StockLab.Application.Exceptions;
 
 namespace StockLab.Api.Middleware;
 
@@ -24,7 +25,8 @@ public sealed class ExceptionHandlingMiddleware(
         catch (Exception exception)
         {
             var invalidRequest = exception is ArgumentException or NotSupportedException;
-            if (!invalidRequest)
+            var rateLimited = exception is MarketDataRateLimitException;
+            if (!invalidRequest && !rateLimited)
             {
                 // Exception messages, stacks and request values may contain credentials.
                 // Log only the category and correlation ID, not the exception object.
@@ -39,11 +41,13 @@ public sealed class ExceptionHandlingMiddleware(
             }
 
             context.Response.Clear();
-            context.Response.StatusCode = invalidRequest
+            context.Response.StatusCode = rateLimited ? StatusCodes.Status429TooManyRequests : invalidRequest
                 ? StatusCodes.Status400BadRequest
                 : StatusCodes.Status500InternalServerError;
 
-            var error = exception is NotSupportedException
+            var error = rateLimited
+                ? new ApiErrorResponse("market_data_rate_limited", "Market data requests are temporarily rate limited.")
+                : exception is NotSupportedException
                 ? new ApiErrorResponse("unsupported_operation", "The requested operation or interval is not supported.")
                 : invalidRequest
                 ? new ApiErrorResponse("invalid_request", "The request is invalid.")

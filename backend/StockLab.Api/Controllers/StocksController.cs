@@ -18,6 +18,7 @@ public sealed class StocksController(IMarketDataProvider marketDataProvider) : C
     // validation responses additionally include field-level errors.
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<StockHistoryResponse>> GetHistoryAsync(
         [FromRoute, Required] string symbol,
@@ -43,6 +44,7 @@ public sealed class StocksController(IMarketDataProvider marketDataProvider) : C
     [HttpGet("search")]
     [ProducesResponseType(typeof(StockSearchResponse[]), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiValidationErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<StockSearchResponse[]>> SearchStocksAsync(
         [FromQuery, Required] string query,
@@ -58,6 +60,7 @@ public sealed class StocksController(IMarketDataProvider marketDataProvider) : C
     [ProducesResponseType(typeof(StockQuoteResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiValidationErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<StockQuoteResponse>> GetQuoteAsync(
         [FromRoute, Required] string symbol,
