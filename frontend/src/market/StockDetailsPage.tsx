@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { formatCurrency, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
+import { formatCompactCurrency, formatCurrency, formatDate, formatNumber, formatPercent, formatSignedCurrency, formatSignedPercent, localeForLanguage } from '../i18n/formatters'
 import { MarketShell } from './MarketShell'
 import { MarketIcon } from './marketIcons'
 import { type MarketStock } from './marketData'
@@ -33,6 +33,13 @@ type TradeConfirmation = {
   limitPrice?: number
   executionPrice: number
 }
+type ToastState = {
+  key: string
+  values?: Record<string, string | number>
+  tabKey?: string
+  side?: TradeSide
+  orderType?: TradeOrderType
+}
 
 const detailTabs = ['Overview', 'Chart', 'Financials', 'News', 'Key Metrics', 'Forecast', 'AI Insights'] as const
 type DetailTab = typeof detailTabs[number]
@@ -52,7 +59,7 @@ function changeLabel(details: StockDetails, todayLabel = 'today') {
 }
 
 function PriceChart({ details, range }: { details: StockDetails; range: ChartRange }) {
-  const { t } = useTranslation()
+  const { i18n, t } = useTranslation()
   const history = getVisibleHistory(details.history, range)
   const width = 720
   const height = 270
@@ -82,10 +89,17 @@ function PriceChart({ details, range }: { details: StockDetails; range: ChartRan
     Math.floor((history.length - 1) * 0.75),
     history.length - 1,
   ])]
+  const localizeHistoryLabel = (label: string) => {
+    const dated = /^(Feb|Mar|Apr|May) (\d{1,2})$/.exec(label)
+    if (dated) return new Intl.DateTimeFormat(localeForLanguage(i18n.language), { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`2024-${({ Feb: '02', Mar: '03', Apr: '04', May: '05' } as Record<string, string>)[dated[1]]}-${dated[2].padStart(2, '0')}T00:00:00Z`))
+    const week = /^Week (\d+)$/.exec(label)
+    const earlier = /^Earlier (\d+)$/.exec(label)
+    return week ? t('stockDetails.chartLabels.week', { count: Number(week[1]) }) : earlier ? t('stockDetails.chartLabels.earlier', { count: Number(earlier[1]) }) : label
+  }
 
   return (
     <div className="stock-price-chart" data-range={range}>
-      <svg aria-label={t('stockDetails.historicalPriceChart', { symbol: details.symbol, range })} role="img" viewBox={`0 0 ${width} ${height}`}>
+      <svg aria-label={t('stockDetails.historicalPriceChart', { symbol: details.symbol, range: t(`common.timeRanges.${range}`) })} role="img" viewBox={`0 0 ${width} ${height}`}>
         {yTicks.map((tick, index) => {
           const y = plotTop + (index / 3) * plotHeight
           return (
@@ -107,7 +121,7 @@ function PriceChart({ details, range }: { details: StockDetails; range: ChartRan
         )}
         {labelIndexes.map((index) => {
           const point = points[index]
-          return point ? <text className="stock-chart-x-label" key={`${point.label}-${index}`} x={point.x} y={height - 8}>{point.label}</text> : null
+          return point ? <text className="stock-chart-x-label" key={`${point.label}-${index}`} x={point.x} y={height - 8}>{localizeHistoryLabel(point.label)}</text> : null
         })}
       </svg>
     </div>
@@ -138,12 +152,12 @@ function ConfidenceRing({ confidence }: { confidence: number }) {
   const progress = (confidence / 100) * circumference
 
   return (
-    <div aria-label={t('stockDetails.aiConfidence', { confidence })} className="stock-confidence-ring">
+    <div aria-label={t('stockDetails.aiConfidence', { confidence: formatPercent(confidence, undefined, 0) })} className="stock-confidence-ring">
       <svg aria-hidden="true" viewBox="0 0 80 80">
         <circle className="stock-confidence-track" cx="40" cy="40" r="32" />
         <circle className="stock-confidence-progress" cx="40" cy="40" r="32" strokeDasharray={`${progress} ${circumference - progress}`} />
       </svg>
-      <strong>{confidence}%</strong>
+      <strong>{formatPercent(confidence, undefined, 0)}</strong>
     </div>
   )
 }
@@ -265,7 +279,7 @@ function AlertModal({ details, onClose, onCreated }: { details: StockDetails; on
     event.preventDefault()
     const parsedPrice = Number(targetPrice)
     if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
-      setError(t('stockDetails.errors.targetPrice'))
+      setError('stockDetails.errors.targetPrice')
       return
     }
     onCreated()
@@ -290,7 +304,7 @@ function AlertModal({ details, onClose, onCreated }: { details: StockDetails; on
           </fieldset>
           <label htmlFor="stock-alert-target">{t('common.targetPrice')}</label>
           <div className="stock-input-with-prefix"><span>$</span><input id="stock-alert-target" inputMode="decimal" min="0.01" onChange={(event) => { setTargetPrice(event.target.value); setError('') }} step="0.01" type="number" value={targetPrice} /></div>
-          {error && <p className="stock-form-error" role="alert">{error}</p>}
+          {error && <p className="stock-form-error" role="alert">{t(error)}</p>}
           <div className="stock-modal-actions"><button className="stock-secondary-button" onClick={onClose} type="button">{t('common.cancel')}</button><button className="stock-primary-button" type="submit">{t('alerts.createAlert')}</button></div>
         </form>
       </section>
@@ -348,8 +362,8 @@ function TradeTicket({ details, side, quantity, quantityError, orderType, limitP
       <div className="stock-trade-field"><label htmlFor="stock-order-type">{t('stockDetails.orderType')}</label><select id="stock-order-type" onChange={(event) => onOrderTypeChange(event.target.value as TradeOrderType)} value={orderType}><option value="market">{t('stockDetails.marketOrder')}</option><option value="limit">{t('stockDetails.limitOrder')}</option></select></div>
       {orderType === 'limit' && <div className="stock-trade-field"><label htmlFor="stock-limit-price">{t('stockDetails.limitPrice')}</label><div className="stock-trade-input"><input aria-describedby={limitPriceError ? 'stock-limit-price-error' : undefined} id="stock-limit-price" inputMode="decimal" min="0.01" onChange={(event) => onLimitPriceChange(event.target.value)} step="0.01" type="number" value={limitPrice} /><span>USD</span></div></div>}
       <div className="stock-trade-field"><label htmlFor="stock-quantity">{t('common.quantity')}</label><div className="stock-trade-input"><input id="stock-quantity" inputMode="numeric" min="1" onChange={(event) => onQuantityChange(event.target.value)} type="number" value={quantity} /><span>{t('stockDetails.sharesLabel')}</span></div></div>
-      {quantityError && <p className="stock-form-error" role="alert">{quantityError}</p>}
-      {limitPriceError && <p className="stock-form-error" id="stock-limit-price-error" role="alert">{limitPriceError}</p>}
+      {quantityError && <p className="stock-form-error" role="alert">{t(quantityError)}</p>}
+      {limitPriceError && <p className="stock-form-error" id="stock-limit-price-error" role="alert">{t(limitPriceError)}</p>}
       <div className="stock-trade-summary"><div><span>{t('stockDetails.estimatedPriceShort')}</span><strong>{estimatedPrice > 0 ? formatCurrency(estimatedPrice) : '—'}</strong></div><div><span>{t('stockDetails.estimatedTotalShort')}</span><strong>{estimatedPrice > 0 ? formatCurrency(estimatedTotal) : '—'}</strong></div></div>
       <button className={`stock-trade-submit ${isBuy ? 'stock-trade-submit-buy' : 'stock-trade-submit-sell'}`} type="submit">{t(isBuy ? 'stockDetails.placeBuyOrder' : 'stockDetails.placeSellOrder')}</button>
       <div className="stock-cash-row"><span>{t('stockDetails.availableCashPaper')}</span><strong>{formatCurrency(12430.18)}</strong></div>
@@ -365,6 +379,24 @@ export function StockDetailsPage({ requestedSymbol, stock, onBack }: StockDetail
     Buy: 'stockDetails.ratings.buy',
     Hold: 'stockDetails.ratings.hold',
   }
+  const localizedStatValue = (key: keyof StockDetails['stats'], value: string) => {
+    if (!value || value === '—') return '—'
+    if (key === 'nextEarnings') return formatDate(value)
+    if (key === 'marketCap') {
+      const parsed = Number.parseFloat(value.replace(/[$,]/g, ''))
+      const suffix = value.at(-1)
+      return Number.isFinite(parsed) ? formatCompactCurrency(parsed * (suffix === 'T' ? 1e12 : suffix === 'B' ? 1e9 : suffix === 'M' ? 1e6 : 1)) : t('market.indexValue')
+    }
+    if (key === 'dividendYield') return formatPercent(Number.parseFloat(value))
+    if (key === 'peRatio' || key === 'beta') return formatNumber(Number.parseFloat(value))
+    if (key === 'weekRange') return value.split('–').map((part) => formatCurrency(Number.parseFloat(part.replace(/[$,]/g, '')))).join(' – ')
+    if (key === 'volume' || key === 'averageVolume') {
+      const parsed = Number.parseFloat(value)
+      return formatNumber(parsed * (value.endsWith('M') ? 1e6 : 1), undefined, 0)
+    }
+    if (['eps', 'open', 'high', 'low', 'previousClose', 'analystPriceTarget'].includes(key)) return formatCurrency(Number.parseFloat(value.replace(/[$,]/g, '')))
+    return value
+  }
   const [isWatchlisted, setIsWatchlisted] = useState(false)
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false)
   const [tradeSide, setTradeSide] = useState<TradeSide>('BUY')
@@ -376,11 +408,11 @@ export function StockDetailsPage({ requestedSymbol, stock, onBack }: StockDetail
   const [tradeConfirmation, setTradeConfirmation] = useState<TradeConfirmation | null>(null)
   const [activeRange, setActiveRange] = useState<ChartRange>('3M')
   const [activeTab, setActiveTab] = useState<DetailTab>('Overview')
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState<ToastState | null>(null)
 
-  const showToast = (message: string) => {
+  const showToast = (message: ToastState) => {
     setToast(message)
-    window.setTimeout(() => setToast(''), 2500)
+    window.setTimeout(() => setToast(null), 2500)
   }
 
   if (!details) {
@@ -399,13 +431,13 @@ export function StockDetailsPage({ requestedSymbol, stock, onBack }: StockDetail
     event.preventDefault()
     const parsedQuantity = Number(quantity)
     if (!Number.isInteger(parsedQuantity) || parsedQuantity <= 0) {
-      setQuantityError(t('stockDetails.errors.quantity'))
+      setQuantityError('stockDetails.errors.quantity')
       return
     }
     setQuantityError('')
     const parsedLimitPrice = Number(limitPrice)
     if (orderType === 'limit' && (!Number.isFinite(parsedLimitPrice) || parsedLimitPrice <= 0)) {
-      setLimitPriceError(t('stockDetails.errors.limitPrice'))
+      setLimitPriceError('stockDetails.errors.limitPrice')
       return
     }
     setLimitPriceError('')
@@ -427,20 +459,20 @@ export function StockDetailsPage({ requestedSymbol, stock, onBack }: StockDetail
           <div className="stock-details-identity">
             <StockLogo size="large" symbol={details.symbol} />
             <div>
-              <div className="stock-title-row"><h1 id="stock-details-title">{details.company}</h1><button aria-label={isWatchlisted ? t('stockDetails.removeFromWatchlist', { symbol: details.symbol }) : t('stockDetails.addToWatchlist', { symbol: details.symbol })} aria-pressed={isWatchlisted} className={`stock-title-star ${isWatchlisted ? 'stock-title-star-active' : ''}`} onClick={() => { setIsWatchlisted((current) => !current); showToast(isWatchlisted ? t('stockDetails.removedFromWatchlist', { symbol: details.symbol }) : t('stockDetails.addedToWatchlist', { symbol: details.symbol })) }} type="button"><MarketIcon filled={isWatchlisted} name="star" size={17} /></button></div>
-              <p className="stock-details-subtitle">{details.symbol} <span>•</span> {details.exchange}</p>
+              <div className="stock-title-row"><h1 id="stock-details-title">{details.company}</h1><button aria-label={isWatchlisted ? t('stockDetails.removeFromWatchlist', { symbol: details.symbol }) : t('stockDetails.addToWatchlist', { symbol: details.symbol })} aria-pressed={isWatchlisted} className={`stock-title-star ${isWatchlisted ? 'stock-title-star-active' : ''}`} onClick={() => { setIsWatchlisted((current) => !current); showToast({ key: isWatchlisted ? 'stockDetails.removedFromWatchlist' : 'stockDetails.addedToWatchlist', values: { symbol: details.symbol } }) }} type="button"><MarketIcon filled={isWatchlisted} name="star" size={17} /></button></div>
+              <p className="stock-details-subtitle">{details.symbol} <span>•</span> {details.exchange === 'Global Exchange' ? t('stockDetails.globalExchange') : details.exchange}</p>
               <div className="stock-price-row"><strong>{formatCurrency(details.price)}</strong><span className={details.tone === 'positive' ? 'stock-positive' : 'stock-negative'}>{changeLabel(details, t('stockDetails.today'))}</span></div>
               <p className="stock-details-status">{details.statusKey ? t(details.statusKey) : details.status} <span>•</span> {details.updatedAtKey ? t(details.updatedAtKey) : details.updatedAt}</p>
             </div>
           </div>
           <div className="stock-details-actions">
-            <button aria-pressed={isWatchlisted} className={`stock-outline-button ${isWatchlisted ? 'stock-outline-button-active' : ''}`} onClick={() => { setIsWatchlisted((current) => !current); showToast(isWatchlisted ? t('stockDetails.removedFromWatchlist', { symbol: details.symbol }) : t('stockDetails.addedToWatchlist', { symbol: details.symbol })) }} type="button"><MarketIcon filled={isWatchlisted} name="star" size={15} /> {isWatchlisted ? t('stockDetails.inWatchlist') : t('stockDetails.addToWatchlist', { symbol: details.symbol })}</button>
+            <button aria-pressed={isWatchlisted} className={`stock-outline-button ${isWatchlisted ? 'stock-outline-button-active' : ''}`} onClick={() => { setIsWatchlisted((current) => !current); showToast({ key: isWatchlisted ? 'stockDetails.removedFromWatchlist' : 'stockDetails.addedToWatchlist', values: { symbol: details.symbol } }) }} type="button"><MarketIcon filled={isWatchlisted} name="star" size={15} /> {isWatchlisted ? t('stockDetails.inWatchlist') : t('stockDetails.addToWatchlist', { symbol: details.symbol })}</button>
             <button className="stock-outline-button" onClick={() => setIsAlertModalOpen(true)} type="button"><MarketIcon name="bell" size={15} /> {t('alerts.createAlert')}</button>
           </div>
         </header>
 
         <nav aria-label={t('stockDetails.sectionsLabel')} className="stock-detail-tabs">
-          {detailTabs.map((tab) => <button aria-pressed={activeTab === tab} className={activeTab === tab ? 'stock-detail-tab-active' : ''} key={tab} onClick={() => { setActiveTab(tab); if (tab !== 'Overview') showToast(t('stockDetails.tabSimulated', { tab: t(detailTabKeys[tab]) })) }} type="button">{t(detailTabKeys[tab])}</button>)}
+          {detailTabs.map((tab) => <button aria-pressed={activeTab === tab} className={activeTab === tab ? 'stock-detail-tab-active' : ''} key={tab} onClick={() => { setActiveTab(tab); if (tab !== 'Overview') showToast({ key: 'stockDetails.tabSimulated', tabKey: detailTabKeys[tab] }) }} type="button">{t(detailTabKeys[tab])}</button>)}
         </nav>
 
         <div className="stock-details-layout">
@@ -448,30 +480,30 @@ export function StockDetailsPage({ requestedSymbol, stock, onBack }: StockDetail
             <article className="stock-chart-card">
               <div className="stock-card-heading stock-chart-heading">
                 <div className="stock-card-title"><span className="stock-card-icon stock-card-icon-chart"><MarketIcon name="chart" size={16} /></span><h2>{t('stockDetails.priceChart')}</h2></div>
-                <div className="stock-chart-tools"><div aria-label={t('stockDetails.chartTimeRange')} className="stock-range-tabs">{chartRanges.map((range) => <button aria-pressed={activeRange === range} className={activeRange === range ? 'stock-range-active' : ''} key={range} onClick={() => setActiveRange(range)} type="button">{range}</button>)}</div><button aria-label={t('stockDetails.expandChart')} className="stock-chart-expand" onClick={() => showToast(t('stockDetails.expandedChart'))} type="button"><MarketIcon name="expand" size={13} /></button></div>
+                <div className="stock-chart-tools"><div aria-label={t('stockDetails.chartTimeRange')} className="stock-range-tabs">{chartRanges.map((range) => <button aria-pressed={activeRange === range} className={activeRange === range ? 'stock-range-active' : ''} key={range} onClick={() => setActiveRange(range)} type="button">{t(`common.timeRanges.${range}`)}</button>)}</div><button aria-label={t('stockDetails.expandChart')} className="stock-chart-expand" onClick={() => showToast({ key: 'stockDetails.expandedChart' })} type="button"><MarketIcon name="expand" size={13} /></button></div>
               </div>
               <PriceChart details={details} range={activeRange} />
             </article>
 
             <section aria-label={t('stockDetails.keyStatistics')} className="stock-stats-grid">
-              <StatCard label={t('stockDetails.stats.marketCap')} value={details.stats.marketCap} />
-              <StatCard label={t('stockDetails.stats.peRatio')} value={details.stats.peRatio} />
-              <StatCard label={t('stockDetails.stats.eps')} value={details.stats.eps} />
-              <StatCard label={t('stockDetails.stats.dividendYield')} value={details.stats.dividendYield} />
-              <StatCard label={t('stockDetails.stats.weekRange')} value={details.stats.weekRange} />
-              <StatCard label={t('stockDetails.stats.volume')} value={details.stats.volume} />
-              <StatCard label={t('stockDetails.stats.averageVolume')} value={details.stats.averageVolume} />
-              <StatCard label={t('stockDetails.stats.nextEarnings')} value={details.stats.nextEarnings} />
+              <StatCard label={t('stockDetails.stats.marketCap')} value={localizedStatValue('marketCap', details.stats.marketCap)} />
+              <StatCard label={t('stockDetails.stats.peRatio')} value={localizedStatValue('peRatio', details.stats.peRatio)} />
+              <StatCard label={t('stockDetails.stats.eps')} value={localizedStatValue('eps', details.stats.eps)} />
+              <StatCard label={t('stockDetails.stats.dividendYield')} value={localizedStatValue('dividendYield', details.stats.dividendYield)} />
+              <StatCard label={t('stockDetails.stats.weekRange')} value={localizedStatValue('weekRange', details.stats.weekRange)} />
+              <StatCard label={t('stockDetails.stats.volume')} value={localizedStatValue('volume', details.stats.volume)} />
+              <StatCard label={t('stockDetails.stats.averageVolume')} value={localizedStatValue('averageVolume', details.stats.averageVolume)} />
+              <StatCard label={t('stockDetails.stats.nextEarnings')} value={localizedStatValue('nextEarnings', details.stats.nextEarnings)} />
             </section>
 
             <section aria-label={t('stockDetails.tradingMetrics')} className="stock-metrics-card">
-              <MetricItem label={t('stockDetails.metrics.open')} value={details.stats.open} />
-              <MetricItem label={t('stockDetails.metrics.high')} value={details.stats.high} />
-              <MetricItem label={t('stockDetails.metrics.low')} value={details.stats.low} />
-              <MetricItem label={t('stockDetails.metrics.previousClose')} value={details.stats.previousClose} />
-              <MetricItem label={t('stockDetails.metrics.beta')} value={details.stats.beta} />
+              <MetricItem label={t('stockDetails.metrics.open')} value={localizedStatValue('open', details.stats.open)} />
+              <MetricItem label={t('stockDetails.metrics.high')} value={localizedStatValue('high', details.stats.high)} />
+              <MetricItem label={t('stockDetails.metrics.low')} value={localizedStatValue('low', details.stats.low)} />
+              <MetricItem label={t('stockDetails.metrics.previousClose')} value={localizedStatValue('previousClose', details.stats.previousClose)} />
+              <MetricItem label={t('stockDetails.metrics.beta')} value={localizedStatValue('beta', details.stats.beta)} />
               <MetricItem label={t('stockDetails.metrics.analystRating')} value={analystRatingKeys[details.stats.analystRating] ? t(analystRatingKeys[details.stats.analystRating]) : details.stats.analystRating} tone="positive" />
-              <MetricItem label={t('stockDetails.metrics.analystTarget')} value={details.stats.analystPriceTarget} tone="positive" />
+              <MetricItem label={t('stockDetails.metrics.analystTarget')} value={localizedStatValue('analystPriceTarget', details.stats.analystPriceTarget)} tone="positive" />
             </section>
           </div>
 
@@ -495,9 +527,9 @@ export function StockDetailsPage({ requestedSymbol, stock, onBack }: StockDetail
         </div>
       </section>
 
-      {isAlertModalOpen && <AlertModal details={details} onClose={() => setIsAlertModalOpen(false)} onCreated={() => { setIsAlertModalOpen(false); showToast(t('stockDetails.alertCreated', { symbol: details.symbol })) }} />}
-      {tradeConfirmation && <TradeConfirmationModal details={details} executionPrice={tradeConfirmation.executionPrice} limitPrice={tradeConfirmation.limitPrice} onClose={() => setTradeConfirmation(null)} onConfirm={() => { setTradeConfirmation(null); showToast(t('stockDetails.orderPlaced', { side: tradeConfirmation.side === 'BUY' ? t('common.buy') : t('common.sell'), orderType: tradeConfirmation.orderType === 'limit' ? t('stockDetails.limitOrder') : t('stockDetails.marketOrder'), quantity: tradeConfirmation.quantity, symbol: details.symbol })) }} orderType={tradeConfirmation.orderType} quantity={tradeConfirmation.quantity} side={tradeConfirmation.side} total={tradeConfirmation.total} />}
-      {toast && <div aria-live="polite" className="stock-toast">{toast}</div>}
+      {isAlertModalOpen && <AlertModal details={details} onClose={() => setIsAlertModalOpen(false)} onCreated={() => { setIsAlertModalOpen(false); showToast({ key: 'stockDetails.alertCreated', values: { symbol: details.symbol } }) }} />}
+      {tradeConfirmation && <TradeConfirmationModal details={details} executionPrice={tradeConfirmation.executionPrice} limitPrice={tradeConfirmation.limitPrice} onClose={() => setTradeConfirmation(null)} onConfirm={() => { setTradeConfirmation(null); showToast({ key: 'stockDetails.orderPlaced', side: tradeConfirmation.side, orderType: tradeConfirmation.orderType, values: { quantity: tradeConfirmation.quantity, symbol: details.symbol } }) }} orderType={tradeConfirmation.orderType} quantity={tradeConfirmation.quantity} side={tradeConfirmation.side} total={tradeConfirmation.total} />}
+      {toast && <div aria-live="polite" className="stock-toast">{t(toast.key, { ...toast.values, ...(toast.tabKey ? { tab: t(toast.tabKey) } : {}), ...(toast.side ? { side: t(toast.side === 'BUY' ? 'common.buy' : 'common.sell') } : {}), ...(toast.orderType ? { orderType: t(toast.orderType === 'limit' ? 'stockDetails.limitOrder' : 'stockDetails.marketOrder') } : {}) })}</div>}
     </MarketShell>
   )
 }

@@ -1,5 +1,5 @@
 import { Sidebar } from '../components/layout/Sidebar'
-import { formatCurrency } from '../i18n/formatters'
+import { formatCurrency, formatDate } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
@@ -70,11 +70,13 @@ function ProfileAvatar({ small = false }: { small?: boolean }) {
   return <span aria-label={t('profile.avatarAlt')} className={`profile-avatar ${small ? 'profile-avatar-small' : ''}`}><svg aria-hidden="true" viewBox="0 0 96 96"><circle cx="48" cy="48" fill="#d7d9dc" r="48" /><path d="M16 96c2-21 14-31 32-31s30 10 32 31" fill="#4d86be" /><path d="M31 62c3 11 10 17 17 17s14-6 17-17c-5 4-11 6-17 6s-12-2-17-6Z" fill="#d99b79" /><ellipse cx="48" cy="43" fill="#efb38c" rx="18" ry="22" /><path d="M30 40c0-19 8-27 20-27 14 0 21 10 18 28l-5-6c-7 4-16 3-25-3-1 4-4 7-8 8Z" fill="#3a2b27" /><path d="M39 46h3M54 46h3" stroke="#4b3028" strokeLinecap="round" strokeWidth="2" /><path d="M43 56c3 2 7 2 10 0" fill="none" stroke="#a45e52" strokeLinecap="round" strokeWidth="1.6" /></svg></span>
 }
 
-function ProfileField({ label, value, editing, type = 'text', options, onChange, onEdit, readOnly = false }: { label: string; value: string; editing: boolean; type?: 'text' | 'email' | 'password' | 'select'; options?: string[]; onChange?: (value: string) => void; onEdit: () => void; readOnly?: boolean }) {
+type ProfileOption = { label: string; value: string }
+
+function ProfileField({ label, value, editing, type = 'text', options, onChange, onEdit, readOnly = false }: { label: string; value: string; editing: boolean; type?: 'text' | 'email' | 'password' | 'select'; options?: ProfileOption[]; onChange?: (value: string) => void; onEdit: () => void; readOnly?: boolean }) {
   const { t } = useTranslation()
   const isSelect = type === 'select' && options !== undefined
-  const fieldControl = isSelect ? <select aria-label={label} onChange={(event) => onChange?.(event.target.value)} required value={value}>{options?.map((option) => <option key={option} value={option}>{option}</option>)}</select> : <input aria-label={label} onChange={(event) => onChange?.(event.target.value)} required type={type} value={value} />
-  return <div className="profile-info-row"><span className="profile-info-label">{label}</span>{isSelect ? fieldControl : editing && !readOnly ? fieldControl : <strong>{value}</strong>}<button aria-label={`${t('common.edit')} ${label}`} className="row-edit-button" onClick={onEdit} type="button"><Icon name="edit" size={14} /></button></div>
+  const fieldControl = isSelect ? <select aria-label={label} onChange={(event) => onChange?.(event.target.value)} required value={value}>{options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : <input aria-label={label} onChange={(event) => onChange?.(event.target.value)} required type={type} value={value} />
+  return <div className="profile-info-row"><span className="profile-info-label">{label}</span>{isSelect ? fieldControl : editing && !readOnly ? fieldControl : <strong>{value}</strong>}<button aria-label={t('common.editField', { field: label })} className="row-edit-button" onClick={onEdit} type="button"><Icon name="edit" size={14} /></button></div>
 }
 
 function PreferenceToggle({ label, description, enabled, onChange }: { label: string; description: string; enabled: boolean; onChange: () => void }) {
@@ -89,25 +91,13 @@ function PasswordModal({ onClose, onSave }: { onClose: () => void; onSave: () =>
     const form = new FormData(event.currentTarget)
     const password = String(form.get('new-password') ?? '')
     const confirmation = String(form.get('confirm-password') ?? '')
-    if (password.length < 8) { setError(t('profile.passwordModal.shortPassword')); return }
-    if (password !== confirmation) { setError(t('profile.passwordModal.mismatch')); return }
+    if (password.length < 8) { setError('profile.passwordModal.shortPassword'); return }
+    if (password !== confirmation) { setError('profile.passwordModal.mismatch'); return }
     onSave()
   }
 
-  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="password-title" aria-modal="true" className="password-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label={t('profile.passwordModal.close')} className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="modal-icon"><Icon name="lock" size={20} /></div><h2 id="password-title">{t('profile.passwordModal.title')}</h2><p>{t('profile.passwordModal.description')}</p><form onSubmit={submit}><label htmlFor="current-password">{t('profile.passwordModal.currentPassword')}</label><input id="current-password" name="current-password" required type="password" /><label htmlFor="new-password">{t('profile.passwordModal.newPassword')}</label><input id="new-password" minLength={8} name="new-password" required type="password" /><label htmlFor="confirm-password">{t('profile.passwordModal.confirmPassword')}</label><input id="confirm-password" minLength={8} name="confirm-password" required type="password" />{error && <div className="form-error" role="alert">{error}</div>}<div className="modal-actions"><button className="cancel-button" onClick={onClose} type="button">{t('common.cancel')}</button><button className="modal-primary" type="submit">{t('profile.passwordModal.save')}</button></div></form></section></div>
+  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="password-title" aria-modal="true" className="password-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label={t('profile.passwordModal.close')} className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="modal-icon"><Icon name="lock" size={20} /></div><h2 id="password-title">{t('profile.passwordModal.title')}</h2><p>{t('profile.passwordModal.description')}</p><form onSubmit={submit}><label htmlFor="current-password">{t('profile.passwordModal.currentPassword')}</label><input id="current-password" name="current-password" required type="password" /><label htmlFor="new-password">{t('profile.passwordModal.newPassword')}</label><input id="new-password" minLength={8} name="new-password" required type="password" /><label htmlFor="confirm-password">{t('profile.passwordModal.confirmPassword')}</label><input id="confirm-password" minLength={8} name="confirm-password" required type="password" />{error && <div className="form-error" role="alert">{t(error)}</div>}<div className="modal-actions"><button className="cancel-button" onClick={onClose} type="button">{t('common.cancel')}</button><button className="modal-primary" type="submit">{t('profile.passwordModal.save')}</button></div></form></section></div>
 }
-
-const countryOptions = ['United States', 'Canada', 'United Kingdom', 'France', 'Germany', 'Australia', 'Japan']
-const timezoneOptions = [
-  '(UTC-8) Pacific Time (US & Canada)',
-  '(UTC-7) Mountain Time (US & Canada)',
-  '(UTC-6) Central Time (US & Canada)',
-  '(UTC-5) Eastern Time (US & Canada)',
-  '(UTC-4) Eastern Time (US & Canada)',
-  '(UTC+0) Greenwich Mean Time',
-  '(UTC+1) Central European Time',
-  '(UTC+9) Japan Standard Time',
-]
 
 export default function ProfilePage() {
   const { i18n, t } = useTranslation()
@@ -119,12 +109,14 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false)
   const [passwordModalOpen, setPasswordModalOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState<{ key: string; options?: { count: number } }>({ key: '' })
   const [preferences, setPreferences] = useState({ email: true, alerts: true, marketing: false, currency: 'USD ($)', darkMode: false })
+  const countryOptions = ['us', 'ca', 'gb', 'fr', 'de', 'au', 'jp'].map((value) => ({ label: t(`profile.countries.${value}`), value }))
+  const timezoneOptions = ['americaPacific', 'americaMountain', 'americaCentral', 'americaEasternStandard', 'americaEasternDaylight', 'greenwich', 'europeCentral', 'japan'].map((value) => ({ label: t(`profile.timezones.${value}`), value }))
 
-  const showToast = (message: string) => {
-    setToast(message)
-    window.setTimeout(() => setToast(''), 2300)
+  const showToast = (key: string, options?: { count: number }) => {
+    setToast({ key, options })
+    window.setTimeout(() => setToast({ key: '' }), 2300)
   }
 
   const beginEditing = () => { setDraft(profile); setEditing(true) }
@@ -133,7 +125,7 @@ export default function ProfilePage() {
     event?.preventDefault()
     setProfile(draft)
     setEditing(false)
-    showToast(t('profile.profileSavedToast'))
+    showToast('profile.profileSavedToast')
   }
   const updatePreference = (key: 'email' | 'alerts' | 'marketing' | 'darkMode') => setPreferences((current) => ({ ...current, [key]: !current[key] }))
 
@@ -150,8 +142,8 @@ export default function ProfilePage() {
         <div className="breadcrumb"><strong>{t('profile.title')}</strong></div>
         <div className="topbar-actions">
           <label className="global-search"><Icon name="search" size={16} /><input aria-label={t('common.searchStocks')} placeholder={t('common.searchStocksEtfsNewsPlaceholder')} /></label>
-          <button aria-label={t('common.notifications')} className="icon-button notification-button" onClick={() => showToast(t('common.notificationsCaughtUp'))} type="button"><Icon name="bell" size={18} /><i>2</i></button>
-          <button aria-label={t('common.openMessages')} className="icon-button mail-button" onClick={() => showToast(t('common.noNewMessages'))} type="button"><Icon name="mail" size={17} /></button>
+          <button aria-label={t('common.notifications')} className="icon-button notification-button" onClick={() => showToast('common.notificationsCaughtUp')} type="button"><Icon name="bell" size={18} /><i>2</i></button>
+          <button aria-label={t('common.openMessages')} className="icon-button mail-button" onClick={() => showToast('common.noNewMessages')} type="button"><Icon name="mail" size={17} /></button>
           <button aria-label={t('common.openAccountMenu')} className="topbar-account" onClick={() => window.location.assign(routeFor('profile'))} type="button"><ProfileAvatar small /><Icon name="chevron-down" size={14} /></button>
         </div>
       </header>
@@ -159,8 +151,8 @@ export default function ProfilePage() {
         <section aria-labelledby="profile-summary-title" className="profile-summary-card">
           <div className="summary-identity"><ProfileAvatar /><div><h1 id="profile-summary-title">{profile.name}</h1><p>{profile.email}</p><span className="verified-badge"><i /> {t('profile.verifiedAccount')}</span></div></div>
           <div className="summary-details">
-            <div><span><Icon name="activity" size={15} /> {t('profile.memberSince')}</span><strong>{t('profile.memberSinceValue')}</strong></div>
-            <div><span><Icon name="activity" size={15} /> {t('profile.accountCreated')}</span><strong>{t('profile.accountCreatedValue')}</strong></div>
+            <div><span><Icon name="activity" size={15} /> {t('profile.memberSince')}</span><strong>{formatDate(profile.createdAt)}</strong></div>
+            <div><span><Icon name="activity" size={15} /> {t('profile.accountCreated')}</span><strong>{formatDate(profile.createdAt)}</strong></div>
             <div><span><Icon name="activity" size={15} /> {t('profile.initialCapital')}</span><strong>{formatCurrency(profile.initialCapital)}</strong></div>
             <div><span>{t('profile.accountStatus')}</span><strong className="active-text">{t('profile.active')}</strong></div>
           </div>
@@ -199,14 +191,14 @@ export default function ProfilePage() {
         <section aria-labelledby="security-title" className="panel account-security-panel">
           <div className="panel-heading"><div><h2 id="security-title">{t('profile.accountSecurity')}</h2><p>{t('profile.accountSecurityDescription')}</p></div></div>
           <div className="security-grid">
-            <button className="security-item" onClick={() => showToast(t('profile.twoFactorToast'))} type="button"><span className="security-icon security-green"><Icon name="shield" size={20} /></span><span><strong>{t('profile.twoFactorAuthentication')}</strong><small>{t('profile.twoFactorDescription')}</small></span><b className="security-badge">{t('profile.enabled')}</b><Icon name="chevron-right" size={15} /></button>
-            <button className="security-item" onClick={() => showToast(t('profile.sessionsToast', { count: 3 }))} type="button"><span className="security-icon security-purple"><Icon name="key" size={20} /></span><span><strong>{t('profile.activeSessions')}</strong><small>{t('profile.activeSessionsDescription')}</small></span><b className="session-count">{t('profile.activeSessionsCount', { count: 3 })}</b><Icon name="chevron-right" size={15} /></button>
+            <button className="security-item" onClick={() => showToast('profile.twoFactorToast')} type="button"><span className="security-icon security-green"><Icon name="shield" size={20} /></span><span><strong>{t('profile.twoFactorAuthentication')}</strong><small>{t('profile.twoFactorDescription')}</small></span><b className="security-badge">{t('profile.enabled')}</b><Icon name="chevron-right" size={15} /></button>
+            <button className="security-item" onClick={() => showToast('profile.sessionsToast', { count: 3 })} type="button"><span className="security-icon security-purple"><Icon name="key" size={20} /></span><span><strong>{t('profile.activeSessions')}</strong><small>{t('profile.activeSessionsDescription')}</small></span><b className="session-count">{t('profile.activeSessionsCount', { count: 3 })}</b><Icon name="chevron-right" size={15} /></button>
           </div>
         </section>
         <p className="simulation-note"><Icon name="activity" size={14} /> {t('profile.previewNote')}</p>
       </div>
     </main>
-    <div aria-live="polite" className={`toast ${toast ? 'visible' : ''}`}>{toast}</div>
-    {passwordModalOpen && <PasswordModal onClose={() => setPasswordModalOpen(false)} onSave={() => { setPasswordModalOpen(false); showToast(t('profile.passwordChangeToast')) }} />}
+    <div aria-live="polite" className={`toast ${toast.key ? 'visible' : ''}`}>{toast.key ? t(toast.key, toast.options) : ''}</div>
+    {passwordModalOpen && <PasswordModal onClose={() => setPasswordModalOpen(false)} onSave={() => { setPasswordModalOpen(false); showToast('profile.passwordChangeToast') }} />}
   </div>
 }

@@ -48,7 +48,7 @@ export function MarketShell({
             <button aria-label={t('common.openMessages')} className="market-topbar-icon" type="button">
               <MarketIcon name="mail" size={17} />
             </button>
-            <button aria-label={t('common.openProfile', { name: 'Alex Johnson' })} className="market-avatar" onClick={() => window.location.assign(routeFor('profile'))} type="button">AJ</button>
+            <button aria-label={t('common.openProfile')} className="market-avatar" onClick={() => window.location.assign(routeFor('profile'))} type="button">AJ</button>
             <button aria-label={t('common.openAccountMenu')} className="market-account-chevron" onClick={() => window.location.assign(routeFor('profile'))} type="button">
               <MarketIcon name="chevronDown" size={14} />
             </button>

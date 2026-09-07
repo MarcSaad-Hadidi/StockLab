@@ -705,6 +705,7 @@ input:focus-visible {
 }
 
 .market-table-scroll {
+  position: relative;
   overflow-x: auto;
 }
 

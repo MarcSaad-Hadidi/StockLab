@@ -1,4 +1,4 @@
-import { i18n } from './i18n'
+import { i18n } from './i18n.ts'
 
 export function localeForLanguage(language = i18n.language) {
   return language === 'fr' ? 'fr-FR' : 'en-US'
@@ -46,6 +46,13 @@ export function formatPercent(value: number, language = i18n.language, fractionD
 
 export function formatSignedPercent(value: number, language = i18n.language, fractionDigits = 2) {
   return formatPercent(value, language, fractionDigits, true)
+}
+
+/** Format a wall-clock HH:mm value without changing its time zone. */
+export function formatTime(value: string, language = i18n.language) {
+  return new Intl.DateTimeFormat(localeForLanguage(language), {
+    hour: 'numeric', minute: '2-digit', timeZone: 'UTC',
+  }).format(new Date(`1970-01-01T${value}:00.000Z`))
 }
 
 export function formatDate(value: string | number | Date, language = i18n.language) {

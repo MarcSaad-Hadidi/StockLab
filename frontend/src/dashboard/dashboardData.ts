@@ -199,8 +199,8 @@ export const watchlist: WatchlistItem[] = [
 ]
 
 export const transactions: Transaction[] = [
-  { symbol: 'AAPL', company: 'Apple Inc.', type: 'Buy', shares: 10, amount: 2098.10, time: '10:42 AM', timeKey: 'dashboard.times.todayAt' },
-  { symbol: 'TSLA', company: 'Tesla Inc.', type: 'Sell', shares: 5, amount: 1693.70, time: '3:18 PM', timeKey: 'dashboard.times.yesterdayAt' },
+  { symbol: 'AAPL', company: 'Apple Inc.', type: 'Buy', shares: 10, amount: 2098.10, time: '10:42', timeKey: 'dashboard.times.todayAt' },
+  { symbol: 'TSLA', company: 'Tesla Inc.', type: 'Sell', shares: 5, amount: 1693.70, time: '15:18', timeKey: 'dashboard.times.yesterdayAt' },
   { symbol: 'NVDA', company: 'NVIDIA Corporation', type: 'Buy', shares: 12, amount: 1969.56, time: '', timeKey: 'dashboard.times.may28' },
 ]
 

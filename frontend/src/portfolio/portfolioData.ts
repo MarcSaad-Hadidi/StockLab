@@ -47,7 +47,7 @@ function buildChartSeries(points: string, range: string): PerformancePoint[] {
   const rangeDays = chartRangeDays[range] ?? 85
   return coordinates.map(([x, y], index) => {
     const elapsedDays = Math.round((index / Math.max(coordinates.length - 1, 1)) * rangeDays)
-    const date = new Date(chartStart + elapsedDays * 86_400_000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+    const date = new Date(chartStart + elapsedDays * 86_400_000).toISOString().slice(0, 10)
     const value = 140 - ((y - 20) / 180) * 80
     return { x, y, amount: value, date, value: `$${value.toFixed(2)}K` }
   })

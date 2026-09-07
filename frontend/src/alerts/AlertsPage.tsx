@@ -111,10 +111,10 @@ function AlertModal({ alert, onClose, onSave }: { alert: PriceAlert | null; onCl
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const parsedPrice = Number(targetPrice)
-    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) { setError(t('stockDetails.errors.targetPrice')); return }
+    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) { setError('stockDetails.errors.targetPrice'); return }
     onSave({ symbol, condition, targetPrice: parsedPrice })
   }
-  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="alert-modal-title" aria-modal="true" className="alert-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label={t('alerts.closeDialog')} className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="alert-modal-icon"><Icon name="bell" size={20} /></div><h2 id="alert-modal-title">{alert ? t('alerts.editAlertTitle') : t('alerts.createAlert')}</h2><p>{t('alerts.modalDescription')}</p><form onSubmit={submit}><label htmlFor="alert-asset">{t('alerts.selectAsset')}</label><div className="select-wrap"><select id="alert-asset" onChange={(event) => setSymbol(event.target.value)} value={symbol}>{assetOptions.map((asset) => <option key={asset.symbol} value={asset.symbol}>{asset.symbol} — {asset.name}</option>)}</select><Icon name="chevron-down" size={14} /></div><fieldset><legend>{t('common.condition')}</legend><div className="condition-options"><button aria-pressed={condition === 'above'} className={`condition-option ${condition === 'above' ? 'selected' : ''}`} onClick={() => setCondition('above')} type="button"><span>↑</span> {t('common.above')}</button><button aria-pressed={condition === 'below'} className={`condition-option ${condition === 'below' ? 'selected' : ''}`} onClick={() => setCondition('below')} type="button"><span>↓</span> {t('common.below')}</button></div></fieldset><label htmlFor="alert-target">{t('common.targetPrice')}</label><div className="price-input"><span>$</span><input id="alert-target" inputMode="decimal" min="0.01" onChange={(event) => { setTargetPrice(event.target.value); setError('') }} required step="0.01" type="number" value={targetPrice} /></div><fieldset className="notify-fieldset"><legend>{t('alerts.notifyVia')}</legend><div className="notify-options"><label><input defaultChecked type="checkbox" /> <span>{t('alerts.inApp')}</span></label><label><input defaultChecked type="checkbox" /> <span>{t('common.email')}</span></label><label><input type="checkbox" /> <span>{t('alerts.pushNotification')}</span></label></div></fieldset>{error && <p className="form-error" role="alert">{error}</p>}<div className="alert-modal-actions"><button className="cancel-button" onClick={onClose} type="button">{t('common.cancel')}</button><button className="modal-primary" type="submit">{alert ? t('common.saveChanges') : t('alerts.createAlert')}</button></div></form></section></div>
+  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="alert-modal-title" aria-modal="true" className="alert-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label={t('alerts.closeDialog')} className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="alert-modal-icon"><Icon name="bell" size={20} /></div><h2 id="alert-modal-title">{alert ? t('alerts.editAlertTitle') : t('alerts.createAlert')}</h2><p>{t('alerts.modalDescription')}</p><form onSubmit={submit}><label htmlFor="alert-asset">{t('alerts.selectAsset')}</label><div className="select-wrap"><select id="alert-asset" onChange={(event) => setSymbol(event.target.value)} value={symbol}>{assetOptions.map((asset) => <option key={asset.symbol} value={asset.symbol}>{asset.symbol} — {asset.name}</option>)}</select><Icon name="chevron-down" size={14} /></div><fieldset><legend>{t('common.condition')}</legend><div className="condition-options"><button aria-pressed={condition === 'above'} className={`condition-option ${condition === 'above' ? 'selected' : ''}`} onClick={() => setCondition('above')} type="button"><span>↑</span> {t('common.above')}</button><button aria-pressed={condition === 'below'} className={`condition-option ${condition === 'below' ? 'selected' : ''}`} onClick={() => setCondition('below')} type="button"><span>↓</span> {t('common.below')}</button></div></fieldset><label htmlFor="alert-target">{t('common.targetPrice')}</label><div className="price-input"><span>$</span><input id="alert-target" inputMode="decimal" min="0.01" onChange={(event) => { setTargetPrice(event.target.value); setError('') }} required step="0.01" type="number" value={targetPrice} /></div><fieldset className="notify-fieldset"><legend>{t('alerts.notifyVia')}</legend><div className="notify-options"><label><input defaultChecked type="checkbox" /> <span>{t('alerts.inApp')}</span></label><label><input defaultChecked type="checkbox" /> <span>{t('common.email')}</span></label><label><input type="checkbox" /> <span>{t('alerts.pushNotification')}</span></label></div></fieldset>{error && <p className="form-error" role="alert">{t(error)}</p>}<div className="alert-modal-actions"><button className="cancel-button" onClick={onClose} type="button">{t('common.cancel')}</button><button className="modal-primary" type="submit">{alert ? t('common.saveChanges') : t('alerts.createAlert')}</button></div></form></section></div>
 }
 
 export default function AlertsPage() {
@@ -128,12 +128,12 @@ export default function AlertsPage() {
   const [assetFilter, setAssetFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState<'all' | AlertStatus>('active')
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState<{ key: string; values?: Record<string, string> } | null>(null)
   const [modalAlert, setModalAlert] = useState<PriceAlert | null | undefined>(undefined)
 
-  const showToast = (message: string) => {
-    setToast(message)
-    window.setTimeout(() => setToast(''), 2300)
+  const showToast = (key: string, values?: Record<string, string>) => {
+    setToast({ key, values })
+    window.setTimeout(() => setToast(null), 2300)
   }
 
   const counts = useMemo(() => ({
@@ -157,12 +157,12 @@ export default function AlertsPage() {
     const asset = assetOptions.find((candidate) => candidate.symbol === draft.symbol) ?? assetOptions[0]
     if (modalAlert) {
       setAlerts((current) => current.map((candidate) => candidate.id === modalAlert.id ? { ...candidate, ...asset, condition: draft.condition, targetPrice: draft.targetPrice } : candidate))
-      showToast(t('alerts.alertUpdated', { symbol: draft.symbol }))
+      showToast('alerts.alertUpdated', { symbol: draft.symbol })
     } else {
       const createdAlert: PriceAlert = { id: `alert-${Date.now()}`, ...asset, condition: draft.condition, targetPrice: draft.targetPrice, status: 'active', createdAt: '2026-06-04' }
       setAlerts((current) => [createdAlert, ...current])
       setStatusFilter('active')
-      showToast(t('alerts.alertCreatedToast', { symbol: draft.symbol }))
+      showToast('alerts.alertCreatedToast', { symbol: draft.symbol })
     }
     setModalAlert(undefined)
   }
@@ -170,12 +170,12 @@ export default function AlertsPage() {
   const toggleAlert = (alert: PriceAlert) => {
     const nextStatus: AlertStatus = alert.status === 'active' ? 'disabled' : 'active'
     setAlerts((current) => current.map((candidate) => candidate.id === alert.id ? { ...candidate, status: nextStatus } : candidate))
-    showToast(t(nextStatus === 'active' ? 'alerts.alertEnabled' : 'alerts.alertDisabled', { symbol: alert.symbol }))
+    showToast(nextStatus === 'active' ? 'alerts.alertEnabled' : 'alerts.alertDisabled', { symbol: alert.symbol })
   }
 
   const deleteAlert = (alert: PriceAlert) => {
     setAlerts((current) => current.filter((candidate) => candidate.id !== alert.id))
-    showToast(t('alerts.alertDeleted', { symbol: alert.symbol }))
+    showToast('alerts.alertDeleted', { symbol: alert.symbol })
   }
 
   return <div className="alerts-page stocklab-layout">
@@ -186,8 +186,8 @@ export default function AlertsPage() {
         <div className="breadcrumb"><strong>{t('alerts.pageTitle')}</strong></div>
         <div className="topbar-actions">
           <label className="global-search"><Icon name="search" size={16} /><input aria-label={t('common.searchStocks')} onChange={(event) => setQuery(event.target.value)} placeholder={t('common.searchStocksEtfsNewsPlaceholder')} value={query} /></label>
-          <button aria-label={t('common.notifications')} className="icon-button notification-button" onClick={() => showToast(t('common.notificationsCaughtUp'))} type="button"><Icon name="bell" size={18} /><i>2</i></button>
-          <button aria-label={t('common.openMessages')} className="icon-button mail-button" onClick={() => showToast(t('common.noNewMessages'))} type="button"><Icon name="mail" size={17} /></button>
+          <button aria-label={t('common.notifications')} className="icon-button notification-button" onClick={() => showToast('common.notificationsCaughtUp')} type="button"><Icon name="bell" size={18} /><i>2</i></button>
+          <button aria-label={t('common.openMessages')} className="icon-button mail-button" onClick={() => showToast('common.noNewMessages')} type="button"><Icon name="mail" size={17} /></button>
           <button aria-label={t('common.openAccountMenu')} className="topbar-account" onClick={() => window.location.assign(routeFor('profile'))} type="button"><UserAvatar /><Icon name="chevron-down" size={14} /></button>
         </div>
       </header>
@@ -208,7 +208,7 @@ export default function AlertsPage() {
             <label className="filter-select"><span>{t('common.condition')}</span><select aria-label={t('common.condition')} onChange={(event) => setConditionFilter(event.target.value as 'all' | AlertCondition)} value={conditionFilter}><option value="all">{t('alerts.allConditions')}</option><option value="above">{t('alerts.conditions.above')}</option><option value="below">{t('alerts.conditions.below')}</option></select><Icon name="chevron-down" size={13} /></label>
             <label className="filter-select"><span>{t('common.asset')}</span><select aria-label={t('common.asset')} onChange={(event) => setAssetFilter(event.target.value)} value={assetFilter}><option value="all">{t('alerts.allAssets')}</option>{assetOptions.map((asset) => <option key={asset.symbol} value={asset.symbol}>{asset.symbol}</option>)}</select><Icon name="chevron-down" size={13} /></label>
             <label className="filter-select"><span>{t('common.status')}</span><select aria-label={t('common.status')} onChange={(event) => setStatusFilter(event.target.value as 'all' | AlertStatus)} value={statusFilter}><option value="all">{t('alerts.allStatuses')}</option><option value="active">{t('alerts.statuses.active')}</option><option value="triggered">{t('alerts.statuses.triggered')}</option><option value="disabled">{t('alerts.statuses.disabled')}</option></select><Icon name="chevron-down" size={13} /></label>
-            <button aria-label={t('alerts.moreFilters')} className="filter-button" onClick={() => showToast(t('alerts.allFiltersShown'))} type="button"><Icon name="filter" size={15} /></button>
+            <button aria-label={t('alerts.moreFilters')} className="filter-button" onClick={() => showToast('alerts.allFiltersShown')} type="button"><Icon name="filter" size={15} /></button>
           </div>
           <div className="alert-table-header" aria-hidden="true">{Object.values({ asset: 'asset', condition: 'condition', targetPrice: 'targetPrice', lastPrice: 'lastPrice', status: 'status', created: 'created', actions: 'actions' }).map((key) => <span key={key}>{t(`alerts.columns.${key}`)}</span>)}</div>
           <div className="alert-list">{filteredAlerts.length > 0 ? filteredAlerts.map((alert) => <AlertRow alert={alert} key={alert.id} onDelete={deleteAlert} onEdit={(target) => setModalAlert(target)} onToggle={toggleAlert} />) : <div className="empty-state"><span><Icon name="bell" size={18} /></span><strong>{t('alerts.noAlerts')}</strong><p>{t('alerts.noAlertsHint')}</p></div>}</div>
@@ -221,7 +221,7 @@ export default function AlertsPage() {
         <p className="simulation-note"><Icon name="activity" size={13} /> {t('alerts.simulationNote')}</p>
       </div>
     </main>
-    <div aria-live="polite" className={`toast ${toast ? 'visible' : ''}`}>{toast}</div>
+    <div aria-live="polite" className={`toast ${toast ? 'visible' : ''}`}>{toast ? t(toast.key, toast.values) : ''}</div>
     {modalAlert !== undefined && <AlertModal alert={modalAlert} onClose={() => setModalAlert(undefined)} onSave={saveAlert} />}
   </div>
 }
