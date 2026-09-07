@@ -43,7 +43,9 @@ public sealed class ExceptionHandlingMiddleware(
                 ? StatusCodes.Status400BadRequest
                 : StatusCodes.Status500InternalServerError;
 
-            var error = invalidRequest
+            var error = exception is NotSupportedException
+                ? new ApiErrorResponse("unsupported_operation", "The requested operation or interval is not supported.")
+                : invalidRequest
                 ? new ApiErrorResponse("invalid_request", "The request is invalid.")
                 : new ApiErrorResponse("internal_server_error", "An unexpected error occurred.");
             await context.Response.WriteAsJsonAsync(error, context.RequestAborted);
