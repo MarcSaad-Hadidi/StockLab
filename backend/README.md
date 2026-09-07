@@ -132,7 +132,8 @@ The response contains only `symbol`, `price`, `change`, `changePercent` and `vol
 Financial values are JSON numbers; unavailable optional values remain null.
 Symbols are trimmed and uppercased. AAPL, MSFT and NVDA return 200 with simulated
 fixture quotes. Unknown symbols return 404 with `error: stock_not_found` and a
-message. Blank symbols reaching the action return 400 with `error: invalid_symbol`.
+message. Blank symbols matching the route are rejected before the action with
+400 and `error: validation_error`.
 Provider exceptions propagate to the global middleware. A URL missing the symbol
 segment does not match this route and returns 404.
 
@@ -159,8 +160,43 @@ Unexpected failures are logged at Error with exception type and request trace ID
 Exception objects, messages, stacks, request values and credentials are not logged
 by this middleware. Expected invalid input and client cancellations are not logged
 as server errors. Normal 404 results remain decisions of the controller.
-This does not replace ASP.NET Core model validation or add a global validation
-policy; that belongs to issue #15.
+The middleware remains a safety net for exceptions; normal request validation
+uses MVC's automatic model-state filter described below.
+
+## HTTP request validation
+
+Controllers marked `[ApiController]` reject invalid model state before action
+execution. `Validation/ApiValidation.cs` configures one
+`InvalidModelStateResponseFactory` for annotation and model-binding failures.
+The public JSON extends the existing error/message convention with field errors:
+
+```json
+{
+  "error": "validation_error",
+  "message": "The request contains invalid data.",
+  "errors": {
+    "symbol": ["The value is missing or invalid."]
+  }
+}
+```
+
+Field messages are controlled, generic text: raw binding errors, attempted values
+and exceptions are never copied into the response. Use native `[Required]` for
+missing, empty or whitespace strings, `[RegularExpression]`/`[StringLength]` for
+formats and lengths, `[Range]` for bounds and `[EnumDataType]` for defined enum
+values when an endpoint's contract requires them. Typed route/query parameters
+also participate in model binding and use the same 400 format on conversion errors.
+
+The quote action uses `[Required]` on its route symbol and no longer contains a
+manual blank-input check. Its existing provider contract requires only a nonblank
+symbol; no speculative ticker regex or length limit is imposed. Trimming and case
+normalization remain unchanged. Missing route segments still produce 404 because
+no action matches. Application/provider preconditions remain for non-HTTP callers.
+
+`ApiValidationTests` runs MVC in an in-memory TestServer and verifies that invalid
+requests never reach its counting provider. A test-only controller exercises
+required fields, regex, range, enum and query-binding validation; none of those
+probe routes or future search/history DTOs are added to the production API.
 
 ## Health and OpenAPI
 

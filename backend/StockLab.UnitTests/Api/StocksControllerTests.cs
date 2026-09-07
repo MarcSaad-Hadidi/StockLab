@@ -30,15 +30,6 @@ public sealed class StocksControllerTests
     }
 
     [Fact]
-    public async Task Blank_symbol_keeps_400_error_contract()
-    {
-        var result = await new StocksController(new MockMarketDataProvider()).GetQuoteAsync(" ", default);
-        var response = Assert.IsType<BadRequestObjectResult>(result.Result);
-        Assert.Equal(400, response.StatusCode);
-        Assert.Equal("invalid_symbol", Assert.IsType<ApiErrorResponse>(response.Value).Error);
-    }
-
-    [Fact]
     public async Task Provider_argument_exception_propagates_to_global_handler()
     {
         var exception = new ArgumentException("provider detail");
