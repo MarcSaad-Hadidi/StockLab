@@ -45,6 +45,9 @@ public sealed class ApiValidationTests : IDisposable
     [Theory]
     [InlineData("/api/stocks/%20/quote", "symbol")]
     [InlineData("/api/stocks/%20%20%20/quote", "symbol")]
+    [InlineData("/api/stocks/search", "query")]
+    [InlineData("/api/stocks/search?query=", "query")]
+    [InlineData("/api/stocks/search?query=%20%20%20", "query")]
     [InlineData("/validation-probe", "value")]
     [InlineData("/validation-probe?value=", "value")]
     [InlineData("/validation-probe?value=%20%20", "value")]
@@ -68,6 +71,38 @@ public sealed class ApiValidationTests : IDisposable
         Assert.Equal("The value is missing or invalid.", errors.GetProperty(field)[0].GetString());
         Assert.DoesNotContain("private-marker", body);
         Assert.Equal(0, provider.QuoteCalls);
+        Assert.Equal(0, provider.SearchCalls);
+    }
+
+    [Theory]
+    [InlineData("AAPL", "AAPL", "Apple Inc.")]
+    [InlineData("apple", "AAPL", "Apple Inc.")]
+    [InlineData("microsoft", "MSFT", "Microsoft Corporation")]
+    [InlineData("nvidia", "NVDA", "NVIDIA Corporation")]
+    [InlineData("aPpLe", "AAPL", "Apple Inc.")]
+    [InlineData("%20aapl%20", "AAPL", "Apple Inc.")]
+    public async Task Search_returns_stock_list_with_http_fields(string query, string symbol, string companyName)
+    {
+        using var response = await client.GetAsync($"/api/stocks/search?query={query}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var stock = Assert.Single(json.RootElement.EnumerateArray());
+        Assert.Equal(4, stock.EnumerateObject().Count());
+        Assert.Equal(symbol, stock.GetProperty("symbol").GetString());
+        Assert.Equal(companyName, stock.GetProperty("companyName").GetString());
+        Assert.Equal("NASDAQ", stock.GetProperty("exchange").GetString());
+        Assert.Equal("USD", stock.GetProperty("currency").GetString());
+        Assert.Equal(1, provider.SearchCalls);
+    }
+
+    [Fact]
+    public async Task Search_without_matches_returns_200_and_empty_array()
+    {
+        using var response = await client.GetAsync("/api/stocks/search?query=zzzzzz");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("[]", await response.Content.ReadAsStringAsync());
+        Assert.Equal(1, provider.SearchCalls);
     }
 
     [Theory]
@@ -117,12 +152,17 @@ public sealed class ApiValidationTests : IDisposable
     {
         private readonly MockMarketDataProvider inner = new();
         public int QuoteCalls { get; private set; }
+        public int SearchCalls { get; private set; }
         public Task<StockQuote?> GetQuoteAsync(string symbol, CancellationToken cancellationToken = default)
         {
             QuoteCalls++;
             return inner.GetQuoteAsync(symbol, cancellationToken);
         }
-        public Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(string query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(string query, CancellationToken cancellationToken = default)
+        {
+            SearchCalls++;
+            return inner.SearchStocksAsync(query, cancellationToken);
+        }
         public Task<StockHistory?> GetHistoryAsync(StockHistoryRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }

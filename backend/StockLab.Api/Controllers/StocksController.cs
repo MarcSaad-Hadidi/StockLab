@@ -10,6 +10,20 @@ namespace StockLab.Api.Controllers;
 [Produces("application/json")]
 public sealed class StocksController(IMarketDataProvider marketDataProvider) : ControllerBase
 {
+    /// <summary>Searches stocks by ticker or company name.</summary>
+    [HttpGet("search")]
+    [ProducesResponseType(typeof(StockSearchResponse[]), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiValidationErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<StockSearchResponse[]>> SearchStocksAsync(
+        [FromQuery, Required] string query,
+        CancellationToken cancellationToken)
+    {
+        var results = await marketDataProvider.SearchStocksAsync(query, cancellationToken);
+        return Ok(results.Select(stock => new StockSearchResponse(
+            stock.Symbol, stock.CompanyName, stock.Exchange, stock.Currency)).ToArray());
+    }
+
     /// <summary>Gets the latest available quote for a stock symbol.</summary>
     [HttpGet("{symbol}/quote")]
     [ProducesResponseType(typeof(StockQuoteResponse), StatusCodes.Status200OK)]

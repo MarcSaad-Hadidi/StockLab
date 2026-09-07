@@ -262,3 +262,19 @@ dotnet test backend/StockLab.sln --no-build
 
 For API changes, also check health, Development OpenAPI, absence of WeatherForecast
 and CORS behavior with the API running.
+
+## Stock search API
+
+`GET /api/stocks/search?query=apple` searches the configured `IMarketDataProvider`
+by ticker or company name. The local mock matches case-insensitively and trims
+surrounding whitespace. Results use the HTTP `StockSearchResponse` DTO:
+
+```json
+[{"symbol":"AAPL","companyName":"Apple Inc.","exchange":"NASDAQ","currency":"USD"}]
+```
+
+A valid search without matches returns HTTP 200 with `[]`. Missing, empty or
+whitespace-only `query` returns HTTP 400 using the existing `validation_error`
+format before the provider is called. Unexpected exceptions remain handled by
+the global middleware. The HTTP cancellation token is forwarded to the provider.
+The Development OpenAPI document describes the required query and 200/400 responses.

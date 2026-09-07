@@ -24,3 +24,18 @@ GET {{StockLab.Api_HostAddress}}/api/stocks/%20/quote
 Accept: application/json
 
 ###
+
+GET {{StockLab.Api_HostAddress}}/api/stocks/search?query=apple
+Accept: application/json
+
+###
+
+GET {{StockLab.Api_HostAddress}}/api/stocks/search?query=zzzzzz
+Accept: application/json
+
+###
+
+GET {{StockLab.Api_HostAddress}}/api/stocks/search
+Accept: application/json
+
+###
