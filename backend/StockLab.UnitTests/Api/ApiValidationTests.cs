@@ -148,11 +148,98 @@ public sealed class ApiValidationTests : IDisposable
         host.Dispose();
     }
 
+    private const string FullHistoryQuery = "from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=Day";
+
+    [Theory]
+    [InlineData("from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=Day", 5)]
+    [InlineData("from=2026-08-25T13:30:00Z&to=2026-08-27T13:30:00Z&interval=Day", 2)]
+    [InlineData("from=2026-09-01T00:00:00Z&to=2026-09-02T00:00:00Z&interval=Day", 0)]
+    public async Task History_returns_ohlcv_in_requested_half_open_range(string query, int count)
+    {
+        using var response = await client.GetAsync($"/api/stocks/%20aapl%20/history?{query}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = json.RootElement;
+        Assert.Equal(4, root.EnumerateObject().Count());
+        Assert.Equal("AAPL", root.GetProperty("symbol").GetString());
+        Assert.Equal("USD", root.GetProperty("currency").GetString());
+        Assert.Equal("Day", root.GetProperty("interval").GetString());
+        var bars = root.GetProperty("bars").EnumerateArray().ToArray();
+        Assert.Equal(count, bars.Length);
+        var from = DateTimeOffset.Parse(query.Split('&')[0][5..]);
+        var to = DateTimeOffset.Parse(query.Split('&')[1][3..]);
+        DateTimeOffset? previous = null;
+        foreach (var bar in bars)
+        {
+            Assert.Equal(6, bar.EnumerateObject().Count());
+            var timestamp = bar.GetProperty("openTimeUtc").GetDateTimeOffset();
+            Assert.Equal(TimeSpan.Zero, timestamp.Offset);
+            Assert.True(timestamp >= from && timestamp < to);
+            Assert.True(previous is null || timestamp > previous);
+            previous = timestamp;
+            var open = bar.GetProperty("open").GetDecimal();
+            var high = bar.GetProperty("high").GetDecimal();
+            var low = bar.GetProperty("low").GetDecimal();
+            var close = bar.GetProperty("close").GetDecimal();
+            Assert.True(low <= open && low <= close && high >= open && high >= close);
+            Assert.True(bar.GetProperty("volume").GetInt64() >= 0);
+        }
+        Assert.Equal(1, provider.HistoryCalls);
+    }
+
+    [Theory]
+    [InlineData("%20", FullHistoryQuery)]
+    [InlineData("AAPL", "to=2026-08-29T13:30:00Z&interval=Day")]
+    [InlineData("AAPL", "from=2026-08-24T13:30:00Z&interval=Day")]
+    [InlineData("AAPL", "from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z")]
+    [InlineData("AAPL", "from=invalid&to=2026-08-29T13:30:00Z&interval=Day")]
+    [InlineData("AAPL", "from=2026-08-24T13:30:00Z&to=invalid&interval=Day")]
+    [InlineData("AAPL", "from=2026-08-29T13:30:00Z&to=2026-08-29T13:30:00Z&interval=Day")]
+    [InlineData("AAPL", "from=2026-08-30T13:30:00Z&to=2026-08-29T13:30:00Z&interval=Day")]
+    [InlineData("AAPL", "from=2026-08-24T13:30:00%2B02:00&to=2026-08-29T13:30:00Z&interval=Day")]
+    [InlineData("AAPL", "from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00%2B02:00&interval=Day")]
+    [InlineData("AAPL", "from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=999")]
+    [InlineData("AAPL", "from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=invalid")]
+    public async Task Invalid_history_is_rejected_before_provider(string symbol, string query)
+    {
+        using var response = await client.GetAsync($"/api/stocks/{symbol}/history?{query}");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("validation_error", json.RootElement.GetProperty("error").GetString());
+        Assert.NotEmpty(json.RootElement.GetProperty("errors").EnumerateObject());
+        Assert.Equal(0, provider.HistoryCalls);
+    }
+
+    [Fact]
+    public async Task Unknown_history_symbol_returns_stock_not_found()
+    {
+        using var response = await client.GetAsync($"/api/stocks/INVALID/history?{FullHistoryQuery}");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("stock_not_found", json.RootElement.GetProperty("error").GetString());
+        Assert.Equal(1, provider.HistoryCalls);
+    }
+
+    [Theory]
+    [InlineData("Minute")]
+    [InlineData("Hour")]
+    [InlineData("Week")]
+    [InlineData("Month")]
+    public async Task Unsupported_history_interval_returns_explicit_safe_error(string interval)
+    {
+        using var response = await client.GetAsync($"/api/stocks/AAPL/history?{FullHistoryQuery.Replace("Day", interval)}");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("unsupported_operation", json.RootElement.GetProperty("error").GetString());
+        Assert.Equal(1, provider.HistoryCalls);
+    }
     private sealed class CountingProvider : IMarketDataProvider
     {
         private readonly MockMarketDataProvider inner = new();
         public int QuoteCalls { get; private set; }
         public int SearchCalls { get; private set; }
+        public int HistoryCalls { get; private set; }
         public Task<StockQuote?> GetQuoteAsync(string symbol, CancellationToken cancellationToken = default)
         {
             QuoteCalls++;
@@ -163,7 +250,11 @@ public sealed class ApiValidationTests : IDisposable
             SearchCalls++;
             return inner.SearchStocksAsync(query, cancellationToken);
         }
-        public Task<StockHistory?> GetHistoryAsync(StockHistoryRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<StockHistory?> GetHistoryAsync(StockHistoryRequest request, CancellationToken cancellationToken = default)
+        {
+            HistoryCalls++;
+            return inner.GetHistoryAsync(request, cancellationToken);
+        }
     }
 }
 

@@ -29,7 +29,10 @@ public sealed class ExceptionHandlingMiddlewareTests : IDisposable
         await Middleware(exception).InvokeAsync(context);
 
         Assert.Equal(400, context.Response.StatusCode);
-        AssertError(context, "invalid_request", "The request is invalid.");
+        if (kind == "unsupported")
+            AssertError(context, "unsupported_operation", "The requested operation or interval is not supported.");
+        else
+            AssertError(context, "invalid_request", "The request is invalid.");
         Assert.Empty(logger.Messages);
     }
 

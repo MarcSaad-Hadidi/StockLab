@@ -138,7 +138,7 @@ Provider exceptions propagate to the global middleware. A URL missing the symbol
 segment does not match this route and returns 404.
 
 This route and its 200/400/404/500 response schemas appear in Development OpenAPI.
-No search/history HTTP endpoints or frontend integration are included.
+Search and history HTTP endpoints are described below; frontend integration is separate.
 
 ## Global exception handling
 
@@ -146,8 +146,8 @@ No search/history HTTP endpoints or frontend integration are included.
 in every environment, including Development. Public errors use `ApiErrorResponse`
 with the existing JSON shape `{ "error": "code", "message": "safe message" }`.
 
-- `ArgumentException` (including `ArgumentOutOfRangeException`) and
-  `NotSupportedException`: 400, `invalid_request`, `The request is invalid.`
+- `ArgumentException` (including `ArgumentOutOfRangeException`): 400, `invalid_request`, `The request is invalid.`
+- `NotSupportedException`: 400, `unsupported_operation`, `The requested operation or interval is not supported.`
 - Unexpected exceptions: 500, `internal_server_error`, `An unexpected error occurred.`
 - `OperationCanceledException` with the HTTP request token cancelled: no response
   body is written; status 499 is set if headers have not been sent. A disconnected
@@ -278,3 +278,30 @@ whitespace-only `query` returns HTTP 400 using the existing `validation_error`
 format before the provider is called. Unexpected exceptions remain handled by
 the global middleware. The HTTP cancellation token is forwarded to the provider.
 The Development OpenAPI document describes the required query and 200/400 responses.
+
+## Stock history API
+
+`GET /api/stocks/AAPL/history?from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=Day`
+
+All four parameters (symbol, from, to, interval) are required. The query DTO only
+binds and validates HTTP input before mapping to the existing StockHistoryRequest.
+Dates must have a zero UTC offset, from must precede to, and interval must be a
+defined StockHistoryInterval value. Invalid HTTP input returns 400 validation_error
+before the provider is called.
+
+The response exposes symbol, currency, interval (a string such as Day) and a bars
+array. Each bar contains openTimeUtc, decimal open/high/low/close and nullable volume.
+The provider's chronological data is preserved without resampling or gap filling;
+opening timestamps fall in [from, to). A known symbol with no bars returns 200 with
+bars: []; an unknown symbol returns 404 stock_not_found.
+
+The local mock supports only Day, with five sessions from August 24 to 28, 2026.
+Minute, Hour, Week and Month are never replaced with Day. The existing global
+middleware maps NotSupportedException to 400 unsupported_operation with a safe
+message, allowing clients to distinguish unsupported capabilities from malformed
+HTTP input. Argument exceptions retain 400 invalid_request. No local catch is used.
+Request cancellation is forwarded unchanged to the provider.
+
+For a partial period, use from=2026-08-25T13:30:00Z and to=2026-08-27T13:30:00Z
+(two bars). September 1 to 2, 2026 returns an empty history. OpenAPI in Development
+lists symbol/from/to/interval, the response DTO with bars, and 200/400/404/500 responses.

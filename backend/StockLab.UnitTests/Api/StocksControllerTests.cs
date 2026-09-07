@@ -67,6 +67,23 @@ public sealed class StocksControllerTests
             () => controller.SearchStocksAsync("AAPL", default)));
     }
 
+    [Fact]
+    public async Task History_forwards_request_cancellation_token()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var query = new StockHistoryQuery
+        {
+            From = DateTimeOffset.Parse("2026-08-24T13:30:00Z"),
+            To = DateTimeOffset.Parse("2026-08-29T13:30:00Z"),
+            Interval = StockHistoryInterval.Day
+        };
+        var controller = new StocksController(new MockMarketDataProvider());
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => controller.GetHistoryAsync("AAPL", query, cancellation.Token));
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+    }
+
     private sealed class ThrowingProvider(Exception exception) : IMarketDataProvider
     {
         public Task<StockQuote?> GetQuoteAsync(string symbol, CancellationToken cancellationToken = default) => Task.FromException<StockQuote?>(exception);

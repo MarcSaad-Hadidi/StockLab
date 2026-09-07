@@ -39,3 +39,18 @@ GET {{StockLab.Api_HostAddress}}/api/stocks/search
 Accept: application/json
 
 ###
+
+GET {{StockLab.Api_HostAddress}}/api/stocks/AAPL/history?from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=Day
+Accept: application/json
+
+###
+
+GET {{StockLab.Api_HostAddress}}/api/stocks/AAPL/history?from=2026-08-25T13:30:00Z&to=2026-08-27T13:30:00Z&interval=Day
+Accept: application/json
+
+###
+
+GET {{StockLab.Api_HostAddress}}/api/stocks/AAPL/history?from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=Hour
+Accept: application/json
+
+###
