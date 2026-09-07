@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import '../i18n/i18n'
 import { DashboardPage } from './DashboardPage'
 import './DashboardPage.css'
 

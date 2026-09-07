@@ -1,6 +1,8 @@
 import { Sidebar } from '../components/layout/Sidebar'
+import { formatCurrency } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
-import { useMemo, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   filterTransactions,
   paginateTransactions,
@@ -87,20 +89,21 @@ type TopbarProps = {
 }
 
 function Topbar({ onMenuOpen, onQueryChange, onToast, query }: TopbarProps) {
+  const { t } = useTranslation()
   return (
     <header className="transactions-topbar">
       <div className="breadcrumb">
-        <button aria-label="Open navigation" className="mobile-menu-button icon-button" onClick={onMenuOpen} type="button"><Icon name="menu" size={20} /></button>
-        <strong>Transactions</strong>
+        <button aria-label={t('common.openNavigation')} className="mobile-menu-button icon-button" onClick={onMenuOpen} type="button"><Icon name="menu" size={20} /></button>
+        <strong>{t('common.navigation.transactions')}</strong>
       </div>
       <div className="topbar-actions">
         <label className="global-search">
           <Icon name="search" size={16} />
-          <input aria-label="Search stocks, ETFs, news" onChange={(event) => onQueryChange(event.target.value)} placeholder="Search stocks, ETFs, news..." value={query} />
+          <input aria-label={t('common.searchStocksEtfsNews')} onChange={(event) => onQueryChange(event.target.value)} placeholder={t('common.searchStocksEtfsNewsPlaceholder')} value={query} />
         </label>
-        <button aria-label="Notifications" className="icon-button notification-button" onClick={() => onToast('You are all caught up.')} type="button"><Icon name="bell" size={18} /><i>2</i></button>
-        <button aria-label="Open messages" className="icon-button mail-button" onClick={() => onToast('No new messages.')} type="button"><Icon name="mail" size={17} /></button>
-        <button aria-label="Open account menu" className="topbar-account" onClick={() => window.location.assign(routeFor('profile'))} type="button"><span className="topbar-avatar">GA</span><Icon name="chevron-down" size={14} /></button>
+        <button aria-label={t('common.notifications')} className="icon-button notification-button" onClick={() => onToast(t('common.notificationsCaughtUp'))} type="button"><Icon name="bell" size={18} /><i>2</i></button>
+        <button aria-label={t('common.openMessages')} className="icon-button mail-button" onClick={() => onToast(t('common.noNewMessages'))} type="button"><Icon name="mail" size={17} /></button>
+        <button aria-label={t('common.openAccountMenu')} className="topbar-account" onClick={() => window.location.assign(routeFor('profile'))} type="button"><span className="topbar-avatar">GA</span><Icon name="chevron-down" size={14} /></button>
       </div>
     </header>
   )
@@ -115,31 +118,28 @@ type SummaryCardProps = {
 }
 
 function SummaryCard({ detail, icon, label, tone, value }: SummaryCardProps) {
-  return <article className="summary-card"><div className={`summary-icon summary-icon-${tone}`}><Icon name={icon} size={17} /></div><p>{label}</p><strong>{value}</strong><span className="summary-detail"><b>{detail}</b> <span>vs last 30 days</span></span></article>
+  const { t } = useTranslation()
+  return <article className="summary-card"><div className={`summary-icon summary-icon-${tone}`}><Icon name={icon} size={17} /></div><p>{label}</p><strong>{value}</strong><span className="summary-detail"><b>{detail}</b> <span>{t('transactions.vsLast30Days')}</span></span></article>
 }
 
-const currencyFormatter = new Intl.NumberFormat('en-US', { currency: 'USD', maximumFractionDigits: 2, minimumFractionDigits: 2, style: 'currency' })
-const dateFormatter = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' })
-const timeFormatter = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })
-const filterDateFormatter = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' })
-
-function formatCurrency(value: number) {
-  return currencyFormatter.format(value)
-}
-
-function formatDateParts(isoDate: string) {
+function formatDateParts(isoDate: string, language: string) {
   const date = new Date(isoDate)
+  const locale = language === 'fr' ? 'fr-FR' : 'en-US'
+  const dateFormatter = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' })
+  const timeFormatter = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })
   return { day: dateFormatter.format(date), time: timeFormatter.format(date) }
 }
 
-function formatFilterDate(value: string) {
-  if (!value) return 'Any date'
-  return filterDateFormatter.format(new Date(`${value}T00:00:00.000Z`))
+function formatFilterDate(value: string, language: string, emptyLabel: string) {
+  if (!value) return emptyLabel
+  const locale = language === 'fr' ? 'fr-FR' : 'en-US'
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' }).format(new Date(`${value}T00:00:00.000Z`))
 }
 
 function TransactionRow({ transaction }: { transaction: Transaction }) {
-  const dateParts = formatDateParts(transaction.date)
-  return <tr><td><time className="date-cell" dateTime={transaction.date}><span>{dateParts.day}</span><small>{dateParts.time}</small></time></td><td><strong className="symbol-cell">{transaction.symbol}</strong></td><td className="company-cell">{transaction.company}</td><td><span className={`action-pill action-${transaction.action.toLowerCase()}`}>{transaction.action}</span></td><td className="number-cell">{transaction.quantity}</td><td className="money-cell">{formatCurrency(transaction.executionPrice)}</td><td className="money-cell"><strong>{formatCurrency(transaction.totalAmount)}</strong></td></tr>
+  const { i18n, t } = useTranslation()
+  const dateParts = formatDateParts(transaction.date, i18n.language)
+  return <tr><td><time className="date-cell" dateTime={transaction.date}><span>{dateParts.day}</span><small>{dateParts.time}</small></time></td><td><strong className="symbol-cell">{transaction.symbol}</strong></td><td className="company-cell">{transaction.company}</td><td><span className={`action-pill action-${transaction.action.toLowerCase()}`}>{t(`common.${transaction.action === 'BUY' ? 'buy' : 'sell'}`)}</span></td><td className="number-cell">{transaction.quantity}</td><td className="money-cell">{formatCurrency(transaction.executionPrice)}</td><td className="money-cell"><strong>{formatCurrency(transaction.totalAmount)}</strong></td></tr>
 }
 
 const defaultFilters: TransactionFilters = {
@@ -168,11 +168,12 @@ type FilterControlsProps = {
 }
 
 function FilterControls({ activeFilterCount, filterMenuOpen, filters, onActionChange, onFilterMenuToggle, onFilterUpdate, onReset }: FilterControlsProps) {
+  const { i18n, t } = useTranslation()
   const typeOptions: Array<{ label: string; value: TransactionTypeFilter }> = [
-    { label: 'All Types', value: 'All' },
-    { label: 'Stocks', value: 'Stock' },
-    { label: 'ETFs', value: 'ETF' },
-    { label: 'Crypto', value: 'Crypto' },
+    { label: t('transactions.filters.allTypes'), value: 'All' },
+    { label: t('market.filterNouns.stocks'), value: 'Stock' },
+    { label: t('market.filterNouns.etfs'), value: 'ETF' },
+    { label: t('market.filterNouns.crypto'), value: 'Crypto' },
   ]
 
   return (
@@ -180,30 +181,30 @@ function FilterControls({ activeFilterCount, filterMenuOpen, filters, onActionCh
       <div className="transactions-controls">
         <label className="table-search">
           <Icon name="search" size={15} />
-          <input aria-label="Search transactions by symbol or company" onChange={(event) => onFilterUpdate('query', event.target.value)} placeholder="Search by symbol..." value={filters.query} />
+          <input aria-label={t('transactions.searchLabel')} onChange={(event) => onFilterUpdate('query', event.target.value)} placeholder={t('transactions.searchPlaceholder')} value={filters.query} />
         </label>
         <label className="date-range-control">
           <Icon name="calendar" size={14} />
-          <span className="sr-only">From date</span>
-          <span className="date-field"><span aria-hidden="true">{formatFilterDate(filters.from)}</span><input aria-label="Filter from date" onChange={(event) => onFilterUpdate('from', event.target.value)} onInput={(event) => onFilterUpdate('from', event.currentTarget.value)} type="date" value={filters.from} /></span>
+          <span className="sr-only">{t('transactions.fromDate')}</span>
+          <span className="date-field"><span aria-hidden="true">{formatFilterDate(filters.from, i18n.language, t('transactions.anyDate'))}</span><input aria-label={t('transactions.filterFromDate')} onChange={(event) => onFilterUpdate('from', event.target.value)} onInput={(event) => onFilterUpdate('from', event.currentTarget.value)} type="date" value={filters.from} /></span>
           <span aria-hidden="true" className="date-separator">–</span>
-          <span className="sr-only">To date</span>
-          <span className="date-field"><span aria-hidden="true">{formatFilterDate(filters.to)}</span><input aria-label="Filter to date" onChange={(event) => onFilterUpdate('to', event.target.value)} onInput={(event) => onFilterUpdate('to', event.currentTarget.value)} type="date" value={filters.to} /></span>
+          <span className="sr-only">{t('transactions.toDate')}</span>
+          <span className="date-field"><span aria-hidden="true">{formatFilterDate(filters.to, i18n.language, t('transactions.anyDate'))}</span><input aria-label={t('transactions.filterToDate')} onChange={(event) => onFilterUpdate('to', event.target.value)} onInput={(event) => onFilterUpdate('to', event.currentTarget.value)} type="date" value={filters.to} /></span>
         </label>
         <label className="type-select">
-          <span className="sr-only">Asset type</span>
-          <select aria-label="Filter by asset type" onChange={(event) => onFilterUpdate('assetType', event.target.value)} value={filters.assetType}>
+          <span className="sr-only">{t('common.assetType')}</span>
+          <select aria-label={t('transactions.filterAssetType')} onChange={(event) => onFilterUpdate('assetType', event.target.value)} value={filters.assetType}>
             {typeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
           <Icon name="chevron-down" size={13} />
         </label>
-        <div aria-label="Filter by transaction action" className="action-filters" role="group">
-          <button aria-pressed={filters.action === 'BUY'} className="action-filter action-filter-buy" onClick={() => onActionChange('BUY')} type="button">BUY</button>
-          <button aria-pressed={filters.action === 'SELL'} className="action-filter action-filter-sell" onClick={() => onActionChange('SELL')} type="button">SELL</button>
+        <div aria-label={t('transactions.filterAction')} className="action-filters" role="group">
+          <button aria-pressed={filters.action === 'BUY'} className="action-filter action-filter-buy" onClick={() => onActionChange('BUY')} type="button">{t('common.buy')}</button>
+          <button aria-pressed={filters.action === 'SELL'} className="action-filter action-filter-sell" onClick={() => onActionChange('SELL')} type="button">{t('common.sell')}</button>
         </div>
         <div className="filter-popover-wrap">
-          <button aria-expanded={filterMenuOpen} className={`filter-button ${activeFilterCount > 0 ? 'has-active-filter' : ''}`} onClick={onFilterMenuToggle} type="button"><span>Filters</span><Icon name="filter" size={14} />{activeFilterCount > 0 && <b>{activeFilterCount}</b>}</button>
-          {filterMenuOpen && <div aria-label="Transaction filter summary" className="filter-menu" role="dialog"><strong>Transaction filters</strong><p>{activeFilterCount > 0 ? `${activeFilterCount} custom filter${activeFilterCount > 1 ? 's' : ''} applied.` : 'Use the controls to narrow this history.'}</p><button onClick={onReset} type="button">Reset filters</button></div>}
+          <button aria-expanded={filterMenuOpen} className={`filter-button ${activeFilterCount > 0 ? 'has-active-filter' : ''}`} onClick={onFilterMenuToggle} type="button"><span>{t('common.filters')}</span><Icon name="filter" size={14} />{activeFilterCount > 0 && <b>{activeFilterCount}</b>}</button>
+          {filterMenuOpen && <div aria-label={t('transactions.filterSummary')} className="filter-menu" role="dialog"><strong>{t('transactions.transactionFilters')}</strong><p>{activeFilterCount > 0 ? t('transactions.customFiltersApplied', { count: activeFilterCount }) : t('transactions.useControls')}</p><button onClick={onReset} type="button">{t('transactions.resetFilters')}</button></div>}
         </div>
       </div>
     </div>
@@ -211,11 +212,12 @@ function FilterControls({ activeFilterCount, filterMenuOpen, filters, onActionCh
 }
 
 function TransactionsTable({ items }: { items: Transaction[] }) {
+  const { t } = useTranslation()
   if (items.length === 0) {
-    return <div className="empty-state"><span><Icon name="search" size={19} /></span><strong>No transactions found</strong><p>Try another symbol, type, action, or date range.</p></div>
+    return <div className="empty-state"><span><Icon name="search" size={19} /></span><strong>{t('transactions.noTransactions')}</strong><p>{t('transactions.noTransactionsHint')}</p></div>
   }
 
-  return <div className="table-scroll"><table className="transactions-table"><thead><tr><th scope="col"><span>Date <Icon name="sort" size={12} /></span></th><th scope="col">Symbol</th><th scope="col">Company</th><th scope="col">Type</th><th scope="col">Quantity</th><th scope="col">Exec. Price</th><th scope="col">Total Amount</th></tr></thead><tbody>{items.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}</tbody></table></div>
+  return <div className="table-scroll"><table className="transactions-table"><thead><tr><th scope="col"><span>{t('transactions.columns.date')} <Icon name="sort" size={12} /></span></th><th scope="col">{t('market.columns.symbol')}</th><th scope="col">{t('market.columns.company')}</th><th scope="col">{t('transactions.columns.type')}</th><th scope="col">{t('common.quantity')}</th><th scope="col">{t('transactions.columns.executionPrice')}</th><th scope="col">{t('transactions.columns.totalAmount')}</th></tr></thead><tbody>{items.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}</tbody></table></div>
 }
 
 type PaginationProps = {
@@ -225,10 +227,15 @@ type PaginationProps = {
 }
 
 function Pagination({ currentPage, onPageChange, totalPages }: PaginationProps) {
-  return <nav aria-label="Transactions pagination" className="pagination"><button aria-label="Previous page" className="pagination-arrow" disabled={currentPage === 1} onClick={() => onPageChange(currentPage - 1)} type="button"><Icon name="arrow-left" size={13} /></button>{getPageItems(currentPage, totalPages).map((item, index) => item === 'ellipsis' ? <span aria-hidden="true" className="pagination-ellipsis" key={`ellipsis-${index}`}>…</span> : <button aria-current={item === currentPage ? 'page' : undefined} className={item === currentPage ? 'current' : ''} key={item} onClick={() => onPageChange(item)} type="button">{item}</button>)}<button aria-label="Next page" className="pagination-arrow" disabled={currentPage === totalPages} onClick={() => onPageChange(currentPage + 1)} type="button"><Icon name="arrow-right" size={13} /></button></nav>
+  const { t } = useTranslation()
+  return <nav aria-label={t('transactions.pagination')} className="pagination"><button aria-label={t('common.previousPage')} className="pagination-arrow" disabled={currentPage === 1} onClick={() => onPageChange(currentPage - 1)} type="button"><Icon name="arrow-left" size={13} /></button>{getPageItems(currentPage, totalPages).map((item, index) => item === 'ellipsis' ? <span aria-hidden="true" className="pagination-ellipsis" key={`ellipsis-${index}`}>…</span> : <button aria-current={item === currentPage ? 'page' : undefined} className={item === currentPage ? 'current' : ''} key={item} onClick={() => onPageChange(item)} type="button">{item}</button>)}<button aria-label={t('common.nextPage')} className="pagination-arrow" disabled={currentPage === totalPages} onClick={() => onPageChange(currentPage + 1)} type="button"><Icon name="arrow-right" size={13} /></button></nav>
 }
 
 export function TransactionsPage() {
+  const { i18n, t } = useTranslation()
+  useEffect(() => {
+    document.title = `${t('common.navigation.transactions')} | StockLab`
+  }, [i18n.language, t])
   const [filters, setFilters] = useState<TransactionFilters>(defaultFilters)
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
   const [page, setPage] = useState(1)
@@ -270,25 +277,25 @@ export function TransactionsPage() {
       <main className="transactions-main">
         <Topbar onMenuOpen={() => setSidebarOpen(true)} onQueryChange={(query) => updateFilter('query', query)} onToast={showToast} query={filters.query} />
         <div className="transactions-content">
-          <section className="transactions-heading"><div><h1>Your Transaction History</h1><p>Track all your trades and activity in one place.</p></div></section>
+          <section className="transactions-heading"><div><h1>{t('transactions.title')}</h1><p>{t('transactions.subtitle')}</p></div></section>
 
-          <section aria-label="Transaction summary" className="summary-grid">
-            <SummaryCard detail="+14.3%" icon="activity" label="Total Trades" tone="blue" value={transactionSummary.totalTrades.toString()} />
-            <SummaryCard detail={transactionSummary.investedChange} icon="wallet" label="Total Invested" tone="purple" value={formatCurrency(transactionSummary.totalInvested)} />
-            <SummaryCard detail={transactionSummary.proceedsChange} icon="chart" label="Total Proceeds" tone="orange" value={formatCurrency(transactionSummary.totalProceeds)} />
-            <SummaryCard detail={transactionSummary.pnlChange} icon="activity" label="Net P&amp;L" tone="green" value={`+${formatCurrency(transactionSummary.netPnl)}`} />
+          <section aria-label={t('transactions.summaryLabel')} className="summary-grid">
+            <SummaryCard detail="+14.3%" icon="activity" label={t('transactions.totalTrades')} tone="blue" value={transactionSummary.totalTrades.toString()} />
+            <SummaryCard detail={transactionSummary.investedChange} icon="wallet" label={t('transactions.totalInvested')} tone="purple" value={formatCurrency(transactionSummary.totalInvested)} />
+            <SummaryCard detail={transactionSummary.proceedsChange} icon="chart" label={t('transactions.totalProceeds')} tone="orange" value={formatCurrency(transactionSummary.totalProceeds)} />
+            <SummaryCard detail={transactionSummary.pnlChange} icon="activity" label={t('transactions.netPnl')} tone="green" value={`+${formatCurrency(transactionSummary.netPnl)}`} />
           </section>
 
-          <section aria-label="Transaction filters" className="controls-panel panel">
+          <section aria-label={t('transactions.filtersLabel')} className="controls-panel panel">
             <FilterControls activeFilterCount={activeFilterCount} filterMenuOpen={filterMenuOpen} filters={filters} onActionChange={changeAction} onFilterMenuToggle={() => setFilterMenuOpen((open) => !open)} onFilterUpdate={updateFilter} onReset={resetFilters} />
           </section>
 
           <section aria-labelledby="transactions-table-title" className="panel transactions-panel">
-            <h2 className="sr-only" id="transactions-table-title">Transaction history table</h2>
+            <h2 className="sr-only" id="transactions-table-title">{t('transactions.tableTitle')}</h2>
             <TransactionsTable items={pageData.items} />
-            <div className="table-footer"><span>Showing <strong>{pageData.startIndex}–{pageData.endIndex}</strong> of <strong>{filteredTransactions.length}</strong> transactions</span><Pagination currentPage={pageData.currentPage} onPageChange={setPage} totalPages={pageData.totalPages} /></div>
+            <div className="table-footer"><span>{t('transactions.showing', { start: pageData.startIndex, end: pageData.endIndex, count: filteredTransactions.length })}</span><Pagination currentPage={pageData.currentPage} onPageChange={setPage} totalPages={pageData.totalPages} /></div>
           </section>
-          <p className="simulation-note"><Icon name="activity" size={13} /> Transaction history is simulated for this frontend preview.</p>
+          <p className="simulation-note"><Icon name="activity" size={13} /> {t('transactions.simulationNote')}</p>
         </div>
       </main>
       <div aria-live="polite" className={`toast ${toast ? 'visible' : ''}`}>{toast}</div>

@@ -1,10 +1,11 @@
 import { routeFor } from '../navigation/routes'
-import { useState } from 'react'
+import { LanguageSelector } from '../components/LanguageSelector'
+import { useTranslation } from 'react-i18next'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import './login.css'
 
 type FieldErrors = Partial<Record<'email' | 'password', string>>
-type Language = 'fr' | 'en'
 
 function Icon({ name }: { name: 'mail' | 'lock' | 'eye' | 'eyeOff' | 'google' }) {
   if (name === 'google') {
@@ -32,61 +33,14 @@ function Brand() {
   return <div className="brand" aria-label="StockLab"><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span><span>Stock<span>Lab</span></span></div>
 }
 
-const translations = {
-  fr: {
-    title: 'Bon retour',
-    subtitle: 'Connectez-vous pour accéder à votre tableau de bord',
-    emailLabel: 'Adresse e-mail',
-    emailPlaceholder: 'vous@exemple.com',
-    passwordLabel: 'Mot de passe',
-    passwordPlaceholder: 'Entrez votre mot de passe',
-    forgot: 'Mot de passe oublié ?',
-    signIn: 'Se connecter',
-    divider: 'ou continuer avec',
-    google: 'Continuer avec Google',
-    prompt: 'Vous n’avez pas encore de compte ?',
-    register: 'Créer un compte',
-    success: 'Connexion prête à être envoyée.',
-    errors: {
-      email: 'Veuillez saisir votre adresse e-mail.',
-      emailInvalid: 'Veuillez saisir une adresse valide.',
-      password: 'Veuillez saisir votre mot de passe.',
-    },
-    showPassword: 'Afficher le mot de passe',
-    hidePassword: 'Masquer le mot de passe',
-    languageLabel: 'Choisir la langue',
-  },
-  en: {
-    title: 'Welcome back',
-    subtitle: 'Sign in to access your dashboard',
-    emailLabel: 'Email address',
-    emailPlaceholder: 'you@example.com',
-    passwordLabel: 'Password',
-    passwordPlaceholder: 'Enter your password',
-    forgot: 'Forgot password?',
-    signIn: 'Sign in',
-    divider: 'or continue with',
-    google: 'Continue with Google',
-    prompt: 'Don’t have an account yet?',
-    register: 'Create an account',
-    success: 'Your sign-in details are ready to submit.',
-    errors: {
-      email: 'Please enter your email address.',
-      emailInvalid: 'Please enter a valid email address.',
-      password: 'Please enter your password.',
-    },
-    showPassword: 'Show password',
-    hidePassword: 'Hide password',
-    languageLabel: 'Choose language',
-  },
-} as const
-
 export default function LoginPage() {
-  const [language, setLanguage] = useState<Language>('fr')
+  const { i18n, t } = useTranslation()
+  useEffect(() => {
+    document.title = `${t('login.title')} | StockLab`
+  }, [i18n.language, t])
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [submitted, setSubmitted] = useState(false)
-  const copy = translations[language]
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -95,9 +49,9 @@ export default function LoginPage() {
     const password = String(form.get('password') ?? '')
     const nextErrors: FieldErrors = {}
 
-    if (!email) nextErrors.email = copy.errors.email
-    else if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = copy.errors.emailInvalid
-    if (!password) nextErrors.password = copy.errors.password
+    if (!email) nextErrors.email = t('login.errors.email')
+    else if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = t('login.errors.emailInvalid')
+    if (!password) nextErrors.password = t('login.errors.password')
 
     setErrors(nextErrors)
     setSubmitted(Object.keys(nextErrors).length === 0)
@@ -128,21 +82,18 @@ export default function LoginPage() {
         <section className="login-card" aria-labelledby="login-heading">
           <div className="card-topline">
             <Brand />
-            <div className="language-switch" role="group" aria-label={copy.languageLabel}>
-              <button type="button" className={language === 'fr' ? 'active' : ''} aria-pressed={language === 'fr'} onClick={() => setLanguage('fr')}>FR</button>
-              <button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => setLanguage('en')}>EN</button>
-            </div>
+            <LanguageSelector />
           </div>
-          <header className="card-heading"><h1 id="login-heading">{copy.title}</h1><p>{copy.subtitle}</p></header>
+          <header className="card-heading"><h1 id="login-heading">{t('login.title')}</h1><p>{t('login.subtitle')}</p></header>
           <form className="login-form" onSubmit={handleSubmit} noValidate>
-            <div className="field-group"><label htmlFor="email">{copy.emailLabel}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={copy.emailPlaceholder} autoComplete="email" aria-invalid={Boolean(errors.email)} /></div>{errors.email && <p className="field-error">{errors.email}</p>}</div>
-            <div className="field-group"><div className="label-row"><label htmlFor="password">{copy.passwordLabel}</label><a href="#forgot-password">{copy.forgot}</a></div><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={copy.passwordPlaceholder} autoComplete="current-password" aria-invalid={Boolean(errors.password)} /><button className="visibility-button" type="button" aria-label={showPassword ? copy.hidePassword : copy.showPassword} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{errors.password}</p>}</div>
-            <button className="primary-button" type="submit">{copy.signIn}</button>
-            {submitted && <p className="form-success" role="status">{copy.success}</p>}
+            <div className="field-group"><label htmlFor="email">{t('login.emailLabel')}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={t('login.emailPlaceholder')} autoComplete="email" aria-invalid={Boolean(errors.email)} /></div>{errors.email && <p className="field-error">{errors.email}</p>}</div>
+            <div className="field-group"><div className="label-row"><label htmlFor="password">{t('login.passwordLabel')}</label><a href="#forgot-password">{t('login.forgot')}</a></div><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={t('login.passwordPlaceholder')} autoComplete="current-password" aria-invalid={Boolean(errors.password)} /><button className="visibility-button" type="button" aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{errors.password}</p>}</div>
+            <button className="primary-button" type="submit">{t('login.signIn')}</button>
+            {submitted && <p className="form-success" role="status">{t('login.success')}</p>}
           </form>
-          <div className="form-divider"><span>{copy.divider}</span></div>
-          <button className="google-button" type="button"><Icon name="google" /><span>{copy.google}</span></button>
-          <p className="register-prompt">{copy.prompt} <a href={routeFor('register')}>{copy.register}</a></p>
+          <div className="form-divider"><span>{t('login.divider')}</span></div>
+          <button className="google-button" type="button"><Icon name="google" /><span>{t('login.google')}</span></button>
+          <p className="register-prompt">{t('login.prompt')} <a href={routeFor('register')}>{t('login.register')}</a></p>
         </section>
       </div>
     </main>

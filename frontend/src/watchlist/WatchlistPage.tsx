@@ -1,5 +1,7 @@
 import { Sidebar } from '../components/layout/Sidebar'
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { formatCurrency, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
+import { useTranslation } from 'react-i18next'
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { watchlistItems, type WatchlistItem } from './watchlistData'
 import './watchlist.css'
 
@@ -56,19 +58,8 @@ function StockMark({ item }: { item: WatchlistItem }) {
   return <span aria-hidden="true" className={`stock-mark stock-mark-${item.markTone}`}>{item.symbol === 'MSFT' ? <><i /><i /><i /><i /></> : item.symbol.slice(0, 1)}</span>
 }
 
-function formatCurrency(value: number) {
-  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function formatChange(value: number) {
-  return `${value >= 0 ? '+' : '-'}$${Math.abs(value).toFixed(2)}`
-}
-
-function formatPercent(value: number) {
-  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
-}
-
 function WatchlistRow({ item, onAlert, onDetails, onRemove }: { item: WatchlistItem; onAlert: (item: WatchlistItem) => void; onDetails: (item: WatchlistItem) => void; onRemove: (item: WatchlistItem) => void }) {
+  const { t } = useTranslation()
   return (
     <article className="watchlist-row">
       <div className="watchlist-asset">
@@ -80,38 +71,44 @@ function WatchlistRow({ item, onAlert, onDetails, onRemove }: { item: WatchlistI
         </div>
       </div>
       <div className="watchlist-cell watchlist-price">
-        <span className="cell-label">Current price</span>
+        <span className="cell-label">{t('watchlist.currentPrice')}</span>
         <strong>{formatCurrency(item.price)}</strong>
       </div>
       <div className={`watchlist-cell watchlist-change ${item.tone}`}>
-        <span className="cell-label">Today</span>
-        <strong>{formatChange(item.change)}</strong>
-        <small>{formatPercent(item.changePercent)}</small>
+        <span className="cell-label">{t('common.today')}</span>
+        <strong>{formatSignedCurrency(item.change)}</strong>
+        <small>{formatSignedPercent(item.changePercent)}</small>
       </div>
       <div className="watchlist-actions">
-        <button className="details-button" onClick={() => onDetails(item)} type="button">Stock details <Icon name="chevron-right" size={14} /></button>
-        <button className="alert-button" onClick={() => onAlert(item)} type="button"><Icon name="bell" size={14} /> Create alert</button>
-        <button aria-label={`Remove ${item.symbol} from watchlist`} className="remove-button" onClick={() => onRemove(item)} type="button"><Icon name="x" size={15} /><span>Remove</span></button>
+        <button className="details-button" onClick={() => onDetails(item)} type="button">{t('watchlist.stockDetails')} <Icon name="chevron-right" size={14} /></button>
+        <button className="alert-button" onClick={() => onAlert(item)} type="button"><Icon name="bell" size={14} /> {t('alerts.createAlert')}</button>
+        <button aria-label={t('watchlist.removeFromWatchlist', { symbol: item.symbol })} className="remove-button" onClick={() => onRemove(item)} type="button"><Icon name="x" size={15} /><span>{t('common.remove')}</span></button>
       </div>
     </article>
   )
 }
 
 function StockDetails({ item, onClose }: { item: WatchlistItem; onClose: () => void }) {
-  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="stock-details-title" aria-modal="true" className="stock-details-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label="Close stock details" className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="modal-stock-heading"><StockMark item={item} /><div><span>{item.exchange}</span><h2 id="stock-details-title">{item.symbol}</h2><p>{item.name}</p></div></div><div className="modal-price"><span>Current price</span><strong>{formatCurrency(item.price)}</strong><b className={item.tone}>{formatChange(item.change)} ({formatPercent(item.changePercent)})</b></div><div className="modal-detail-grid"><div><span>Market status</span><strong><i className="market-dot" /> Open</strong></div><div><span>Day range</span><strong>{formatCurrency(item.price * 0.97)} – {formatCurrency(item.price * 1.02)}</strong></div><div><span>52 week range</span><strong>{formatCurrency(item.price * 0.65)} – {formatCurrency(item.price * 1.28)}</strong></div><div><span>Data source</span><strong>Simulated</strong></div></div><button className="modal-primary" onClick={onClose} type="button">Done</button></section></div>
+  const { t } = useTranslation()
+  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="stock-details-title" aria-modal="true" className="stock-details-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label={t('watchlist.closeStockDetails')} className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="modal-stock-heading"><StockMark item={item} /><div><span>{item.exchange}</span><h2 id="stock-details-title">{item.symbol}</h2><p>{item.name}</p></div></div><div className="modal-price"><span>{t('watchlist.currentPrice')}</span><strong>{formatCurrency(item.price)}</strong><b className={item.tone}>{formatSignedCurrency(item.change)} ({formatSignedPercent(item.changePercent)})</b></div><div className="modal-detail-grid"><div><span>{t('watchlist.marketStatus')}</span><strong><i className="market-dot" /> {t('watchlist.open')}</strong></div><div><span>{t('watchlist.dayRange')}</span><strong>{formatCurrency(item.price * 0.97)} – {formatCurrency(item.price * 1.02)}</strong></div><div><span>{t('watchlist.weekRange')}</span><strong>{formatCurrency(item.price * 0.65)} – {formatCurrency(item.price * 1.28)}</strong></div><div><span>{t('watchlist.dataSource')}</span><strong>{t('common.simulated')}</strong></div></div><button className="modal-primary" onClick={onClose} type="button">{t('common.done')}</button></section></div>
 }
 
 function AlertModal({ item, onClose, onSave }: { item: WatchlistItem; onClose: () => void; onSave: (threshold: string) => void }) {
+  const { t } = useTranslation()
   const [threshold, setThreshold] = useState(item.price.toFixed(2))
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     onSave(threshold)
   }
 
-  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="alert-title" aria-modal="true" className="alert-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label="Close create alert dialog" className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="alert-icon"><Icon name="bell" size={21} /></div><h2 id="alert-title">Create an alert</h2><p>Get notified when <strong>{item.symbol}</strong> reaches your target price.</p><form onSubmit={submit}><label htmlFor="alert-threshold">Target price</label><div className="alert-input"><span>$</span><input id="alert-threshold" inputMode="decimal" min="0" onChange={(event) => setThreshold(event.target.value)} required step="0.01" type="number" value={threshold} /></div><div className="alert-form-actions"><button className="cancel-button" onClick={onClose} type="button">Cancel</button><button className="modal-primary" type="submit">Save alert</button></div></form></section></div>
+  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="alert-title" aria-modal="true" className="alert-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label={t('stockDetails.closeCreateAlert')} className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="alert-icon"><Icon name="bell" size={21} /></div><h2 id="alert-title">{t('alerts.createAlert')}</h2><p>{t('watchlist.alertPrompt')} <strong>{item.symbol}</strong>.</p><form onSubmit={submit}><label htmlFor="alert-threshold">{t('common.targetPrice')}</label><div className="alert-input"><span>$</span><input id="alert-threshold" inputMode="decimal" min="0" onChange={(event) => setThreshold(event.target.value)} required step="0.01" type="number" value={threshold} /></div><div className="alert-form-actions"><button className="cancel-button" onClick={onClose} type="button">{t('common.cancel')}</button><button className="modal-primary" type="submit">{t('watchlist.saveAlert')}</button></div></form></section></div>
 }
 
 export default function WatchlistPage() {
+  const { i18n, t } = useTranslation()
+  useEffect(() => {
+    document.title = `${t('common.navigation.watchlist')} | StockLab`
+  }, [i18n.language, t])
   const [items, setItems] = useState(watchlistItems)
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'default' | 'price' | 'change'>('default')
@@ -135,7 +132,7 @@ export default function WatchlistPage() {
 
   const removeItem = (item: WatchlistItem) => {
     setItems((current) => current.filter((candidate) => candidate.symbol !== item.symbol))
-    showToast(`${item.symbol} removed from your watchlist.`)
+    showToast(t('watchlist.removedToast', { symbol: item.symbol }))
   }
 
   return (
@@ -143,19 +140,19 @@ export default function WatchlistPage() {
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <main className="watchlist-main">
-        <header className="watchlist-topbar"><button aria-label="Open navigation" className="mobile-menu-button icon-button" onClick={() => setSidebarOpen(true)} type="button"><Icon name="menu" size={22} /></button><div className="breadcrumb"><span>Workspace</span><Icon name="chevron-right" size={14} /><strong>Watchlist</strong></div><div className="topbar-actions"><label className="global-search"><Icon name="search" size={17} /><input aria-label="Search watchlist" onChange={(event) => setQuery(event.target.value)} placeholder="Search stocks..." value={query} /></label><button aria-label="Notifications" className="icon-button notification-button" onClick={() => showToast('You are all caught up.')} type="button"><Icon name="bell" size={19} /><i /></button><span className="topbar-avatar">MS</span></div></header>
+        <header className="watchlist-topbar"><button aria-label={t('common.openNavigation')} className="mobile-menu-button icon-button" onClick={() => setSidebarOpen(true)} type="button"><Icon name="menu" size={22} /></button><div className="breadcrumb"><span>{t('common.workspace')}</span><Icon name="chevron-right" size={14} /><strong>{t('common.navigation.watchlist')}</strong></div><div className="topbar-actions"><label className="global-search"><Icon name="search" size={17} /><input aria-label={t('watchlist.searchLabel')} onChange={(event) => setQuery(event.target.value)} placeholder={t('dashboard.searchPlaceholder')} value={query} /></label><button aria-label={t('common.notifications')} className="icon-button notification-button" onClick={() => showToast(t('common.notificationsCaughtUp'))} type="button"><Icon name="bell" size={19} /><i /></button><span className="topbar-avatar">MS</span></div></header>
 
         <div className="watchlist-content">
-          <section className="watchlist-welcome"><div><p className="eyebrow">Market overview</p><h1>My watchlist <span>✦</span></h1><p className="welcome-copy">Keep an eye on the assets you care about and act when the moment is right.</p></div><button className="primary-button" onClick={() => showToast('Use the search field to find a stock to add.')} type="button"><span>+</span> Add a stock</button></section>
+          <section className="watchlist-welcome"><div><p className="eyebrow">{t('watchlist.marketOverview')}</p><h1>{t('watchlist.myWatchlist')} <span>✦</span></h1><p className="welcome-copy">{t('watchlist.subtitle')}</p></div><button className="primary-button" onClick={() => showToast(t('watchlist.addStockHint'))} type="button"><span>+</span> {t('watchlist.addStock')}</button></section>
 
-          <section aria-label="Watchlist summary" className="watchlist-summary"><div><span className="summary-icon summary-icon-blue"><Icon name="star" size={18} /></span><span><small>Saved assets</small><strong>{items.length}</strong></span></div><div><span className="summary-icon summary-icon-green"><Icon name="trending-up" size={18} /></span><span><small>Gainers today</small><strong>{items.filter((item) => item.tone === 'positive').length}</strong></span></div><div><span className="summary-icon summary-icon-purple"><Icon name="activity" size={18} /></span><span><small>Average move</small><strong>+0.20%</strong></span></div><div className="summary-status"><i /> Market open <small>Simulated data</small></div></section>
+          <section aria-label={t('watchlist.summaryLabel')} className="watchlist-summary"><div><span className="summary-icon summary-icon-blue"><Icon name="star" size={18} /></span><span><small>{t('watchlist.savedAssets')}</small><strong>{items.length}</strong></span></div><div><span className="summary-icon summary-icon-green"><Icon name="trending-up" size={18} /></span><span><small>{t('watchlist.gainersToday')}</small><strong>{items.filter((item) => item.tone === 'positive').length}</strong></span></div><div><span className="summary-icon summary-icon-purple"><Icon name="activity" size={18} /></span><span><small>{t('watchlist.averageMove')}</small><strong>+0.20%</strong></span></div><div className="summary-status"><i /> {t('watchlist.marketOpen')} <small>{t('common.simulatedData')}</small></div></section>
 
-          <section aria-labelledby="watchlist-title" className="panel watchlist-panel"><div className="panel-heading"><div><h2 id="watchlist-title">Stocks you’re watching</h2><p>Prices and changes are simulated for this preview.</p></div><button className="panel-action" onClick={() => showToast('All prices are already up to date.')} type="button"><Icon name="activity" size={14} /> Refresh prices</button></div><div className="watchlist-controls"><label className="watchlist-filter"><Icon name="search" size={16} /><input aria-label="Filter stocks" onChange={(event) => setQuery(event.target.value)} placeholder="Filter by symbol or company" value={query} /></label><label className="sort-control"><span>Sort by</span><select aria-label="Sort watchlist" onChange={(event) => setSort(event.target.value as 'default' | 'price' | 'change')} value={sort}><option value="default">Added recently</option><option value="price">Price, high to low</option><option value="change">Daily change</option></select><Icon name="chevron-down" size={14} /></label></div><div className="watchlist-columns" aria-hidden="true"><span>Asset</span><span>Current price</span><span>Today</span><span>Actions</span></div><div className="watchlist-list">{filteredItems.length > 0 ? filteredItems.map((item) => <WatchlistRow item={item} key={item.symbol} onAlert={setAlertTarget} onDetails={setDetailTarget} onRemove={removeItem} />) : <div className="empty-state"><span><Icon name="search" size={19} /></span><strong>No stocks found</strong><p>Try another symbol or company name.</p></div>}</div><div className="watchlist-footer"><span><i className="live-dot" /> Prices update automatically in a live account</span><strong>{filteredItems.length} of {items.length} assets shown</strong></div></section>
+          <section aria-labelledby="watchlist-title" className="panel watchlist-panel"><div className="panel-heading"><div><h2 id="watchlist-title">{t('watchlist.stocksWatching')}</h2><p>{t('watchlist.previewPrices')}</p></div><button className="panel-action" onClick={() => showToast(t('watchlist.pricesUpdated'))} type="button"><Icon name="activity" size={14} /> {t('watchlist.refreshPrices')}</button></div><div className="watchlist-controls"><label className="watchlist-filter"><Icon name="search" size={16} /><input aria-label={t('watchlist.filterStocks')} onChange={(event) => setQuery(event.target.value)} placeholder={t('watchlist.filterPlaceholder')} value={query} /></label><label className="sort-control"><span>{t('watchlist.sortBy')}</span><select aria-label={t('watchlist.sortLabel')} onChange={(event) => setSort(event.target.value as 'default' | 'price' | 'change')} value={sort}><option value="default">{t('watchlist.addedRecently')}</option><option value="price">{t('watchlist.priceHighLow')}</option><option value="change">{t('watchlist.dailyChange')}</option></select><Icon name="chevron-down" size={14} /></label></div><div className="watchlist-columns" aria-hidden="true"><span>{t('common.asset')}</span><span>{t('watchlist.currentPrice')}</span><span>{t('common.today')}</span><span>{t('common.actions')}</span></div><div className="watchlist-list">{filteredItems.length > 0 ? filteredItems.map((item) => <WatchlistRow item={item} key={item.symbol} onAlert={setAlertTarget} onDetails={setDetailTarget} onRemove={removeItem} />) : <div className="empty-state"><span><Icon name="search" size={19} /></span><strong>{t('market.noStocksFound')}</strong><p>{t('watchlist.noStocksHint')}</p></div>}</div><div className="watchlist-footer"><span><i className="live-dot" /> {t('watchlist.liveUpdateNote')}</span><strong>{t('watchlist.assetsShown', { shown: filteredItems.length, total: items.length })}</strong></div></section>
         </div>
       </main>
       <div aria-live="polite" className={`toast ${toast ? 'visible' : ''}`}>{toast}</div>
       {detailTarget && <StockDetails item={detailTarget} onClose={() => setDetailTarget(null)} />}
-      {alertTarget && <AlertModal item={alertTarget} onClose={() => setAlertTarget(null)} onSave={(threshold) => { setAlertTarget(null); showToast(`Alert set for ${alertTarget.symbol} at $${threshold}.`) }} />}
+      {alertTarget && <AlertModal item={alertTarget} onClose={() => setAlertTarget(null)} onSave={(threshold) => { setAlertTarget(null); showToast(t('watchlist.alertSet', { symbol: alertTarget.symbol, threshold })) }} />}
     </div>
   )
 }

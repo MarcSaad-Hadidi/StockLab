@@ -29,8 +29,11 @@ export type AiTraderInsight = {
   recommendation: AiTraderRecommendation
   confidence: number
   summary: string
+  summaryKey?: string
   keyFactors: string[]
+  keyFactorKeys?: string[]
   updatedAt: string
+  updatedAtKey?: string
 }
 
 export const chartRanges = ['1D', '5D', '1M', '3M', '6M', 'YTD', '1Y', '5Y', 'MAX'] as const
@@ -45,7 +48,9 @@ export type StockDetails = {
   market: MarketStock['market']
   exchange: string
   status: string
+  statusKey?: string
   updatedAt: string
+  updatedAtKey?: string
   price: number
   changeAmount: number
   changePercent: string
@@ -114,7 +119,9 @@ const detailOverrides: Record<string, StockDetailsOverrides> = {
   AAPL: {
     exchange: 'NASDAQ',
     status: 'Market Closed',
+    statusKey: 'stockDetails.status.marketClosed',
     updatedAt: 'May 24, 2024 4:00 PM ET',
+    updatedAtKey: 'stockDetails.updatedAt.may24',
     history: aaplHistory,
     stats: {
       peRatio: '28.75',
@@ -136,8 +143,15 @@ const detailOverrides: Record<string, StockDetailsOverrides> = {
       recommendation: 'BUY',
       confidence: 82,
       summary: 'Strong momentum, positive earnings outlook, and favorable technical indicators suggest potential upside in the near term.',
+      summaryKey: 'stockDetails.insight.summary.aapl',
       keyFactors: ['Earnings Momentum', 'Technical Strength', 'Analyst Upgrades'],
+      keyFactorKeys: [
+        'stockDetails.insight.factors.earningsMomentum',
+        'stockDetails.insight.factors.technicalStrength',
+        'stockDetails.insight.factors.analystUpgrades',
+      ],
       updatedAt: 'Updated 2m ago',
+      updatedAtKey: 'stockDetails.insight.updated.twoMinutes',
     },
   },
 }
@@ -188,8 +202,15 @@ function defaultInsight(stock: MarketStock): AiTraderInsight {
     summary: isPositive
       ? 'Positive price action and supportive market signals point to a constructive near-term setup.'
       : 'Mixed momentum suggests waiting for a clearer signal before increasing exposure.',
+    summaryKey: isPositive ? 'stockDetails.insight.summary.positive' : 'stockDetails.insight.summary.negative',
     keyFactors: ['Price Momentum', 'Market Sentiment', 'Technical Signals'],
+    keyFactorKeys: [
+      'stockDetails.insight.factors.priceMomentum',
+      'stockDetails.insight.factors.marketSentiment',
+      'stockDetails.insight.factors.technicalSignals',
+    ],
     updatedAt: 'Updated 5m ago',
+    updatedAtKey: 'stockDetails.insight.updated.fiveMinutes',
   }
 }
 
@@ -205,7 +226,9 @@ export function getStockDetails(stock: MarketStock): StockDetails {
     market: stock.market,
     exchange: overrides?.exchange ?? (stock.market === 'US Market' ? 'NASDAQ / NYSE' : 'Global Exchange'),
     status: overrides?.status ?? 'Market Open',
+    statusKey: overrides?.statusKey ?? 'stockDetails.status.marketOpen',
     updatedAt: overrides?.updatedAt ?? 'May 24, 2024 4:00 PM ET',
+    updatedAtKey: overrides?.updatedAtKey ?? 'stockDetails.updatedAt.may24',
     price,
     changeAmount,
     changePercent: stock.changePercent,
