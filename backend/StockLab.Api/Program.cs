@@ -1,5 +1,6 @@
 using StockLab.Application.Interfaces;
 using StockLab.Infrastructure.MarketData;
+using StockLab.Api.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +25,8 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {

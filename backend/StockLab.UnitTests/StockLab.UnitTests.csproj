@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\StockLab.Api\StockLab.Api.csproj" />
     <ProjectReference Include="..\StockLab.Application\StockLab.Application.csproj" />
     <ProjectReference Include="..\StockLab.Infrastructure\StockLab.Infrastructure.csproj" />
   </ItemGroup>
