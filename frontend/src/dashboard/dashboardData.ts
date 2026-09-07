@@ -40,7 +40,7 @@ export type PerformanceSeries = {
 export type Position = {
   symbol: string
   company: string
-  shares: string
+  shares: number
   value: string
   allocation: number
   price: string
@@ -61,9 +61,10 @@ export type Transaction = {
   symbol: string
   company: string
   type: 'Buy' | 'Sell'
-  shares: string
+  shares: number
   amount: string
   time: string
+  timeKey: string
 }
 
 export const metrics: Metric[] = [
@@ -150,7 +151,7 @@ export const positions: Position[] = [
   {
     symbol: 'AAPL',
     company: 'Apple Inc.',
-    shares: '42 shares',
+    shares: 42,
     value: '$8,812.08',
     allocation: 18.2,
     price: '$209.81',
@@ -160,7 +161,7 @@ export const positions: Position[] = [
   {
     symbol: 'MSFT',
     company: 'Microsoft Corp.',
-    shares: '18 shares',
+    shares: 18,
     value: '$7,671.24',
     allocation: 15.9,
     price: '$425.07',
@@ -170,7 +171,7 @@ export const positions: Position[] = [
   {
     symbol: 'NVDA',
     company: 'NVIDIA Corporation',
-    shares: '36 shares',
+    shares: 36,
     value: '$5,908.68',
     allocation: 12.2,
     price: '$164.13',
@@ -180,7 +181,7 @@ export const positions: Position[] = [
   {
     symbol: 'AMZN',
     company: 'Amazon.com Inc.',
-    shares: '24 shares',
+    shares: 24,
     value: '$4,359.12',
     allocation: 9.0,
     price: '$181.63',
@@ -198,9 +199,9 @@ export const watchlist: WatchlistItem[] = [
 ]
 
 export const transactions: Transaction[] = [
-  { symbol: 'AAPL', company: 'Apple Inc.', type: 'Buy', shares: '10 shares', amount: '$2,098.10', time: 'Today, 10:42 AM' },
-  { symbol: 'TSLA', company: 'Tesla Inc.', type: 'Sell', shares: '5 shares', amount: '$1,693.70', time: 'Yesterday, 3:18 PM' },
-  { symbol: 'NVDA', company: 'NVIDIA Corporation', type: 'Buy', shares: '12 shares', amount: '$1,969.56', time: 'May 28, 2026' },
+  { symbol: 'AAPL', company: 'Apple Inc.', type: 'Buy', shares: 10, amount: '$2,098.10', time: '10:42 AM', timeKey: 'dashboard.times.todayAt' },
+  { symbol: 'TSLA', company: 'Tesla Inc.', type: 'Sell', shares: 5, amount: '$1,693.70', time: '3:18 PM', timeKey: 'dashboard.times.yesterdayAt' },
+  { symbol: 'NVDA', company: 'NVIDIA Corporation', type: 'Buy', shares: 12, amount: '$1,969.56', time: '', timeKey: 'dashboard.times.may28' },
 ]
 
 export const aiPerformance = {

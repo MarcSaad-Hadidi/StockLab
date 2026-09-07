@@ -29,13 +29,25 @@ export function isSupportedLanguage(value: string | null | undefined): value is 
   return value === 'en' || value === 'fr'
 }
 
+function readStoredLanguage(storage: LanguageStorage | undefined): string | null {
+  try {
+    return storage?.getItem(languageStorageKey) ?? null
+  } catch {
+    return null
+  }
+}
+
 export function getStoredLanguage(storage: LanguageStorage | undefined = browserStorage()): Language {
-  const stored = storage?.getItem(languageStorageKey)
+  const stored = readStoredLanguage(storage)
   return isSupportedLanguage(stored) ? stored : defaultLanguage
 }
 
 export function persistLanguage(language: Language, storage: LanguageStorage | undefined = browserStorage()) {
-  storage?.setItem(languageStorageKey, language)
+  try {
+    storage?.setItem(languageStorageKey, language)
+  } catch {
+    // A blocked or full storage must not prevent the UI from changing language.
+  }
 }
 
 export async function setLanguage(language: Language, storage: LanguageStorage | undefined = browserStorage()) {
@@ -51,5 +63,12 @@ i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false },
   initAsync: false,
 })
+
+function syncDocumentLanguage(language: string) {
+  if (typeof document !== 'undefined') document.documentElement.lang = language
+}
+
+syncDocumentLanguage(i18n.language)
+i18n.on('languageChanged', syncDocumentLanguage)
 
 export { i18n }

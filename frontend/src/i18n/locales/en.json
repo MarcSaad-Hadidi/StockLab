@@ -132,7 +132,13 @@
     "winRate": "Win rate",
     "tradesExecuted": "{{count}} trades executed",
     "sevenDayPerformance": "7-day performance",
-    "connectBrokerage": "Connect a brokerage account to see your live portfolio."
+    "connectBrokerage": "Connect a brokerage account to see your live portfolio.",
+    "shares": "{{count}} shares",
+    "times": {
+      "todayAt": "Today, {{time}}",
+      "yesterdayAt": "Yesterday, {{time}}",
+      "may28": "May 28, 2026"
+    }
   },
   "market": {
     "title": "Market",
@@ -188,6 +194,42 @@
     "byStockLabAi": "by StockLab AI",
     "highConfidence": "High Confidence",
     "keyFactors": "Key Factors",
+    "status": {
+      "marketOpen": "Market Open",
+      "marketClosed": "Market Closed"
+    },
+    "updatedAt": {
+      "may24": "May 24, 2024 4:00 PM ET"
+    },
+    "recommendations": {
+      "buy": "BUY",
+      "sell": "SELL",
+      "hold": "HOLD"
+    },
+    "ratings": {
+      "strongBuy": "Strong Buy",
+      "buy": "Buy",
+      "hold": "Hold"
+    },
+    "insight": {
+      "summary": {
+        "aapl": "Strong momentum, positive earnings outlook, and favorable technical indicators suggest potential upside in the near term.",
+        "positive": "Positive price action and supportive market signals point to a constructive near-term setup.",
+        "negative": "Mixed momentum suggests waiting for a clearer signal before increasing exposure."
+      },
+      "factors": {
+        "earningsMomentum": "Earnings Momentum",
+        "technicalStrength": "Technical Strength",
+        "analystUpgrades": "Analyst Upgrades",
+        "priceMomentum": "Price Momentum",
+        "marketSentiment": "Market Sentiment",
+        "technicalSignals": "Technical Signals"
+      },
+      "updated": {
+        "twoMinutes": "Updated 2m ago",
+        "fiveMinutes": "Updated 5m ago"
+      }
+    },
     "errors": {
       "targetPrice": "Enter a target price greater than zero.",
       "quantity": "Enter a whole number of shares greater than zero.",
@@ -302,6 +344,7 @@
     "toDate": "To date",
     "filterFromDate": "Filter from date",
     "filterToDate": "Filter to date",
+    "anyDate": "Any date",
     "filterAssetType": "Filter by asset type",
     "filterAction": "Filter by transaction action",
     "filterSummary": "Transaction filter summary",
@@ -440,6 +483,31 @@
     "performanceChart": "AI Trader performance chart",
     "currentValue": "Current value",
     "allTime": "{{percent}}% all time",
+    "chartLabels": {
+      "may21": "May 21",
+      "may22": "May 22",
+      "may23": "May 23",
+      "may24": "May 24",
+      "may25": "May 25",
+      "may26": "May 26",
+      "may27": "May 27"
+    },
+    "modelLabel": "Model",
+    "modelHistory": {
+      "may20": "May 20, 2024",
+      "apr29": "Apr 29, 2024",
+      "apr03": "Apr 03, 2024"
+    },
+    "times": {
+      "may24_1018": "May 24, 10:18 AM",
+      "may24_0953": "May 24, 09:53 AM",
+      "may23_0347": "May 23, 03:47 PM",
+      "may23_0211": "May 23, 02:11 PM",
+      "may24_0809": "May 24, 08:09 AM",
+      "may23_0411": "May 23, 04:11 PM",
+      "may23_0116": "May 23, 01:16 PM",
+      "may22_0341": "May 22, 03:41 PM"
+    },
     "performanceStatistics": "Performance Statistics",
     "recentBotPerformance": "Recent bot performance",
     "totalReturn": "Total Return",
@@ -457,6 +525,8 @@
     "f1Score": "F1 Score",
     "trainedOn": "Trained On",
     "nextRetrain": "Next Retrain",
+    "nextRetrainValue": "May 27, 2024",
+    "periodValue": "Dec 2023 – May 2024",
     "archived": "Archived",
     "viewModelDetails": "View Model Details",
     "backtestingResults": "Backtesting Results",
@@ -604,6 +674,8 @@
     "activeSessionsCount": "{{count}} Active",
     "enabled": "Enabled",
     "previewNote": "This is a frontend preview. Profile changes are not saved to a backend.",
+    "memberSinceValue": "May 20, 2024",
+    "accountCreatedValue": "May 20, 2024",
     "profileSavedToast": "Profile changes saved for this preview.",
     "twoFactorToast": "Two-factor authentication is enabled in this preview.",
     "sessionsToast": "You have {{count}} active sessions.",
@@ -621,6 +693,7 @@
     }
   },
   "notFound": {
+    "error": "Error 404",
     "workspaceOnline": "Workspace online",
     "workspace": "StockLab workspace",
     "pageNotFound": "Page not found",

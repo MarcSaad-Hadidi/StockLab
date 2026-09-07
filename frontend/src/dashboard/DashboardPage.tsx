@@ -235,10 +235,11 @@ function AllocationBar({ allocation }: { allocation: number }) {
 }
 
 function PositionRow({ position }: { position: Position }) {
+  const { t } = useTranslation()
   return (
     <tr>
       <td><div className="asset-cell"><StockMark size="small" symbol={position.symbol} /><span><strong>{position.symbol}</strong><small>{position.company}</small></span></div></td>
-      <td>{position.shares}</td>
+      <td>{t('dashboard.shares', { count: position.shares })}</td>
       <td><strong>{position.value}</strong><small className="muted-line">{position.price}</small></td>
       <td><div className="allocation-cell"><AllocationBar allocation={position.allocation} /><small>{position.allocation}%</small></div></td>
       <td><span className={`change-pill ${position.tone}`}>{position.change}</span></td>
@@ -265,8 +266,8 @@ function TransactionRow({ transaction }: { transaction: Transaction }) {
       <StockMark size="small" symbol={transaction.symbol} />
       <div className="transaction-name"><strong>{transaction.symbol}</strong><small>{transaction.company}</small></div>
       <div className={`transaction-type ${transaction.type.toLowerCase()}`}><span className="transaction-dot" />{t(`common.${transaction.type.toLowerCase()}`)}</div>
-      <div className="transaction-amount"><strong>{transaction.amount}</strong><small>{transaction.shares}</small></div>
-      <small className="transaction-time">{transaction.time}</small>
+      <div className="transaction-amount"><strong>{transaction.amount}</strong><small>{t('dashboard.shares', { count: transaction.shares })}</small></div>
+      <small className="transaction-time">{t(transaction.timeKey, { time: transaction.time })}</small>
     </li>
   )
 }
@@ -325,7 +326,7 @@ export function DashboardPage() {
 
           <div className="dashboard-grid dashboard-grid-bottom">
             <section aria-labelledby="positions-title" className="panel positions-panel"><PanelHeading action={t('dashboard.viewPortfolio')} destination="portfolio" id="positions-title" subtitle={t('dashboard.positionsSubtitle')} title={t('dashboard.keyPositions')} /><div className="table-scroll"><table><thead><tr><th>{t('common.asset')}</th><th>{t('dashboard.holdings')}</th><th>{t('common.value')}</th><th>{t('common.allocation')}</th><th>{t('dashboard.today')}</th></tr></thead><tbody>{positions.map((position) => <PositionRow key={position.symbol} position={position} />)}</tbody></table></div></section>
-            <section aria-labelledby="transactions-title" className="panel transactions-panel"><PanelHeading action={t('common.viewAll')} destination="transactions" id="transactions-title" subtitle={t('dashboard.transactionsSubtitle')} title={t('dashboard.recentTransactions')} /><ul className="transaction-list">{transactions.map((transaction) => <TransactionRow key={`${transaction.symbol}-${transaction.time}`} transaction={transaction} />)}</ul></section>
+            <section aria-labelledby="transactions-title" className="panel transactions-panel"><PanelHeading action={t('common.viewAll')} destination="transactions" id="transactions-title" subtitle={t('dashboard.transactionsSubtitle')} title={t('dashboard.recentTransactions')} /><ul className="transaction-list">{transactions.map((transaction) => <TransactionRow key={`${transaction.symbol}-${transaction.timeKey}`} transaction={transaction} />)}</ul></section>
           </div>
 
           <section aria-labelledby="ai-trader-title" className="panel ai-panel"><div className="ai-heading"><div className="ai-title"><span className="ai-badge"><Icon name="sparkles" size={18} /></span><div><h2 id="ai-trader-title">{t('common.navigation.aiTrader')}</h2><p>{t('dashboard.aiSubtitle')}</p></div><span className="status-badge"><i /> {t('common.live')}</span></div><button className="text-action" onClick={() => window.location.assign(routeFor('ai-trader'))} type="button">{t('dashboard.openAiTrader')} <Icon name="chevron-right" size={16} /></button></div><div className="ai-content"><div className="ai-stat ai-stat-primary"><span>{t('dashboard.aiReturn')}</span><strong>{aiPerformance.return}</strong><small><Icon name="trending-up" size={13} /> {t('dashboard.outperformingMarket')}</small></div><div className="ai-stat"><span>{t('dashboard.netPnl')}</span><strong>{aiPerformance.pnl}</strong><small>{t('dashboard.sinceActivation')}</small></div><div className="ai-stat"><span>{t('dashboard.winRate')}</span><strong>{aiPerformance.winRate}</strong><small>{t('dashboard.tradesExecuted', { count: aiPerformance.trades })}</small></div><div className="ai-chart-wrap"><span>{t('dashboard.sevenDayPerformance')}</span><Sparkline /><div className="ai-chart-labels"><small>{t('common.days.mon')}</small><small>{t('dashboard.today')}</small></div></div></div></section>

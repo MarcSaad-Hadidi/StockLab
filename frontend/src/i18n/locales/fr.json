@@ -132,7 +132,13 @@
     "winRate": "Taux de réussite",
     "tradesExecuted": "{{count}} transactions exécutées",
     "sevenDayPerformance": "Performance sur 7 jours",
-    "connectBrokerage": "Connectez un compte de courtage pour voir votre portefeuille en direct."
+    "connectBrokerage": "Connectez un compte de courtage pour voir votre portefeuille en direct.",
+    "shares": "{{count}} actions",
+    "times": {
+      "todayAt": "Aujourd’hui à {{time}}",
+      "yesterdayAt": "Hier à {{time}}",
+      "may28": "28 mai 2026"
+    }
   },
   "market": {
     "title": "Marché",
@@ -188,6 +194,42 @@
     "byStockLabAi": "par StockLab IA",
     "highConfidence": "Confiance élevée",
     "keyFactors": "Facteurs clés",
+    "status": {
+      "marketOpen": "Marché ouvert",
+      "marketClosed": "Marché fermé"
+    },
+    "updatedAt": {
+      "may24": "24 mai 2024 à 16 h 00 HE"
+    },
+    "recommendations": {
+      "buy": "ACHAT",
+      "sell": "VENTE",
+      "hold": "CONSERVER"
+    },
+    "ratings": {
+      "strongBuy": "Achat fort",
+      "buy": "Achat",
+      "hold": "Conserver"
+    },
+    "insight": {
+      "summary": {
+        "aapl": "Une forte dynamique, des perspectives bénéficiaires positives et des indicateurs techniques favorables suggèrent un potentiel de hausse à court terme.",
+        "positive": "La dynamique positive des cours et les signaux de marché favorables indiquent une configuration constructive à court terme.",
+        "negative": "Une dynamique mitigée invite à attendre un signal plus clair avant d’augmenter l’exposition."
+      },
+      "factors": {
+        "earningsMomentum": "Dynamique des bénéfices",
+        "technicalStrength": "Force technique",
+        "analystUpgrades": "Relèvements d’analystes",
+        "priceMomentum": "Dynamique des cours",
+        "marketSentiment": "Sentiment du marché",
+        "technicalSignals": "Signaux techniques"
+      },
+      "updated": {
+        "twoMinutes": "Mis à jour il y a 2 min",
+        "fiveMinutes": "Mis à jour il y a 5 min"
+      }
+    },
     "errors": {
       "targetPrice": "Saisissez un prix cible supérieur à zéro.",
       "quantity": "Saisissez un nombre entier d’actions supérieur à zéro.",
@@ -302,6 +344,7 @@
     "toDate": "Date de fin",
     "filterFromDate": "Filtrer à partir d’une date",
     "filterToDate": "Filtrer jusqu’à une date",
+    "anyDate": "Toute date",
     "filterAssetType": "Filtrer par type d’actif",
     "filterAction": "Filtrer par action de transaction",
     "filterSummary": "Résumé des filtres de transactions",
@@ -440,6 +483,31 @@
     "performanceChart": "Graphique de performance du Trader IA",
     "currentValue": "Valeur actuelle",
     "allTime": "{{percent}} % depuis le début",
+    "chartLabels": {
+      "may21": "21 mai",
+      "may22": "22 mai",
+      "may23": "23 mai",
+      "may24": "24 mai",
+      "may25": "25 mai",
+      "may26": "26 mai",
+      "may27": "27 mai"
+    },
+    "modelLabel": "Modèle",
+    "modelHistory": {
+      "may20": "20 mai 2024",
+      "apr29": "29 avr. 2024",
+      "apr03": "03 avr. 2024"
+    },
+    "times": {
+      "may24_1018": "24 mai, 10 h 18",
+      "may24_0953": "24 mai, 9 h 53",
+      "may23_0347": "23 mai, 15 h 47",
+      "may23_0211": "23 mai, 14 h 11",
+      "may24_0809": "24 mai, 8 h 09",
+      "may23_0411": "23 mai, 16 h 11",
+      "may23_0116": "23 mai, 13 h 16",
+      "may22_0341": "22 mai, 15 h 41"
+    },
     "performanceStatistics": "Statistiques de performance",
     "recentBotPerformance": "Performance récente du bot",
     "totalReturn": "Rendement total",
@@ -457,6 +525,8 @@
     "f1Score": "Score F1",
     "trainedOn": "Entraîné le",
     "nextRetrain": "Prochain entraînement",
+    "nextRetrainValue": "27 mai 2024",
+    "periodValue": "Déc. 2023 – mai 2024",
     "archived": "Archivé",
     "viewModelDetails": "Voir les détails du modèle",
     "backtestingResults": "Résultats du backtest",
@@ -604,6 +674,8 @@
     "activeSessionsCount": "{{count}} actives",
     "enabled": "Activée",
     "previewNote": "Ceci est un aperçu frontend. Les modifications du profil ne sont pas enregistrées sur un backend.",
+    "memberSinceValue": "20 mai 2024",
+    "accountCreatedValue": "20 mai 2024",
     "profileSavedToast": "Les modifications du profil ont été enregistrées dans cet aperçu.",
     "twoFactorToast": "L’authentification à deux facteurs est activée dans cet aperçu.",
     "sessionsToast": "Vous avez {{count}} sessions actives.",
@@ -621,6 +693,7 @@
     }
   },
   "notFound": {
+    "error": "Erreur 404",
     "workspaceOnline": "Espace de travail en ligne",
     "workspace": "Espace de travail StockLab",
     "pageNotFound": "Page introuvable",

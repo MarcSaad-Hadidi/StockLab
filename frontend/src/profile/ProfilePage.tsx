@@ -158,8 +158,8 @@ export default function ProfilePage() {
         <section aria-labelledby="profile-summary-title" className="profile-summary-card">
           <div className="summary-identity"><ProfileAvatar /><div><h1 id="profile-summary-title">{profile.name}</h1><p>{profile.email}</p><span className="verified-badge"><i /> {t('profile.verifiedAccount')}</span></div></div>
           <div className="summary-details">
-            <div><span><Icon name="activity" size={15} /> {t('profile.memberSince')}</span><strong>May 20, 2024</strong></div>
-            <div><span><Icon name="activity" size={15} /> {t('profile.accountCreated')}</span><strong>{profile.createdAt}</strong></div>
+            <div><span><Icon name="activity" size={15} /> {t('profile.memberSince')}</span><strong>{t('profile.memberSinceValue')}</strong></div>
+            <div><span><Icon name="activity" size={15} /> {t('profile.accountCreated')}</span><strong>{t('profile.accountCreatedValue')}</strong></div>
             <div><span><Icon name="activity" size={15} /> {t('profile.initialCapital')}</span><strong>{profile.initialCapital}</strong></div>
             <div><span>{t('profile.accountStatus')}</span><strong className="active-text">{t('profile.active')}</strong></div>
           </div>

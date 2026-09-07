@@ -122,27 +122,27 @@ function SummaryCard({ detail, icon, label, tone, value }: SummaryCardProps) {
 }
 
 const currencyFormatter = new Intl.NumberFormat('en-US', { currency: 'USD', maximumFractionDigits: 2, minimumFractionDigits: 2, style: 'currency' })
-const dateFormatter = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' })
-const timeFormatter = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })
-const filterDateFormatter = new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' })
-
 function formatCurrency(value: number) {
   return currencyFormatter.format(value)
 }
 
-function formatDateParts(isoDate: string) {
+function formatDateParts(isoDate: string, language: string) {
   const date = new Date(isoDate)
+  const locale = language === 'fr' ? 'fr-FR' : 'en-US'
+  const dateFormatter = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' })
+  const timeFormatter = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' })
   return { day: dateFormatter.format(date), time: timeFormatter.format(date) }
 }
 
-function formatFilterDate(value: string) {
-  if (!value) return 'Any date'
-  return filterDateFormatter.format(new Date(`${value}T00:00:00.000Z`))
+function formatFilterDate(value: string, language: string, emptyLabel: string) {
+  if (!value) return emptyLabel
+  const locale = language === 'fr' ? 'fr-FR' : 'en-US'
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' }).format(new Date(`${value}T00:00:00.000Z`))
 }
 
 function TransactionRow({ transaction }: { transaction: Transaction }) {
-  const { t } = useTranslation()
-  const dateParts = formatDateParts(transaction.date)
+  const { i18n, t } = useTranslation()
+  const dateParts = formatDateParts(transaction.date, i18n.language)
   return <tr><td><time className="date-cell" dateTime={transaction.date}><span>{dateParts.day}</span><small>{dateParts.time}</small></time></td><td><strong className="symbol-cell">{transaction.symbol}</strong></td><td className="company-cell">{transaction.company}</td><td><span className={`action-pill action-${transaction.action.toLowerCase()}`}>{t(`common.${transaction.action === 'BUY' ? 'buy' : 'sell'}`)}</span></td><td className="number-cell">{transaction.quantity}</td><td className="money-cell">{formatCurrency(transaction.executionPrice)}</td><td className="money-cell"><strong>{formatCurrency(transaction.totalAmount)}</strong></td></tr>
 }
 
@@ -172,7 +172,7 @@ type FilterControlsProps = {
 }
 
 function FilterControls({ activeFilterCount, filterMenuOpen, filters, onActionChange, onFilterMenuToggle, onFilterUpdate, onReset }: FilterControlsProps) {
-  const { t } = useTranslation()
+  const { i18n, t } = useTranslation()
   const typeOptions: Array<{ label: string; value: TransactionTypeFilter }> = [
     { label: t('transactions.filters.allTypes'), value: 'All' },
     { label: t('market.filterNouns.stocks'), value: 'Stock' },
@@ -190,10 +190,10 @@ function FilterControls({ activeFilterCount, filterMenuOpen, filters, onActionCh
         <label className="date-range-control">
           <Icon name="calendar" size={14} />
           <span className="sr-only">{t('transactions.fromDate')}</span>
-          <span className="date-field"><span aria-hidden="true">{formatFilterDate(filters.from)}</span><input aria-label={t('transactions.filterFromDate')} onChange={(event) => onFilterUpdate('from', event.target.value)} onInput={(event) => onFilterUpdate('from', event.currentTarget.value)} type="date" value={filters.from} /></span>
+          <span className="date-field"><span aria-hidden="true">{formatFilterDate(filters.from, i18n.language, t('transactions.anyDate'))}</span><input aria-label={t('transactions.filterFromDate')} onChange={(event) => onFilterUpdate('from', event.target.value)} onInput={(event) => onFilterUpdate('from', event.currentTarget.value)} type="date" value={filters.from} /></span>
           <span aria-hidden="true" className="date-separator">–</span>
           <span className="sr-only">{t('transactions.toDate')}</span>
-          <span className="date-field"><span aria-hidden="true">{formatFilterDate(filters.to)}</span><input aria-label={t('transactions.filterToDate')} onChange={(event) => onFilterUpdate('to', event.target.value)} onInput={(event) => onFilterUpdate('to', event.currentTarget.value)} type="date" value={filters.to} /></span>
+          <span className="date-field"><span aria-hidden="true">{formatFilterDate(filters.to, i18n.language, t('transactions.anyDate'))}</span><input aria-label={t('transactions.filterToDate')} onChange={(event) => onFilterUpdate('to', event.target.value)} onInput={(event) => onFilterUpdate('to', event.currentTarget.value)} type="date" value={filters.to} /></span>
         </label>
         <label className="type-select">
           <span className="sr-only">{t('common.assetType')}</span>

@@ -223,6 +223,11 @@ function useDialogAccessibility(onClose: () => void, dialogRef: FocusableRef, in
 function AiInsightCard({ details }: { details: StockDetails }) {
   const { t } = useTranslation()
   const insight = details.aiInsight
+  const recommendationKey = `stockDetails.recommendations.${insight.recommendation.toLowerCase()}`
+  const recommendation = t(recommendationKey, { defaultValue: insight.recommendation })
+  const summary = insight.summaryKey ? t(insight.summaryKey) : insight.summary
+  const keyFactors = insight.keyFactorKeys?.map((key) => t(key)) ?? insight.keyFactors
+  const updatedAt = insight.updatedAtKey ? t(insight.updatedAtKey) : insight.updatedAt
 
   return (
     <article className="stock-ai-card">
@@ -231,19 +236,19 @@ function AiInsightCard({ details }: { details: StockDetails }) {
           <span className="stock-card-icon stock-card-icon-ai"><MarketIcon name="robot" size={16} /></span>
           <h2>{t('stockDetails.aiInsight')} <small>{t('stockDetails.byStockLabAi')}</small></h2>
         </div>
-        <span className="stock-updated-pill">{insight.updatedAt}</span>
+        <span className="stock-updated-pill">{updatedAt}</span>
       </div>
       <div className="stock-ai-summary">
         <div>
-          <span className={`stock-ai-recommendation ${recommendationClass(insight.recommendation)}`}>{insight.recommendation}</span>
+          <span className={`stock-ai-recommendation ${recommendationClass(insight.recommendation)}`}>{recommendation}</span>
           <strong>{t('stockDetails.highConfidence')}</strong>
         </div>
         <ConfidenceRing confidence={insight.confidence} />
       </div>
-      <p className="stock-ai-copy">{insight.summary}</p>
+      <p className="stock-ai-copy">{summary}</p>
       <div className="stock-key-factors">
         <span>{t('stockDetails.keyFactors')}</span>
-        <div>{insight.keyFactors.map((factor) => <span key={factor}>{factor}</span>)}</div>
+        <div>{keyFactors.map((factor) => <span key={factor}>{factor}</span>)}</div>
       </div>
     </article>
   )
@@ -358,6 +363,11 @@ function TradeTicket({ details, side, quantity, quantityError, orderType, limitP
 export function StockDetailsPage({ requestedSymbol, stock, onBack }: StockDetailsPageProps) {
   const { t } = useTranslation()
   const details = useMemo(() => stock ? getStockDetails(stock) : null, [stock])
+  const analystRatingKeys: Record<string, string> = {
+    'Strong Buy': 'stockDetails.ratings.strongBuy',
+    Buy: 'stockDetails.ratings.buy',
+    Hold: 'stockDetails.ratings.hold',
+  }
   const [isWatchlisted, setIsWatchlisted] = useState(false)
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false)
   const [tradeSide, setTradeSide] = useState<TradeSide>('BUY')
@@ -423,11 +433,11 @@ export function StockDetailsPage({ requestedSymbol, stock, onBack }: StockDetail
               <div className="stock-title-row"><h1 id="stock-details-title">{details.company}</h1><button aria-label={isWatchlisted ? t('stockDetails.removeFromWatchlist', { symbol: details.symbol }) : t('stockDetails.addToWatchlist', { symbol: details.symbol })} aria-pressed={isWatchlisted} className={`stock-title-star ${isWatchlisted ? 'stock-title-star-active' : ''}`} onClick={() => { setIsWatchlisted((current) => !current); showToast(isWatchlisted ? t('stockDetails.removedFromWatchlist', { symbol: details.symbol }) : t('stockDetails.addedToWatchlist', { symbol: details.symbol })) }} type="button"><MarketIcon filled={isWatchlisted} name="star" size={17} /></button></div>
               <p className="stock-details-subtitle">{details.symbol} <span>•</span> {details.exchange}</p>
               <div className="stock-price-row"><strong>{formatCurrency(details.price)}</strong><span className={details.tone === 'positive' ? 'stock-positive' : 'stock-negative'}>{changeLabel(details, t('stockDetails.today'))}</span></div>
-              <p className="stock-details-status">{details.status} <span>•</span> {details.updatedAt}</p>
+              <p className="stock-details-status">{details.statusKey ? t(details.statusKey) : details.status} <span>•</span> {details.updatedAtKey ? t(details.updatedAtKey) : details.updatedAt}</p>
             </div>
           </div>
           <div className="stock-details-actions">
-            <button aria-pressed={isWatchlisted} className={`stock-outline-button ${isWatchlisted ? 'stock-outline-button-active' : ''}`} onClick={() => { setIsWatchlisted((current) => !current); showToast(isWatchlisted ? t('stockDetails.removedFromWatchlist', { symbol: details.symbol }) : t('stockDetails.addedToWatchlist', { symbol: details.symbol })) }} type="button"><MarketIcon filled={isWatchlisted} name="star" size={15} /> {isWatchlisted ? t('stockDetails.inWatchlist') : t('stockDetails.addToWatchlist')}</button>
+            <button aria-pressed={isWatchlisted} className={`stock-outline-button ${isWatchlisted ? 'stock-outline-button-active' : ''}`} onClick={() => { setIsWatchlisted((current) => !current); showToast(isWatchlisted ? t('stockDetails.removedFromWatchlist', { symbol: details.symbol }) : t('stockDetails.addedToWatchlist', { symbol: details.symbol })) }} type="button"><MarketIcon filled={isWatchlisted} name="star" size={15} /> {isWatchlisted ? t('stockDetails.inWatchlist') : t('stockDetails.addToWatchlist', { symbol: details.symbol })}</button>
             <button className="stock-outline-button" onClick={() => setIsAlertModalOpen(true)} type="button"><MarketIcon name="bell" size={15} /> {t('alerts.createAlert')}</button>
           </div>
         </header>
@@ -463,7 +473,7 @@ export function StockDetailsPage({ requestedSymbol, stock, onBack }: StockDetail
               <MetricItem label={t('stockDetails.metrics.low')} value={details.stats.low} />
               <MetricItem label={t('stockDetails.metrics.previousClose')} value={details.stats.previousClose} />
               <MetricItem label={t('stockDetails.metrics.beta')} value={details.stats.beta} />
-              <MetricItem label={t('stockDetails.metrics.analystRating')} value={details.stats.analystRating} tone="positive" />
+              <MetricItem label={t('stockDetails.metrics.analystRating')} value={analystRatingKeys[details.stats.analystRating] ? t(analystRatingKeys[details.stats.analystRating]) : details.stats.analystRating} tone="positive" />
               <MetricItem label={t('stockDetails.metrics.analystTarget')} value={details.stats.analystPriceTarget} tone="positive" />
             </section>
           </div>
