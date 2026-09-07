@@ -90,18 +90,18 @@
     },
     "performance": {
       "change": {
-        "1D": "+1,35 % aujourd’hui",
-        "1W": "+3,04 % cette semaine",
-        "1M": "+6,91 % ce mois-ci",
-        "3M": "+16,51 % en 3 mois",
-        "1Y": "+40,04 % cette année",
-        "YTD": "+22,83 % depuis le début de l’année",
-        "ALL": "+90,00 % depuis le début"
+        "1D": "{{change}} aujourd’hui",
+        "1W": "{{change}} cette semaine",
+        "1M": "{{change}} ce mois-ci",
+        "3M": "{{change}} en 3 mois",
+        "1Y": "{{change}} cette année",
+        "YTD": "{{change}} depuis le début de l’année",
+        "ALL": "{{change}} depuis le début"
       }
     },
     "performanceChart": "Graphique de performance du portefeuille pour {{range}}",
     "aiPerformanceSparkline": "Mini-graphique de performance du Trader IA",
-    "allocation": "{{allocation}} % de répartition",
+    "allocation": "{{allocation}} de répartition",
     "openDetails": "Ouvrir les détails de {{symbol}}",
     "date": "Lundi 1 juin 2026",
     "welcome": "Voici l’évolution de votre portefeuille aujourd’hui.",

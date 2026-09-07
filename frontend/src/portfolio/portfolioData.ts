@@ -58,13 +58,13 @@ export const chartSeries: Record<string, PerformancePoint[]> = Object.fromEntrie
 export type PerformanceSeries = {
   labels: string[]
   values: number[]
-  change: string
-  changeLabel: string
+  change: number
+  changePercent: number
 }
 
 const performanceSampleIndices = (length: number) => Array.from(new Set([0, Math.round((length - 1) * 0.16), Math.round((length - 1) * 0.33), Math.round((length - 1) * 0.5), Math.round((length - 1) * 0.67), Math.round((length - 1) * 0.84), Math.max(length - 1, 0)]))
 
 export const performanceSeries: Record<string, PerformanceSeries> = Object.fromEntries(Object.entries(chartSeries).map(([range, points]) => {
   const samples = performanceSampleIndices(points.length).map((index) => points[index])
-  return [range, { labels: samples.map((point) => point.date), values: samples.map((point) => point.amount), change: '+$7,812.45', changeLabel: '6.47% overall' }]
+  return [range, { labels: samples.map((point) => point.date), values: samples.map((point) => point.amount), change: 7812.45, changePercent: 6.47 }]
 }))

@@ -41,10 +41,10 @@ export type TraderTrade = {
 
 export type ModelVersion = {
   version: string
-  accuracy: string
-  precision: string
-  recall: string
-  f1Score: string
+  accuracy: number
+  precision: number
+  recall: number
+  f1Score: number
   trainedOn: string
   trainedOnKey?: string
   status: 'Current' | 'Archived'
@@ -102,10 +102,10 @@ export const recentTrades: TraderTrade[] = [
 
 export const currentModel: ModelVersion = {
   version: 'v3.2.1',
-  accuracy: '72.4%',
-  precision: '72.1%',
-  recall: '76.8%',
-  f1Score: '74.4%',
+  accuracy: 72.4,
+  precision: 72.1,
+  recall: 76.8,
+  f1Score: 74.4,
   trainedOn: 'May 20, 2024',
   trainedOnKey: 'aiTrader.modelHistory.may20',
   status: 'Current',
@@ -113,15 +113,15 @@ export const currentModel: ModelVersion = {
 
 export const modelHistory: ModelVersion[] = [
   currentModel,
-  { version: 'v3.1.0', accuracy: '70.8%', precision: '69.9%', recall: '74.2%', f1Score: '72.0%', trainedOn: 'Apr 29, 2024', trainedOnKey: 'aiTrader.modelHistory.apr29', status: 'Archived' },
-  { version: 'v3.0.2', accuracy: '68.5%', precision: '67.2%', recall: '71.6%', f1Score: '69.3%', trainedOn: 'Apr 03, 2024', trainedOnKey: 'aiTrader.modelHistory.apr03', status: 'Archived' },
+  { version: 'v3.1.0', accuracy: 70.8, precision: 69.9, recall: 74.2, f1Score: 72, trainedOn: 'Apr 29, 2024', trainedOnKey: 'aiTrader.modelHistory.apr29', status: 'Archived' },
+  { version: 'v3.0.2', accuracy: 68.5, precision: 67.2, recall: 71.6, f1Score: 69.3, trainedOn: 'Apr 03, 2024', trainedOnKey: 'aiTrader.modelHistory.apr03', status: 'Archived' },
 ]
 
 export const backtestSummary = {
-  totalReturn: '+28.12%',
-  winRate: '66.3%',
-  maxDrawdown: '-8.7%',
-  sharpeRatio: '1.48',
-  totalTrades: '312',
-  profitFactor: '2.12',
+  totalReturn: 28.12,
+  winRate: 66.3,
+  maxDrawdown: -8.7,
+  sharpeRatio: 1.48,
+  totalTrades: 312,
+  profitFactor: 2.12,
 }

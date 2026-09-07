@@ -90,18 +90,18 @@
     },
     "performance": {
       "change": {
-        "1D": "+1.35% today",
-        "1W": "+3.04% this week",
-        "1M": "+6.91% this month",
-        "3M": "+16.51% in 3 months",
-        "1Y": "+40.04% this year",
-        "YTD": "+22.83% YTD",
-        "ALL": "+90.00% all time"
+        "1D": "{{change}} today",
+        "1W": "{{change}} this week",
+        "1M": "{{change}} this month",
+        "3M": "{{change}} in 3 months",
+        "1Y": "{{change}} this year",
+        "YTD": "{{change}} YTD",
+        "ALL": "{{change}} all time"
       }
     },
     "performanceChart": "Portfolio performance chart for {{range}}",
     "aiPerformanceSparkline": "AI Trader performance sparkline",
-    "allocation": "{{allocation}}% allocation",
+    "allocation": "{{allocation}} allocation",
     "openDetails": "Open {{symbol}} details",
     "date": "Monday, June 1, 2026",
     "welcome": "Here’s what’s happening with your portfolio today.",

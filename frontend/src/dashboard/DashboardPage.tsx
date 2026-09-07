@@ -1,4 +1,5 @@
 import { Sidebar } from '../components/layout/Sidebar'
+import { formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -71,10 +72,6 @@ function StockMark({ symbol, size = 'medium' }: { symbol: string; size?: 'small'
   )
 }
 
-function formatCurrency(value: number) {
-  return `$${value.toFixed(2)}K`
-}
-
 function PerformanceChart({ range }: { range: PerformanceRange }) {
   const { t } = useTranslation()
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
@@ -112,11 +109,11 @@ function PerformanceChart({ range }: { range: PerformanceRange }) {
       <div className="chart-summary">
         <div>
           <span className="chart-eyebrow">{t('common.portfolioValue')}</span>
-          <strong>{formatCurrency(series.values.at(-1) ?? 0)}</strong>
+          <strong>{formatCompactCurrency((series.values.at(-1) ?? 0) * 1000)}</strong>
         </div>
         <div className="chart-change">
-          <span>{series.change}</span>
-          <small>{t(`dashboard.performance.change.${range}`)}</small>
+          <span>{formatSignedCurrency(series.change)}</span>
+          <small>{t(`dashboard.performance.change.${range}`, { change: formatSignedPercent(Number.parseFloat(series.changeLabel)) })}</small>
         </div>
       </div>
       <svg aria-label={t('dashboard.performanceChart', { range })} className="performance-chart" key={range} role="img" viewBox={`0 0 ${width} ${height}`}>
@@ -132,7 +129,7 @@ function PerformanceChart({ range }: { range: PerformanceRange }) {
           return (
             <g key={tick}>
               <line className="chart-grid-line" x1={padding.left} x2={width - padding.right} y1={y} y2={y} />
-              <text className="chart-y-label" textAnchor="end" x={width - padding.right} y={y - 7}>{formatCurrency(value)}</text>
+              <text className="chart-y-label" textAnchor="end" x={width - padding.right} y={y - 7}>{formatCompactCurrency(value * 1000)}</text>
             </g>
           )
         })}
@@ -141,7 +138,7 @@ function PerformanceChart({ range }: { range: PerformanceRange }) {
         {activePoint && <line className="chart-crosshair" x1={activePoint.x} x2={activePoint.x} y1={padding.top} y2={height - padding.bottom} />}
         {points.map((point, index) => (
           <g
-            aria-label={`${series.labels[index]}: ${formatCurrency(point.value)} portfolio value`}
+            aria-label={`${series.labels[index]}: ${formatCompactCurrency(point.value * 1000)} portfolio value`}
             aria-pressed={pinnedIndex === index}
             className={`chart-point-group ${activeIndex === index ? 'active' : ''}`}
             key={`${point.x}-${index}`}
@@ -167,14 +164,14 @@ function PerformanceChart({ range }: { range: PerformanceRange }) {
         {activePoint && activeIndex !== null && activeValue !== null && <g className="chart-tooltip" pointerEvents="none" transform={`translate(${tooltipX} ${tooltipY})`}>
           <rect height={tooltipHeight} rx="7" width={tooltipWidth} />
           <text className="chart-tooltip-label" x="10" y="18">{series.labels[activeIndex]}</text>
-          <text className="chart-tooltip-value" x="10" y="38">{formatCurrency(activeValue)}</text>
+          <text className="chart-tooltip-value" x="10" y="38">{formatCompactCurrency(activeValue * 1000)}</text>
         </g>}
         {series.labels.map((label, index) => {
           const point = points[index]
           return <text className="chart-x-label" key={label} textAnchor={index === 0 ? 'start' : index === series.labels.length - 1 ? 'end' : 'middle'} x={point.x} y={height - 7}>{label}</text>
         })}
       </svg>
-      <span aria-live="polite" className="chart-tooltip-announcement">{activeIndex !== null && activeValue !== null ? `${series.labels[activeIndex]}: ${formatCurrency(activeValue)}` : ''}</span>
+      <span aria-live="polite" className="chart-tooltip-announcement">{activeIndex !== null && activeValue !== null ? `${series.labels[activeIndex]}: ${formatCompactCurrency(activeValue * 1000)}` : ''}</span>
     </div>
   )
 }
@@ -223,15 +220,15 @@ function MetricCard({ metric }: { metric: (typeof metrics)[number] }) {
     <article className="metric-card">
       <div className={`metric-icon metric-icon-${metric.tone}`}><Icon name={metric.icon} size={20} /></div>
       <p>{t(metric.label)}</p>
-      <strong>{metric.value}</strong>
-      <span className="metric-change"><Icon name="trending-up" size={13} /> {metric.change} <em>{t(metric.detail)}</em></span>
+      <strong>{formatCurrency(metric.value)}</strong>
+      <span className="metric-change"><Icon name="trending-up" size={13} /> {formatSignedPercent(metric.change)} <em>{t(metric.detail)}</em></span>
     </article>
   )
 }
 
 function AllocationBar({ allocation }: { allocation: number }) {
   const { t } = useTranslation()
-  return <span aria-label={t('dashboard.allocation', { allocation })} className="allocation-bar"><i style={{ width: `${Math.min(allocation * 3.2, 100)}%` }} /></span>
+  return <span aria-label={t('dashboard.allocation', { allocation: formatPercent(allocation, undefined, 1) })} className="allocation-bar"><i style={{ width: `${Math.min(allocation * 3.2, 100)}%` }} /></span>
 }
 
 function PositionRow({ position }: { position: Position }) {
@@ -240,9 +237,9 @@ function PositionRow({ position }: { position: Position }) {
     <tr>
       <td><div className="asset-cell"><StockMark size="small" symbol={position.symbol} /><span><strong>{position.symbol}</strong><small>{position.company}</small></span></div></td>
       <td>{t('dashboard.shares', { count: position.shares })}</td>
-      <td><strong>{position.value}</strong><small className="muted-line">{position.price}</small></td>
-      <td><div className="allocation-cell"><AllocationBar allocation={position.allocation} /><small>{position.allocation}%</small></div></td>
-      <td><span className={`change-pill ${position.tone}`}>{position.change}</span></td>
+      <td><strong>{formatCurrency(position.value)}</strong><small className="muted-line">{formatCurrency(position.price)}</small></td>
+      <td><div className="allocation-cell"><AllocationBar allocation={position.allocation} /><small>{formatPercent(position.allocation, undefined, 1)}</small></div></td>
+      <td><span className={`change-pill ${position.tone}`}>{formatSignedPercent(position.change)}</span></td>
     </tr>
   )
 }
@@ -253,7 +250,7 @@ function WatchlistRow({ item }: { item: WatchlistItem }) {
     <li className="watchlist-row">
       <StockMark size="small" symbol={item.symbol} />
       <div className="watchlist-name"><strong>{item.symbol}</strong><small>{item.company}</small></div>
-      <div className="watchlist-price"><strong>{item.price}</strong><span className={item.tone}>{item.change}</span></div>
+      <div className="watchlist-price"><strong>{formatCurrency(item.price)}</strong><span className={item.tone}>{formatSignedPercent(item.change)}</span></div>
       <button aria-label={t('dashboard.openDetails', { symbol: item.symbol })} className="icon-button row-more" onClick={() => undefined} type="button"><Icon name="more" size={18} /></button>
     </li>
   )
@@ -266,7 +263,7 @@ function TransactionRow({ transaction }: { transaction: Transaction }) {
       <StockMark size="small" symbol={transaction.symbol} />
       <div className="transaction-name"><strong>{transaction.symbol}</strong><small>{transaction.company}</small></div>
       <div className={`transaction-type ${transaction.type.toLowerCase()}`}><span className="transaction-dot" />{t(`common.${transaction.type.toLowerCase()}`)}</div>
-      <div className="transaction-amount"><strong>{transaction.amount}</strong><small>{t('dashboard.shares', { count: transaction.shares })}</small></div>
+      <div className="transaction-amount"><strong>{formatCurrency(transaction.amount)}</strong><small>{t('dashboard.shares', { count: transaction.shares })}</small></div>
       <small className="transaction-time">{t(transaction.timeKey, { time: transaction.time })}</small>
     </li>
   )
@@ -329,7 +326,7 @@ export function DashboardPage() {
             <section aria-labelledby="transactions-title" className="panel transactions-panel"><PanelHeading action={t('common.viewAll')} destination="transactions" id="transactions-title" subtitle={t('dashboard.transactionsSubtitle')} title={t('dashboard.recentTransactions')} /><ul className="transaction-list">{transactions.map((transaction) => <TransactionRow key={`${transaction.symbol}-${transaction.timeKey}`} transaction={transaction} />)}</ul></section>
           </div>
 
-          <section aria-labelledby="ai-trader-title" className="panel ai-panel"><div className="ai-heading"><div className="ai-title"><span className="ai-badge"><Icon name="sparkles" size={18} /></span><div><h2 id="ai-trader-title">{t('common.navigation.aiTrader')}</h2><p>{t('dashboard.aiSubtitle')}</p></div><span className="status-badge"><i /> {t('common.live')}</span></div><button className="text-action" onClick={() => window.location.assign(routeFor('ai-trader'))} type="button">{t('dashboard.openAiTrader')} <Icon name="chevron-right" size={16} /></button></div><div className="ai-content"><div className="ai-stat ai-stat-primary"><span>{t('dashboard.aiReturn')}</span><strong>{aiPerformance.return}</strong><small><Icon name="trending-up" size={13} /> {t('dashboard.outperformingMarket')}</small></div><div className="ai-stat"><span>{t('dashboard.netPnl')}</span><strong>{aiPerformance.pnl}</strong><small>{t('dashboard.sinceActivation')}</small></div><div className="ai-stat"><span>{t('dashboard.winRate')}</span><strong>{aiPerformance.winRate}</strong><small>{t('dashboard.tradesExecuted', { count: aiPerformance.trades })}</small></div><div className="ai-chart-wrap"><span>{t('dashboard.sevenDayPerformance')}</span><Sparkline /><div className="ai-chart-labels"><small>{t('common.days.mon')}</small><small>{t('dashboard.today')}</small></div></div></div></section>
+          <section aria-labelledby="ai-trader-title" className="panel ai-panel"><div className="ai-heading"><div className="ai-title"><span className="ai-badge"><Icon name="sparkles" size={18} /></span><div><h2 id="ai-trader-title">{t('common.navigation.aiTrader')}</h2><p>{t('dashboard.aiSubtitle')}</p></div><span className="status-badge"><i /> {t('common.live')}</span></div><button className="text-action" onClick={() => window.location.assign(routeFor('ai-trader'))} type="button">{t('dashboard.openAiTrader')} <Icon name="chevron-right" size={16} /></button></div><div className="ai-content"><div className="ai-stat ai-stat-primary"><span>{t('dashboard.aiReturn')}</span><strong>{formatSignedPercent(aiPerformance.return)}</strong><small><Icon name="trending-up" size={13} /> {t('dashboard.outperformingMarket')}</small></div><div className="ai-stat"><span>{t('dashboard.netPnl')}</span><strong>{formatSignedCurrency(aiPerformance.pnl)}</strong><small>{t('dashboard.sinceActivation')}</small></div><div className="ai-stat"><span>{t('dashboard.winRate')}</span><strong>{formatPercent(aiPerformance.winRate, undefined, 1)}</strong><small>{t('dashboard.tradesExecuted', { count: aiPerformance.trades })}</small></div><div className="ai-chart-wrap"><span>{t('dashboard.sevenDayPerformance')}</span><Sparkline /><div className="ai-chart-labels"><small>{t('common.days.mon')}</small><small>{t('dashboard.today')}</small></div></div></div></section>
           <p className="simulation-note"><span><Icon name="activity" size={14} /> {t('common.simulatedData')}</span> {t('dashboard.connectBrokerage')}</p>
         </div>
       </main>

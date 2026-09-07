@@ -1,4 +1,5 @@
 import { Sidebar } from '../components/layout/Sidebar'
+import { formatCurrency, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { watchlistItems, type WatchlistItem } from './watchlistData'
@@ -57,18 +58,6 @@ function StockMark({ item }: { item: WatchlistItem }) {
   return <span aria-hidden="true" className={`stock-mark stock-mark-${item.markTone}`}>{item.symbol === 'MSFT' ? <><i /><i /><i /><i /></> : item.symbol.slice(0, 1)}</span>
 }
 
-function formatCurrency(value: number) {
-  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function formatChange(value: number) {
-  return `${value >= 0 ? '+' : '-'}$${Math.abs(value).toFixed(2)}`
-}
-
-function formatPercent(value: number) {
-  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
-}
-
 function WatchlistRow({ item, onAlert, onDetails, onRemove }: { item: WatchlistItem; onAlert: (item: WatchlistItem) => void; onDetails: (item: WatchlistItem) => void; onRemove: (item: WatchlistItem) => void }) {
   const { t } = useTranslation()
   return (
@@ -87,8 +76,8 @@ function WatchlistRow({ item, onAlert, onDetails, onRemove }: { item: WatchlistI
       </div>
       <div className={`watchlist-cell watchlist-change ${item.tone}`}>
         <span className="cell-label">{t('common.today')}</span>
-        <strong>{formatChange(item.change)}</strong>
-        <small>{formatPercent(item.changePercent)}</small>
+        <strong>{formatSignedCurrency(item.change)}</strong>
+        <small>{formatSignedPercent(item.changePercent)}</small>
       </div>
       <div className="watchlist-actions">
         <button className="details-button" onClick={() => onDetails(item)} type="button">{t('watchlist.stockDetails')} <Icon name="chevron-right" size={14} /></button>
@@ -101,7 +90,7 @@ function WatchlistRow({ item, onAlert, onDetails, onRemove }: { item: WatchlistI
 
 function StockDetails({ item, onClose }: { item: WatchlistItem; onClose: () => void }) {
   const { t } = useTranslation()
-  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="stock-details-title" aria-modal="true" className="stock-details-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label={t('watchlist.closeStockDetails')} className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="modal-stock-heading"><StockMark item={item} /><div><span>{item.exchange}</span><h2 id="stock-details-title">{item.symbol}</h2><p>{item.name}</p></div></div><div className="modal-price"><span>{t('watchlist.currentPrice')}</span><strong>{formatCurrency(item.price)}</strong><b className={item.tone}>{formatChange(item.change)} ({formatPercent(item.changePercent)})</b></div><div className="modal-detail-grid"><div><span>{t('watchlist.marketStatus')}</span><strong><i className="market-dot" /> {t('watchlist.open')}</strong></div><div><span>{t('watchlist.dayRange')}</span><strong>{formatCurrency(item.price * 0.97)} – {formatCurrency(item.price * 1.02)}</strong></div><div><span>{t('watchlist.weekRange')}</span><strong>{formatCurrency(item.price * 0.65)} – {formatCurrency(item.price * 1.28)}</strong></div><div><span>{t('watchlist.dataSource')}</span><strong>{t('common.simulated')}</strong></div></div><button className="modal-primary" onClick={onClose} type="button">{t('common.done')}</button></section></div>
+  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="stock-details-title" aria-modal="true" className="stock-details-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label={t('watchlist.closeStockDetails')} className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="modal-stock-heading"><StockMark item={item} /><div><span>{item.exchange}</span><h2 id="stock-details-title">{item.symbol}</h2><p>{item.name}</p></div></div><div className="modal-price"><span>{t('watchlist.currentPrice')}</span><strong>{formatCurrency(item.price)}</strong><b className={item.tone}>{formatSignedCurrency(item.change)} ({formatSignedPercent(item.changePercent)})</b></div><div className="modal-detail-grid"><div><span>{t('watchlist.marketStatus')}</span><strong><i className="market-dot" /> {t('watchlist.open')}</strong></div><div><span>{t('watchlist.dayRange')}</span><strong>{formatCurrency(item.price * 0.97)} – {formatCurrency(item.price * 1.02)}</strong></div><div><span>{t('watchlist.weekRange')}</span><strong>{formatCurrency(item.price * 0.65)} – {formatCurrency(item.price * 1.28)}</strong></div><div><span>{t('watchlist.dataSource')}</span><strong>{t('common.simulated')}</strong></div></div><button className="modal-primary" onClick={onClose} type="button">{t('common.done')}</button></section></div>
 }
 
 function AlertModal({ item, onClose, onSave }: { item: WatchlistItem; onClose: () => void; onSave: (threshold: string) => void }) {

@@ -1,4 +1,5 @@
 import { Sidebar } from '../components/layout/Sidebar'
+import { formatCurrency } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -119,11 +120,6 @@ type SummaryCardProps = {
 function SummaryCard({ detail, icon, label, tone, value }: SummaryCardProps) {
   const { t } = useTranslation()
   return <article className="summary-card"><div className={`summary-icon summary-icon-${tone}`}><Icon name={icon} size={17} /></div><p>{label}</p><strong>{value}</strong><span className="summary-detail"><b>{detail}</b> <span>{t('transactions.vsLast30Days')}</span></span></article>
-}
-
-const currencyFormatter = new Intl.NumberFormat('en-US', { currency: 'USD', maximumFractionDigits: 2, minimumFractionDigits: 2, style: 'currency' })
-function formatCurrency(value: number) {
-  return currencyFormatter.format(value)
 }
 
 function formatDateParts(isoDate: string, language: string) {

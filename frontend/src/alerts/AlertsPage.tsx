@@ -1,4 +1,5 @@
 import { Sidebar } from '../components/layout/Sidebar'
+import { formatCurrency, formatDate } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
@@ -75,10 +76,6 @@ function StockMark({ symbol }: { symbol: string }) {
   return <span aria-hidden="true" className={`stock-mark stock-mark-${symbol.toLowerCase()}`}>{mark}</span>
 }
 
-function formatCurrency(value: number) {
-  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
 function ConditionBadge({ condition }: { condition: AlertCondition }) {
   const { t } = useTranslation()
   return <span className={`condition-badge condition-${condition}`}><b>{condition === 'above' ? '↑' : '↓'}</b>{t(`alerts.conditions.${condition}`)}</span>
@@ -98,7 +95,7 @@ function AlertRow({ alert, onEdit, onToggle, onDelete }: { alert: PriceAlert; on
     <div className="alert-cell alert-number"><span className="cell-label">{t('common.targetPrice')}</span><strong>{formatCurrency(alert.targetPrice)}</strong></div>
     <div className="alert-cell alert-number"><span className="cell-label">{t('alerts.lastPrice')}</span><strong>{formatCurrency(alert.lastPrice)}</strong></div>
     <div className="alert-cell"><span className="cell-label">{t('common.status')}</span><StatusBadge status={alert.status} /></div>
-    <div className="alert-cell alert-date"><span className="cell-label">{t('common.created')}</span><span>{alert.createdAt}</span></div>
+    <div className="alert-cell alert-date"><span className="cell-label">{t('common.created')}</span><span>{formatDate(alert.createdAt)}</span></div>
     <div className="alert-actions"><button aria-label={t('alerts.editAlert', { symbol: alert.symbol })} className="table-action" onClick={() => onEdit(alert)} title={t('common.edit')} type="button"><Icon name="edit" size={14} /></button><button aria-label={toggleLabel} className={`table-action ${alert.status === 'active' ? 'action-disable' : 'action-enable'}`} onClick={() => onToggle(alert)} title={toggleLabel} type="button"><Icon name={alert.status === 'active' ? 'pause' : 'play'} size={14} /></button><button aria-label={t('alerts.deleteAlert', { symbol: alert.symbol })} className="table-action action-delete" onClick={() => onDelete(alert)} title={t('common.delete')} type="button"><Icon name="trash" size={14} /></button></div>
   </article>
 }
@@ -162,7 +159,7 @@ export default function AlertsPage() {
       setAlerts((current) => current.map((candidate) => candidate.id === modalAlert.id ? { ...candidate, ...asset, condition: draft.condition, targetPrice: draft.targetPrice } : candidate))
       showToast(t('alerts.alertUpdated', { symbol: draft.symbol }))
     } else {
-      const createdAlert: PriceAlert = { id: `alert-${Date.now()}`, ...asset, condition: draft.condition, targetPrice: draft.targetPrice, status: 'active', createdAt: 'Jun 4, 2026' }
+      const createdAlert: PriceAlert = { id: `alert-${Date.now()}`, ...asset, condition: draft.condition, targetPrice: draft.targetPrice, status: 'active', createdAt: '2026-06-04' }
       setAlerts((current) => [createdAlert, ...current])
       setStatusFilter('active')
       showToast(t('alerts.alertCreatedToast', { symbol: draft.symbol }))

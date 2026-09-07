@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
+import { formatCurrency, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { MarketShell } from './MarketShell'
 import { MarketIcon } from './marketIcons'
 import { type MarketStock } from './marketData'
@@ -45,13 +46,9 @@ const detailTabKeys: Record<DetailTab, string> = {
   'AI Insights': 'stockDetails.tabs.aiInsights',
 }
 
-function formatCurrency(value: number) {
-  return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
 function changeLabel(details: StockDetails, todayLabel = 'today') {
-  const sign = details.tone === 'positive' ? '+' : '-'
-  return `${sign}${formatCurrency(Math.abs(details.changeAmount))} (${details.changePercent}) ${todayLabel}`
+  const changePercent = Number.parseFloat(details.changePercent) * (details.tone === 'positive' ? 1 : -1)
+  return `${formatSignedCurrency(details.changeAmount)} (${formatSignedPercent(changePercent)}) ${todayLabel}`
 }
 
 function PriceChart({ details, range }: { details: StockDetails; range: ChartRange }) {
@@ -94,7 +91,7 @@ function PriceChart({ details, range }: { details: StockDetails; range: ChartRan
           return (
             <g key={`tick-${tick}`}>
               <line className="stock-chart-grid-line" x1={plotLeft} x2={width - plotRight} y1={y} y2={y} />
-              <text className="stock-chart-y-label" x="6" y={y + 4}>{formatCurrency(tick).replace('.00', '')}</text>
+              <text className="stock-chart-y-label" x="6" y={y + 4}>{formatCurrency(tick, undefined, 0)}</text>
             </g>
           )
         })}
@@ -355,7 +352,7 @@ function TradeTicket({ details, side, quantity, quantityError, orderType, limitP
       {limitPriceError && <p className="stock-form-error" id="stock-limit-price-error" role="alert">{limitPriceError}</p>}
       <div className="stock-trade-summary"><div><span>{t('stockDetails.estimatedPriceShort')}</span><strong>{estimatedPrice > 0 ? formatCurrency(estimatedPrice) : '—'}</strong></div><div><span>{t('stockDetails.estimatedTotalShort')}</span><strong>{estimatedPrice > 0 ? formatCurrency(estimatedTotal) : '—'}</strong></div></div>
       <button className={`stock-trade-submit ${isBuy ? 'stock-trade-submit-buy' : 'stock-trade-submit-sell'}`} type="submit">{t(isBuy ? 'stockDetails.placeBuyOrder' : 'stockDetails.placeSellOrder')}</button>
-      <div className="stock-cash-row"><span>{t('stockDetails.availableCashPaper')}</span><strong>$12,430.18</strong></div>
+      <div className="stock-cash-row"><span>{t('stockDetails.availableCashPaper')}</span><strong>{formatCurrency(12430.18)}</strong></div>
     </form>
   )
 }

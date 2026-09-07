@@ -1,4 +1,5 @@
 import { Sidebar } from '../components/layout/Sidebar'
+import { formatCurrency } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
@@ -160,7 +161,7 @@ export default function ProfilePage() {
           <div className="summary-details">
             <div><span><Icon name="activity" size={15} /> {t('profile.memberSince')}</span><strong>{t('profile.memberSinceValue')}</strong></div>
             <div><span><Icon name="activity" size={15} /> {t('profile.accountCreated')}</span><strong>{t('profile.accountCreatedValue')}</strong></div>
-            <div><span><Icon name="activity" size={15} /> {t('profile.initialCapital')}</span><strong>{profile.initialCapital}</strong></div>
+            <div><span><Icon name="activity" size={15} /> {t('profile.initialCapital')}</span><strong>{formatCurrency(profile.initialCapital)}</strong></div>
             <div><span>{t('profile.accountStatus')}</span><strong className="active-text">{t('profile.active')}</strong></div>
           </div>
           <div className="summary-actions">
