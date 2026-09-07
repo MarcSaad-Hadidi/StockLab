@@ -506,16 +506,17 @@ a {
 }
 
 .allocation-panel {
+  align-self: start;
   padding-inline: 18px;
 }
 
 .allocation-body {
   display: flex;
-  min-height: 182px;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: clamp(22px, 4vw, 43px);
-  padding: 12px 4px 0;
+  gap: 16px;
+  padding: 8px 0 0;
 }
 
 .donut {
@@ -556,6 +557,7 @@ a {
 
 .allocation-legend {
   display: grid;
+  flex: none;
   min-width: 129px;
   gap: 12px;
   margin: 0;
@@ -600,10 +602,12 @@ a {
 }
 
 .allocation-link {
-  display: inline-flex;
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
   align-items: center;
   gap: 4px;
-  margin: 2px 0 1px 44px;
+  margin: 10px auto 0;
   color: var(--blue);
   font-size: 9px;
   font-weight: 800;
@@ -788,18 +792,27 @@ tfoot td {
     grid-template-columns: minmax(0, 1.35fr) minmax(275px, 0.9fr);
   }
 
-  .allocation-body {
-    gap: 15px;
-  }
-
   .donut {
-    width: 126px;
-    height: 126px;
+    width: 108px;
+    height: 108px;
   }
 
   .donut::before {
-    width: 89px;
-    height: 89px;
+    width: 76px;
+    height: 76px;
+  }
+
+  .allocation-legend {
+    width: 112px;
+    min-width: 112px;
+  }
+
+  .allocation-legend li {
+    grid-template-columns: 8px minmax(0, 1fr) auto;
+  }
+
+  .allocation-legend strong {
+    white-space: nowrap;
   }
 }
 
@@ -819,15 +832,6 @@ tfoot td {
 
   .overview-grid {
     grid-template-columns: 1fr;
-  }
-
-  .allocation-body {
-    justify-content: flex-start;
-    padding-left: 12%;
-  }
-
-  .allocation-link {
-    margin-left: 12%;
   }
 
   .search-box {
@@ -901,17 +905,6 @@ tfoot td {
   .performance-stats {
     grid-template-columns: repeat(2, 1fr);
     row-gap: 12px;
-  }
-
-  .allocation-body {
-    justify-content: center;
-    padding-left: 0;
-  }
-
-  .allocation-link {
-    display: flex;
-    justify-content: center;
-    margin-left: 0;
   }
 
   .table-actions button:last-child {
