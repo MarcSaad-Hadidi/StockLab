@@ -1,12 +1,13 @@
 using StockLab.Application.Interfaces;
 using StockLab.Infrastructure.MarketData;
 using StockLab.Api.Middleware;
+using StockLab.Api.Validation;
 
 var builder = WebApplication.CreateBuilder(args);
 
 const string frontendCorsPolicy = "Frontend";
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().ConfigureApiBehaviorOptions(ApiValidation.Configure);
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
 builder.Services.AddSingleton<IMarketDataProvider, MockMarketDataProvider>();

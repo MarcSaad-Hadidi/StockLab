@@ -19,3 +19,8 @@ GET {{StockLab.Api_HostAddress}}/api/stocks/INVALID/quote
 Accept: application/json
 
 ###
+
+GET {{StockLab.Api_HostAddress}}/api/stocks/%20/quote
+Accept: application/json
+
+###

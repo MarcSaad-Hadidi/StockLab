@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 using StockLab.Api.DTOs;
 using StockLab.Application.Interfaces;
 
@@ -12,18 +13,13 @@ public sealed class StocksController(IMarketDataProvider marketDataProvider) : C
     /// <summary>Gets the latest available quote for a stock symbol.</summary>
     [HttpGet("{symbol}/quote")]
     [ProducesResponseType(typeof(StockQuoteResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiValidationErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<StockQuoteResponse>> GetQuoteAsync(
-        [FromRoute] string? symbol,
+        [FromRoute, Required] string symbol,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(symbol))
-        {
-            return BadRequest(new ApiErrorResponse("invalid_symbol", "A nonblank stock symbol is required."));
-        }
-
         var normalizedSymbol = symbol.Trim().ToUpperInvariant();
         var quote = await marketDataProvider.GetQuoteAsync(normalizedSymbol, cancellationToken);
         if (quote is null)
