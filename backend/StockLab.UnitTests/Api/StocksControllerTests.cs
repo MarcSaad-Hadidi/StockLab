@@ -47,10 +47,30 @@ public sealed class StocksControllerTests
         Assert.Equal(cancellation.Token, exception.CancellationToken);
     }
 
+    [Fact]
+    public async Task Search_forwards_request_cancellation_token()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var controller = new StocksController(new MockMarketDataProvider());
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => controller.SearchStocksAsync("AAPL", cancellation.Token));
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Search_provider_failure_propagates_to_global_handler()
+    {
+        var exception = new InvalidOperationException("provider detail");
+        var controller = new StocksController(new ThrowingProvider(exception));
+        Assert.Same(exception, await Assert.ThrowsAsync<InvalidOperationException>(
+            () => controller.SearchStocksAsync("AAPL", default)));
+    }
+
     private sealed class ThrowingProvider(Exception exception) : IMarketDataProvider
     {
         public Task<StockQuote?> GetQuoteAsync(string symbol, CancellationToken cancellationToken = default) => Task.FromException<StockQuote?>(exception);
-        public Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(string query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(string query, CancellationToken cancellationToken = default) => Task.FromException<IReadOnlyList<StockSearchResult>>(exception);
         public Task<StockHistory?> GetHistoryAsync(StockHistoryRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 }
