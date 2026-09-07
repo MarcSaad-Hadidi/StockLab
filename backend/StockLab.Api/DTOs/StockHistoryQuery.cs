@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using StockLab.Application.DTOs.MarketData;
+using StockLab.Api.Validation;
 
 namespace StockLab.Api.DTOs;
 
@@ -9,12 +10,15 @@ namespace StockLab.Api.DTOs;
 public sealed class StockHistoryQuery : IValidatableObject
 {
     [FromQuery(Name = "from"), BindRequired, Required]
+    [ModelBinder(BinderType = typeof(HistoryParameterModelBinder))]
     public DateTimeOffset? From { get; init; }
 
     [FromQuery(Name = "to"), BindRequired, Required]
+    [ModelBinder(BinderType = typeof(HistoryParameterModelBinder))]
     public DateTimeOffset? To { get; init; }
 
     [FromQuery(Name = "interval"), BindRequired, Required, EnumDataType(typeof(StockHistoryInterval))]
+    [ModelBinder(BinderType = typeof(HistoryParameterModelBinder))]
     public StockHistoryInterval? Interval { get; init; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)

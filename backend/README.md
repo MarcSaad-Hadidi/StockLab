@@ -305,3 +305,5 @@ Request cancellation is forwarded unchanged to the provider.
 For a partial period, use from=2026-08-25T13:30:00Z and to=2026-08-27T13:30:00Z
 (two bars). September 1 to 2, 2026 returns an empty history. OpenAPI in Development
 lists symbol/from/to/interval, the response DTO with bars, and 200/400/404/500 responses.
+
+History bounds require an explicit UTC suffix (Z or +00:00). Each history parameter accepts one value only; composite intervals such as Minute,Hour or 1,2 are rejected with validation_error before the provider is invoked. A single interval name or defined numeric value remains supported.

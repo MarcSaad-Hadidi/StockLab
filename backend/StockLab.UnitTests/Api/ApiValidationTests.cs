@@ -201,6 +201,11 @@ public sealed class ApiValidationTests : IDisposable
     [InlineData("AAPL", "from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00%2B02:00&interval=Day")]
     [InlineData("AAPL", "from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=999")]
     [InlineData("AAPL", "from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=invalid")]
+    [InlineData("AAPL", "from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=Minute,Hour")]
+    [InlineData("AAPL", "from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=1,2")]
+    [InlineData("AAPL", "from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=Day&interval=Hour")]
+    [InlineData("AAPL", "from=2026-08-24T13:30:00&to=2026-08-29T13:30:00Z&interval=Day")]
+    [InlineData("AAPL", "from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00&interval=Day")]
     public async Task Invalid_history_is_rejected_before_provider(string symbol, string query)
     {
         using var response = await client.GetAsync($"/api/stocks/{symbol}/history?{query}");
@@ -232,6 +237,18 @@ public sealed class ApiValidationTests : IDisposable
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("unsupported_operation", json.RootElement.GetProperty("error").GetString());
+        Assert.Equal(1, provider.HistoryCalls);
+    }
+    [Theory]
+    [InlineData("from=2026-08-24T13:30:00%2B00:00&to=2026-08-29T13:30:00%2B00:00&interval=Day")]
+    [InlineData("from=2026-08-24T13:30:00.000Z&to=2026-08-29T13:30:00.000Z&interval=3")]
+    public async Task Explicit_utc_bounds_and_single_intervals_remain_supported(string query)
+    {
+        using var response = await client.GetAsync($"/api/stocks/AAPL/history?{query}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("Day", json.RootElement.GetProperty("interval").GetString());
+        Assert.Equal(5, json.RootElement.GetProperty("bars").GetArrayLength());
         Assert.Equal(1, provider.HistoryCalls);
     }
     private sealed class CountingProvider : IMarketDataProvider
