@@ -347,3 +347,5 @@ does not share in-flight tasks or implement request deduplication (#31).
 Permanent cache tests use a counting provider and MemoryCache's native controllable
 clock to verify call counts and expiration without delays. HTTP checks verify the
 public contracts, not cache hits.
+
+MarketDataCache:SizeLimit defaults to 8388608 accounting units (approximately 8 MiB). A dedicated keyed MemoryCache enforces this positive budget. Each entry accounts for fixed overhead, UTF-16 key strings and result strings/collection elements. This is an estimated retained-size budget, not an exact CLR heap limit. Empty results still consume units; oversized entries are returned without being cached. Other application caches are unaffected.

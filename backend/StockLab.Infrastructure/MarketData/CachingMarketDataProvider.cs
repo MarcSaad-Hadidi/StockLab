@@ -33,7 +33,7 @@ public sealed class CachingMarketDataProvider : IMarketDataProvider
     {
         cancellationToken.ThrowIfCancellationRequested();
         var normalized = Normalize(symbol);
-        return GetOrLoadAsync((keyNamespace, "quote", normalized), quoteTtl,
+        return GetOrLoadAsync((keyNamespace, "quote", normalized), normalized.Length, quoteTtl,
             () => inner.GetQuoteAsync(normalized, cancellationToken), cancellationToken);
     }
 
@@ -44,7 +44,7 @@ public sealed class CachingMarketDataProvider : IMarketDataProvider
         var normalized = Normalize(query);
         // Snapshot collections: callers and providers must not mutate a cached result.
         return (await GetOrLoadAsync<IReadOnlyList<StockSearchResult>>(
-            (keyNamespace, "search", normalized), searchTtl, async () =>
+            (keyNamespace, "search", normalized), normalized.Length, searchTtl, async () =>
                 Array.AsReadOnly((await inner.SearchStocksAsync(normalized, cancellationToken)).ToArray()),
             cancellationToken))!;
     }
@@ -60,14 +60,14 @@ public sealed class CachingMarketDataProvider : IMarketDataProvider
             || request.FromUtc >= request.ToUtc || !Enum.IsDefined(request.Interval))
             throw new ArgumentException("History requires UTC bounds, from < to and a defined interval.", nameof(request));
 
-        return GetOrLoadAsync((keyNamespace, "history", normalized), historyTtl, async () =>
+        return GetOrLoadAsync((keyNamespace, "history", normalized), normalized.Symbol.Length, historyTtl, async () =>
         {
             var history = await inner.GetHistoryAsync(normalized, cancellationToken);
             return history is null ? null : history with { Bars = Array.AsReadOnly(history.Bars.ToArray()) };
         }, cancellationToken);
     }
 
-    private async Task<T?> GetOrLoadAsync<T>(object key, TimeSpan ttl, Func<Task<T?>> load,
+    private async Task<T?> GetOrLoadAsync<T>(object key, int keyLength, TimeSpan ttl, Func<Task<T?>> load,
         CancellationToken cancellationToken) where T : class
     {
         if (cache.TryGetValue<T>(key, out var cached))
@@ -77,10 +77,26 @@ public sealed class CachingMarketDataProvider : IMarketDataProvider
         cancellationToken.ThrowIfCancellationRequested();
         // Unknown symbols are not negatively cached. Valid empty collections are cached.
         if (result is not null)
-            cache.Set(key, result, ttl);
+            cache.Set(key, result, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = ttl,
+                Size = 512L + 2L * keyLength + EstimatePayloadSize(result)
+            });
         return result;
     }
 
+    // Budget units approximate retained bytes, including UTF-16 strings and collection elements.
+    // This is a bounded accounting budget, not an exact measurement of the CLR heap.
+    private static long EstimatePayloadSize(object result) => result switch
+    {
+        StockQuote quote => 128L + TextSize(quote.Symbol) + TextSize(quote.Currency),
+        IReadOnlyList<StockSearchResult> stocks => stocks.Sum(stock =>
+            128L + TextSize(stock.Symbol) + TextSize(stock.CompanyName) + TextSize(stock.Exchange) + TextSize(stock.Currency)),
+        StockHistory history => 128L + TextSize(history.Symbol) + TextSize(history.Currency) + 128L * history.Bars.Count,
+        _ => throw new InvalidOperationException("Unsupported cache result type.")
+    };
+
+    private static long TextSize(string? value) => value is null ? 0 : 24L + 2L * value.Length;
     private static string Normalize(string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value);

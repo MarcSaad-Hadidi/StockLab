@@ -10,15 +10,21 @@ const string frontendCorsPolicy = "Frontend";
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(ApiValidation.Configure);
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
-builder.Services.AddMemoryCache();
 builder.Services.AddOptions<MarketDataCacheOptions>()
     .Bind(builder.Configuration.GetSection(MarketDataCacheOptions.SectionName))
     .Validate(options => options.HasValidTtls(), "Cache TTLs must be positive and at most 365 days.")
+    .Validate(options => options.SizeLimit > 0, "Cache SizeLimit must be positive.")
     .ValidateOnStart();
+// A dedicated cache avoids imposing size accounting on unrelated application caches.
+builder.Services.AddKeyedSingleton<Microsoft.Extensions.Caching.Memory.IMemoryCache>("MarketData", (services, _) =>
+    new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions
+    {
+        SizeLimit = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<MarketDataCacheOptions>>().Value.SizeLimit
+    }));
 builder.Services.AddSingleton<MockMarketDataProvider>();
 builder.Services.AddSingleton<IMarketDataProvider>(services => new CachingMarketDataProvider(
     services.GetRequiredService<MockMarketDataProvider>(),
-    services.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>(),
+    services.GetRequiredKeyedService<Microsoft.Extensions.Caching.Memory.IMemoryCache>("MarketData"),
     services.GetRequiredService<Microsoft.Extensions.Options.IOptions<MarketDataCacheOptions>>()));
 builder.Services.AddCors(options =>
 {

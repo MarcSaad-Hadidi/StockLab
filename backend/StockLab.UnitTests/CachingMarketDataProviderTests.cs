@@ -18,7 +18,7 @@ public sealed class CachingMarketDataProviderTests : IDisposable
 
     public CachingMarketDataProviderTests()
     {
-        memory = new MemoryCache(new MemoryCacheOptions { Clock = clock });
+        memory = new MemoryCache(new MemoryCacheOptions { Clock = clock, SizeLimit = 8 * 1024 * 1024 });
         cached = new(provider, memory, Options.Create(new MarketDataCacheOptions
         {
             QuoteTtl = TimeSpan.FromSeconds(10), SearchTtl = TimeSpan.FromSeconds(20), HistoryTtl = TimeSpan.FromSeconds(30)
@@ -174,6 +174,31 @@ public sealed class CachingMarketDataProviderTests : IDisposable
         Assert.Equal(1, other.Calls);
     }
 
+    [Fact]
+    public async Task Distinct_empty_searches_cannot_grow_cache_beyond_budget()
+    {
+        using var bounded = new MemoryCache(new MemoryCacheOptions { SizeLimit = 4096 });
+        var cache = new CachingMarketDataProvider(provider, bounded, Options.Create(new MarketDataCacheOptions()));
+        for (var i = 0; i < 100; i++)
+        {
+            Assert.Empty(await cache.SearchStocksAsync($"no-match-{i}"));
+            // Every retained entry accounts for at least 512 units, even with no results.
+            Assert.InRange(bounded.Count, 0, 8);
+        }
+        Assert.Equal(100, provider.Calls);
+    }
+
+    [Fact]
+    public async Task Oversized_key_is_served_but_not_retained()
+    {
+        using var bounded = new MemoryCache(new MemoryCacheOptions { SizeLimit = 4096 });
+        var cache = new CachingMarketDataProvider(provider, bounded, Options.Create(new MarketDataCacheOptions()));
+        var query = new string('z', 5000);
+        Assert.Empty(await cache.SearchStocksAsync(query));
+        Assert.Empty(await cache.SearchStocksAsync(query));
+        Assert.Equal(0, bounded.Count);
+        Assert.Equal(2, provider.Calls);
+    }
     public void Dispose() => memory.Dispose();
 
     // MemoryCache's native clock hook makes expiration tests deterministic without delays.
