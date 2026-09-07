@@ -132,12 +132,35 @@ The response contains only `symbol`, `price`, `change`, `changePercent` and `vol
 Financial values are JSON numbers; unavailable optional values remain null.
 Symbols are trimmed and uppercased. AAPL, MSFT and NVDA return 200 with simulated
 fixture quotes. Unknown symbols return 404 with `error: stock_not_found` and a
-message. Blank symbols reaching the action, or argument errors from the provider,
-return 400 with `error: invalid_symbol`. A URL missing the symbol segment does not
-match this route and returns 404. Cancellation is allowed to propagate.
+message. Blank symbols reaching the action return 400 with `error: invalid_symbol`.
+Provider exceptions propagate to the global middleware. A URL missing the symbol
+segment does not match this route and returns 404.
 
-This route and its 200/400/404 response schemas appear in Development OpenAPI.
+This route and its 200/400/404/500 response schemas appear in Development OpenAPI.
 No search/history HTTP endpoints or frontend integration are included.
+
+## Global exception handling
+
+`StockLab.Api/Middleware/ExceptionHandlingMiddleware.cs` wraps the HTTP pipeline
+in every environment, including Development. Public errors use `ApiErrorResponse`
+with the existing JSON shape `{ "error": "code", "message": "safe message" }`.
+
+- `ArgumentException` (including `ArgumentOutOfRangeException`) and
+  `NotSupportedException`: 400, `invalid_request`, `The request is invalid.`
+- Unexpected exceptions: 500, `internal_server_error`, `An unexpected error occurred.`
+- `OperationCanceledException` with the HTTP request token cancelled: no response
+  body is written; status 499 is set if headers have not been sent. A disconnected
+  client generally cannot receive that status. Other cancellations are treated as
+  unexpected failures, rather than silently hidden as client disconnects.
+- An already-started response cannot be replaced safely: unexpected exceptions
+  propagate to the host, without appending an error document.
+
+Unexpected failures are logged at Error with exception type and request trace ID.
+Exception objects, messages, stacks, request values and credentials are not logged
+by this middleware. Expected invalid input and client cancellations are not logged
+as server errors. Normal 404 results remain decisions of the controller.
+This does not replace ASP.NET Core model validation or add a global validation
+policy; that belongs to issue #15.
 
 ## Health and OpenAPI
 
@@ -183,8 +206,10 @@ Run all backend unit tests from the repository root with one command:
 dotnet test backend/StockLab.sln
 ```
 
-`StockLab.UnitTests` uses xUnit and the .NET test SDK, references Application and
-Infrastructure, and groups tests by domain under `MarketData/`. Production projects
+`StockLab.UnitTests` uses xUnit and the .NET test SDK, references Api, Application and
+Infrastructure, and groups tests under `Api/` and `MarketData/`. API tests cover
+exception JSON, safe logging, client cancellation, started responses and the quote
+controller's existing results. No deliberately failing endpoint is added. Production projects
 do not reference the test project. Initial tests exercise the existing local mock:
 quotes, searches, historical date boundaries and consistency, invalid input and
 cancellation. They use fixed fixture dates without network calls, credentials,
