@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useMemo, useState } from 'react'
 import { MarketShell } from './MarketShell'
 import { MarketIcon } from './marketIcons'
@@ -17,13 +18,22 @@ type MarketPageProps = {
 
 const filterOptions: MarketFilter[] = ['All', 'Stocks', 'ETFs', 'Indices', 'Crypto']
 const resultsPerPage = 10
-const filterNounByFilter: Record<MarketFilter, string> = {
-  All: 'Stocks',
-  Stocks: 'Stocks',
-  ETFs: 'ETFs',
-  Indices: 'Indices',
-  Crypto: 'Crypto',
-  'US Market': 'US Market',
+const filterLabelKeys: Record<MarketFilter, string> = {
+  All: 'market.filters.all',
+  Stocks: 'market.filters.stocks',
+  ETFs: 'market.filters.etfs',
+  Indices: 'market.filters.indices',
+  Crypto: 'market.filters.crypto',
+  'US Market': 'market.filters.usMarket',
+}
+
+const filterNounKeys: Record<MarketFilter, string> = {
+  All: 'market.filterNouns.stocks',
+  Stocks: 'market.filterNouns.stocks',
+  ETFs: 'market.filterNouns.etfs',
+  Indices: 'market.filterNouns.indices',
+  Crypto: 'market.filterNouns.crypto',
+  'US Market': 'market.filterNouns.usMarket',
 }
 
 function changeLabel(stock: MarketStock) {
@@ -43,11 +53,12 @@ function MarketOverviewCard({
   onViewAll: () => void
   tone: 'popular' | 'positive' | 'negative'
 }) {
+  const { t } = useTranslation()
   return (
     <section aria-labelledby={`${title.toLowerCase().replaceAll(' ', '-')}-title`} className={`market-overview-card market-overview-card-${tone}`}>
       <div className="market-overview-heading">
         <h2 id={`${title.toLowerCase().replaceAll(' ', '-')}-title`}>{title}</h2>
-        <button className="market-view-all" type="button" onClick={onViewAll}>View all</button>
+        <button className="market-view-all" type="button" onClick={onViewAll}>{t('common.viewAll')}</button>
       </div>
       <div className="market-overview-list">
         {stocks.map((stock) => (
@@ -79,10 +90,11 @@ function SearchResultRow({
   onOpenStock: (symbol: string) => void
   onToggleFavorite: (symbol: string) => void
 }) {
+  const { t } = useTranslation()
   return (
     <tr>
       <td>
-        <button aria-label={`Open ${stock.symbol} stock details`} className="market-symbol-cell" type="button" onClick={() => onOpenStock(stock.symbol)}>
+        <button aria-label={t('market.openStockDetails', { symbol: stock.symbol })} className="market-symbol-cell" type="button" onClick={() => onOpenStock(stock.symbol)}>
           <StockLogo symbol={stock.symbol} />
           <strong>{stock.symbol}</strong>
         </button>
@@ -97,7 +109,7 @@ function SearchResultRow({
       <td className="market-number-cell">{stock.marketCap}</td>
       <td className="market-favorite-cell">
         <button
-          aria-label={`${favorite ? 'Remove' : 'Add'} ${stock.symbol} ${favorite ? 'from' : 'to'} favorites`}
+          aria-label={favorite ? t('market.removeFavorite', { symbol: stock.symbol }) : t('market.addFavorite', { symbol: stock.symbol })}
           aria-pressed={favorite}
           className={`market-favorite-button ${favorite ? 'market-favorite-button-active' : ''}`}
           type="button"
@@ -111,6 +123,7 @@ function SearchResultRow({
 }
 
 export function MarketPage({ onOpenStock }: MarketPageProps) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState<MarketFilter>('All')
   const [currentPage, setCurrentPage] = useState(1)
@@ -118,11 +131,11 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
   const [favoriteOnly, setFavoriteOnly] = useState(false)
   const sections = useMemo(() => getMarketSections(marketStocks, activeFilter), [activeFilter])
-  const filterNoun = filterNounByFilter[activeFilter]
+  const filterNoun = t(filterNounKeys[activeFilter])
   const overviewTitles = {
-    popular: `Popular ${filterNoun}`,
-    gainers: activeFilter === 'All' || activeFilter === 'Stocks' || activeFilter === 'US Market' ? 'Top Gainers' : `Top ${filterNoun} Gainers`,
-    losers: activeFilter === 'All' || activeFilter === 'Stocks' || activeFilter === 'US Market' ? 'Top Losers' : `Top ${filterNoun} Losers`,
+    popular: t('market.popular', { asset: filterNoun }),
+    gainers: activeFilter === 'All' || activeFilter === 'Stocks' || activeFilter === 'US Market' ? t('market.topGainers') : t('market.topAssetGainers', { asset: filterNoun }),
+    losers: activeFilter === 'All' || activeFilter === 'Stocks' || activeFilter === 'US Market' ? t('market.topLosers') : t('market.topAssetLosers', { asset: filterNoun }),
   }
 
   const filteredResults = useMemo(() => {
@@ -165,16 +178,16 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
   return (
     <MarketShell>
       <section aria-labelledby="market-title" className="market-intro">
-        <h1 id="market-title">Market</h1>
-        <p>Explore stocks, ETFs and discover investment opportunities.</p>
+        <h1 id="market-title">{t('market.title')}</h1>
+        <p>{t('market.subtitle')}</p>
       </section>
 
       <label className="market-search-bar">
         <MarketIcon name="search" size={17} />
-        <span className="market-sr-only">Search for stocks, companies or keywords</span>
+        <span className="market-sr-only">{t('market.searchLabel')}</span>
         <input
-          aria-label="Search for stocks, companies or keywords"
-          placeholder="Search for stocks, companies or keywords..."
+          aria-label={t('market.searchLabel')}
+          placeholder={t('market.searchPlaceholder')}
           type="search"
           value={query}
           onChange={(event) => {
@@ -185,7 +198,7 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
         <MarketIcon name="search" size={16} />
       </label>
 
-      <div className="market-filter-row" aria-label="Market filters">
+      <div className="market-filter-row" aria-label={t('market.filtersLabel')}>
         <div className="market-filter-tabs">
           {filterOptions.map((filter) => (
             <button
@@ -198,7 +211,7 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
                 setCurrentPage(1)
               }}
             >
-              {filter}
+              {t(filterLabelKeys[filter])}
             </button>
           ))}
         </div>
@@ -212,7 +225,7 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
               setCurrentPage(1)
             }}
           >
-            <span>US Market</span>
+            <span>{t('market.filters.usMarket')}</span>
             <MarketIcon name="chevronDown" size={13} />
           </button>
           <div className="market-more-filter-wrap">
@@ -222,11 +235,11 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
               type="button"
               onClick={() => setMoreFiltersOpen((open) => !open)}
             >
-              <span>More Filters</span>
+              <span>{t('market.moreFilters')}</span>
               <MarketIcon name="filter" size={14} />
             </button>
             {moreFiltersOpen && (
-              <div aria-label="More filters" className="market-more-filter-menu" role="dialog">
+              <div aria-label={t('market.moreFilters')} className="market-more-filter-menu" role="dialog">
                 <label className="market-checkbox-row">
                   <input
                     checked={favoriteOnly}
@@ -236,9 +249,9 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
                       setCurrentPage(1)
                     }}
                   />
-                  <span>Only show favorites</span>
+                  <span>{t('market.onlyFavorites')}</span>
                 </label>
-                <button className="market-clear-filters" type="button" onClick={clearFilters}>Clear filters</button>
+                <button className="market-clear-filters" type="button" onClick={clearFilters}>{t('common.clearFilters')}</button>
               </div>
             )}
           </div>
@@ -253,13 +266,13 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
 
       <section aria-labelledby="search-results-title" className="market-results-panel">
         <div className="market-results-heading">
-          <h2 id="search-results-title">Search Results</h2>
+          <h2 id="search-results-title">{t('market.searchResults')}</h2>
           <div className="market-results-meta">
-            <span>Showing {pagination.startIndex}-{pagination.endIndex} of {filteredResults.length} results</span>
+            <span>{t('market.showingResults', { start: pagination.startIndex, end: pagination.endIndex, count: filteredResults.length })}</span>
             {pagination.totalPages > 1 && (
-              <div aria-label="Search results pages" className="market-pagination">
+              <div aria-label={t('market.resultsPages')} className="market-pagination">
                 <button
-                  aria-label="Previous results page"
+                  aria-label={t('common.previousPage')}
                   className="market-page-arrow"
                   disabled={pagination.currentPage === 1}
                   type="button"
@@ -270,7 +283,7 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
                 {Array.from({ length: pagination.totalPages }, (_, index) => index + 1).map((page) => (
                   <button
                     aria-current={page === pagination.currentPage ? 'page' : undefined}
-                    aria-label={`Go to results page ${page}`}
+                    aria-label={t('market.goToResultsPage', { page })}
                     className={`market-page-button ${page === pagination.currentPage ? 'market-page-button-active' : ''}`}
                     key={page}
                     type="button"
@@ -280,7 +293,7 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
                   </button>
                 ))}
                 <button
-                  aria-label="Next results page"
+                  aria-label={t('common.nextPage')}
                   className="market-page-arrow"
                   disabled={pagination.currentPage === pagination.totalPages}
                   type="button"
@@ -298,12 +311,12 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
             <table className="market-results-table">
               <thead>
                 <tr>
-                  <th scope="col">Symbol</th>
-                  <th scope="col">Company</th>
-                  <th scope="col">Price</th>
-                  <th scope="col">Daily Change</th>
-                  <th scope="col">Market Cap</th>
-                  <th scope="col"><span className="market-sr-only">Favorite</span></th>
+                  <th scope="col">{t('market.columns.symbol')}</th>
+                  <th scope="col">{t('market.columns.company')}</th>
+                  <th scope="col">{t('market.columns.price')}</th>
+                  <th scope="col">{t('market.columns.dailyChange')}</th>
+                  <th scope="col">{t('market.columns.marketCap')}</th>
+                  <th scope="col"><span className="market-sr-only">{t('market.columns.favorite')}</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -322,8 +335,8 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
         ) : (
           <div className="market-empty-state">
             <MarketIcon name="search" size={22} />
-            <strong>No stocks found</strong>
-            <p>Try another symbol, company name or filter.</p>
+            <strong>{t('market.noStocksFound')}</strong>
+            <p>{t('market.noStocksHint')}</p>
           </div>
         )}
       </section>

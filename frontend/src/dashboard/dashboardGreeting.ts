@@ -1,6 +1,12 @@
-export function getTimeBasedGreeting(date = new Date(), name?: string): string {
+export type GreetingPeriod = 'morning' | 'afternoon' | 'evening'
+
+export function getGreetingPeriod(date = new Date()): GreetingPeriod {
   const hour = date.getHours()
-  const period = hour < 5 ? 'Good evening' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  return hour < 5 ? 'evening' : hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening'
+}
+
+export function getTimeBasedGreeting(date = new Date(), name?: string): string {
+  const period = `Good ${getGreetingPeriod(date)}`
   const normalizedName = name?.trim()
   return normalizedName ? `${period}, ${normalizedName}` : period
 }

@@ -8,11 +8,14 @@
     "build": "tsc -b && vite build",
     "build:dashboard": "tsc -b && vite build --config vite.dashboard.config.ts",
     "lint": "eslint .",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
+    "i18next": "^26.4.2",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "react-i18next": "^17.0.13"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

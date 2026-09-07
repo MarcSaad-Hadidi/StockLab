@@ -1,10 +1,11 @@
 import { routeFor } from '../navigation/routes'
-import { useState } from 'react'
+import { LanguageSelector } from '../components/LanguageSelector'
+import { useTranslation } from 'react-i18next'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import './register.css'
 
 type FieldErrors = Partial<Record<'name' | 'email' | 'password' | 'confirmPassword', string>>
-type Language = 'fr' | 'en'
 
 function Icon({ name }: { name: 'user' | 'mail' | 'lock' | 'eye' | 'eyeOff' | 'gift' | 'google' }) {
   if (name === 'google') {
@@ -35,16 +36,14 @@ function Brand() {
 }
 
 export default function RegisterPage() {
-  const [language, setLanguage] = useState<Language>('fr')
+  const { i18n, t } = useTranslation()
+  useEffect(() => {
+    document.title = `${t('register.title')} | StockLab`
+  }, [i18n.language, t])
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [submitted, setSubmitted] = useState(false)
-  const copy = language === 'fr' ? {
-    title: 'Créez votre compte', subtitle: 'Rejoignez StockLab et commencez à investir', nameLabel: 'Nom complet', namePlaceholder: 'Entrez votre nom complet', emailLabel: 'Adresse e-mail', emailPlaceholder: 'vous@exemple.com', passwordLabel: 'Mot de passe', passwordPlaceholder: 'Créez un mot de passe', confirmLabel: 'Confirmer le mot de passe', confirmPlaceholder: 'Confirmez votre mot de passe', capitalTitle: 'Capital virtuel offert', capitalLine: 'Commencez avec 100 000 $ pour vos simulations.', create: 'Créer un compte', divider: 'ou continuer avec', google: 'S’inscrire avec Google', loginPrompt: 'Vous avez déjà un compte ?', loginLink: 'Se connecter', success: 'Vos informations sont prêtes à être envoyées.', errors: { name: 'Veuillez saisir votre nom complet.', email: 'Veuillez saisir votre adresse e-mail.', emailInvalid: 'Veuillez saisir une adresse valide.', password: 'Créez un mot de passe.', passwordShort: '8 caractères minimum.', confirm: 'Confirmez votre mot de passe.', mismatch: 'Les mots de passe diffèrent.' }, showPassword: 'Afficher le mot de passe', hidePassword: 'Masquer le mot de passe', showConfirmation: 'Afficher la confirmation', hideConfirmation: 'Masquer la confirmation', languageLabel: 'Choisir la langue',
-  } : {
-    title: 'Create your account', subtitle: 'Join StockLab and start your investing journey', nameLabel: 'Full name', namePlaceholder: 'Enter your full name', emailLabel: 'Email address', emailPlaceholder: 'you@example.com', passwordLabel: 'Password', passwordPlaceholder: 'Create a password', confirmLabel: 'Confirm password', confirmPlaceholder: 'Confirm your password', capitalTitle: 'Virtual capital included', capitalLine: 'Start with $100,000 for paper trading.', create: 'Create account', divider: 'or continue with', google: 'Sign up with Google', loginPrompt: 'Already have an account?', loginLink: 'Sign in', success: 'Your details are ready to submit.', errors: { name: 'Please enter your full name.', email: 'Please enter your email address.', emailInvalid: 'Please enter a valid email address.', password: 'Please create a password.', passwordShort: 'Use at least 8 characters.', confirm: 'Please confirm your password.', mismatch: 'Passwords do not match.' }, showPassword: 'Show password', hidePassword: 'Hide password', showConfirmation: 'Show confirmation', hideConfirmation: 'Hide confirmation', languageLabel: 'Choose language',
-  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -55,13 +54,13 @@ export default function RegisterPage() {
     const confirmPassword = String(form.get('confirmPassword') ?? '')
     const nextErrors: FieldErrors = {}
 
-    if (!name) nextErrors.name = copy.errors.name
-    if (!email) nextErrors.email = copy.errors.email
-    else if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = copy.errors.emailInvalid
-    if (!password) nextErrors.password = copy.errors.password
-    else if (password.length < 8) nextErrors.password = copy.errors.passwordShort
-    if (!confirmPassword) nextErrors.confirmPassword = copy.errors.confirm
-    else if (confirmPassword !== password) nextErrors.confirmPassword = copy.errors.mismatch
+    if (!name) nextErrors.name = t('register.errors.name')
+    if (!email) nextErrors.email = t('register.errors.email')
+    else if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = t('register.errors.emailInvalid')
+    if (!password) nextErrors.password = t('register.errors.password')
+    else if (password.length < 8) nextErrors.password = t('register.errors.passwordShort')
+    if (!confirmPassword) nextErrors.confirmPassword = t('register.errors.confirm')
+    else if (confirmPassword !== password) nextErrors.confirmPassword = t('register.errors.mismatch')
 
     setErrors(nextErrors)
     setSubmitted(Object.keys(nextErrors).length === 0)
@@ -84,23 +83,20 @@ export default function RegisterPage() {
         </svg>
 
         <section className="register-card" aria-labelledby="register-heading">
-          <div className="card-topline"><Brand /><div className="language-switch" role="group" aria-label={copy.languageLabel}>
-            <button type="button" className={language === 'fr' ? 'active' : ''} aria-pressed={language === 'fr'} onClick={() => setLanguage('fr')}>FR</button>
-            <button type="button" className={language === 'en' ? 'active' : ''} aria-pressed={language === 'en'} onClick={() => setLanguage('en')}>EN</button>
-          </div></div>
-          <header className="card-heading"><h1 id="register-heading">{copy.title}</h1><p>{copy.subtitle}</p></header>
+          <div className="card-topline"><Brand /><LanguageSelector /></div>
+          <header className="card-heading"><h1 id="register-heading">{t('register.title')}</h1><p>{t('register.subtitle')}</p></header>
           <form className="register-form" onSubmit={handleSubmit} noValidate>
-            <div className="field-group"><label htmlFor="name">{copy.nameLabel}</label><div className={`input-wrap ${errors.name ? 'has-error' : ''}`}><Icon name="user" /><input id="name" name="name" type="text" placeholder={copy.namePlaceholder} autoComplete="name" aria-invalid={Boolean(errors.name)} /></div>{errors.name && <p className="field-error">{errors.name}</p>}</div>
-            <div className="field-group"><label htmlFor="email">{copy.emailLabel}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={copy.emailPlaceholder} autoComplete="email" aria-invalid={Boolean(errors.email)} /></div>{errors.email && <p className="field-error">{errors.email}</p>}</div>
-            <div className="field-group"><label htmlFor="password">{copy.passwordLabel}</label><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={copy.passwordPlaceholder} autoComplete="new-password" aria-invalid={Boolean(errors.password)} /><button className="visibility-button" type="button" aria-label={showPassword ? copy.hidePassword : copy.showPassword} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{errors.password}</p>}</div>
-            <div className="field-group"><label htmlFor="confirmPassword">{copy.confirmLabel}</label><div className={`input-wrap ${errors.confirmPassword ? 'has-error' : ''}`}><Icon name="lock" /><input id="confirmPassword" name="confirmPassword" type={showConfirmation ? 'text' : 'password'} placeholder={copy.confirmPlaceholder} autoComplete="new-password" aria-invalid={Boolean(errors.confirmPassword)} /><button className="visibility-button" type="button" aria-label={showConfirmation ? copy.hideConfirmation : copy.showConfirmation} onClick={() => setShowConfirmation((visible) => !visible)}><Icon name={showConfirmation ? 'eyeOff' : 'eye'} /></button></div>{errors.confirmPassword && <p className="field-error">{errors.confirmPassword}</p>}</div>
-            <div className="capital-note"><span className="capital-icon"><Icon name="gift" /></span><div className="capital-copy"><strong>{copy.capitalTitle}</strong><p>{copy.capitalLine}</p></div></div>
-            <button className="primary-button" type="submit">{copy.create}</button>
-            {submitted && <p className="form-success" role="status">{copy.success}</p>}
+            <div className="field-group"><label htmlFor="name">{t('register.nameLabel')}</label><div className={`input-wrap ${errors.name ? 'has-error' : ''}`}><Icon name="user" /><input id="name" name="name" type="text" placeholder={t('register.namePlaceholder')} autoComplete="name" aria-invalid={Boolean(errors.name)} /></div>{errors.name && <p className="field-error">{errors.name}</p>}</div>
+            <div className="field-group"><label htmlFor="email">{t('register.emailLabel')}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={t('register.emailPlaceholder')} autoComplete="email" aria-invalid={Boolean(errors.email)} /></div>{errors.email && <p className="field-error">{errors.email}</p>}</div>
+            <div className="field-group"><label htmlFor="password">{t('register.passwordLabel')}</label><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={t('register.passwordPlaceholder')} autoComplete="new-password" aria-invalid={Boolean(errors.password)} /><button className="visibility-button" type="button" aria-label={showPassword ? t('register.hidePassword') : t('register.showPassword')} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{errors.password}</p>}</div>
+            <div className="field-group"><label htmlFor="confirmPassword">{t('register.confirmLabel')}</label><div className={`input-wrap ${errors.confirmPassword ? 'has-error' : ''}`}><Icon name="lock" /><input id="confirmPassword" name="confirmPassword" type={showConfirmation ? 'text' : 'password'} placeholder={t('register.confirmPlaceholder')} autoComplete="new-password" aria-invalid={Boolean(errors.confirmPassword)} /><button className="visibility-button" type="button" aria-label={showConfirmation ? t('register.hideConfirmation') : t('register.showConfirmation')} onClick={() => setShowConfirmation((visible) => !visible)}><Icon name={showConfirmation ? 'eyeOff' : 'eye'} /></button></div>{errors.confirmPassword && <p className="field-error">{errors.confirmPassword}</p>}</div>
+            <div className="capital-note"><span className="capital-icon"><Icon name="gift" /></span><div className="capital-copy"><strong>{t('register.capitalTitle')}</strong><p>{t('register.capitalLine')}</p></div></div>
+            <button className="primary-button" type="submit">{t('register.create')}</button>
+            {submitted && <p className="form-success" role="status">{t('register.success')}</p>}
           </form>
-          <div className="form-divider"><span>{copy.divider}</span></div>
-          <button className="google-button" type="button"><Icon name="google" /><span>{copy.google}</span></button>
-          <p className="login-prompt">{copy.loginPrompt} <a href={routeFor('login')}>{copy.loginLink}</a></p>
+          <div className="form-divider"><span>{t('register.divider')}</span></div>
+          <button className="google-button" type="button"><Icon name="google" /><span>{t('register.google')}</span></button>
+          <p className="login-prompt">{t('register.loginPrompt')} <a href={routeFor('login')}>{t('register.loginLink')}</a></p>
         </section>
       </div>
     </main>

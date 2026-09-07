@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { MarketPage } from './MarketPage'
 import { getStockBySymbol, marketStocks } from './marketData'
 import { marketRoute, stockDetailsRoute } from './marketRoutes'
@@ -9,6 +10,7 @@ function requestedSymbolFromUrl() {
 }
 
 export function MarketApp() {
+  const { i18n, t } = useTranslation()
   const [requestedSymbol, setRequestedSymbol] = useState<string | null>(requestedSymbolFromUrl)
   const selectedStock = requestedSymbol ? getStockBySymbol(marketStocks, requestedSymbol) : undefined
 
@@ -19,8 +21,8 @@ export function MarketApp() {
   }, [])
 
   useEffect(() => {
-    document.title = selectedStock ? `StockLab — ${selectedStock.symbol}` : 'StockLab — Market'
-  }, [selectedStock])
+    document.title = selectedStock ? `StockLab — ${selectedStock.symbol}` : `StockLab — ${t('market.title')}`
+  }, [i18n.language, selectedStock, t])
 
   const openStock = (symbol: string) => {
     window.history.pushState({}, '', stockDetailsRoute(symbol))
