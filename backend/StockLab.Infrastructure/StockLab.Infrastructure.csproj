@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.10" />
     <ProjectReference Include="..\StockLab.Application\StockLab.Application.csproj" />
     <ProjectReference Include="..\StockLab.Domain\StockLab.Domain.csproj" />
   </ItemGroup>
