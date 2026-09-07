@@ -307,3 +307,43 @@ For a partial period, use from=2026-08-25T13:30:00Z and to=2026-08-27T13:30:00Z
 lists symbol/from/to/interval, the response DTO with bars, and 200/400/404/500 responses.
 
 History bounds require an explicit UTC suffix (Z or +00:00). Each history parameter accepts one value only; composite intervals such as Minute,Hour or 1,2 are rejected with validation_error before the provider is invoked. A single interval name or defined numeric value remains supported.
+
+## Market data cache
+
+The API registers IMarketDataProvider as a singleton CachingMarketDataProvider
+wrapping the singleton MockMarketDataProvider. Controllers remain unaware of caching.
+Replace only the inner provider registration when a real provider is introduced.
+Infrastructure uses the native Microsoft.Extensions.Caching.Memory package;
+Application and Domain remain independent of cache and HTTP libraries.
+
+MarketDataCache configuration in appsettings.json supplies absolute (not sliding) TTLs:
+
+- QuoteTtl: 00:00:15 (15 seconds).
+- SearchTtl: 00:05:00 (5 minutes).
+- HistoryTtl: 00:15:00 (15 minutes).
+
+Configuration is read at startup. Each TTL must be positive and at most 365 days;
+invalid values fail startup rather than silently disabling expiration or overflowing
+expiration calculations. Environment overrides use MarketDataCache__QuoteTtl, etc.
+Restart the API after changing TTLs.
+
+Keys use separate operation identifiers, trimmed uppercase symbols/search terms,
+and the entire history request (symbol, UTC from/to, interval). Each decorator has
+its own key namespace to prevent collisions when sharing an IMemoryCache. History
+preconditions are validated before lookup, so an invalid offset cannot hit an
+equivalent UTC cache entry.
+
+Only completed successful non-null results are cached. Unknown quote/history symbols
+are not cached and are retried on subsequent requests. Empty search results and known
+histories with empty bars are cached for their respective TTLs. Collections are copied
+into read-only snapshots; no exception or cancellation is converted into cached data.
+Already-cancelled requests fail even on a hit. Misses forward the caller's token and
+check cancellation again before insertion.
+
+IMemoryCache is thread-safe and local to this process. Entries may be evicted and
+are lost on restart. Concurrent misses can each call the provider; this implementation
+does not share in-flight tasks or implement request deduplication (#31).
+
+Permanent cache tests use a counting provider and MemoryCache's native controllable
+clock to verify call counts and expiration without delays. HTTP checks verify the
+public contracts, not cache hits.
