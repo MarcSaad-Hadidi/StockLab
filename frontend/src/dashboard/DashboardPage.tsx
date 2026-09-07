@@ -1,3 +1,4 @@
+import { FinancialLineChart } from '../components/charts/FinancialLineChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
@@ -74,36 +75,10 @@ function StockMark({ symbol, size = 'medium' }: { symbol: string; size?: 'small'
 
 function PerformanceChart({ range }: { range: PerformanceRange }) {
   const { i18n, t } = useTranslation()
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
-  const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
-  const [pinnedIndex, setPinnedIndex] = useState<number | null>(null)
   const series = performanceSeries[range]
-  const width = 760
-  const height = 250
-  const padding = { top: 18, right: 14, bottom: 34, left: 14 }
   const min = Math.min(...series.values) - 0.7
   const max = Math.max(...series.values) + 0.7
-  const usableWidth = width - padding.left - padding.right
-  const usableHeight = height - padding.top - padding.bottom
-  const points = series.values.map((value, index) => {
-    const x = padding.left + (index / (series.values.length - 1)) * usableWidth
-    const y = padding.top + ((max - value) / (max - min)) * usableHeight
-    return { x, y, value }
-  })
-  const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
-  const areaPath = `${linePath} L ${points.at(-1)?.x ?? width} ${height - padding.bottom} L ${points[0].x} ${height - padding.bottom} Z`
-  const yTicks = [0, 1, 2, 3]
-  const activeIndex = hoveredIndex ?? focusedIndex ?? pinnedIndex
-  const activePoint = activeIndex === null ? null : points[activeIndex]
-  const activeValue = activeIndex === null ? null : series.values[activeIndex]
-  const pointHitRadius = 44
-  const tooltipWidth = 134
-  const tooltipHeight = 52
-  const tooltipX = activePoint ? Math.min(Math.max(activePoint.x - tooltipWidth / 2, padding.left), width - padding.right - tooltipWidth) : 0
-  const tooltipY = activePoint
-    ? Math.min(Math.max(activePoint.y < tooltipHeight + 24 ? activePoint.y + 17 : activePoint.y - tooltipHeight - 17, 8), height - tooltipHeight - 8)
-    : 0
-  const localizeLabel = (label: string) => t(`dashboard.chartLabels.${label}`)
+  const labels = series.labels.map(label => t(`dashboard.chartLabels.${label}`))
 
   return (
     <div className="chart-wrap">
@@ -117,62 +92,15 @@ function PerformanceChart({ range }: { range: PerformanceRange }) {
           <small>{t(`dashboard.performance.change.${range}`, { change: formatSignedPercent(Number.parseFloat(series.changeLabel)) })}</small>
         </div>
       </div>
-      <svg aria-label={t('dashboard.performanceChart', { range: t(`common.timeRanges.${range}`) })} className="performance-chart" key={range} role="img" viewBox={`0 0 ${width} ${height}`}>
-        <defs>
-          <linearGradient id={`portfolio-fill-${range}`} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#2f7bf0" stopOpacity=".22" />
-            <stop offset="100%" stopColor="#2f7bf0" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {yTicks.map((tick) => {
-          const y = padding.top + (tick / (yTicks.length - 1)) * usableHeight
-          const value = max - (tick / (yTicks.length - 1)) * (max - min)
-          return (
-            <g key={tick}>
-              <line className="chart-grid-line" x1={padding.left} x2={width - padding.right} y1={y} y2={y} />
-              <text className="chart-y-label" textAnchor="end" x={width - padding.right} y={y - 7}>{formatCompactCurrency(value * 1000)}</text>
-            </g>
-          )
-        })}
-        <path className="chart-area" d={areaPath} fill={`url(#portfolio-fill-${range})`} />
-        <path className="chart-line" d={linePath} />
-        {activePoint && <line className="chart-crosshair" x1={activePoint.x} x2={activePoint.x} y1={padding.top} y2={height - padding.bottom} />}
-        {points.map((point, index) => (
-          <g
-            aria-label={t('dashboard.chartPoint', { label: localizeLabel(series.labels[index]), value: formatCompactCurrency(point.value * 1000, i18n.language) })}
-            aria-pressed={pinnedIndex === index}
-            className={`chart-point-group ${activeIndex === index ? 'active' : ''}`}
-            key={`${point.x}-${index}`}
-            onBlur={() => setFocusedIndex(null)}
-            onClick={() => setPinnedIndex((current) => current === index ? null : index)}
-            onFocus={() => setFocusedIndex(index)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') setPinnedIndex(null)
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                setPinnedIndex((current) => current === index ? null : index)
-              }
-            }}
-            onPointerEnter={() => setHoveredIndex(index)}
-            onPointerLeave={() => setHoveredIndex(null)}
-            role="button"
-            tabIndex={0}
-          >
-            <circle className="chart-point-hit" cx={point.x} cy={point.y} r={pointHitRadius} />
-            <circle className="chart-point" cx={point.x} cy={point.y} key={`${point.x}-${index}`} r={index === points.length - 1 ? 4 : 2.5} style={{ animationDelay: `${index * 45}ms` }} />
-          </g>
-        ))}
-        {activePoint && activeIndex !== null && activeValue !== null && <g className="chart-tooltip" pointerEvents="none" transform={`translate(${tooltipX} ${tooltipY})`}>
-          <rect height={tooltipHeight} rx="7" width={tooltipWidth} />
-          <text className="chart-tooltip-label" x="10" y="18">{localizeLabel(series.labels[activeIndex])}</text>
-          <text className="chart-tooltip-value" x="10" y="38">{formatCompactCurrency(activeValue * 1000)}</text>
-        </g>}
-        {series.labels.map((label, index) => {
-          const point = points[index]
-          return <text className="chart-x-label" key={label} textAnchor={index === 0 ? 'start' : index === series.labels.length - 1 ? 'end' : 'middle'} x={point.x} y={height - 7}>{localizeLabel(label)}</text>
-        })}
-      </svg>
-      <span aria-live="polite" className="chart-tooltip-announcement">{activeIndex !== null && activeValue !== null ? t('dashboard.chartPoint', { label: localizeLabel(series.labels[activeIndex]), value: formatCompactCurrency(activeValue * 1000, i18n.language) }) : ''}</span>
+      <FinancialLineChart
+        values={series.values}
+        labels={labels}
+        min={min}
+        max={max}
+        ariaLabel={t('dashboard.performanceChart', { range: t(`common.timeRanges.${range}`) })}
+        formatValue={value => formatCompactCurrency(value * 1000, i18n.language)}
+        pointLabel={index => t('dashboard.chartPoint', { label: labels[index], value: formatCompactCurrency(series.values[index] * 1000, i18n.language) })}
+      />
     </div>
   )
 }

@@ -1,0 +1,15 @@
+.financial-line-chart { position: relative; width: 100%; height: clamp(260px, 28vw, 320px); min-width: 0; font-family: inherit; }
+.financial-chart-overlay { position: absolute; inset: 0; pointer-events: none; }
+.financial-chart-overlay svg { display: block; }
+.financial-chart-crosshair { stroke: #9ebce7; stroke-width: 1; stroke-dasharray: 4 5; pointer-events: none; }
+.financial-chart-point { outline: none; cursor: crosshair; }
+.financial-chart-hit { fill: transparent; pointer-events: all; }
+.financial-chart-halo { fill: #2f7bf0; opacity: .1; pointer-events: none; }
+.financial-chart-dot { fill: white; stroke: #2f7bf0; stroke-width: 2.5; pointer-events: none; }
+.financial-chart-point:focus-visible .financial-chart-dot { stroke: #174e9e; stroke-width: 3.5; }
+.financial-chart-point[aria-pressed="true"] .financial-chart-dot { fill: #2f7bf0; stroke: white; filter: drop-shadow(0 0 2px #2f7bf0); }
+.financial-chart-tooltip rect { fill: #1e2d4a; stroke: #344866; stroke-width: 1; filter: drop-shadow(0 4px 5px rgba(20,33,61,.16)); }
+.financial-chart-tooltip text { font-family: inherit; font-variant-numeric: tabular-nums; }
+.financial-chart-date { fill: #c4d3e9; font-size: 11px; }
+.financial-chart-value { fill: white; font-size: 15px; font-weight: 700; }
+.financial-chart-announcement { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

@@ -1,3 +1,4 @@
+import { FinancialLineChart } from '../components/charts/FinancialLineChart'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatCompactCurrency, formatCurrency, formatDate, formatNumber, formatPercent, formatSignedCurrency, formatSignedPercent, localeForLanguage } from '../i18n/formatters'
@@ -61,34 +62,9 @@ function changeLabel(details: StockDetails, todayLabel = 'today') {
 function PriceChart({ details, range }: { details: StockDetails; range: ChartRange }) {
   const { i18n, t } = useTranslation()
   const history = getVisibleHistory(details.history, range)
-  const width = 720
-  const height = 270
-  const plotLeft = 52
-  const plotRight = 10
-  const plotTop = 18
-  const plotBottom = 38
-  const plotWidth = width - plotLeft - plotRight
-  const plotHeight = height - plotTop - plotBottom
   const values = history.map((point) => point.value)
   const minValue = Math.floor(Math.min(...values) - 3)
   const maxValue = Math.ceil(Math.max(...values) + 3)
-  const valueRange = Math.max(1, maxValue - minValue)
-  const points = history.map((point, index) => {
-    const x = plotLeft + (history.length === 1 ? plotWidth / 2 : (index / (history.length - 1)) * plotWidth)
-    const y = plotTop + ((maxValue - point.value) / valueRange) * plotHeight
-    return { x, y, ...point }
-  })
-  const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' ')
-  const areaPath = `${linePath} L ${points.at(-1)?.x.toFixed(2)} ${plotTop + plotHeight} L ${points[0]?.x.toFixed(2)} ${plotTop + plotHeight} Z`
-  const yTicks = Array.from({ length: 4 }, (_, index) => maxValue - (valueRange / 3) * index)
-  const markerValue = history.at(-1)?.value ?? details.price
-  const labelIndexes = [...new Set([
-    0,
-    Math.floor((history.length - 1) * 0.25),
-    Math.floor((history.length - 1) * 0.5),
-    Math.floor((history.length - 1) * 0.75),
-    history.length - 1,
-  ])]
   const localizeHistoryLabel = (label: string) => {
     const dated = /^(Feb|Mar|Apr|May) (\d{1,2})$/.exec(label)
     if (dated) return new Intl.DateTimeFormat(localeForLanguage(i18n.language), { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`2024-${({ Feb: '02', Mar: '03', Apr: '04', May: '05' } as Record<string, string>)[dated[1]]}-${dated[2].padStart(2, '0')}T00:00:00Z`))
@@ -99,31 +75,17 @@ function PriceChart({ details, range }: { details: StockDetails; range: ChartRan
 
   return (
     <div className="stock-price-chart" data-range={range}>
-      <svg aria-label={t('stockDetails.historicalPriceChart', { symbol: details.symbol, range: t(`common.timeRanges.${range}`) })} role="img" viewBox={`0 0 ${width} ${height}`}>
-        {yTicks.map((tick, index) => {
-          const y = plotTop + (index / 3) * plotHeight
-          return (
-            <g key={`tick-${tick}`}>
-              <line className="stock-chart-grid-line" x1={plotLeft} x2={width - plotRight} y1={y} y2={y} />
-              <text className="stock-chart-y-label" x="6" y={y + 4}>{formatCurrency(tick, undefined, 0)}</text>
-            </g>
-          )
-        })}
-        <path className="stock-chart-area" d={areaPath} />
-        <path className="stock-chart-line" d={linePath} />
-        {points.at(-1) && (
-          <g>
-            <line className="stock-chart-guide" x1={points.at(-1)?.x} x2={points.at(-1)?.x} y1={points.at(-1)?.y} y2={plotTop + plotHeight} />
-            <circle className="stock-chart-point" cx={points.at(-1)?.x} cy={points.at(-1)?.y} r="4" />
-            <rect className="stock-chart-value-pill" height="22" rx="5" width="68" x={Math.min(width - 74, Math.max(plotLeft, (points.at(-1)?.x ?? width) - 34))} y={Math.max(5, (points.at(-1)?.y ?? 20) - 30)} />
-            <text className="stock-chart-value-label" x={Math.min(width - 40, Math.max(plotLeft + 34, (points.at(-1)?.x ?? width)))} y={Math.max(20, (points.at(-1)?.y ?? 20) - 15)}>{formatCurrency(markerValue)}</text>
-          </g>
-        )}
-        {labelIndexes.map((index) => {
-          const point = points[index]
-          return point ? <text className="stock-chart-x-label" key={`${point.label}-${index}`} x={point.x} y={height - 8}>{localizeHistoryLabel(point.label)}</text> : null
-        })}
-      </svg>
+      <FinancialLineChart
+        key={`${details.symbol}-${range}`}
+        values={values}
+        labels={history.map(point => localizeHistoryLabel(point.label))}
+        min={minValue}
+        max={maxValue}
+        ariaLabel={t('stockDetails.historicalPriceChart', { symbol: details.symbol, range: t(`common.timeRanges.${range}`) })}
+        formatValue={value => formatCurrency(value, i18n.language)}
+        formatTick={value => formatCurrency(value, i18n.language, 0)}
+        showLatestValue
+      />
     </div>
   )
 }
