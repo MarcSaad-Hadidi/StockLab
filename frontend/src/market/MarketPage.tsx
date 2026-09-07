@@ -7,6 +7,7 @@ import {
   getMarketSections,
   marketStocks,
   paginateMarketStocks,
+  type AssetTypeFilter,
   type MarketFilter,
   type MarketStock,
 } from './marketData'
@@ -17,24 +18,22 @@ type MarketPageProps = {
   onOpenStock: (symbol: string) => void
 }
 
-const filterOptions: MarketFilter[] = ['All', 'Stocks', 'ETFs', 'Indices', 'Crypto']
+const filterOptions: AssetTypeFilter[] = ['All', 'Stocks', 'ETFs', 'Indices', 'Crypto']
 const resultsPerPage = 10
-const filterLabelKeys: Record<MarketFilter, string> = {
+const filterLabelKeys: Record<AssetTypeFilter, string> = {
   All: 'market.filters.all',
   Stocks: 'market.filters.stocks',
   ETFs: 'market.filters.etfs',
   Indices: 'market.filters.indices',
   Crypto: 'market.filters.crypto',
-  'US Market': 'market.filters.usMarket',
 }
 
-const filterNounKeys: Record<MarketFilter, string> = {
+const filterNounKeys: Record<AssetTypeFilter, string> = {
   All: 'market.filterNouns.stocks',
   Stocks: 'market.filterNouns.stocks',
   ETFs: 'market.filterNouns.etfs',
   Indices: 'market.filterNouns.indices',
   Crypto: 'market.filterNouns.crypto',
-  'US Market': 'market.filterNouns.usMarket',
 }
 
 function numericQuote(value: string) {
@@ -143,23 +142,24 @@ function SearchResultRow({
 export function MarketPage({ onOpenStock }: MarketPageProps) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
-  const [activeFilter, setActiveFilter] = useState<MarketFilter>('All')
+  const [assetType, setAssetType] = useState<AssetTypeFilter>('All')
+  const [market, setMarket] = useState<MarketFilter>('All')
   const [currentPage, setCurrentPage] = useState(1)
   const [favoriteSymbols, setFavoriteSymbols] = useState<Set<string>>(() => new Set(['AAPL', 'MSFT']))
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
   const [favoriteOnly, setFavoriteOnly] = useState(false)
-  const sections = useMemo(() => getMarketSections(marketStocks, activeFilter), [activeFilter])
-  const filterNoun = t(filterNounKeys[activeFilter])
+  const sections = useMemo(() => getMarketSections(marketStocks, { assetType, market }), [assetType, market])
+  const filterNoun = t(assetType === 'All' && market === 'US Market' ? 'market.filterNouns.usMarket' : filterNounKeys[assetType])
   const overviewTitles = {
     popular: t('market.popular', { asset: filterNoun }),
-    gainers: activeFilter === 'All' || activeFilter === 'Stocks' || activeFilter === 'US Market' ? t('market.topGainers') : t('market.topAssetGainers', { asset: filterNoun }),
-    losers: activeFilter === 'All' || activeFilter === 'Stocks' || activeFilter === 'US Market' ? t('market.topLosers') : t('market.topAssetLosers', { asset: filterNoun }),
+    gainers: assetType === 'All' || assetType === 'Stocks' ? t('market.topGainers') : t('market.topAssetGainers', { asset: filterNoun }),
+    losers: assetType === 'All' || assetType === 'Stocks' ? t('market.topLosers') : t('market.topAssetLosers', { asset: filterNoun }),
   }
 
-  const filteredResults = useMemo(() => {
-    const results = filterMarketStocks(marketStocks, query, activeFilter)
-    return favoriteOnly ? results.filter((stock) => favoriteSymbols.has(stock.symbol)) : results
-  }, [activeFilter, favoriteOnly, favoriteSymbols, query])
+  const filteredResults = useMemo(
+    () => filterMarketStocks(marketStocks, { query, assetType, market, favoriteOnly, favoriteSymbols }),
+    [assetType, market, favoriteOnly, favoriteSymbols, query],
+  )
 
   const pagination = useMemo(
     () => paginateMarketStocks(filteredResults, currentPage, resultsPerPage),
@@ -180,8 +180,8 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
   }
 
   const clearFilters = () => {
-    setQuery('')
-    setActiveFilter('All')
+    setMarket('All')
+    setAssetType('All')
     setCurrentPage(1)
     setFavoriteOnly(false)
     setMoreFiltersOpen(false)
@@ -220,12 +220,12 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
         <div className="market-filter-tabs">
           {filterOptions.map((filter) => (
             <button
-              aria-pressed={activeFilter === filter}
-              className={`market-filter-tab ${activeFilter === filter ? 'market-filter-tab-active' : ''}`}
+              aria-pressed={assetType === filter}
+              className={`market-filter-tab ${assetType === filter ? 'market-filter-tab-active' : ''}`}
               key={filter}
               type="button"
               onClick={() => {
-                setActiveFilter(filter)
+                setAssetType(filter)
                 setCurrentPage(1)
               }}
             >
@@ -235,11 +235,11 @@ export function MarketPage({ onOpenStock }: MarketPageProps) {
         </div>
         <div className="market-filter-actions">
           <button
-            aria-pressed={activeFilter === 'US Market'}
-            className={`market-market-select ${activeFilter === 'US Market' ? 'market-market-select-active' : ''}`}
+            aria-pressed={market === 'US Market'}
+            className={`market-market-select ${market === 'US Market' ? 'market-market-select-active' : ''}`}
             type="button"
             onClick={() => {
-              setActiveFilter(activeFilter === 'US Market' ? 'All' : 'US Market')
+              setMarket((current) => current === 'US Market' ? 'All' : 'US Market')
               setCurrentPage(1)
             }}
           >
