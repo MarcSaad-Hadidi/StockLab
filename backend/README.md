@@ -311,7 +311,7 @@ History bounds require an explicit UTC suffix (Z or +00:00). Each history parame
 ## Market data cache
 
 The API registers IMarketDataProvider as a singleton CachingMarketDataProvider
-wrapping DeduplicatingMarketDataProvider, then the singleton MockMarketDataProvider. Controllers remain unaware of these decorators.
+wrapping DeduplicatingMarketDataProvider, RateLimitedMarketDataProvider, then the singleton MockMarketDataProvider. Controllers remain unaware of these decorators.
 Replace only the inner provider registration when a real provider is introduced.
 Infrastructure uses the native Microsoft.Extensions.Caching.Memory package;
 Application and Domain remain independent of cache and HTTP libraries.
@@ -352,7 +352,7 @@ MarketDataCache:SizeLimit defaults to 8388608 accounting units (approximately 8 
 
 ## Concurrent market data requests
 
-Program.cs composes Cache -> Dedup -> Mock behind IMarketDataProvider. Cache hits
+Program.cs composes Cache -> Dedup -> RateLimit -> Mock behind IMarketDataProvider. Cache hits
 bypass the deduplication layer. On a miss, DeduplicatingMarketDataProvider shares
 one in-progress provider task per normalized key, separately for quote, search and
 history. Keys use trimmed uppercase symbols/search terms and complete validated
@@ -381,3 +381,46 @@ Tests use a counting provider blocked by TaskCompletionSource, guaranteeing ten
 active waiters before release. Coverage includes thread-pool contention, distinct
 keys, cancellation isolation, retry/cleanup, null/empty results and cache expiration
 with a controllable clock. HTTP checks only verify public contract regressions.
+
+## Outbound provider rate limiting
+
+RateLimitedMarketDataProvider wraps the terminal provider after cache and dedup.
+One singleton native FixedWindowRateLimiter supplies a shared budget for quote,
+search and history. This protects outbound provider calls, not incoming HTTP requests
+by IP or user. A cache hit uses no permit; simultaneous identical misses share one
+flight and one permit. Distinct keys and operations consume the same global budget.
+
+MarketDataRateLimit configures local StockLab defaults, not Twelve Data plan limits:
+
+- PermitLimit: 30 attempts per fixed window.
+- Window: 00:01:00, automatically renewed by the native limiter.
+- QueueLimit: 10 waiting calls, oldest first; zero disables waiting.
+
+Values are validated at startup: PermitLimit 1..10000, QueueLimit 0..1000, Window
+1 millisecond..1 day. Invalid values fail explicitly. Configuration changes require
+a restart. Fixed windows can allow bursts across a window boundary; this is not a
+rolling-window or daily credit cap. Protection and queues are local to this process.
+The DI container owns and disposes the native limiter and its renewal timer.
+
+Every attempt needs one acquired permit before calling the terminal provider.
+A full queue returns MarketDataRateLimitException, mapped by the existing global
+handler to HTTP 429 with error market_data_rate_limited and message
+"Market data requests are temporarily rate limited." A Warning is emitted only on
+rejection, without symbol, query, payload, quota or credentials. No Retry-After is
+invented. OpenAPI describes the 429 response on all three market data endpoints.
+
+Cancellation while queued stops that wait without calling the provider or becoming
+429. The received token is forwarded to the provider after admission. In the actual
+pipeline, dedup deliberately supplies an independent token; individual HTTP callers
+can abandon their own waits without cancelling shared queued work. This preserves #31.
+
+Provider failures propagate unchanged and still consume the window permit: an
+attempt may already have spent external credits. Lease disposal is guaranteed but
+does not refund a fixed-window permit. The next renewal restores capacity. This
+layer neither caches failures nor implements retries.
+
+Permanent tests use the native limiter with AutoReplenishment=false and explicit
+TryReplenish (a minimal test-only window), plus a TaskCompletionSource-controlled
+provider for the ten-caller pipeline test. No sleeps or long delays are needed.
+They assert native statistics, provider counts, bounded queue/rejection, cancellation,
+shared budget, null/empty behavior, provider failures and safe 429 JSON.

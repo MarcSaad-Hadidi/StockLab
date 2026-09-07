@@ -98,6 +98,16 @@ public sealed class ExceptionHandlingMiddlewareTests : IDisposable
         Assert.Equal(200, context.Response.StatusCode);
     }
 
+    [Fact]
+    public async Task Provider_rate_limit_returns_safe_429_without_error_logging()
+    {
+        var context = Context();
+        await Middleware(new StockLab.Application.Exceptions.MarketDataRateLimitException()).InvokeAsync(context);
+        Assert.Equal(429, context.Response.StatusCode);
+        AssertError(context, "market_data_rate_limited", "Market data requests are temporarily rate limited.");
+        Assert.Empty(logger.Messages);
+        Assert.False(context.Response.Headers.ContainsKey("Retry-After"));
+    }
     private ExceptionHandlingMiddleware Middleware(Exception exception) =>
         new(_ => Task.FromException(exception), logger);
 

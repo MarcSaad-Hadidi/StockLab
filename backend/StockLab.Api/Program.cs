@@ -22,8 +22,18 @@ builder.Services.AddKeyedSingleton<Microsoft.Extensions.Caching.Memory.IMemoryCa
         SizeLimit = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<MarketDataCacheOptions>>().Value.SizeLimit
     }));
 builder.Services.AddSingleton<MockMarketDataProvider>();
+builder.Services.AddOptions<MarketDataRateLimitOptions>()
+    .Bind(builder.Configuration.GetSection(MarketDataRateLimitOptions.SectionName))
+    .Validate(options => options.IsValid(), MarketDataRateLimitOptions.ValidationMessage)
+    .ValidateOnStart();
+builder.Services.AddSingleton<System.Threading.RateLimiting.RateLimiter>(services =>
+    services.GetRequiredService<Microsoft.Extensions.Options.IOptions<MarketDataRateLimitOptions>>().Value.CreateLimiter());
+builder.Services.AddSingleton<RateLimitedMarketDataProvider>(services => new RateLimitedMarketDataProvider(
+    services.GetRequiredService<MockMarketDataProvider>(),
+    services.GetRequiredService<System.Threading.RateLimiting.RateLimiter>(),
+    services.GetRequiredService<ILogger<RateLimitedMarketDataProvider>>()));
 builder.Services.AddSingleton<DeduplicatingMarketDataProvider>(services =>
-    new DeduplicatingMarketDataProvider(services.GetRequiredService<MockMarketDataProvider>()));
+    new DeduplicatingMarketDataProvider(services.GetRequiredService<RateLimitedMarketDataProvider>()));
 builder.Services.AddSingleton<IMarketDataProvider>(services => new CachingMarketDataProvider(
     services.GetRequiredService<DeduplicatingMarketDataProvider>(),
     services.GetRequiredKeyedService<Microsoft.Extensions.Caching.Memory.IMemoryCache>("MarketData"),
