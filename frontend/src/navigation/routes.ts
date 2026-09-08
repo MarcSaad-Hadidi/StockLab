@@ -23,7 +23,7 @@ export function routeFor(label: string): string {
 }
 
 export function pageForPath(pathname: string): PageId | undefined {
-  const path = pathname.replace(/\/$/, '')
+  const path = pathname.split(/[?#]/, 1)[0].replace(/\/$/, '')
   return (Object.keys(pages) as PageId[]).find(id =>
     pages[id].path === path || `/${pages[id].entry}` === path)
 }
