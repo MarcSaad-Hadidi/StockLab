@@ -1,14 +1,10 @@
-import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
-import { fileURLToPath, URL } from 'node:url'
+import { mergeConfig } from 'vite'
+import config from './vite.config.ts'
 
-export default defineConfig({
-  plugins: [react()],
+// Keep the legacy output directory, with every destination linked by Dashboard.
+export default mergeConfig(config, {
   build: {
     outDir: 'dist-dashboard',
     emptyOutDir: true,
-    rollupOptions: {
-      input: fileURLToPath(new URL('./dashboard.html', import.meta.url)),
-    },
   },
 })

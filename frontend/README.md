@@ -3,6 +3,9 @@
 ## StockLab navigation
 
 Run `npm run dev`, or `npm run build` followed by `npm run preview`.
+The legacy `npm run build:dashboard` command uses the same multi-page configuration
+and writes all linked pages to `dist-dashboard`. Preview that output with
+`npm run preview -- --config vite.dashboard.config.ts`.
 The existing multipage app uses full-document navigation; no client router or
 authentication service is required. Logout only navigates to Login.
 
@@ -18,7 +21,9 @@ Sidebars mark their displayed page with `aria-current="page"`; navigation loads
 the destination page rather than changing a local menu selection. Settings links
 open Profile. Controls for unimplemented features are otherwise unchanged.
 
-Run `node --experimental-strip-types --test tests/*.test.ts` for frontend tests.
+Run `npm run test` for frontend tests, including real HTTP checks against dev and
+built preview for both Vite configurations. Vite runs in `mpa` mode so missing
+static files cannot fall back to the root HTML document.
 For deployment outside Vite, configure the host to map these URLs to the same HTML
 entries and provide the Not Found fallback.
 

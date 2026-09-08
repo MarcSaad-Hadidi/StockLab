@@ -19,6 +19,8 @@ function pageRoutes(): Plugin {
 }
 
 export default defineConfig({
+  // Missing assets must remain 404s instead of receiving the root SPA document.
+  appType: 'mpa',
   plugins: [react(), pageRoutes()],
   build: {
     rollupOptions: {
