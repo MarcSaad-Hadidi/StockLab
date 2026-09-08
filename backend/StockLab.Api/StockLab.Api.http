@@ -40,12 +40,12 @@ Accept: application/json
 
 ###
 
-GET {{StockLab.Api_HostAddress}}/api/stocks/AAPL/history?from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=Day
+GET {{StockLab.Api_HostAddress}}/api/stocks/AAPL/history?from=2026-08-24&to=2026-08-29&interval=Day
 Accept: application/json
 
 ###
 
-GET {{StockLab.Api_HostAddress}}/api/stocks/AAPL/history?from=2026-08-25T13:30:00Z&to=2026-08-27T13:30:00Z&interval=Day
+GET {{StockLab.Api_HostAddress}}/api/stocks/AAPL/history?from=2026-08-25&to=2026-08-27&interval=Day
 Accept: application/json
 
 ###

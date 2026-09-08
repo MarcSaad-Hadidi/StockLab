@@ -2,6 +2,7 @@ using StockLab.Application.Interfaces;
 using StockLab.Infrastructure.MarketData;
 using StockLab.Api.Middleware;
 using StockLab.Api.Validation;
+using StockLab.Api.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,7 +22,7 @@ builder.Services.AddKeyedSingleton<Microsoft.Extensions.Caching.Memory.IMemoryCa
     {
         SizeLimit = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<MarketDataCacheOptions>>().Value.SizeLimit
     }));
-builder.Services.AddSingleton<MockMarketDataProvider>();
+builder.Services.AddMarketDataTerminal(builder.Configuration);
 builder.Services.AddOptions<MarketDataRateLimitOptions>()
     .Bind(builder.Configuration.GetSection(MarketDataRateLimitOptions.SectionName))
     .Validate(options => options.IsValid(), MarketDataRateLimitOptions.ValidationMessage)
@@ -29,7 +30,7 @@ builder.Services.AddOptions<MarketDataRateLimitOptions>()
 builder.Services.AddSingleton<System.Threading.RateLimiting.RateLimiter>(services =>
     services.GetRequiredService<Microsoft.Extensions.Options.IOptions<MarketDataRateLimitOptions>>().Value.CreateLimiter());
 builder.Services.AddSingleton<RateLimitedMarketDataProvider>(services => new RateLimitedMarketDataProvider(
-    services.GetRequiredService<MockMarketDataProvider>(),
+    services.GetRequiredKeyedService<IMarketDataProvider>("Terminal"),
     services.GetRequiredService<System.Threading.RateLimiting.RateLimiter>(),
     services.GetRequiredService<ILogger<RateLimitedMarketDataProvider>>()));
 builder.Services.AddSingleton<DeduplicatingMarketDataProvider>(services =>
@@ -68,3 +69,5 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 
 app.Run();
+
+public partial class Program { }

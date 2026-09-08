@@ -7,6 +7,23 @@ public sealed class ExceptionHandlingMiddleware(
     RequestDelegate next,
     ILogger<ExceptionHandlingMiddleware> logger)
 {
+    private static int ProviderStatus(MarketDataProviderFailure failure) => failure switch
+    {
+        MarketDataProviderFailure.RangeTooLarge => 400,
+        MarketDataProviderFailure.Timeout => 504,
+        MarketDataProviderFailure.InvalidRequest or MarketDataProviderFailure.MalformedResponse => 502,
+        _ => 503
+    };
+    private static ApiErrorResponse ProviderError(MarketDataProviderFailure failure) => failure switch
+    {
+        MarketDataProviderFailure.RangeTooLarge => new("market_data_range_too_large", "Request a smaller history range."),
+        MarketDataProviderFailure.Timeout => new("market_data_provider_timeout", "Market data provider timed out."),
+        MarketDataProviderFailure.UpstreamRateLimited => new("market_data_provider_rate_limited", "Market data provider is temporarily rate limited."),
+        MarketDataProviderFailure.InvalidRequest or MarketDataProviderFailure.MalformedResponse =>
+            new("market_data_provider_invalid_response", "Market data provider could not complete the request."),
+        _ => new("market_data_provider_unavailable", "Market data provider is temporarily unavailable.")
+    };
+
     public async Task InvokeAsync(HttpContext context)
     {
         try
@@ -26,7 +43,8 @@ public sealed class ExceptionHandlingMiddleware(
         {
             var invalidRequest = exception is ArgumentException or NotSupportedException;
             var rateLimited = exception is MarketDataRateLimitException;
-            if (!invalidRequest && !rateLimited)
+            var providerFailure = exception as MarketDataProviderException;
+            if (!invalidRequest && !rateLimited && providerFailure is null)
             {
                 // Exception messages, stacks and request values may contain credentials.
                 // Log only the category and correlation ID, not the exception object.
@@ -41,11 +59,11 @@ public sealed class ExceptionHandlingMiddleware(
             }
 
             context.Response.Clear();
-            context.Response.StatusCode = rateLimited ? StatusCodes.Status429TooManyRequests : invalidRequest
+            context.Response.StatusCode = providerFailure is not null ? ProviderStatus(providerFailure.Category) : rateLimited ? StatusCodes.Status429TooManyRequests : invalidRequest
                 ? StatusCodes.Status400BadRequest
                 : StatusCodes.Status500InternalServerError;
 
-            var error = rateLimited
+            var error = providerFailure is not null ? ProviderError(providerFailure.Category) : rateLimited
                 ? new ApiErrorResponse("market_data_rate_limited", "Market data requests are temporarily rate limited.")
                 : exception is NotSupportedException
                 ? new ApiErrorResponse("unsupported_operation", "The requested operation or interval is not supported.")

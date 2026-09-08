@@ -14,8 +14,9 @@ public sealed class RateLimitedMarketDataProviderTests
 {
     private readonly CountingProvider inner = new();
     private readonly RecordingLogger logger = new();
+    private static CalendarHistoryRange HistoryRange => (CalendarHistoryRange)History.Range;
     private static readonly StockHistoryRequest History = new("AAPL",
-        DateTimeOffset.Parse("2026-08-24T13:30:00Z"), DateTimeOffset.Parse("2026-08-29T13:30:00Z"), StockHistoryInterval.Day);
+        new CalendarHistoryRange(new DateOnly(2026, 8, 24), new DateOnly(2026, 8, 29)), StockHistoryInterval.Day);
 
     private static FixedWindowRateLimiter Limiter(int permits, int queue = 0) => new(new FixedWindowRateLimiterOptions
     {
@@ -31,7 +32,7 @@ public sealed class RateLimitedMarketDataProviderTests
         "null-quote" => await provider.GetQuoteAsync("INVALID", token),
         "null-history" => await provider.GetHistoryAsync(History with { Symbol = "INVALID" }, token),
         "empty-search" => await provider.SearchStocksAsync("zzzzzz", token),
-        "empty-history" => await provider.GetHistoryAsync(History with { FromUtc = History.ToUtc, ToUtc = History.ToUtc.AddDays(1) }, token),
+        "empty-history" => await provider.GetHistoryAsync(History with { Range = new CalendarHistoryRange(HistoryRange.ToDate, HistoryRange.ToDate.AddDays(1)) }, token),
         _ => await provider.GetHistoryAsync(History, token)
     };
 

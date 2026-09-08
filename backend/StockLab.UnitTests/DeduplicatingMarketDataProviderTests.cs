@@ -11,15 +11,16 @@ namespace StockLab.UnitTests;
 public sealed class DeduplicatingMarketDataProviderTests
 {
     private readonly BlockingProvider inner = new();
+    private static CalendarHistoryRange HistoryRange => (CalendarHistoryRange)History.Range;
     private static readonly StockHistoryRequest History = new("AAPL",
-        DateTimeOffset.Parse("2026-08-24T13:30:00Z"), DateTimeOffset.Parse("2026-08-29T13:30:00Z"), StockHistoryInterval.Day);
+        new CalendarHistoryRange(new DateOnly(2026, 8, 24), new DateOnly(2026, 8, 29)), StockHistoryInterval.Day);
 
     private static async Task<object?> Call(IMarketDataProvider provider, string operation,
         string value = "AAPL", CancellationToken token = default) => operation switch
     {
         "quote" => await provider.GetQuoteAsync(value, token),
         "search" => await provider.SearchStocksAsync(value, token),
-        "empty-history" => await provider.GetHistoryAsync(History with { FromUtc = History.ToUtc, ToUtc = History.ToUtc.AddDays(1) }, token),
+        "empty-history" => await provider.GetHistoryAsync(History with { Range = new CalendarHistoryRange(HistoryRange.ToDate, HistoryRange.ToDate.AddDays(1)) }, token),
         _ => await provider.GetHistoryAsync(History with { Symbol = value }, token)
     };
 
@@ -77,9 +78,9 @@ public sealed class DeduplicatingMarketDataProviderTests
             dedup.GetQuoteAsync("AAPL"), dedup.GetQuoteAsync("MSFT"),
             dedup.SearchStocksAsync("AAPL"), dedup.SearchStocksAsync("MSFT"),
             dedup.GetHistoryAsync(History),
-            dedup.GetHistoryAsync(History with { FromUtc = History.FromUtc.AddDays(1) }),
-            dedup.GetHistoryAsync(History with { ToUtc = History.ToUtc.AddDays(1) }),
-            dedup.GetHistoryAsync(History with { Interval = StockHistoryInterval.Hour }),
+            dedup.GetHistoryAsync(History with { Range = HistoryRange with { FromDate = HistoryRange.FromDate.AddDays(1) } }),
+            dedup.GetHistoryAsync(History with { Range = HistoryRange with { ToDate = HistoryRange.ToDate.AddDays(1) } }),
+            dedup.GetHistoryAsync(History with { Interval = StockHistoryInterval.Week }),
             dedup.GetHistoryAsync(History with { Symbol = "MSFT" })
         ];
         Assert.All(tasks, task => Assert.False(task.IsCompleted));
@@ -205,7 +206,7 @@ public sealed class DeduplicatingMarketDataProviderTests
     {
         var dedup = new DeduplicatingMarketDataProvider(inner);
         var valid = dedup.GetHistoryAsync(History);
-        await Assert.ThrowsAsync<ArgumentException>(() => dedup.GetHistoryAsync(History with { FromUtc = History.FromUtc.ToOffset(TimeSpan.FromHours(2)) }));
+        await Assert.ThrowsAsync<ArgumentException>(() => dedup.GetHistoryAsync(History with { Range = new IntradayHistoryRange(DateTimeOffset.Parse("2026-08-24T13:30:00+02:00"), DateTimeOffset.Parse("2026-08-29T13:30:00Z")) }));
         Assert.Equal(1, inner.Calls);
         inner.Release();
         await valid;
@@ -218,7 +219,7 @@ public sealed class DeduplicatingMarketDataProviderTests
         var dedup = new DeduplicatingMarketDataProvider(new MockMarketDataProvider());
         Assert.NotNull(await dedup.GetQuoteAsync("AAPL"));
         Assert.Equal(0, dedup.InFlightCount);
-        await Assert.ThrowsAsync<NotSupportedException>(() => dedup.GetHistoryAsync(History with { Interval = StockHistoryInterval.Hour }));
+        await Assert.ThrowsAsync<NotSupportedException>(() => dedup.GetHistoryAsync(History with { Interval = StockHistoryInterval.Week }));
         Assert.Equal(0, dedup.InFlightCount);
         Assert.NotNull(await dedup.GetHistoryAsync(History));
         Assert.Equal(0, dedup.InFlightCount);

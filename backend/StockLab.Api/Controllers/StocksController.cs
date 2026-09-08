@@ -11,7 +11,7 @@ namespace StockLab.Api.Controllers;
 [Produces("application/json")]
 public sealed class StocksController(IMarketDataProvider marketDataProvider) : ControllerBase
 {
-    /// <summary>Gets historical bars with opening times in the UTC range [from, to).</summary>
+    /// <summary>Gets historical bars with timestamps or period dates in the half-open range [from, to).</summary>
     [HttpGet("{symbol}/history")]
     [ProducesResponseType(typeof(StockHistoryResponse), StatusCodes.Status200OK)]
     // Both validation errors and unsupported intervals share error/message;
@@ -20,14 +20,16 @@ public sealed class StocksController(IMarketDataProvider marketDataProvider) : C
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status503ServiceUnavailable)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status504GatewayTimeout)]
     public async Task<ActionResult<StockHistoryResponse>> GetHistoryAsync(
         [FromRoute, Required] string symbol,
         [FromQuery] StockHistoryQuery query,
         CancellationToken cancellationToken)
     {
         var normalizedSymbol = symbol.Trim().ToUpperInvariant();
-        var request = new StockHistoryRequest(normalizedSymbol,
-            query.From!.Value, query.To!.Value, query.Interval!.Value);
+        var request = query.ToRequest(normalizedSymbol);
         var history = await marketDataProvider.GetHistoryAsync(request, cancellationToken);
         if (history is null)
         {
@@ -37,7 +39,7 @@ public sealed class StocksController(IMarketDataProvider marketDataProvider) : C
 
         return Ok(new StockHistoryResponse(history.Symbol, history.Currency, history.Interval.ToString(),
             history.Bars.Select(bar => new StockHistoryBarResponse(
-                bar.OpenTimeUtc, bar.Open, bar.High, bar.Low, bar.Close, bar.Volume)).ToArray()));
+                bar.OpenTimeUtc, bar.PeriodDate, bar.Open, bar.High, bar.Low, bar.Close, bar.Volume)).ToArray()));
     }
 
     /// <summary>Searches stocks by ticker or company name.</summary>
@@ -46,6 +48,9 @@ public sealed class StocksController(IMarketDataProvider marketDataProvider) : C
     [ProducesResponseType(typeof(ApiValidationErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status503ServiceUnavailable)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status504GatewayTimeout)]
     public async Task<ActionResult<StockSearchResponse[]>> SearchStocksAsync(
         [FromQuery, Required] string query,
         CancellationToken cancellationToken)
@@ -62,6 +67,9 @@ public sealed class StocksController(IMarketDataProvider marketDataProvider) : C
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status502BadGateway)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status503ServiceUnavailable)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status504GatewayTimeout)]
     public async Task<ActionResult<StockQuoteResponse>> GetQuoteAsync(
         [FromRoute, Required] string symbol,
         CancellationToken cancellationToken)

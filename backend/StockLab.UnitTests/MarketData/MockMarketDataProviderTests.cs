@@ -7,7 +7,7 @@ namespace StockLab.UnitTests.MarketData;
 public sealed class MockMarketDataProviderTests
 {
     private readonly IMarketDataProvider provider = new MockMarketDataProvider();
-    private static readonly DateTimeOffset FirstOpen = new(2026, 8, 24, 13, 30, 0, TimeSpan.Zero);
+    private static readonly DateOnly FirstOpen = new(2026, 8, 24);
 
     [Theory]
     [InlineData(" aapl ", "AAPL", 204.5, 20_400_000L)]
@@ -51,13 +51,13 @@ public sealed class MockMarketDataProviderTests
     [Fact]
     public async Task History_uses_inclusive_start_and_exclusive_end()
     {
-        var request = Request(" aapl ") with { FromUtc = FirstOpen.AddDays(1), ToUtc = FirstOpen.AddDays(3) };
+        var request = Request(" aapl ") with { Range = new CalendarHistoryRange(FirstOpen.AddDays(1), FirstOpen.AddDays(3)) };
         var history = await provider.GetHistoryAsync(request);
 
         Assert.NotNull(history);
         Assert.Equal("AAPL", history.Symbol);
         Assert.Equal(StockHistoryInterval.Day, history.Interval);
-        Assert.Equal(new[] { FirstOpen.AddDays(1), FirstOpen.AddDays(2) }, history.Bars.Select(bar => bar.OpenTimeUtc));
+        Assert.Equal(new[] { FirstOpen.AddDays(1), FirstOpen.AddDays(2) }, history.Bars.Select(bar => bar.PeriodDate!.Value));
         Assert.All(history.Bars, bar =>
         {
             Assert.True(bar.Low <= bar.Open && bar.Low <= bar.Close);
@@ -96,7 +96,7 @@ public sealed class MockMarketDataProviderTests
     [Fact]
     public async Task Reversed_history_range_is_rejected()
     {
-        var request = Request("AAPL") with { ToUtc = FirstOpen.AddDays(-1) };
+        var request = Request("AAPL") with { Range = new CalendarHistoryRange(FirstOpen, FirstOpen.AddDays(-1)) };
         await Assert.ThrowsAsync<ArgumentException>(() => provider.GetHistoryAsync(request));
     }
 
@@ -122,14 +122,14 @@ public sealed class MockMarketDataProviderTests
         var invalidRequests = new[]
         {
             Request(" "),
-            Request("AAPL") with { FromUtc = FirstOpen.ToOffset(TimeSpan.FromHours(2)) },
-            Request("AAPL") with { ToUtc = FirstOpen.AddDays(5).ToOffset(TimeSpan.FromHours(2)) },
-            Request("AAPL") with { ToUtc = FirstOpen },
+            Request("AAPL") with { Range = new IntradayHistoryRange(DateTimeOffset.Parse("2026-08-24T13:30:00+02:00"), DateTimeOffset.Parse("2026-08-29T13:30:00Z")) },
+            Request("AAPL") with { Range = new IntradayHistoryRange(DateTimeOffset.Parse("2026-08-24T13:30:00Z"), DateTimeOffset.Parse("2026-08-29T13:30:00+02:00")) },
+            Request("AAPL") with { Range = new CalendarHistoryRange(FirstOpen, FirstOpen) },
             Request("AAPL") with { Interval = (StockHistoryInterval)999 }
         };
         foreach (var request in invalidRequests)
             await Assert.ThrowsAnyAsync<ArgumentException>(() => provider.GetHistoryAsync(request));
     }
     private static StockHistoryRequest Request(string symbol) =>
-        new(symbol, FirstOpen, FirstOpen.AddDays(5), StockHistoryInterval.Day);
+        new(symbol, new CalendarHistoryRange(FirstOpen, FirstOpen.AddDays(5)), StockHistoryInterval.Day);
 }
