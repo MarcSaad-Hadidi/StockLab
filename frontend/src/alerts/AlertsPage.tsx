@@ -102,11 +102,19 @@ function AlertRow({ alert, onEdit, onToggle, onDelete }: { alert: PriceAlert; on
 
 type AlertDraft = { symbol: string; condition: AlertCondition; targetPrice: number }
 
-function AlertModal({ alert, onClose, onSave }: { alert: PriceAlert | null; onClose: () => void; onSave: (draft: AlertDraft) => void }) {
+type AlertFormProps = {
+  alert?: PriceAlert | null
+  formId?: string
+  idPrefix: string
+  onCancel?: () => void
+  onSave: (draft: AlertDraft) => void
+}
+
+function AlertForm({ alert, formId, idPrefix, onCancel, onSave }: AlertFormProps) {
   const { t } = useTranslation()
   const [symbol, setSymbol] = useState(alert?.symbol ?? assetOptions[0].symbol)
   const [condition, setCondition] = useState<AlertCondition>(alert?.condition ?? 'above')
-  const [targetPrice, setTargetPrice] = useState(String(alert?.targetPrice ?? assetOptions[0].lastPrice.toFixed(2)))
+  const [targetPrice, setTargetPrice] = useState(alert ? String(alert.targetPrice) : '')
   const [error, setError] = useState('')
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -114,7 +122,33 @@ function AlertModal({ alert, onClose, onSave }: { alert: PriceAlert | null; onCl
     if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) { setError('stockDetails.errors.targetPrice'); return }
     onSave({ symbol, condition, targetPrice: parsedPrice })
   }
-  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="alert-modal-title" aria-modal="true" className="alert-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label={t('alerts.closeDialog')} className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="alert-modal-icon"><Icon name="bell" size={20} /></div><h2 id="alert-modal-title">{alert ? t('alerts.editAlertTitle') : t('alerts.createAlert')}</h2><p>{t('alerts.modalDescription')}</p><form onSubmit={submit}><label htmlFor="alert-asset">{t('alerts.selectAsset')}</label><div className="select-wrap"><select id="alert-asset" onChange={(event) => setSymbol(event.target.value)} value={symbol}>{assetOptions.map((asset) => <option key={asset.symbol} value={asset.symbol}>{asset.symbol} — {asset.name}</option>)}</select><Icon name="chevron-down" size={14} /></div><fieldset><legend>{t('common.condition')}</legend><div className="condition-options"><button aria-pressed={condition === 'above'} className={`condition-option ${condition === 'above' ? 'selected' : ''}`} onClick={() => setCondition('above')} type="button"><span>↑</span> {t('common.above')}</button><button aria-pressed={condition === 'below'} className={`condition-option ${condition === 'below' ? 'selected' : ''}`} onClick={() => setCondition('below')} type="button"><span>↓</span> {t('common.below')}</button></div></fieldset><label htmlFor="alert-target">{t('common.targetPrice')}</label><div className="price-input"><span>$</span><input id="alert-target" inputMode="decimal" min="0.01" onChange={(event) => { setTargetPrice(event.target.value); setError('') }} required step="0.01" type="number" value={targetPrice} /></div><fieldset className="notify-fieldset"><legend>{t('alerts.notifyVia')}</legend><div className="notify-options"><label><input defaultChecked type="checkbox" /> <span>{t('alerts.inApp')}</span></label><label><input defaultChecked type="checkbox" /> <span>{t('common.email')}</span></label><label><input type="checkbox" /> <span>{t('alerts.pushNotification')}</span></label></div></fieldset>{error && <p className="form-error" role="alert">{t(error)}</p>}<div className="alert-modal-actions"><button className="cancel-button" onClick={onClose} type="button">{t('common.cancel')}</button><button className="modal-primary" type="submit">{alert ? t('common.saveChanges') : t('alerts.createAlert')}</button></div></form></section></div>
+  return <form className="alert-form" id={formId} onSubmit={submit}>
+    <div className="alert-form-grid">
+      <div className="alert-form-field">
+        <label htmlFor={`${idPrefix}-asset`}>{t('alerts.selectAsset')}</label>
+        <div className="select-wrap"><select id={`${idPrefix}-asset`} onChange={(event) => setSymbol(event.target.value)} value={symbol}>{assetOptions.map((asset) => <option key={asset.symbol} value={asset.symbol}>{asset.symbol} — {asset.name}</option>)}</select><Icon name="chevron-down" size={14} /></div>
+      </div>
+      <fieldset className="alert-form-field alert-form-condition">
+        <legend>{t('common.condition')}</legend>
+        <div className="condition-options"><button aria-pressed={condition === 'above'} className={`condition-option ${condition === 'above' ? 'selected' : ''}`} onClick={() => setCondition('above')} type="button"><span>↑</span> {t('common.above')}</button><button aria-pressed={condition === 'below'} className={`condition-option ${condition === 'below' ? 'selected' : ''}`} onClick={() => setCondition('below')} type="button"><span>↓</span> {t('common.below')}</button></div>
+      </fieldset>
+      <div className="alert-form-field alert-form-target">
+        <label htmlFor={`${idPrefix}-target`}>{t('common.targetPrice')}</label>
+        <div className="price-input"><span>$</span><input id={`${idPrefix}-target`} inputMode="decimal" min="0.01" onChange={(event) => { setTargetPrice(event.target.value); setError('') }} required step="0.01" type="number" value={targetPrice} /></div>
+      </div>
+      <fieldset className="alert-form-field notify-fieldset">
+        <legend>{t('alerts.notifyVia')}</legend>
+        <div className="notify-options"><label><input defaultChecked type="checkbox" /> <span>{t('alerts.inApp')}</span></label><label><input defaultChecked type="checkbox" /> <span>{t('common.email')}</span></label><label><input type="checkbox" /> <span>{t('alerts.pushNotification')}</span></label></div>
+      </fieldset>
+    </div>
+    {error && <p className="form-error" role="alert">{t(error)}</p>}
+    <div className="alert-form-actions">{onCancel && <button className="cancel-button" onClick={onCancel} type="button">{t('common.cancel')}</button>}<button className="modal-primary" type="submit">{alert ? t('common.saveChanges') : t('alerts.createAlert')}</button></div>
+  </form>
+}
+
+function AlertModal({ alert, onClose, onSave }: { alert: PriceAlert | null; onClose: () => void; onSave: (draft: AlertDraft) => void }) {
+  const { t } = useTranslation()
+  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="alert-modal-title" aria-modal="true" className="alert-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label={t('alerts.closeDialog')} className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="alert-modal-icon"><Icon name="bell" size={20} /></div><h2 id="alert-modal-title">{alert ? t('alerts.editAlertTitle') : t('alerts.createAlert')}</h2><p>{t('alerts.modalDescription')}</p><AlertForm alert={alert} idPrefix="modal-alert" onCancel={onClose} onSave={onSave} /></section></div>
 }
 
 export default function AlertsPage() {
@@ -178,6 +212,11 @@ export default function AlertsPage() {
     showToast('alerts.alertDeleted', { symbol: alert.symbol })
   }
 
+  const focusCreateAlert = () => {
+    document.getElementById('create-alert-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    document.getElementById('inline-alert-asset')?.focus()
+  }
+
   return <div className="alerts-page stocklab-layout">
     <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
     <main className="alerts-main">
@@ -194,7 +233,7 @@ export default function AlertsPage() {
       <div className="alerts-content">
         <section className="alerts-heading">
           <div><h1>{t('alerts.pageTitle')}</h1><p>{t('alerts.pageSubtitle')}</p></div>
-          <button className="primary-button" onClick={() => setModalAlert(null)} type="button"><Icon name="plus" size={15} /> {t('alerts.createAlert')}</button>
+          <button aria-controls="create-alert-form" className="primary-button" onClick={focusCreateAlert} type="button"><Icon name="plus" size={15} /> {t('alerts.createAlert')}</button>
         </section>
         <div aria-label={t('alerts.alertStatus')} className="alert-tabs" role="tablist">
           <button aria-selected={statusFilter === 'active'} className={statusFilter === 'active' ? 'selected' : ''} onClick={() => setStatusFilter('active')} role="tab" type="button">{t('alerts.statuses.active')} <span>({counts.active})</span></button>
@@ -215,7 +254,7 @@ export default function AlertsPage() {
           <div className="alerts-footer"><span>{t('alerts.showing', { shown: filteredAlerts.length, total: alerts.length })}</span><span className="pagination"><button aria-label={t('common.previousPage')} disabled type="button">‹</button><b>1</b><button aria-label={t('common.nextPage')} disabled type="button">›</button><label>{t('alerts.rowsPerPage')} <select aria-label={t('alerts.rowsPerPage')} defaultValue="25"><option>10</option><option>25</option><option>50</option></select></label></span></div>
         </section>
         <div className="alerts-bottom-grid">
-          <section className="panel create-alert-card"><div className="card-icon blue-icon"><Icon name="bell" size={19} /></div><div><h2>{t('alerts.createAlert')}</h2><p>{t('alerts.createAlertDescription')}</p></div><button className="outline-button" onClick={() => setModalAlert(null)} type="button">{t('alerts.createAlert')} <Icon name="chevron-right" size={14} /></button></section>
+          <section aria-labelledby="create-alert-title" className="panel create-alert-card"><div className="create-alert-card-header"><div className="card-icon blue-icon"><Icon name="bell" size={19} /></div><div><h2 id="create-alert-title">{t('alerts.createAlert')}</h2><p>{t('alerts.createAlertDescription')}</p></div></div><AlertForm formId="create-alert-form" idPrefix="inline-alert" onSave={saveAlert} /></section>
           <section className="panel how-alerts-card"><div className="card-icon purple-icon"><Icon name="shield" size={19} /></div><div><h2>{t('alerts.howAlertsWork')}</h2><p>{t('alerts.howAlertsWorkDescription')}</p></div><ul><li><span className="how-icon"><Icon name="activity" size={14} /></span><span><strong>{t('alerts.realTimeMonitoring')}</strong><small>{t('alerts.realTimeMonitoringDescription')}</small></span></li><li><span className="how-icon"><Icon name="bell" size={14} /></span><span><strong>{t('alerts.multipleDeliveryChannels')}</strong><small>{t('alerts.multipleDeliveryChannelsDescription')}</small></span></li><li><span className="how-icon"><Icon name="settings" size={14} /></span><span><strong>{t('alerts.manageAnytime')}</strong><small>{t('alerts.manageAnytimeDescription')}</small></span></li></ul></section>
         </div>
         <p className="simulation-note"><Icon name="activity" size={13} /> {t('alerts.simulationNote')}</p>
