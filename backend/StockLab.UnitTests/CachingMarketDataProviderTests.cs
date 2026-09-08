@@ -13,8 +13,9 @@ public sealed class CachingMarketDataProviderTests : IDisposable
     private readonly CountingProvider provider = new();
     private readonly MemoryCache memory;
     private readonly CachingMarketDataProvider cached;
+    private static CalendarHistoryRange HistoryRange => (CalendarHistoryRange)Request.Range;
     private static readonly StockHistoryRequest Request = new("AAPL",
-        DateTimeOffset.Parse("2026-08-24T13:30:00Z"), DateTimeOffset.Parse("2026-08-29T13:30:00Z"), StockHistoryInterval.Day);
+        new CalendarHistoryRange(new DateOnly(2026, 8, 24), new DateOnly(2026, 8, 29)), StockHistoryInterval.Day);
 
     public CachingMarketDataProviderTests()
     {
@@ -66,11 +67,11 @@ public sealed class CachingMarketDataProviderTests : IDisposable
     public async Task Different_history_keys_do_not_collide()
     {
         await cached.GetHistoryAsync(Request);
-        await cached.GetHistoryAsync(Request with { FromUtc = Request.FromUtc.AddDays(1) });
-        await cached.GetHistoryAsync(Request with { ToUtc = Request.ToUtc.AddDays(1) });
+        await cached.GetHistoryAsync(Request with { Range = HistoryRange with { FromDate = HistoryRange.FromDate.AddDays(1) } });
+        await cached.GetHistoryAsync(Request with { Range = HistoryRange with { ToDate = HistoryRange.ToDate.AddDays(1) } });
         await cached.GetHistoryAsync(Request with { Symbol = "MSFT" });
-        // This fake supports Hour to test cache keys independently of the mock's capabilities.
-        await cached.GetHistoryAsync(Request with { Interval = StockHistoryInterval.Hour });
+        // This fake supports Week to test cache keys independently of the mock's capabilities.
+        await cached.GetHistoryAsync(Request with { Interval = StockHistoryInterval.Week });
         Assert.Equal(5, provider.Calls);
     }
 
@@ -132,7 +133,7 @@ public sealed class CachingMarketDataProviderTests : IDisposable
         for (var i = 0; i < 2; i++)
         {
             Assert.Empty(await cached.SearchStocksAsync("zzzzzz"));
-            var empty = await cached.GetHistoryAsync(Request with { FromUtc = Request.ToUtc, ToUtc = Request.ToUtc.AddDays(1) });
+            var empty = await cached.GetHistoryAsync(Request with { Range = new CalendarHistoryRange(HistoryRange.ToDate, HistoryRange.ToDate.AddDays(1)) });
             Assert.NotNull(empty);
             Assert.Empty(empty.Bars);
         }
@@ -143,8 +144,8 @@ public sealed class CachingMarketDataProviderTests : IDisposable
     public async Task Invalid_history_cannot_hit_equivalent_utc_entry()
     {
         await cached.GetHistoryAsync(Request);
-        await Assert.ThrowsAsync<ArgumentException>(() => cached.GetHistoryAsync(Request with { FromUtc = Request.FromUtc.ToOffset(TimeSpan.FromHours(2)) }));
-        await Assert.ThrowsAsync<ArgumentException>(() => cached.GetHistoryAsync(Request with { ToUtc = Request.FromUtc }));
+        await Assert.ThrowsAsync<ArgumentException>(() => cached.GetHistoryAsync(Request with { Range = new IntradayHistoryRange(DateTimeOffset.Parse("2026-08-24T13:30:00+02:00"), DateTimeOffset.Parse("2026-08-29T13:30:00Z")) }));
+        await Assert.ThrowsAsync<ArgumentException>(() => cached.GetHistoryAsync(Request with { Range = HistoryRange with { ToDate = HistoryRange.FromDate } }));
         await Assert.ThrowsAsync<ArgumentException>(() => cached.GetHistoryAsync(Request with { Interval = (StockHistoryInterval)999 }));
         Assert.Equal(1, provider.Calls);
     }

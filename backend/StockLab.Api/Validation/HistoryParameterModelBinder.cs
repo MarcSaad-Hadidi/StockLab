@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using StockLab.Application.DTOs.MarketData;
 
@@ -25,13 +24,9 @@ public sealed class HistoryParameterModelBinder : IModelBinder
             {
                 result = interval;
             }
-            else if (bindingContext.ModelType == typeof(DateTimeOffset?)
-                && (token.EndsWith('Z') || token.EndsWith("+00:00", StringComparison.Ordinal))
-                && DateTimeOffset.TryParse(token, CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal, out var timestamp)
-                && timestamp.Offset == TimeSpan.Zero)
+            else if (bindingContext.ModelType == typeof(string))
             {
-                result = timestamp;
+                result = token;
             }
         }
 

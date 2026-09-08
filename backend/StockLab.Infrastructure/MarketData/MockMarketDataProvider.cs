@@ -9,8 +9,8 @@ namespace StockLab.Infrastructure.MarketData;
 /// </summary>
 public sealed class MockMarketDataProvider : IMarketDataProvider
 {
-    private static readonly DateTimeOffset FirstSessionOpen =
-        new(2026, 8, 24, 13, 30, 0, TimeSpan.Zero);
+    private static readonly DateOnly FirstSessionDate =
+        new(2026, 8, 24);
 
     private static readonly SimulatedStock[] Stocks =
     [
@@ -41,7 +41,7 @@ public sealed class MockMarketDataProvider : IMarketDataProvider
             change,
             decimal.Round(change / previousClose * 100m, 4),
             last.Volume,
-            last.OpenTimeUtc.AddHours(6.5)));
+            new DateTimeOffset(2026, 8, 28, 20, 0, 0, TimeSpan.Zero)));
     }
 
     public Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(
@@ -74,21 +74,7 @@ public sealed class MockMarketDataProvider : IMarketDataProvider
         ArgumentNullException.ThrowIfNull(request);
         var normalizedSymbol = NormalizeSymbol(request.Symbol);
 
-        if (request.FromUtc.Offset != TimeSpan.Zero || request.ToUtc.Offset != TimeSpan.Zero)
-        {
-            throw new ArgumentException("History timestamps must have a zero UTC offset.", nameof(request));
-        }
-
-        if (request.FromUtc >= request.ToUtc)
-        {
-            throw new ArgumentException("FromUtc must precede ToUtc.", nameof(request));
-        }
-
-        if (!Enum.IsDefined(request.Interval))
-        {
-            throw new ArgumentOutOfRangeException(nameof(request), "History interval must be a defined value.");
-        }
-
+        request.Validate();
         if (request.Interval != StockHistoryInterval.Day)
         {
             throw new NotSupportedException("The mock provider supports only daily history.");
@@ -100,8 +86,9 @@ public sealed class MockMarketDataProvider : IMarketDataProvider
             return Task.FromResult<StockHistory?>(null);
         }
 
+        var range = (CalendarHistoryRange)request.Range;
         var bars = CreateDailyBars(stock, cancellationToken)
-            .Where(bar => bar.OpenTimeUtc >= request.FromUtc && bar.OpenTimeUtc < request.ToUtc)
+            .Where(bar => bar.PeriodDate >= range.FromDate && bar.PeriodDate < range.ToDate)
             .ToArray();
 
         return Task.FromResult<StockHistory?>(new StockHistory(
@@ -122,7 +109,7 @@ public sealed class MockMarketDataProvider : IMarketDataProvider
             cancellationToken.ThrowIfCancellationRequested();
             var open = stock.InitialPrice + day;
             bars[day] = new StockHistoryBar(
-                FirstSessionOpen.AddDays(day), open, open + 1m, open - 0.5m,
+                FirstSessionDate.AddDays(day), open, open + 1m, open - 0.5m,
                 open + 0.5m, stock.InitialVolume + day * 100_000L);
         }
 

@@ -22,8 +22,9 @@ namespace StockLab.UnitTests.MarketData;
 // Complements the existing burst/hit/expiration tests; every case owns its whole pipeline.
 public sealed class MarketDataPipelineTests
 {
+    private static CalendarHistoryRange HistoryRange => (CalendarHistoryRange)History.Range;
     private static readonly StockHistoryRequest History = new("AAPL",
-        DateTimeOffset.Parse("2026-08-24T13:30:00Z"), DateTimeOffset.Parse("2026-08-29T13:30:00Z"), StockHistoryInterval.Day);
+        new CalendarHistoryRange(new DateOnly(2026, 8, 24), new DateOnly(2026, 8, 29)), StockHistoryInterval.Day);
 
     [Theory]
     [InlineData("quote")]
@@ -107,7 +108,7 @@ public sealed class MarketDataPipelineTests
         pipeline.Inner.Block();
         var quotes = new[] { "AAPL", "MSFT", "NVDA" }.Select(symbol => pipeline.Cache.GetQuoteAsync(symbol)).ToArray();
         var full = pipeline.Cache.GetHistoryAsync(History);
-        var partial = pipeline.Cache.GetHistoryAsync(History with { FromUtc = History.FromUtc.AddDays(1), ToUtc = History.FromUtc.AddDays(3) });
+        var partial = pipeline.Cache.GetHistoryAsync(History with { Range = new CalendarHistoryRange(HistoryRange.FromDate.AddDays(1), HistoryRange.FromDate.AddDays(3)) });
         Assert.Equal(5, pipeline.Inner.Calls);
         Assert.Equal(3, pipeline.Permits);
         pipeline.Inner.Release();
@@ -223,7 +224,7 @@ public sealed class MarketDataPipelineTests
             "null-quote" => await Cache.GetQuoteAsync("INVALID", token),
             "null-history" => await Cache.GetHistoryAsync(History with { Symbol = "INVALID" }, token),
             "empty-search" => await Cache.SearchStocksAsync("zzzzzz", token),
-            _ => await Cache.GetHistoryAsync(History with { FromUtc = History.ToUtc, ToUtc = History.ToUtc.AddDays(1) }, token)
+            _ => await Cache.GetHistoryAsync(History with { Range = new CalendarHistoryRange(HistoryRange.ToDate, HistoryRange.ToDate.AddDays(1)) }, token)
         };
         public Task<object?>[] Burst(string operation) => Enumerable.Range(0, 10).Select(_ => Call(operation)).ToArray();
         public void Dispose() { Limiter.Dispose(); Memory.Dispose(); }

@@ -148,12 +148,12 @@ public sealed class ApiValidationTests : IDisposable
         host.Dispose();
     }
 
-    private const string FullHistoryQuery = "from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=Day";
+    private const string FullHistoryQuery = "from=2026-08-24&to=2026-08-29&interval=Day";
 
     [Theory]
-    [InlineData("from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=Day", 5)]
-    [InlineData("from=2026-08-25T13:30:00Z&to=2026-08-27T13:30:00Z&interval=Day", 2)]
-    [InlineData("from=2026-09-01T00:00:00Z&to=2026-09-02T00:00:00Z&interval=Day", 0)]
+    [InlineData("from=2026-08-24&to=2026-08-29&interval=Day", 5)]
+    [InlineData("from=2026-08-25&to=2026-08-27&interval=Day", 2)]
+    [InlineData("from=2026-09-01&to=2026-09-02&interval=Day", 0)]
     public async Task History_returns_ohlcv_in_requested_half_open_range(string query, int count)
     {
         using var response = await client.GetAsync($"/api/stocks/%20aapl%20/history?{query}");
@@ -167,14 +167,14 @@ public sealed class ApiValidationTests : IDisposable
         Assert.Equal("Day", root.GetProperty("interval").GetString());
         var bars = root.GetProperty("bars").EnumerateArray().ToArray();
         Assert.Equal(count, bars.Length);
-        var from = DateTimeOffset.Parse(query.Split('&')[0][5..]);
-        var to = DateTimeOffset.Parse(query.Split('&')[1][3..]);
-        DateTimeOffset? previous = null;
+        var from = DateOnly.Parse(query.Split('&')[0][5..]);
+        var to = DateOnly.Parse(query.Split('&')[1][3..]);
+        DateOnly? previous = null;
         foreach (var bar in bars)
         {
-            Assert.Equal(6, bar.EnumerateObject().Count());
-            var timestamp = bar.GetProperty("openTimeUtc").GetDateTimeOffset();
-            Assert.Equal(TimeSpan.Zero, timestamp.Offset);
+            Assert.Equal(7, bar.EnumerateObject().Count());
+            var timestamp = DateOnly.Parse(bar.GetProperty("periodDate").GetString()!);
+            Assert.Equal(JsonValueKind.Null, bar.GetProperty("openTimeUtc").ValueKind);
             Assert.True(timestamp >= from && timestamp < to);
             Assert.True(previous is null || timestamp > previous);
             previous = timestamp;
@@ -233,22 +233,22 @@ public sealed class ApiValidationTests : IDisposable
     [InlineData("Month")]
     public async Task Unsupported_history_interval_returns_explicit_safe_error(string interval)
     {
-        using var response = await client.GetAsync($"/api/stocks/AAPL/history?{FullHistoryQuery.Replace("Day", interval)}");
+        using var response = await client.GetAsync($"/api/stocks/AAPL/history?{(interval is "Minute" or "Hour" ? "from=2026-08-24T13:30:00Z&to=2026-08-29T13:30:00Z&interval=" + interval : FullHistoryQuery.Replace("Day", interval))}");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("unsupported_operation", json.RootElement.GetProperty("error").GetString());
         Assert.Equal(1, provider.HistoryCalls);
     }
     [Theory]
-    [InlineData("from=2026-08-24T13:30:00%2B00:00&to=2026-08-29T13:30:00%2B00:00&interval=Day")]
-    [InlineData("from=2026-08-24T13:30:00.000Z&to=2026-08-29T13:30:00.000Z&interval=3")]
+    [InlineData("from=2026-08-24T13:30:00%2B00:00&to=2026-08-29T13:30:00%2B00:00&interval=Minute")]
+    [InlineData("from=2026-08-24T13:30:00.000Z&to=2026-08-29T13:30:00.000Z&interval=1")]
     public async Task Explicit_utc_bounds_and_single_intervals_remain_supported(string query)
     {
         using var response = await client.GetAsync($"/api/stocks/AAPL/history?{query}");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal("Day", json.RootElement.GetProperty("interval").GetString());
-        Assert.Equal(5, json.RootElement.GetProperty("bars").GetArrayLength());
+        Assert.Equal("unsupported_operation", json.RootElement.GetProperty("error").GetString());
+
         Assert.Equal(1, provider.HistoryCalls);
     }
     private sealed class CountingProvider : IMarketDataProvider

@@ -74,8 +74,8 @@ public sealed class StocksControllerTests
         cancellation.Cancel();
         var query = new StockHistoryQuery
         {
-            From = DateTimeOffset.Parse("2026-08-24T13:30:00Z"),
-            To = DateTimeOffset.Parse("2026-08-29T13:30:00Z"),
+            From = "2026-08-24",
+            To = "2026-08-29",
             Interval = StockHistoryInterval.Day
         };
         var controller = new StocksController(new MockMarketDataProvider());

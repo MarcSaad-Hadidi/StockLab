@@ -31,9 +31,7 @@ public sealed class DeduplicatingMarketDataProvider(IMarketDataProvider inner) :
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(request);
         var normalized = request with { Symbol = Normalize(request.Symbol) };
-        if (request.FromUtc.Offset != TimeSpan.Zero || request.ToUtc.Offset != TimeSpan.Zero
-            || request.FromUtc >= request.ToUtc || !Enum.IsDefined(request.Interval))
-            throw new ArgumentException("History requires UTC bounds, from < to and a defined interval.", nameof(request));
+        request.Validate();
         return JoinAsync(histories, normalized, () => inner.GetHistoryAsync(normalized, CancellationToken.None), cancellationToken);
     }
 

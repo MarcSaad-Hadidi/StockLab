@@ -7,7 +7,8 @@ public sealed record StockHistoryResponse(
     StockHistoryBarResponse[] Bars);
 
 public sealed record StockHistoryBarResponse(
-    DateTimeOffset OpenTimeUtc,
+    DateTimeOffset? OpenTimeUtc,
+    DateOnly? PeriodDate,
     decimal Open,
     decimal High,
     decimal Low,

@@ -56,9 +56,7 @@ public sealed class CachingMarketDataProvider : IMarketDataProvider
         ArgumentNullException.ThrowIfNull(request);
         var normalized = request with { Symbol = Normalize(request.Symbol) };
         // Check contract preconditions before lookup, including on cache hits.
-        if (request.FromUtc.Offset != TimeSpan.Zero || request.ToUtc.Offset != TimeSpan.Zero
-            || request.FromUtc >= request.ToUtc || !Enum.IsDefined(request.Interval))
-            throw new ArgumentException("History requires UTC bounds, from < to and a defined interval.", nameof(request));
+        request.Validate();
 
         return GetOrLoadAsync((keyNamespace, "history", normalized), normalized.Symbol.Length, historyTtl, async () =>
         {
