@@ -14,6 +14,7 @@ type FinancialLineChartProps = {
   formatTick?: (value: number) => string
   pointLabel?: (index: number) => string
   showLatestValue?: boolean
+  size?: 'default' | 'compact'
 }
 
 function NoTooltip() {
@@ -84,11 +85,11 @@ function ChartInteraction({ values, labels, formatValue, pointLabel, showLatestV
 }
 
 export function FinancialLineChart(props: FinancialLineChartProps) {
-  const { values, labels, min, max, ariaLabel, formatValue, formatTick = formatValue } = props
+  const { values, labels, min, max, ariaLabel, formatValue, formatTick = formatValue, size = 'default' } = props
   const gradientId = useId().replaceAll(':', '')
   const [overlay, setOverlay] = useState<HTMLDivElement | null>(null)
   return (
-    <div className="financial-line-chart">
+    <div className={size === 'compact' ? 'financial-line-chart financial-line-chart-compact' : 'financial-line-chart'}>
       <LineChart
         aria-label={ariaLabel}
         margin={{ left: 4, right: 28, top: 28, bottom: 12 }}

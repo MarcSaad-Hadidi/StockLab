@@ -1,3 +1,4 @@
+import { FinancialLineChart } from '../components/charts/FinancialLineChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { formatCompactCurrency, formatCurrency, formatNumber, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
@@ -89,45 +90,34 @@ function MetricCard({ label, value, change, icon, tone }: { label: string; value
 }
 
 function PerformanceChart() {
-  const { t } = useTranslation()
-  const [activeIndex, setActiveIndex] = useState<number | null>(null)
-  const width = 800
-  const height = 235
-  const padding = { top: 17, right: 15, bottom: 30, left: 8 }
+  const { i18n, t } = useTranslation()
   const min = Math.min(...performanceSeries) - 1000
   const max = Math.max(...performanceSeries) + 1000
-  const usableWidth = width - padding.left - padding.right
-  const usableHeight = height - padding.top - padding.bottom
-  const points = performanceSeries.map((value, index) => ({
-    x: padding.left + (index / (performanceSeries.length - 1)) * usableWidth,
-    y: padding.top + ((max - value) / (max - min)) * usableHeight,
-    value,
-  }))
-  const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ')
-  const areaPath = `${linePath} L ${points.at(-1)?.x ?? width} ${height - padding.bottom} L ${points[0].x} ${height - padding.bottom} Z`
-  const activePoint = activeIndex === null ? null : points[activeIndex]
-  const tooltipX = activePoint ? Math.min(Math.max(activePoint.x - 55, 8), width - 118) : 0
-  const tooltipY = activePoint ? Math.max(9, activePoint.y - 52) : 0
+  const labels = performanceSeries.map((_, index) => {
+    const labelIndex = Math.min(
+      performanceLabels.length - 1,
+      Math.round((index / Math.max(performanceSeries.length - 1, 1)) * (performanceLabels.length - 1)),
+    )
+    return t(performanceLabels[labelIndex])
+  })
+
   return (
     <div className="performance-chart-wrap">
       <div className="chart-summary">
         <div><span>{t('aiTrader.currentValue')}</span><strong>{formatCurrency(traderSummary.currentValue)}</strong></div>
         <div><b>{formatSignedCurrency(traderSummary.profitLoss)}</b><small>{t('aiTrader.allTime', { percent: formatNumber(traderSummary.returnPercent) })}</small></div>
       </div>
-      <svg aria-label={t('aiTrader.performanceChart')} className="performance-chart" role="img" viewBox={`0 0 ${width} ${height}`}>
-        <defs><linearGradient id="ai-trader-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#2f7bf0" stopOpacity=".2" /><stop offset="100%" stopColor="#2f7bf0" stopOpacity="0" /></linearGradient></defs>
-        {[0, 1, 2, 3].map((tick) => {
-          const y = padding.top + (tick / 3) * usableHeight
-          const value = max - (tick / 3) * (max - min)
-          return <g key={tick}><line className="chart-grid-line" x1={padding.left} x2={width - padding.right} y1={y} y2={y} /><text className="chart-y-label" textAnchor="end" x={width - padding.right} y={y - 5}>{formatCompactCurrency(value)}</text></g>
-        })}
-        <path className="chart-area" d={areaPath} fill="url(#ai-trader-fill)" />
-        <path className="chart-line" d={linePath} />
-        {activePoint && <line className="chart-crosshair" x1={activePoint.x} x2={activePoint.x} y1={padding.top} y2={height - padding.bottom} />}
-        {points.map((point, index) => <g className="chart-point-group" key={`${point.x}-${point.value}`} onPointerEnter={() => setActiveIndex(index)} onPointerLeave={() => setActiveIndex(null)}><circle className="chart-point-hit" cx={point.x} cy={point.y} r="20" /><circle className="chart-point" cx={point.x} cy={point.y} r={index === points.length - 1 ? 4 : 2.5} /></g>)}
-        {activePoint && activeIndex !== null && <g className="chart-tooltip" pointerEvents="none" transform={`translate(${tooltipX} ${tooltipY})`}><rect height="43" rx="6" width="118" /><text x="9" y="16">{t(performanceLabels[Math.min(performanceLabels.length - 1, Math.round(activeIndex / 2))])}</text><text className="chart-tooltip-value" x="9" y="33">{formatCurrency(activePoint.value)}</text></g>}
-        {performanceLabels.map((label, index) => <text className="chart-x-label" key={label} textAnchor={index === 0 ? 'start' : index === performanceLabels.length - 1 ? 'end' : 'middle'} x={padding.left + (index / (performanceLabels.length - 1)) * usableWidth} y={height - 6}>{t(label)}</text>)}
-      </svg>
+      <FinancialLineChart
+        values={performanceSeries}
+        labels={labels}
+        min={min}
+        max={max}
+        size="compact"
+        ariaLabel={t('aiTrader.performanceChart')}
+        formatValue={value => formatCurrency(value, i18n.language)}
+        formatTick={value => formatCompactCurrency(value, i18n.language)}
+        pointLabel={index => t('aiTrader.chartPoint', { label: labels[index], value: formatCurrency(performanceSeries[index], i18n.language) })}
+      />
     </div>
   )
 }

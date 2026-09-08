@@ -554,6 +554,7 @@
     "subtitle": "AI-powered trading bot using machine learning and real-time market data.",
     "sections": "AI Trader sections",
     "performanceChart": "AI Trader performance chart",
+    "chartPoint": "{{label}}: {{value}} portfolio value",
     "currentValue": "Current value",
     "allTime": "{{percent}}% all time",
     "chartLabels": {

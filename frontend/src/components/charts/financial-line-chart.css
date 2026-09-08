@@ -1,4 +1,5 @@
 .financial-line-chart { position: relative; width: 100%; height: clamp(260px, 28vw, 320px); min-width: 0; font-family: inherit; }
+.financial-line-chart-compact { height: clamp(196px, 24vw, 236px); }
 .financial-chart-overlay { position: absolute; inset: 0; pointer-events: none; }
 .financial-chart-overlay svg { display: block; }
 .financial-chart-crosshair { stroke: #9ebce7; stroke-width: 1; stroke-dasharray: 4 5; pointer-events: none; }

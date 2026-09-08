@@ -554,6 +554,7 @@
     "subtitle": "Bot de trading propulsé par l’IA, l’apprentissage automatique et les données de marché en temps réel.",
     "sections": "Sections du Trader IA",
     "performanceChart": "Graphique de performance du Trader IA",
+    "chartPoint": "{{label}} : valeur du portefeuille de {{value}}",
     "currentValue": "Valeur actuelle",
     "allTime": "{{percent}} % depuis le début",
     "chartLabels": {
