@@ -1,13 +1,13 @@
-import { FinancialLineChart } from '../components/charts/FinancialLineChart'
+import { StockLogo } from '../market/StockLogo'
+import { UnavailableState } from '../components/UnavailableState'
 import { Sidebar } from '../components/layout/Sidebar'
-import { formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
+import { formatTime, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   aiPerformance,
   metrics,
-  performanceSeries,
   positions,
   transactions,
   type IconName,
@@ -65,71 +65,11 @@ function Icon({ name, size = 20, strokeWidth = 1.8, className }: IconProps) {
   )
 }
 
-function StockMark({ symbol, size = 'medium' }: { symbol: string; size?: 'small' | 'medium' }) {
-  return (
-    <span aria-hidden="true" className={`stock-mark stock-mark-${symbol.toLowerCase()} stock-mark-${size}`}>
-      {symbol === 'MSFT' ? <><i /><i /><i /><i /></> : symbol.slice(0, 1)}
-    </span>
-  )
-}
+function StockMark({ symbol, size = 'medium' }: { symbol: string; size?: 'small' | 'medium' }) { return <span data-size={size}><StockLogo symbol={symbol} /></span> }
 
-function PerformanceChart({ range }: { range: PerformanceRange }) {
-  const { i18n, t } = useTranslation()
-  const series = performanceSeries[range]
-  const min = Math.min(...series.values) - 0.7
-  const max = Math.max(...series.values) + 0.7
-  const labels = series.labels.map(label => t(`dashboard.chartLabels.${label}`))
+function PerformanceChart() { return <UnavailableState message="businessData.portfolio" /> }
 
-  return (
-    <div className="chart-wrap">
-      <div className="chart-summary">
-        <div>
-          <span className="chart-eyebrow">{t('common.portfolioValue')}</span>
-          <strong>{formatCompactCurrency((series.values.at(-1) ?? 0) * 1000)}</strong>
-        </div>
-        <div className="chart-change">
-          <span>{formatSignedCurrency(series.change)}</span>
-          <small>{t(`dashboard.performance.change.${range}`, { change: formatSignedPercent(Number.parseFloat(series.changeLabel)) })}</small>
-        </div>
-      </div>
-      <FinancialLineChart
-        values={series.values}
-        labels={labels}
-        min={min}
-        max={max}
-        ariaLabel={t('dashboard.performanceChart', { range: t(`common.timeRanges.${range}`) })}
-        formatValue={value => formatCompactCurrency(value * 1000, i18n.language)}
-        pointLabel={index => t('dashboard.chartPoint', { label: labels[index], value: formatCompactCurrency(series.values[index] * 1000, i18n.language) })}
-      />
-    </div>
-  )
-}
-
-function Sparkline() {
-  const { t } = useTranslation()
-  const width = 178
-  const height = 56
-  const min = Math.min(...aiPerformance.values)
-  const max = Math.max(...aiPerformance.values)
-  const points = aiPerformance.values.map((value, index) => {
-    const x = (index / (aiPerformance.values.length - 1)) * width
-    const y = height - ((value - min + 1) / (max - min + 2)) * height
-    return `${x},${y}`
-  })
-  return (
-    <svg aria-label={t('dashboard.aiPerformanceSparkline')} className="ai-sparkline" role="img" viewBox={`0 0 ${width} ${height}`}>
-      <defs>
-        <linearGradient id="ai-fill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="#8b6df6" stopOpacity=".26" />
-          <stop offset="100%" stopColor="#8b6df6" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <polyline className="ai-sparkline-area" fill="url(#ai-fill)" points={`0,${height} ${points.join(' ')} ${width},${height}`} stroke="none" />
-      <polyline className="ai-sparkline-line" fill="none" points={points.join(' ')} stroke="#896df1" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
-      <circle cx={width} cy={Number(points.at(-1)?.split(',')[1])} fill="#896df1" r="3.5" />
-    </svg>
-  )
-}
+function Sparkline() { return <UnavailableState message="businessData.ai" /> }
 
 function PanelHeading({ title, subtitle, action, id, destination }: { title: string; subtitle?: string; action?: string; id?: string; destination?: string }) {
   return (
@@ -210,14 +150,14 @@ export function DashboardPage() {
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [toastKey, setToastKey] = useState('')
-  const dashboardUserName = 'Ghaith'
+  const dashboardUserName = ''
   const [greetingPeriod, setGreetingPeriod] = useState(() => getGreetingPeriod(new Date()))
 
   useEffect(() => {
     return startDashboardGreetingTimer(() => setGreetingPeriod(getGreetingPeriod(new Date())), dashboardUserName)
   }, [])
 
-  const greeting = t(`dashboard.greeting.${greetingPeriod}`, { name: dashboardUserName })
+  const greeting = t(`businessData.greeting.${greetingPeriod}`)
 
   const filteredWatchlist = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -242,22 +182,22 @@ export function DashboardPage() {
         </header>
 
         <div className="dashboard-content">
-          <section className="welcome-row"><div><p className="eyebrow">{t('dashboard.date')}</p><h1>{greeting} <span>👋</span></h1><p className="welcome-copy">{t('dashboard.welcome')}</p></div><button className="primary-button" onClick={() => showToast('dashboard.investmentFlowOpened')} type="button"><span>+</span> {t('common.addInvestment')}</button></section>
+          <section className="welcome-row"><div><p className="eyebrow">{new Intl.DateTimeFormat(i18n.language, { dateStyle: 'full' }).format(new Date())}</p><h1>{greeting} <span>👋</span></h1><p className="welcome-copy">{t('dashboard.welcome')}</p></div><button className="primary-button" disabled title={t('businessData.unavailable')} type="button"><span>+</span> {t('common.addInvestment')}</button></section>
 
           <section aria-label={t('dashboard.portfolioSummary')} className="metrics-grid">{metrics.map((metric) => <MetricCard key={metric.label} metric={metric} />)}</section>
 
           <div className="dashboard-grid dashboard-grid-top">
-            <section aria-labelledby="performance-title" className="panel performance-panel"><PanelHeading id="performance-title" subtitle={t('dashboard.performanceSubtitle')} title={t('dashboard.performanceTitle')} /><div className="range-tabs" role="tablist" aria-label={t('common.performanceTimeRange')}>{ranges.map((item) => <button aria-selected={range === item} className={range === item ? 'selected' : ''} key={item} onClick={() => setRange(item)} role="tab" type="button">{t(`common.timeRanges.${item}`)}</button>)}</div><PerformanceChart key={range} range={range} /></section>
-            <section aria-labelledby="watchlist-title" className="panel watchlist-panel"><PanelHeading action={t('common.viewAll')} destination="watchlist" id="watchlist-title" subtitle={t('dashboard.watchlistSubtitle')} title={t('common.navigation.watchlist')} /><div className="watchlist-filter"><Icon name="search" size={15} /><input aria-label={t('dashboard.filterWatchlist')} onChange={(event) => setQuery(event.target.value)} placeholder={t('dashboard.filterPlaceholder')} value={query} /></div>{filteredWatchlist.length > 0 ? <ul className="watchlist-list">{filteredWatchlist.map((item) => <WatchlistRow item={item} key={item.symbol} />)}</ul> : <div className="empty-state">{t('dashboard.noStocksMatch', { query })}</div>}<button className="add-watchlist" onClick={() => showToast('dashboard.addStockToast')} type="button"><span>+</span> {t('dashboard.addToWatchlist')}</button></section>
+            <section aria-labelledby="performance-title" className="panel performance-panel"><PanelHeading id="performance-title" subtitle={t('dashboard.performanceSubtitle')} title={t('dashboard.performanceTitle')} /><div className="range-tabs" role="tablist" aria-label={t('common.performanceTimeRange')}>{ranges.map((item) => <button aria-selected={range === item} className={range === item ? 'selected' : ''} key={item} onClick={() => setRange(item)} role="tab" type="button">{t(`common.timeRanges.${item}`)}</button>)}</div><PerformanceChart key={range} /></section>
+            <section aria-labelledby="watchlist-title" className="panel watchlist-panel"><PanelHeading action={t('common.viewAll')} destination="watchlist" id="watchlist-title" subtitle={t('dashboard.watchlistSubtitle')} title={t('common.navigation.watchlist')} /><div className="watchlist-filter"><Icon name="search" size={15} /><input aria-label={t('dashboard.filterWatchlist')} onChange={(event) => setQuery(event.target.value)} placeholder={t('dashboard.filterPlaceholder')} value={query} /></div>{filteredWatchlist.length > 0 ? <ul className="watchlist-list">{filteredWatchlist.map((item) => <WatchlistRow item={item} key={item.symbol} />)}</ul> : <div className="empty-state">{t('businessData.watchlist')}</div>}<button className="add-watchlist" onClick={() => showToast('businessData.unavailable')} type="button"><span>+</span> {t('dashboard.addToWatchlist')}</button></section>
           </div>
 
           <div className="dashboard-grid dashboard-grid-bottom">
-            <section aria-labelledby="positions-title" className="panel positions-panel"><PanelHeading action={t('dashboard.viewPortfolio')} destination="portfolio" id="positions-title" subtitle={t('dashboard.positionsSubtitle')} title={t('dashboard.keyPositions')} /><div className="table-scroll"><table><thead><tr><th>{t('common.asset')}</th><th>{t('dashboard.holdings')}</th><th>{t('common.value')}</th><th>{t('common.allocation')}</th><th>{t('dashboard.today')}</th></tr></thead><tbody>{positions.map((position) => <PositionRow key={position.symbol} position={position} />)}</tbody></table></div></section>
-            <section aria-labelledby="transactions-title" className="panel transactions-panel"><PanelHeading action={t('common.viewAll')} destination="transactions" id="transactions-title" subtitle={t('dashboard.transactionsSubtitle')} title={t('dashboard.recentTransactions')} /><ul className="transaction-list">{transactions.map((transaction) => <TransactionRow key={`${transaction.symbol}-${transaction.timeKey}`} transaction={transaction} />)}</ul></section>
+            <section aria-labelledby="positions-title" className="panel positions-panel"><PanelHeading action={t('dashboard.viewPortfolio')} destination="portfolio" id="positions-title" subtitle={t('dashboard.positionsSubtitle')} title={t('dashboard.keyPositions')} /><div className="table-scroll"><table><thead><tr><th>{t('common.asset')}</th><th>{t('dashboard.holdings')}</th><th>{t('common.value')}</th><th>{t('common.allocation')}</th><th>{t('dashboard.today')}</th></tr></thead><tbody>{positions.length === 0 && <tr><td colSpan={5}><UnavailableState message="businessData.portfolio" /></td></tr>}{positions.map((position) => <PositionRow key={position.symbol} position={position} />)}</tbody></table></div></section>
+            <section aria-labelledby="transactions-title" className="panel transactions-panel"><PanelHeading action={t('common.viewAll')} destination="transactions" id="transactions-title" subtitle={t('dashboard.transactionsSubtitle')} title={t('dashboard.recentTransactions')} /><ul className="transaction-list">{transactions.length === 0 && <li><UnavailableState message="businessData.transactions" /></li>}{transactions.map((transaction) => <TransactionRow key={`${transaction.symbol}-${transaction.timeKey}`} transaction={transaction} />)}</ul></section>
           </div>
 
-          <section aria-labelledby="ai-trader-title" className="panel ai-panel"><div className="ai-heading"><div className="ai-title"><span className="ai-badge"><Icon name="sparkles" size={18} /></span><div><h2 id="ai-trader-title">{t('common.navigation.aiTrader')}</h2><p>{t('dashboard.aiSubtitle')}</p></div><span className="status-badge"><i /> {t('common.live')}</span></div><button className="text-action" onClick={() => window.location.assign(routeFor('ai-trader'))} type="button">{t('dashboard.openAiTrader')} <Icon name="chevron-right" size={16} /></button></div><div className="ai-content"><div className="ai-stat ai-stat-primary"><span>{t('dashboard.aiReturn')}</span><strong>{formatSignedPercent(aiPerformance.return)}</strong><small><Icon name="trending-up" size={13} /> {t('dashboard.outperformingMarket')}</small></div><div className="ai-stat"><span>{t('dashboard.netPnl')}</span><strong>{formatSignedCurrency(aiPerformance.pnl)}</strong><small>{t('dashboard.sinceActivation')}</small></div><div className="ai-stat"><span>{t('dashboard.winRate')}</span><strong>{formatPercent(aiPerformance.winRate, undefined, 1)}</strong><small>{t('dashboard.tradesExecuted', { count: aiPerformance.trades })}</small></div><div className="ai-chart-wrap"><span>{t('dashboard.sevenDayPerformance')}</span><Sparkline /><div className="ai-chart-labels"><small>{t('common.days.mon')}</small><small>{t('dashboard.today')}</small></div></div></div></section>
-          <p className="simulation-note"><span><Icon name="activity" size={14} /> {t('common.simulatedData')}</span> {t('dashboard.connectBrokerage')}</p>
+          <section aria-labelledby="ai-trader-title" className="panel ai-panel"><div className="ai-heading"><div className="ai-title"><span className="ai-badge"><Icon name="sparkles" size={18} /></span><div><h2 id="ai-trader-title">{t('common.navigation.aiTrader')}</h2><p>{t('dashboard.aiSubtitle')}</p></div><span className="status-badge"><i /> {t('businessData.unavailable')}</span></div><button className="text-action" onClick={() => window.location.assign(routeFor('ai-trader'))} type="button">{t('dashboard.openAiTrader')} <Icon name="chevron-right" size={16} /></button></div><div className="ai-content"><div className="ai-stat ai-stat-primary"><span>{t('dashboard.aiReturn')}</span><strong>{formatSignedPercent(aiPerformance.return)}</strong><small><Icon name="trending-up" size={13} /> {t('businessData.unavailable')}</small></div><div className="ai-stat"><span>{t('dashboard.netPnl')}</span><strong>{formatSignedCurrency(aiPerformance.pnl)}</strong><small>{t('businessData.unavailable')}</small></div><div className="ai-stat"><span>{t('dashboard.winRate')}</span><strong>{formatPercent(aiPerformance.winRate, undefined, 1)}</strong><small>{t('dashboard.tradesExecuted', { count: aiPerformance.trades })}</small></div><div className="ai-chart-wrap"><span>{t('dashboard.sevenDayPerformance')}</span><Sparkline /><div className="ai-chart-labels"><small>{t('common.days.mon')}</small><small>{t('dashboard.today')}</small></div></div></div></section>
+          <p className="simulation-note"><span><Icon name="activity" size={14} /> {t('businessData.unavailable')}</span> {t('businessData.backendPending')}</p>
         </div>
       </main>
       <div aria-live="polite" className={`toast ${toastKey ? 'visible' : ''}`}>{toastKey ? t(toastKey) : ''}</div>

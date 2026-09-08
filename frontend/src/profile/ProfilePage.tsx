@@ -147,7 +147,7 @@ export default function ProfilePage() {
           <button aria-label={t('common.openAccountMenu')} className="topbar-account" onClick={() => window.location.assign(routeFor('profile'))} type="button"><ProfileAvatar small /><Icon name="chevron-down" size={14} /></button>
         </div>
       </header>
-      <div className="profile-content">
+      <div className="profile-content"><p role="status">{t('businessData.profileDemo')}</p>
         <section aria-labelledby="profile-summary-title" className="profile-summary-card">
           <div className="summary-identity"><ProfileAvatar /><div><h1 id="profile-summary-title">{profile.name}</h1><p>{profile.email}</p><span className="verified-badge"><i /> {t('profile.verifiedAccount')}</span></div></div>
           <div className="summary-details">

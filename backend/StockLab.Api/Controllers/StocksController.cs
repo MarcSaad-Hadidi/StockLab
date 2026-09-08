@@ -11,7 +11,7 @@ namespace StockLab.Api.Controllers;
 [Produces("application/json")]
 public sealed class StocksController(IMarketDataProvider marketDataProvider) : ControllerBase
 {
-    /// <summary>Gets historical bars with timestamps or period dates in the half-open range [from, to).</summary>
+    /// <summary>Gets historical bars for a stock symbol.</summary>
     [HttpGet("{symbol}/history")]
     [ProducesResponseType(typeof(StockHistoryResponse), StatusCodes.Status200OK)]
     // Both validation errors and unsupported intervals share error/message;
@@ -83,6 +83,8 @@ public sealed class StocksController(IMarketDataProvider marketDataProvider) : C
         }
 
         return Ok(new StockQuoteResponse(
-            quote.Symbol, quote.Price, quote.Change, quote.ChangePercent, quote.Volume));
+            quote.Symbol, quote.Price, quote.Change, quote.ChangePercent, quote.Volume,
+            quote.Currency, quote.AsOfUtc, quote.Name, quote.Exchange, quote.Open, quote.High, quote.Low,
+            quote.PreviousClose, quote.AverageVolume, quote.IsMarketOpen, quote.FiftyTwoWeek));
     }
 }

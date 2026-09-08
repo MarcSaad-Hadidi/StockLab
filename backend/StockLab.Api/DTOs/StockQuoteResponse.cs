@@ -6,4 +6,15 @@ public sealed record StockQuoteResponse(
     decimal Price,
     decimal? Change,
     decimal? ChangePercent,
-    long? Volume);
+    long? Volume,
+    string Currency,
+    DateTimeOffset AsOfUtc,
+    string? Name,
+    string? Exchange,
+    decimal? Open,
+    decimal? High,
+    decimal? Low,
+    decimal? PreviousClose,
+    long? AverageVolume,
+    bool? IsMarketOpen,
+    StockLab.Application.DTOs.MarketData.StockFiftyTwoWeek? FiftyTwoWeek);

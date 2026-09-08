@@ -4,6 +4,8 @@ using StockLab.Api.Middleware;
 using StockLab.Api.Validation;
 using StockLab.Api.Configuration;
 
+using StockLab.Infrastructure.MarketEnrichment;
+
 var builder = WebApplication.CreateBuilder(args);
 
 const string frontendCorsPolicy = "Frontend";
@@ -39,6 +41,16 @@ builder.Services.AddSingleton<IMarketDataProvider>(services => new CachingMarket
     services.GetRequiredService<DeduplicatingMarketDataProvider>(),
     services.GetRequiredKeyedService<Microsoft.Extensions.Caching.Memory.IMemoryCache>("MarketData"),
     services.GetRequiredService<Microsoft.Extensions.Options.IOptions<MarketDataCacheOptions>>()));
+builder.Services.AddOptions<AlphaVantageOptions>().Bind(builder.Configuration.GetSection("AlphaVantage"))
+    .Validate(o => o.IsValid(), "Invalid Alpha Vantage budget, timeout or cache TTL.").ValidateOnStart();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddHttpClient("AlphaVantage", client =>
+{
+    client.BaseAddress = new Uri("https://www.alphavantage.co/");
+    client.Timeout = Timeout.InfiniteTimeSpan; // Provider owns a bounded timeout, including body reads.
+    client.MaxResponseContentBufferSize = 2 * 1024 * 1024;
+}).RemoveAllLoggers().ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddSingleton<IMarketEnrichmentProvider, AlphaVantageProvider>();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(frontendCorsPolicy, policy =>

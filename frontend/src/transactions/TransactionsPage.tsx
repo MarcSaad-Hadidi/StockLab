@@ -101,7 +101,7 @@ function Topbar({ onMenuOpen, onQueryChange, onToast, query }: TopbarProps) {
           <Icon name="search" size={16} />
           <input aria-label={t('common.searchStocksEtfsNews')} onChange={(event) => onQueryChange(event.target.value)} placeholder={t('common.searchStocksEtfsNewsPlaceholder')} value={query} />
         </label>
-        <button aria-label={t('common.notifications')} className="icon-button notification-button" onClick={() => onToast('common.notificationsCaughtUp')} type="button"><Icon name="bell" size={18} /><i>2</i></button>
+        <button aria-label={t('common.notifications')} className="icon-button notification-button" onClick={() => onToast('common.notificationsCaughtUp')} type="button"><Icon name="bell" size={18} /></button>
         <button aria-label={t('common.openMessages')} className="icon-button mail-button" onClick={() => onToast('common.noNewMessages')} type="button"><Icon name="mail" size={17} /></button>
         <button aria-label={t('common.openAccountMenu')} className="topbar-account" onClick={() => window.location.assign(routeFor('profile'))} type="button"><span className="topbar-avatar">GA</span><Icon name="chevron-down" size={14} /></button>
       </div>
@@ -119,7 +119,7 @@ type SummaryCardProps = {
 
 function SummaryCard({ detail, icon, label, tone, value }: SummaryCardProps) {
   const { t } = useTranslation()
-  return <article className="summary-card"><div className={`summary-icon summary-icon-${tone}`}><Icon name={icon} size={17} /></div><p>{label}</p><strong>{value}</strong><span className="summary-detail"><b>{detail}</b> <span>{t('transactions.vsLast30Days')}</span></span></article>
+  return <article className="summary-card"><div className={`summary-icon summary-icon-${tone}`}><Icon name={icon} size={17} /></div><p>{label}</p><strong>{value}</strong><span className="summary-detail"><b>{detail}</b> <span>{t('businessData.unavailable')}</span></span></article>
 }
 
 function formatDateParts(isoDate: string, language: string) {
@@ -145,9 +145,9 @@ function TransactionRow({ transaction }: { transaction: Transaction }) {
 const defaultFilters: TransactionFilters = {
   action: 'All',
   assetType: 'All',
-  from: '2024-05-01',
+  from: '',
   query: '',
-  to: '2024-05-24',
+  to: '',
 }
 
 function getPageItems(currentPage: number, totalPages: number): Array<number | 'ellipsis'> {
@@ -213,11 +213,8 @@ function FilterControls({ activeFilterCount, filterMenuOpen, filters, onActionCh
 
 function TransactionsTable({ items }: { items: Transaction[] }) {
   const { t } = useTranslation()
-  if (items.length === 0) {
-    return <div className="empty-state"><span><Icon name="search" size={19} /></span><strong>{t('transactions.noTransactions')}</strong><p>{t('transactions.noTransactionsHint')}</p></div>
-  }
 
-  return <div className="table-scroll"><table className="transactions-table"><thead><tr><th scope="col"><span>{t('transactions.columns.date')} <Icon name="sort" size={12} /></span></th><th scope="col">{t('market.columns.symbol')}</th><th scope="col">{t('market.columns.company')}</th><th scope="col">{t('transactions.columns.type')}</th><th scope="col">{t('common.quantity')}</th><th scope="col">{t('transactions.columns.executionPrice')}</th><th scope="col">{t('transactions.columns.totalAmount')}</th></tr></thead><tbody>{items.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}</tbody></table></div>
+  return <div className="table-scroll"><table className="transactions-table"><thead><tr><th scope="col"><span>{t('transactions.columns.date')} <Icon name="sort" size={12} /></span></th><th scope="col">{t('market.columns.symbol')}</th><th scope="col">{t('market.columns.company')}</th><th scope="col">{t('transactions.columns.type')}</th><th scope="col">{t('common.quantity')}</th><th scope="col">{t('transactions.columns.executionPrice')}</th><th scope="col">{t('transactions.columns.totalAmount')}</th></tr></thead><tbody>{items.length === 0 && <tr><td colSpan={7}><div className="empty-state"><strong>{t('businessData.transactions')}</strong><p>{t('businessData.backendPending')}</p></div></td></tr>}{items.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} />)}</tbody></table></div>
 }
 
 type PaginationProps = {
@@ -280,7 +277,7 @@ export function TransactionsPage() {
           <section className="transactions-heading"><div><h1>{t('transactions.title')}</h1><p>{t('transactions.subtitle')}</p></div></section>
 
           <section aria-label={t('transactions.summaryLabel')} className="summary-grid">
-            <SummaryCard detail={formatSignedPercent(14.3)} icon="activity" label={t('transactions.totalTrades')} tone="blue" value={formatNumber(transactionSummary.totalTrades, undefined, 0)} />
+            <SummaryCard detail={'—'} icon="activity" label={t('transactions.totalTrades')} tone="blue" value={formatNumber(transactionSummary.totalTrades, undefined, 0)} />
             <SummaryCard detail={formatSignedPercent(transactionSummary.investedChange)} icon="wallet" label={t('transactions.totalInvested')} tone="purple" value={formatCurrency(transactionSummary.totalInvested)} />
             <SummaryCard detail={formatSignedPercent(transactionSummary.proceedsChange)} icon="chart" label={t('transactions.totalProceeds')} tone="orange" value={formatCurrency(transactionSummary.totalProceeds)} />
             <SummaryCard detail={formatSignedPercent(transactionSummary.pnlChange)} icon="activity" label={t('transactions.netPnl')} tone="green" value={formatSignedCurrency(transactionSummary.netPnl)} />
@@ -295,7 +292,7 @@ export function TransactionsPage() {
             <TransactionsTable items={pageData.items} />
             <div className="table-footer"><span>{t('transactions.showing', { start: pageData.startIndex, end: pageData.endIndex, count: filteredTransactions.length })}</span><Pagination currentPage={pageData.currentPage} onPageChange={setPage} totalPages={pageData.totalPages} /></div>
           </section>
-          <p className="simulation-note"><Icon name="activity" size={13} /> {t('transactions.simulationNote')}</p>
+          <p className="simulation-note"><Icon name="activity" size={13} /> {t('businessData.backendPending')}</p>
         </div>
       </main>
       <div aria-live="polite" className={`toast ${toastKey ? 'visible' : ''}`}>{toastKey ? t(toastKey) : ''}</div>

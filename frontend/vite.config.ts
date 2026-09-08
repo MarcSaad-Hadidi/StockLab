@@ -8,7 +8,7 @@ const rootDir = fileURLToPath(new URL('.', import.meta.url))
 
 function pageRoutes(): Plugin {
   const rewrite = (request: { url?: string }, _response: unknown, next: () => void) => {
-    if (request.url) request.url = documentUrl(request.url)
+    if (request.url && !request.url.startsWith('/api/')) request.url = documentUrl(request.url)
     next()
   }
   return {
@@ -22,6 +22,8 @@ export default defineConfig({
   // Missing assets must remain 404s instead of receiving the root SPA document.
   appType: 'mpa',
   plugins: [react(), pageRoutes()],
+  server: { proxy: { '/api': { target: 'http://localhost:5274', changeOrigin: true } } },
+  preview: { proxy: { '/api': { target: 'http://localhost:5274', changeOrigin: true } } },
   build: {
     rollupOptions: {
       input: {
