@@ -1,0 +1,4 @@
+.market-stock-logo { display: inline-flex; width: 24px; height: 24px; flex: 0 0 24px; align-items: center; justify-content: center; border-radius: 5px; color: white; background: #202838; font-size: 11px; font-weight: 700; box-sizing: border-box; }
+.market-stock-logo-large { width: 46px; height: 46px; flex-basis: 46px; font-size: 18px; border-radius: 11px; }
+.market-stock-logo-image { background: white; padding: 3px; box-shadow: inset 0 0 0 1px #e5e9f1; overflow: hidden; }
+.market-stock-logo-image img { display: block; width: 100%; height: 100%; object-fit: contain; }

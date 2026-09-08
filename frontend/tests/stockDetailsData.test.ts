@@ -1,66 +1,118 @@
-import assert from 'node:assert/strict'
-import { test } from 'node:test'
-import { getStockBySymbol, marketStocks } from '../src/market/marketData.ts'
+import assert from "node:assert/strict";
+import { test } from "node:test";
 import {
+  createMarketDataApi,
+  type StockHistory,
+} from "../src/api/marketDataApi.ts";
+import {
+  historyQuery,
+  historyPoints,
+  money,
   calculateTradeTotal,
-  getStockDetails,
   getTradeExecutionPrice,
-  getVisibleHistory,
-  type ChartRange,
-  type TradeOrderType,
-} from '../src/market/stockDetailsData.ts'
+  chartRanges,
+} from "../src/market/stockDetailsData.ts";
+const now = new Date("2026-09-08T12:30:00Z");
+const data: StockHistory = {
+  symbol: "AAPL",
+  currency: "USD",
+  interval: "Day",
+  bars: [
+    {
+      openTimeUtc: null,
+      periodDate: "2026-09-07",
+      open: 200,
+      high: 205,
+      low: 199,
+      close: 204,
+      volume: 1000,
+    },
+  ],
+};
+test("all enabled ranges have honest half-open boundaries; MAX bounded monthly", () => {
+  for (const range of chartRanges.filter((r) => r !== "MAX")) {
+    const query = historyQuery(range, now)!;
+    assert.ok(query.from < query.to);
+    if (["1D", "5D"].includes(range)) assert.ok(query.from.endsWith("Z"));
+    else assert.match(query.from, /^\d{4}-\d{2}-\d{2}$/);
+  }
+  assert.equal(historyQuery("MAX", now)?.interval, "Month");
+  assert.equal(
+    (Date.parse(historyQuery("MAX", now)!.to) -
+      Date.parse(historyQuery("MAX", now)!.from)) /
+      86400000,
+    4999,
+  );
+  assert.equal(historyQuery("5Y", now)?.interval, "Week");
+  assert.equal(historyQuery("YTD", now)?.from, "2026-01-01");
+});
+test("preserves calendar dates and genuine bar count without synthetic points", () => {
+  assert.deepEqual(historyPoints(data, "en-US"), [
+    { label: "2026-09-07", value: 204 },
+  ]);
+  assert.deepEqual(historyPoints({ ...data, bars: [] }, "fr-FR"), []);
+  const intraday: StockHistory = {
+    ...data,
+    interval: "Hour",
+    bars: [
+      {
+        ...data.bars[0],
+        periodDate: null,
+        openTimeUtc: "2026-09-07T14:00:00Z",
+      },
+    ],
+  };
+  assert.match(historyPoints(intraday, "en-US")[0].label, /UTC$/);
+});
+test("range switching fetches once per uncached range and no prefetch", async () => {
+  const calls: string[] = [];
+  const api = createMarketDataApi("", async (url) => {
+    calls.push(String(url));
+    return Response.json(data);
+  });
+  const signal = new AbortController().signal;
+  for (const range of ["3M", "1Y", "3M"] as const)
+    await api.history("AAPL", historyQuery(range, now)!, signal);
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every((url) => url.includes("interval=Day")));
+});
+test("rejects mismatched temporal fields and malformed OHLCV", async () => {
+  for (const bar of [
+    { ...data.bars[0], openTimeUtc: "2026-09-07T00:00:00Z" },
+    { ...data.bars[0], high: 100 },
+    { ...data.bars[0], volume: -1 },
+  ]) {
+    const api = createMarketDataApi("", async () =>
+      Response.json({ ...data, bars: [bar] }),
+    );
+    await assert.rejects(
+      api.history(
+        "AAPL",
+        historyQuery("3M", now)!,
+        new AbortController().signal,
+      ),
+    );
+  }
+});
+test("currency comes from metadata/history, never assumed USD", () => {
+  assert.equal(money(204.5, null, "en-US"), "204.50");
+  assert.match(money(204.5, "EUR", "en-US"), /€/);
+  assert.equal(money(null, "USD", "en-US"), "—");
+});
+test("local trade estimates use supplied market or limit price", () => {
+  assert.equal(calculateTradeTotal(204.5, 10), 2045);
+  assert.equal(calculateTradeTotal(204.5, -1), 0);
+  assert.equal(getTradeExecutionPrice("market", 204.5), 204.5);
+  assert.equal(getTradeExecutionPrice("limit", 204.5, 200), 200);
+});
 
-test('builds the AAPL detail fixture used by the Stock Details screen', () => {
-  const apple = getStockBySymbol(marketStocks, 'AAPL')
-
-  assert.ok(apple)
-  const details = getStockDetails(apple)
-
-  assert.equal(details.company, 'Apple Inc.')
-  assert.equal(details.exchange, 'NASDAQ')
-  assert.equal(details.price, 191.45)
-  assert.equal(details.changePercent, '1.35%')
-  assert.equal(details.aiInsight.recommendation, 'BUY')
-  assert.equal(details.aiInsight.confidence, 82)
-  assert.ok(details.history.length >= 12)
-})
-
-test('uses market data to provide sensible details for symbols without a custom fixture', () => {
-  const microsoft = getStockBySymbol(marketStocks, 'MSFT')
-
-  assert.ok(microsoft)
-  const details = getStockDetails(microsoft)
-
-  assert.equal(details.symbol, 'MSFT')
-  assert.equal(details.company, 'Microsoft Corporation')
-  assert.equal(details.price, 415.6)
-  assert.equal(details.stats.marketCap, '$3.08T')
-  assert.equal(details.aiInsight.recommendation, 'BUY')
-})
-
-test('calculates a trade total from the simulated quote and quantity', () => {
-  assert.equal(calculateTradeTotal(191.45, 10), 1914.5)
-  assert.equal(calculateTradeTotal(191.45, 0), 0)
-  assert.equal(calculateTradeTotal(191.45, -2), 0)
-})
-
-test('returns a distinct historical window for every advertised chart range', () => {
-  const apple = getStockBySymbol(marketStocks, 'AAPL')
-
-  assert.ok(apple)
-  const details = getStockDetails(apple)
-  const ranges: ChartRange[] = ['1D', '5D', '1M', '3M', '6M', 'YTD', '1Y', '5Y', 'MAX']
-  const lengths = ranges.map((range) => getVisibleHistory(details.history, range).length)
-
-  assert.deepEqual(lengths, [2, 5, 6, 10, 12, 13, 16, 20, 24])
-  assert.equal(getVisibleHistory(details.history, 'MAX').at(-1)?.value, details.price)
-})
-
-test('uses the selected limit price for limit-order trade totals', () => {
-  const marketOrder: TradeOrderType = 'market'
-  const limitOrder: TradeOrderType = 'limit'
-
-  assert.equal(getTradeExecutionPrice(marketOrder, 191.45), 191.45)
-  assert.equal(getTradeExecutionPrice(limitOrder, 191.45, 188.5), 188.5)
-  assert.equal(getTradeExecutionPrice(limitOrder, 191.45), 0)
-})
+test("calendar month windows clamp month ends without rolling into the next month", () => {
+  assert.equal(
+    historyQuery("1M", new Date("2026-03-31T12:00:00Z"))?.from,
+    "2026-02-28",
+  );
+  assert.equal(
+    historyQuery("1Y", new Date("2024-02-29T12:00:00Z"))?.from,
+    "2023-02-28",
+  );
+});

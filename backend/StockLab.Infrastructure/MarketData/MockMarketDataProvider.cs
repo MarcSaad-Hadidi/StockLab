@@ -41,7 +41,9 @@ public sealed class MockMarketDataProvider : IMarketDataProvider
             change,
             decimal.Round(change / previousClose * 100m, 4),
             last.Volume,
-            new DateTimeOffset(2026, 8, 28, 20, 0, 0, TimeSpan.Zero)));
+            new DateTimeOffset(2026, 8, 28, 20, 0, 0, TimeSpan.Zero),
+            stock.CompanyName, "NASDAQ", last.Open, last.High, last.Low, previousClose,
+            (long)bars.Average(bar => bar.Volume!.Value), false));
     }
 
     public Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(

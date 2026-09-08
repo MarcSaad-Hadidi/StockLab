@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MarketPage } from './MarketPage'
-import { getStockBySymbol, marketStocks } from './marketData'
 import { marketRoute, stockDetailsRoute } from './marketRoutes'
 import { StockDetailsPage } from './StockDetailsPage'
 
@@ -12,7 +11,6 @@ function requestedSymbolFromUrl() {
 export function MarketApp() {
   const { i18n, t } = useTranslation()
   const [requestedSymbol, setRequestedSymbol] = useState<string | null>(requestedSymbolFromUrl)
-  const selectedStock = requestedSymbol ? getStockBySymbol(marketStocks, requestedSymbol) : undefined
 
   useEffect(() => {
     const handlePopState = () => setRequestedSymbol(requestedSymbolFromUrl())
@@ -21,8 +19,8 @@ export function MarketApp() {
   }, [])
 
   useEffect(() => {
-    document.title = selectedStock ? `StockLab — ${selectedStock.symbol}` : `StockLab — ${t('market.title')}`
-  }, [i18n.language, selectedStock, t])
+    document.title = requestedSymbol ? `StockLab — ${requestedSymbol}` : `StockLab — ${t('market.title')}`
+  }, [i18n.language, requestedSymbol, t])
 
   const openStock = (symbol: string) => {
     window.history.pushState({}, '', stockDetailsRoute(symbol))
@@ -37,7 +35,7 @@ export function MarketApp() {
   }
 
   if (requestedSymbol) {
-    return <StockDetailsPage onBack={goBackToMarket} requestedSymbol={requestedSymbol} stock={selectedStock} />
+    return <StockDetailsPage onBack={goBackToMarket} requestedSymbol={requestedSymbol} key={requestedSymbol} />
   }
 
   return <MarketPage onOpenStock={openStock} />

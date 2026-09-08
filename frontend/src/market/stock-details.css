@@ -1309,3 +1309,6 @@
     animation: none;
   }
 }
+
+.stock-bar-caption { grid-column: 1 / -1; margin: 0 9px 12px; color: #74839a; font-size: 11px; }
+.stock-price-chart > [role="status"], .stock-price-chart > [role="alert"] { min-height: 240px; padding: 20px; }

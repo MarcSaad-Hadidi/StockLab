@@ -14,7 +14,8 @@ export function formatCurrency(value: number | null | undefined, language = i18n
   }).format(value)
 }
 
-export function formatCompactCurrency(value: number, language = i18n.language, fractionDigits = 2) {
+export function formatCompactCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   return new Intl.NumberFormat(localeForLanguage(language), {
     currency: 'USD',
     maximumFractionDigits: fractionDigits,
@@ -24,18 +25,21 @@ export function formatCompactCurrency(value: number, language = i18n.language, f
   }).format(value)
 }
 
-export function formatSignedCurrency(value: number, language = i18n.language, fractionDigits = 2) {
+export function formatSignedCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   return `${value >= 0 ? '+' : '-'}${formatCurrency(Math.abs(value), language, fractionDigits)}`
 }
 
-export function formatNumber(value: number, language = i18n.language, fractionDigits = 2) {
+export function formatNumber(value: number | null | undefined, language = i18n.language, fractionDigits = 2) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   return new Intl.NumberFormat(localeForLanguage(language), {
     maximumFractionDigits: fractionDigits,
     minimumFractionDigits: fractionDigits,
   }).format(value)
 }
 
-export function formatPercent(value: number, language = i18n.language, fractionDigits = 2, signed = false) {
+export function formatPercent(value: number | null | undefined, language = i18n.language, fractionDigits = 2, signed = false) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   return new Intl.NumberFormat(localeForLanguage(language), {
     maximumFractionDigits: fractionDigits,
     minimumFractionDigits: fractionDigits,
@@ -44,7 +48,8 @@ export function formatPercent(value: number, language = i18n.language, fractionD
   }).format(value / 100)
 }
 
-export function formatSignedPercent(value: number, language = i18n.language, fractionDigits = 2) {
+export function formatSignedPercent(value: number | null | undefined, language = i18n.language, fractionDigits = 2) {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   return formatPercent(value, language, fractionDigits, true)
 }
 
