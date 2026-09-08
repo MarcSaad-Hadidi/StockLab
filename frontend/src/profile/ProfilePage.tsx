@@ -154,7 +154,7 @@ export default function ProfilePage() {
             <div><span><Icon name="activity" size={15} /> {t('profile.memberSince')}</span><strong>{formatDate(profile.createdAt)}</strong></div>
             <div><span><Icon name="activity" size={15} /> {t('profile.accountCreated')}</span><strong>{formatDate(profile.createdAt)}</strong></div>
             <div><span><Icon name="activity" size={15} /> {t('profile.initialCapital')}</span><strong>{formatCurrency(profile.initialCapital)}</strong></div>
-            <div><span>{t('profile.accountStatus')}</span><strong className="active-text">{t('profile.active')}</strong></div>
+            <div><span>{t('profile.accountStatus')}</span><strong className={`account-status-text ${profile.status === 'active' ? 'status-active' : 'status-inactive'}`}>{t(`profile.${profile.status}`)}</strong></div>
           </div>
           <div className="summary-actions">
             <button className="summary-primary" onClick={() => editing ? saveProfile() : beginEditing()} type="button"><Icon name="edit" size={14} /> {editing ? t('profile.saveProfile') : t('profile.editProfile')}</button>
