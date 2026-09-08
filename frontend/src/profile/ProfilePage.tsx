@@ -66,11 +66,6 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   return <svg aria-hidden="true" className="icon" height={size} viewBox="0 0 24 24" width={size}>{paths[name]}</svg>
 }
 
-function ProfileAvatar({ small = false }: { small?: boolean }) {
-  const { t } = useTranslation()
-  return <span aria-label={t('profile.avatarAlt')} className={`profile-avatar ${small ? 'profile-avatar-small' : ''}`}><svg aria-hidden="true" viewBox="0 0 96 96"><circle cx="48" cy="48" fill="#d7d9dc" r="48" /><path d="M16 96c2-21 14-31 32-31s30 10 32 31" fill="#4d86be" /><path d="M31 62c3 11 10 17 17 17s14-6 17-17c-5 4-11 6-17 6s-12-2-17-6Z" fill="#d99b79" /><ellipse cx="48" cy="43" fill="#efb38c" rx="18" ry="22" /><path d="M30 40c0-19 8-27 20-27 14 0 21 10 18 28l-5-6c-7 4-16 3-25-3-1 4-4 7-8 8Z" fill="#3a2b27" /><path d="M39 46h3M54 46h3" stroke="#4b3028" strokeLinecap="round" strokeWidth="2" /><path d="M43 56c3 2 7 2 10 0" fill="none" stroke="#a45e52" strokeLinecap="round" strokeWidth="1.6" /></svg></span>
-}
-
 type ProfileOption = { label: string; value: string }
 
 function ProfileField({ label, value, editing, type = 'text', options, onChange, onEdit, readOnly = false }: { label: string; value: string; editing: boolean; type?: 'text' | 'email' | 'password' | 'select'; options?: ProfileOption[]; onChange?: (value: string) => void; onEdit: () => void; readOnly?: boolean }) {
@@ -141,7 +136,7 @@ export default function ProfilePage() {
       <TopBar onMenuOpen={() => setSidebarOpen(true)} title={t('profile.title')} />
       <div className="profile-content"><p role="status">{t('businessData.profileDemo')}</p>
         <section aria-labelledby="profile-summary-title" className="profile-summary-card">
-          <div className="summary-identity"><ProfileAvatar /><div><h1 id="profile-summary-title">{profile.name}</h1><p>{profile.email}</p><span className="verified-badge"><i /> {t('profile.verifiedAccount')}</span></div></div>
+          <div className="summary-identity"><div><h1 id="profile-summary-title">{profile.name}</h1><p>{profile.email}</p><span className="verified-badge"><i /> {t('profile.verifiedAccount')}</span></div></div>
           <div className="summary-details">
             <div><span><Icon name="activity" size={15} /> {t('profile.memberSince')}</span><strong>{formatDate(profile.createdAt)}</strong></div>
             <div><span><Icon name="activity" size={15} /> {t('profile.accountCreated')}</span><strong>{formatDate(profile.createdAt)}</strong></div>
