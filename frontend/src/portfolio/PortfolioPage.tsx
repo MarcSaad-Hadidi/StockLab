@@ -1,3 +1,4 @@
+import { FinancialLineChart } from '../components/charts/FinancialLineChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { formatCompactCurrency, formatCurrency, formatNumber, formatPercent, formatSignedCurrency, formatSignedPercent, localeForLanguage } from '../i18n/formatters'
 import { useTranslation } from 'react-i18next'
@@ -39,37 +40,34 @@ function MetricCard({ label, value, detail, tone = 'neutral' }: { label: string;
 
 function PerformanceChart({ range }: { range: TimeRange }) {
   const { i18n, t } = useTranslation()
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
-  const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
-  const [pinnedIndex, setPinnedIndex] = useState<number | null>(null)
   const series = performanceSeries[range]
   const labels = series.labels.map((label) => new Intl.DateTimeFormat(localeForLanguage(i18n.language), { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${label}T00:00:00.000Z`)))
-  const width = 760
-  const height = 250
-  const padding = { top: 18, right: 14, bottom: 34, left: 14 }
   const min = Math.min(...series.values) - 0.7
   const max = Math.max(...series.values) + 0.7
-  const usableWidth = width - padding.left - padding.right
-  const usableHeight = height - padding.top - padding.bottom
-  const points = series.values.map((value, index) => ({
-    x: padding.left + (index / Math.max(series.values.length - 1, 1)) * usableWidth,
-    y: padding.top + ((max - value) / Math.max(max - min, 1)) * usableHeight,
-  }))
-  const linePath = points.map((point, index) => (index === 0 ? 'M' : 'L') + ' ' + point.x + ' ' + point.y).join(' ')
-  const baseline = height - padding.bottom
-  const areaPath = linePath + ' L ' + (points.at(-1)?.x ?? width) + ' ' + baseline + ' L ' + (points[0]?.x ?? padding.left) + ' ' + baseline + ' Z'
-  const yTicks = [0, 1, 2, 3]
-  const activeIndex = hoveredIndex ?? focusedIndex ?? pinnedIndex
-  const activePoint = activeIndex === null ? null : points[activeIndex]
-  const activeValue = activeIndex === null ? null : series.values[activeIndex]
-  const pointHitRadius = 44
-  const tooltipWidth = 134
-  const tooltipHeight = 52
-  const tooltipX = activePoint ? Math.min(Math.max(activePoint.x - tooltipWidth / 2, padding.left), width - padding.right - tooltipWidth) : 0
-  const tooltipY = activePoint
-    ? Math.min(Math.max(activePoint.y < tooltipHeight + 24 ? activePoint.y + 17 : activePoint.y - tooltipHeight - 17, 8), height - tooltipHeight - 8)
-    : 0
-  return <div className="chart-wrap"><div className="chart-summary"><div><span className="chart-eyebrow">{t('common.portfolioValue')}</span><strong>{formatCompactCurrency((series.values.at(-1) ?? 0) * 1000)}</strong></div><div className="chart-change"><span>{formatSignedCurrency(series.change)}</span><small>{t(`portfolio.performance.change.${range}`, { change: formatSignedPercent(series.changePercent) })}</small></div></div><svg aria-label={t('portfolio.performanceChart', { range: t(`common.timeRanges.${range}`) })} className="performance-chart" key={range} role="img" viewBox={'0 0 ' + width + ' ' + height}><defs><linearGradient id={'portfolio-fill-' + range} x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#2f7bf0" stopOpacity=".22" /><stop offset="100%" stopColor="#2f7bf0" stopOpacity="0" /></linearGradient></defs>{yTicks.map((tick) => { const y = padding.top + (tick / (yTicks.length - 1)) * usableHeight; const value = max - (tick / (yTicks.length - 1)) * (max - min); return <g key={'y-tick-' + tick}><line className="chart-grid-line" x1={padding.left} x2={width - padding.right} y1={y} y2={y} /><text className="chart-y-label" textAnchor="end" x={width - padding.right} y={y - 7}>{formatCompactCurrency(value * 1000)}</text></g> })}<path className="chart-area" d={areaPath} fill={'url(#portfolio-fill-' + range + ')'} /><path className="chart-line" d={linePath} />{points.map((point, index) => <g aria-label={t('portfolio.chartPoint', { label: labels[index], value: formatCompactCurrency(series.values[index] * 1000) })} aria-pressed={pinnedIndex === index} className={'chart-point-group ' + (activeIndex === index ? 'active' : '')} key={point.x + '-' + index} onBlur={() => setFocusedIndex(null)} onClick={() => setPinnedIndex((current) => current === index ? null : index)} onFocus={() => setFocusedIndex(index)} onKeyDown={(event) => { if (event.key === 'Escape') setPinnedIndex(null); if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setPinnedIndex((current) => current === index ? null : index) } }} onPointerEnter={() => setHoveredIndex(index)} onPointerLeave={() => setHoveredIndex(null)} role="button" tabIndex={0}><circle className="chart-point-hit" cx={point.x} cy={point.y} r={pointHitRadius} /><circle className="chart-point" cx={point.x} cy={point.y} r={index === points.length - 1 ? 4 : 2.5} style={{ animationDelay: (index * 45) + 'ms' }} /></g>)}{activePoint && <line className="chart-crosshair" x1={activePoint.x} x2={activePoint.x} y1={padding.top} y2={baseline} />}{activePoint && activeIndex !== null && activeValue !== null && <g className="chart-tooltip" pointerEvents="none" transform={'translate(' + tooltipX + ' ' + tooltipY + ')'}><rect height={tooltipHeight} rx="7" width={tooltipWidth} /><text className="chart-tooltip-label" x="10" y="18">{labels[activeIndex]}</text><text className="chart-tooltip-value" x="10" y="38">{formatCompactCurrency(activeValue * 1000)}</text></g>}{labels.map((label, index) => <text className="chart-x-label" key={label + '-' + index} textAnchor={index === 0 ? 'start' : index === labels.length - 1 ? 'end' : 'middle'} x={points[index].x} y={height - 7}>{label}</text>)}</svg><span className="chart-tooltip-announcement" aria-live="polite">{activeIndex !== null && activeValue !== null ? t('portfolio.chartPoint', { label: labels[activeIndex], value: formatCompactCurrency(activeValue * 1000) }) : ''}</span></div>
+
+  return (
+    <div className="chart-wrap">
+      <div className="chart-summary">
+        <div>
+          <span className="chart-eyebrow">{t('common.portfolioValue')}</span>
+          <strong>{formatCompactCurrency((series.values.at(-1) ?? 0) * 1000)}</strong>
+        </div>
+        <div className="chart-change">
+          <span>{formatSignedCurrency(series.change)}</span>
+          <small>{t(`portfolio.performance.change.${range}`, { change: formatSignedPercent(series.changePercent) })}</small>
+        </div>
+      </div>
+      <FinancialLineChart
+        values={series.values}
+        labels={labels}
+        min={min}
+        max={max}
+        ariaLabel={t('portfolio.performanceChart', { range: t(`common.timeRanges.${range}`) })}
+        formatValue={value => formatCompactCurrency(value * 1000, i18n.language)}
+        pointLabel={index => t('portfolio.chartPoint', { label: labels[index], value: formatCompactCurrency(series.values[index] * 1000, i18n.language) })}
+      />
+    </div>
+  )
 }
 
 function AllocationPanel() {
