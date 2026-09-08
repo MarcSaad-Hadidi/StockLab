@@ -97,7 +97,10 @@ a { text-decoration: none; }
 .summary-identity > div { min-width: 0; }
 .summary-identity h1 { margin: 0 0 5px; overflow: hidden; color: #15233a; font-size: 22px; font-weight: 800; letter-spacing: -.04em; text-overflow: ellipsis; white-space: nowrap; }
 .summary-identity p { margin: 0 0 8px; overflow: hidden; color: #8d99aa; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.verified-badge, .security-badge, .active-text { color: #35a661; font-size: 9px; font-weight: 800; }
+.verified-badge, .security-badge { color: #35a661; font-size: 9px; font-weight: 800; }
+.account-status-text { font-size: 9px; font-weight: 800; }
+.summary-details strong.status-active { color: #35a661; }
+.summary-details strong.status-inactive { color: #d94f5f; }
 .verified-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; background: #e7f8e9; border-radius: 5px; }
 .verified-badge i { width: 5px; height: 5px; background: #4ac46d; border-radius: 50%; }
 .summary-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; align-content: center; margin: 0 20px; padding: 0 22px; border-right: 1px solid #edf0f5; border-left: 1px solid #edf0f5; }
@@ -190,6 +193,8 @@ a { text-decoration: none; }
 .dark-mode .profile-topbar, .dark-mode .profile-summary-card, .dark-mode .panel, .dark-mode .password-modal { background: #182337; border-color: #28364e; }
 .dark-mode .summary-identity h1, .dark-mode .panel-heading h2, .dark-mode .password-modal h2, .dark-mode .profile-info-row strong, .dark-mode .preference-row strong, .dark-mode .security-item strong { color: #f2f5fb; }
 .dark-mode .summary-details strong, .dark-mode .summary-secondary, .dark-mode .cancel-button, .dark-mode .currency-select select { color: #dbe3f1; }
+.dark-mode .summary-details strong.status-active { color: #35a661; }
+.dark-mode .summary-details strong.status-inactive { color: #d94f5f; }
 .dark-mode .summary-secondary, .dark-mode .cancel-button, .dark-mode .currency-select select, .dark-mode .global-search { background: #202e45; border-color: #35445d; }
 .dark-mode .profile-info-row, .dark-mode .preference-row, .dark-mode .security-item + .security-item, .dark-mode .summary-details { border-color: #2a3951; }
 .dark-mode .global-search input { color: #e5ebf5; }

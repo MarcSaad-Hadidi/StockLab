@@ -715,6 +715,7 @@
     "initialCapital": "Initial Capital",
     "accountStatus": "Account Status",
     "active": "Active",
+    "inactive": "Inactive",
     "editProfile": "Edit Profile",
     "saveProfile": "Save Profile",
     "changePassword": "Change Password",
