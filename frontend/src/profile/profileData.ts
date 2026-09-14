@@ -3,6 +3,7 @@ export type ProfileData = {
   email: string
   createdAt: string
   initialCapital: number
+  status: 'active' | 'inactive'
   phone: string
   country: string
   timezone: string
@@ -13,6 +14,7 @@ export const initialProfile: ProfileData = {
   email: 'alex.johnson@example.com',
   createdAt: '2024-05-20',
   initialCapital: 100000,
+  status: 'active',
   phone: '+1 (555) 123-4567',
   country: 'us',
   timezone: 'americaEasternDaylight',
