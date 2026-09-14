@@ -13,6 +13,7 @@ type IconName =
   | 'chevron-down'
   | 'chevron-right'
   | 'close'
+  | 'external-link'
   | 'grid'
   | 'menu'
   | 'more'
@@ -40,6 +41,7 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
     'chevron-down': <path d="m6 9 6 6 6-6" {...common} />,
     'chevron-right': <path d="m9 6 6 6-6 6" {...common} />,
     close: <path d="m6 6 12 12M18 6 6 18" {...common} />,
+    'external-link': <><path d="M14 5h5v5" {...common} /><path d="m19 5-8 8" {...common} /><path d="M18 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" {...common} /></>,
     grid: <><rect x="3" y="3" width="7" height="7" rx="1" {...common} /><rect x="14" y="3" width="7" height="7" rx="1" {...common} /><rect x="3" y="14" width="7" height="7" rx="1" {...common} /><rect x="14" y="14" width="7" height="7" rx="1" {...common} /></>,
     menu: <path d="M4 7h16M4 12h16M4 17h16" {...common} />,
     more: <><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" /></>,
@@ -58,18 +60,26 @@ function StockMark({ item }: { item: WatchlistItem }) {
   return <span aria-hidden="true" className={`stock-mark stock-mark-${item.markTone}`}>{item.symbol === 'MSFT' ? <><i /><i /><i /><i /></> : item.symbol.slice(0, 1)}</span>
 }
 
+function TrendSparkline({ item }: { item: WatchlistItem }) {
+  const seed = item.symbol.split('').reduce((total, character) => total + character.charCodeAt(0), 0)
+  const points = Array.from({ length: 7 }, (_, index) => {
+    const drift = item.tone === 'positive' ? index * 2.2 : -index * 1.8
+    const variation = ((seed + index * 17) % 9) - 4
+    return `${index * 16},${26 - drift - variation}`
+  }).join(' ')
+
+  return <svg aria-label={`${item.symbol} seven day trend`} className={`trend-sparkline ${item.tone}`} role="img" viewBox="0 0 96 32"><polyline fill="none" points={points} stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg>
+}
+
 function WatchlistRow({ item, onAlert, onDetails, onRemove }: { item: WatchlistItem; onAlert: (item: WatchlistItem) => void; onDetails: (item: WatchlistItem) => void; onRemove: (item: WatchlistItem) => void }) {
   const { t } = useTranslation()
   return (
     <article className="watchlist-row">
-      <div className="watchlist-asset">
+      <div className="watchlist-symbol">
         <StockMark item={item} />
-        <div>
-          <strong>{item.symbol}</strong>
-          <span>{item.name}</span>
-          <small>{item.exchange}</small>
-        </div>
+        <strong>{item.symbol}</strong>
       </div>
+      <div className="watchlist-company"><span>{item.name}</span><small>{item.exchange}</small></div>
       <div className="watchlist-cell watchlist-price">
         <span className="cell-label">{t('watchlist.currentPrice')}</span>
         <strong>{formatCurrency(item.price)}</strong>
@@ -79,10 +89,11 @@ function WatchlistRow({ item, onAlert, onDetails, onRemove }: { item: WatchlistI
         <strong>{formatSignedCurrency(item.change)}</strong>
         <small>{formatSignedPercent(item.changePercent)}</small>
       </div>
+      <div className="watchlist-trend"><span className="cell-label">{t('watchlist.chart7d')}</span><TrendSparkline item={item} /></div>
       <div className="watchlist-actions">
-        <button className="details-button" onClick={() => onDetails(item)} type="button">{t('watchlist.stockDetails')} <Icon name="chevron-right" size={14} /></button>
-        <button className="alert-button" onClick={() => onAlert(item)} type="button"><Icon name="bell" size={14} /> {t('alerts.createAlert')}</button>
-        <button aria-label={t('watchlist.removeFromWatchlist', { symbol: item.symbol })} className="remove-button" onClick={() => onRemove(item)} type="button"><Icon name="x" size={15} /><span>{t('common.remove')}</span></button>
+        <button aria-label={`${t('watchlist.stockDetails')} — ${item.symbol}`} className="details-button" onClick={() => onDetails(item)} type="button"><Icon name="external-link" size={14} /></button>
+        <button aria-label={`${t('alerts.createAlert')} — ${item.symbol}`} className="alert-button" onClick={() => onAlert(item)} type="button"><Icon name="bell" size={14} /></button>
+        <button aria-label={t('watchlist.removeFromWatchlist', { symbol: item.symbol })} className="remove-button" onClick={() => onRemove(item)} type="button"><Icon name="x" size={15} /></button>
       </div>
     </article>
   )
@@ -135,6 +146,10 @@ export default function WatchlistPage() {
     showToast('watchlist.removedToast', { symbol: item.symbol })
   }
 
+  const topGainer = items.length > 0 ? items.reduce((top, item) => item.changePercent > top.changePercent ? item : top, items[0]) : undefined
+  const topLoser = items.length > 0 ? items.reduce((bottom, item) => item.changePercent < bottom.changePercent ? item : bottom, items[0]) : undefined
+  const averageChange = items.length > 0 ? items.reduce((total, item) => total + item.changePercent, 0) / items.length : 0
+
   return (
     <div className="watchlist-page stocklab-layout">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -145,9 +160,14 @@ export default function WatchlistPage() {
         <div className="watchlist-content">
           <section className="watchlist-welcome"><div><p className="eyebrow">{t('watchlist.marketOverview')}</p><h1>{t('watchlist.myWatchlist')} <span>✦</span></h1><p className="welcome-copy">{t('watchlist.subtitle')}</p></div><button className="primary-button" onClick={() => showToast('watchlist.addStockHint')} type="button"><span>+</span> {t('watchlist.addStock')}</button></section>
 
-          <section aria-label={t('watchlist.summaryLabel')} className="watchlist-summary"><div><span className="summary-icon summary-icon-blue"><Icon name="star" size={18} /></span><span><small>{t('watchlist.savedAssets')}</small><strong>{formatNumber(items.length, undefined, 0)}</strong></span></div><div><span className="summary-icon summary-icon-green"><Icon name="trending-up" size={18} /></span><span><small>{t('watchlist.gainersToday')}</small><strong>{formatNumber(items.filter((item) => item.tone === 'positive').length, undefined, 0)}</strong></span></div><div><span className="summary-icon summary-icon-purple"><Icon name="activity" size={18} /></span><span><small>{t('watchlist.averageMove')}</small><strong>{formatSignedPercent(0.2)}</strong></span></div><div className="summary-status"><i /> {t('watchlist.marketOpen')} <small>{t('common.simulatedData')}</small></div></section>
+          <section aria-label={t('watchlist.summaryLabel')} className="watchlist-summary">
+            <div className="summary-card"><span className="summary-card-label">{t('watchlist.savedAssets')}</span><strong>{formatNumber(items.length, undefined, 0)}</strong><small>{t('watchlist.assetsShown', { shown: items.length, total: items.length })}</small></div>
+            <div className="summary-card"><span className="summary-card-label">{t('watchlist.topGainer')}</span><strong>{topGainer?.symbol ?? '—'}</strong><small className="positive">{topGainer ? formatSignedPercent(topGainer.changePercent) : '—'}</small></div>
+            <div className="summary-card"><span className="summary-card-label">{t('watchlist.topLoser')}</span><strong>{topLoser?.symbol ?? '—'}</strong><small className="negative">{topLoser ? formatSignedPercent(topLoser.changePercent) : '—'}</small></div>
+            <div className="summary-card"><span className="summary-card-label">{t('watchlist.averageMove')}</span><strong className={averageChange >= 0 ? 'positive' : 'negative'}>{formatSignedPercent(averageChange)}</strong><small>{t('watchlist.acrossWatched')}</small></div>
+          </section>
 
-          <section aria-labelledby="watchlist-title" className="panel watchlist-panel"><div className="panel-heading"><div><h2 id="watchlist-title">{t('watchlist.stocksWatching')}</h2><p>{t('watchlist.previewPrices')}</p></div><button className="panel-action" onClick={() => showToast('watchlist.pricesUpdated')} type="button"><Icon name="activity" size={14} /> {t('watchlist.refreshPrices')}</button></div><div className="watchlist-controls"><label className="watchlist-filter"><Icon name="search" size={16} /><input aria-label={t('watchlist.filterStocks')} onChange={(event) => setQuery(event.target.value)} placeholder={t('watchlist.filterPlaceholder')} value={query} /></label><label className="sort-control"><span>{t('watchlist.sortBy')}</span><select aria-label={t('watchlist.sortLabel')} onChange={(event) => setSort(event.target.value as 'default' | 'price' | 'change')} value={sort}><option value="default">{t('watchlist.addedRecently')}</option><option value="price">{t('watchlist.priceHighLow')}</option><option value="change">{t('watchlist.dailyChange')}</option></select><Icon name="chevron-down" size={14} /></label></div><div className="watchlist-columns" aria-hidden="true"><span>{t('common.asset')}</span><span>{t('watchlist.currentPrice')}</span><span>{t('common.today')}</span><span>{t('common.actions')}</span></div><div className="watchlist-list">{filteredItems.length > 0 ? filteredItems.map((item) => <WatchlistRow item={item} key={item.symbol} onAlert={setAlertTarget} onDetails={setDetailTarget} onRemove={removeItem} />) : <div className="empty-state"><span><Icon name="search" size={19} /></span><strong>{t('market.noStocksFound')}</strong><p>{t('watchlist.noStocksHint')}</p></div>}</div><div className="watchlist-footer"><span><i className="live-dot" /> {t('watchlist.liveUpdateNote')}</span><strong>{t('watchlist.assetsShown', { shown: filteredItems.length, total: items.length })}</strong></div></section>
+          <section aria-labelledby="watchlist-title" className="panel watchlist-panel"><div className="panel-heading"><div><h2 id="watchlist-title">{t('watchlist.stocksWatching')}</h2><p>{t('watchlist.previewPrices')}</p></div><div className="watchlist-panel-actions"><button className="panel-action" onClick={() => showToast('watchlist.pricesUpdated')} type="button"><Icon name="activity" size={14} /> {t('watchlist.refreshPrices')}</button><label className="sort-control"><span>{t('watchlist.sortBy')}</span><select aria-label={t('watchlist.sortLabel')} onChange={(event) => setSort(event.target.value as 'default' | 'price' | 'change')} value={sort}><option value="default">{t('watchlist.addedRecently')}</option><option value="price">{t('watchlist.priceHighLow')}</option><option value="change">{t('watchlist.dailyChange')}</option></select><Icon name="chevron-down" size={14} /></label></div></div><div className="watchlist-controls"><label className="watchlist-filter"><Icon name="search" size={16} /><input aria-label={t('watchlist.filterStocks')} onChange={(event) => setQuery(event.target.value)} placeholder={t('watchlist.filterPlaceholder')} value={query} /></label></div><div className="watchlist-columns" aria-hidden="true"><span>{t('watchlist.symbol')}</span><span>{t('watchlist.company')}</span><span>{t('watchlist.currentPrice')}</span><span>{t('common.today')}</span><span>{t('watchlist.chart7d')}</span><span>{t('common.actions')}</span></div><div className="watchlist-list">{filteredItems.length > 0 ? filteredItems.map((item) => <WatchlistRow item={item} key={item.symbol} onAlert={setAlertTarget} onDetails={setDetailTarget} onRemove={removeItem} />) : <div className="empty-state"><span><Icon name="search" size={19} /></span><strong>{t('market.noStocksFound')}</strong><p>{t('watchlist.noStocksHint')}</p></div>}</div><div className="watchlist-footer"><span><i className="live-dot" /> {t('watchlist.liveUpdateNote')}</span><strong>{t('watchlist.assetsShown', { shown: filteredItems.length, total: items.length })}</strong></div></section>
         </div>
       </main>
       <div aria-live="polite" className={`toast ${toast ? 'visible' : ''}`}>{toast ? t(toast.key, toast.key === 'watchlist.alertSetFormatted' ? { ...toast.values, price: formatCurrency(Number(toast.values?.price)) } : toast.values) : ''}</div>
