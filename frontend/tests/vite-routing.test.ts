@@ -55,6 +55,9 @@ for (const config of ['vite.config.ts', 'vite.dashboard.config.ts']) {
           assert.equal(await unknown.text(), await notFound.text())
           const rootResponse = await fetch(base)
           assert.equal(rootResponse.status, 200)
+          const rootHtml = await rootResponse.text()
+          assert.match(rootHtml, /http-equiv="refresh"/i)
+          assert.match(rootHtml, /window\.location\.replace\(['"]\/login['"]\)/)
         })
 
         await t.test('missing static assets and Vite modules never fall back to an HTML document', async () => {
