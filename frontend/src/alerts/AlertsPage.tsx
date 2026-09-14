@@ -1,6 +1,6 @@
 import { Sidebar } from '../components/layout/Sidebar'
+import { TopBar } from '../components/layout/TopBar'
 import { formatCurrency, formatDate } from '../i18n/formatters'
-import { routeFor } from '../navigation/routes'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { assetOptions, initialAlerts, type AlertCondition, type AlertStatus, type PriceAlert } from './alertsData'
@@ -65,10 +65,6 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   }
 
   return <svg aria-hidden="true" className="icon" height={size} viewBox="0 0 24 24" width={size}>{paths[name]}</svg>
-}
-
-function UserAvatar() {
-  return <span aria-hidden="true" className="user-avatar">MS</span>
 }
 
 function StockMark({ symbol }: { symbol: string }) {
@@ -220,16 +216,7 @@ export default function AlertsPage() {
   return <div className="alerts-page stocklab-layout">
     <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
     <main className="alerts-main">
-      <header className="alerts-topbar">
-        <button aria-label={t('common.openNavigation')} className="mobile-menu-button icon-button" onClick={() => setSidebarOpen(true)} type="button"><Icon name="menu" size={20} /></button>
-        <div className="breadcrumb"><strong>{t('alerts.pageTitle')}</strong></div>
-        <div className="topbar-actions">
-          <label className="global-search"><Icon name="search" size={16} /><input aria-label={t('common.searchStocks')} onChange={(event) => setQuery(event.target.value)} placeholder={t('common.searchStocksEtfsNewsPlaceholder')} value={query} /></label>
-          <button aria-label={t('common.notifications')} className="icon-button notification-button" onClick={() => showToast('common.notificationsCaughtUp')} type="button"><Icon name="bell" size={18} /><i>2</i></button>
-          <button aria-label={t('common.openMessages')} className="icon-button mail-button" onClick={() => showToast('common.noNewMessages')} type="button"><Icon name="mail" size={17} /></button>
-          <button aria-label={t('common.openAccountMenu')} className="topbar-account" onClick={() => window.location.assign(routeFor('profile'))} type="button"><UserAvatar /><Icon name="chevron-down" size={14} /></button>
-        </div>
-      </header>
+      <TopBar onMenuOpen={() => setSidebarOpen(true)} title={t('alerts.pageTitle')} />
       <div className="alerts-content">
         <section className="alerts-heading">
           <div><h1>{t('alerts.pageTitle')}</h1><p>{t('alerts.pageSubtitle')}</p></div>

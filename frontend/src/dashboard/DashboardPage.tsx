@@ -1,5 +1,6 @@
 import { FinancialLineChart } from '../components/charts/FinancialLineChart'
 import { Sidebar } from '../components/layout/Sidebar'
+import { TopBar } from '../components/layout/TopBar'
 import { formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
 import { useTranslation } from 'react-i18next'
@@ -235,11 +236,7 @@ export function DashboardPage() {
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <main className="dashboard-main">
-        <header className="dashboard-topbar">
-          <button aria-label={t('common.openNavigation')} className="mobile-menu-button icon-button" onClick={() => setSidebarOpen(true)} type="button"><Icon name="menu" size={22} /></button>
-          <div className="breadcrumb"><span>{t('common.workspace')}</span><Icon name="chevron-right" size={14} /><strong>{t('common.navigation.dashboard')}</strong></div>
-          <div className="topbar-actions"><label className="global-search"><Icon name="search" size={17} /><input aria-label={t('common.searchStocks')} onChange={(event) => setQuery(event.target.value)} placeholder={t('dashboard.searchPlaceholder')} value={query} /></label><button aria-label={t('common.notifications')} className="icon-button notification-button" onClick={() => showToast('common.notificationsCaughtUp')} type="button"><Icon name="bell" size={19} /><i /></button><span className="topbar-avatar">GA</span></div>
-        </header>
+        <TopBar onMenuOpen={() => setSidebarOpen(true)} title={t('common.navigation.dashboard')} />
 
         <div className="dashboard-content">
           <section className="welcome-row"><div><p className="eyebrow">{t('dashboard.date')}</p><h1>{greeting} <span>👋</span></h1><p className="welcome-copy">{t('dashboard.welcome')}</p></div><button className="primary-button" onClick={() => showToast('dashboard.investmentFlowOpened')} type="button"><span>+</span> {t('common.addInvestment')}</button></section>

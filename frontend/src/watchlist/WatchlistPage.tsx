@@ -1,4 +1,5 @@
 import { Sidebar } from '../components/layout/Sidebar'
+import { TopBar } from '../components/layout/TopBar'
 import { formatCurrency, formatNumber, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
@@ -155,7 +156,7 @@ export default function WatchlistPage() {
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <main className="watchlist-main">
-        <header className="watchlist-topbar"><button aria-label={t('common.openNavigation')} className="mobile-menu-button icon-button" onClick={() => setSidebarOpen(true)} type="button"><Icon name="menu" size={22} /></button><div className="breadcrumb"><span>{t('common.workspace')}</span><Icon name="chevron-right" size={14} /><strong>{t('common.navigation.watchlist')}</strong></div><div className="topbar-actions"><label className="global-search"><Icon name="search" size={17} /><input aria-label={t('watchlist.searchLabel')} onChange={(event) => setQuery(event.target.value)} placeholder={t('dashboard.searchPlaceholder')} value={query} /></label><button aria-label={t('common.notifications')} className="icon-button notification-button" onClick={() => showToast('common.notificationsCaughtUp')} type="button"><Icon name="bell" size={19} /><i /></button><span className="topbar-avatar">MS</span></div></header>
+        <TopBar onMenuOpen={() => setSidebarOpen(true)} title={t('common.navigation.watchlist')} />
 
         <div className="watchlist-content">
           <section className="watchlist-welcome"><div><p className="eyebrow">{t('watchlist.marketOverview')}</p><h1>{t('watchlist.myWatchlist')} <span>✦</span></h1><p className="welcome-copy">{t('watchlist.subtitle')}</p></div><button className="primary-button" onClick={() => showToast('watchlist.addStockHint')} type="button"><span>+</span> {t('watchlist.addStock')}</button></section>
