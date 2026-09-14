@@ -114,9 +114,24 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 
 .alerts-bottom-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(290px, .75fr); gap: 16px; margin-top: 16px; }
 .create-alert-card, .how-alerts-card { padding: 17px; animation: alerts-rise .55s .18s cubic-bezier(.22, 1, .36, 1) both; }
-.create-alert-card { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 13px; }
+.create-alert-card { display: block; }
+.create-alert-card-header { display: flex; align-items: center; gap: 13px; }
 .card-icon { display: inline-flex; align-items: center; justify-content: center; width: 37px; height: 37px; border-radius: 10px; }.blue-icon { color: var(--blue); background: #edf4ff; }.purple-icon { color: var(--purple); background: #f0edff; }
 .create-alert-card h2, .how-alerts-card h2 { margin: 0; color: #1b2945; font-family: Manrope, sans-serif; font-size: 12px; }.create-alert-card p, .how-alerts-card > div p { margin: 5px 0 0; color: #96a2b3; font-size: 9px; line-height: 1.45; }
+.alert-form { margin-top: 18px; }
+.alert-form-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start; gap: 14px 16px; }
+.alert-form-field { min-width: 0; margin: 0; padding: 0; border: 0; }
+.alert-form-field label, .alert-form-field legend { display: block; margin: 0 0 7px; padding: 0; color: #53617a; font-size: 9px; font-weight: 800; }
+.alert-form-condition { min-width: 0; }
+.alert-form .select-wrap select, .alert-form .price-input { min-height: 35px; }
+.alert-form .notify-fieldset { margin-top: 0 !important; }
+.alert-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; margin-top: 18px; }
+.alert-form-actions .modal-primary { min-width: 120px; }
+.alert-modal .alert-form-grid { display: block; }
+.alert-modal .alert-form-condition { margin-top: 15px; }
+.alert-modal .alert-form-target { margin-top: 15px; }
+.alert-modal .notify-fieldset { margin-top: 16px !important; }
+.alert-modal .alert-form-actions { display: grid; grid-template-columns: 1fr 1fr; margin-top: 20px; }
 .outline-button { display: inline-flex; align-items: center; gap: 5px; min-height: 29px; padding: 0 10px; color: var(--blue); font-size: 9px; font-weight: 800; white-space: nowrap; background: #fff; border: 1px solid #dce8fb; border-radius: 6px; transition: background .16s ease, transform .16s ease; }.outline-button:hover { background: #f4f8ff; transform: translateY(-1px); }
 .how-alerts-card { display: grid; grid-template-columns: 37px minmax(0, 1fr); gap: 11px; }.how-alerts-card ul { grid-column: 1 / -1; display: grid; gap: 9px; margin: 4px 0 0; padding: 0; list-style: none; }.how-alerts-card li { display: grid; grid-template-columns: 26px minmax(0, 1fr); align-items: center; gap: 8px; }.how-icon { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; color: var(--purple); background: #f2efff; border-radius: 7px; }.how-alerts-card li strong, .how-alerts-card li small { display: block; }.how-alerts-card li strong { margin-bottom: 2px; color: #43516a; font-size: 9px; }.how-alerts-card li small { color: #9ca7b7; font-size: 8px; }
 .simulation-note { display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin: 13px 2px 0; color: #a3adbb; font-size: 8px; }
@@ -165,8 +180,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .alert-actions { grid-column: 1 / -1; justify-content: flex-end; padding-top: 2px; border-top: 1px solid #f4f5f8; }
   .alerts-footer { align-items: flex-start; flex-direction: column; justify-content: center; gap: 6px; padding: 9px 4px; }
   .pagination { align-self: flex-end; }
-  .create-alert-card { grid-template-columns: 37px minmax(0, 1fr); }
-  .create-alert-card .outline-button { grid-column: 1 / -1; justify-content: center; }
+  .create-alert-card-header { align-items: flex-start; }
 }
 
 @media (max-width: 520px) {
@@ -185,6 +199,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .alert-asset { padding-bottom: 3px; }
   .alert-actions { justify-content: flex-start; }
   .create-alert-card, .how-alerts-card { padding: 15px; }
+  .create-alert-card .alert-form-grid { grid-template-columns: 1fr; gap: 12px; }
+  .create-alert-card .notify-fieldset { margin-top: 0 !important; }
+  .create-alert-card .alert-form-actions { justify-content: stretch; }
+  .create-alert-card .alert-form-actions .modal-primary { flex: 1; }
   .simulation-note { justify-content: center; text-align: center; }
 }
 

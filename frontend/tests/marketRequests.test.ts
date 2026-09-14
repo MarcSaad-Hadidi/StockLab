@@ -247,20 +247,19 @@ test("alert draft search is debounced once and does not loop on result renders",
   const root = createRoot(document.getElementById("root")!);
   try {
     await act(async () => root.render(createElement(AlertsPage)));
-    const open = Array.from(document.querySelectorAll('button')).find(button => button.textContent?.trim() === i18n.t('alerts.createAlert'))!;
-    await act(async () => open.click());
-    const input = document.querySelector('[role="dialog"] input[aria-label]') as HTMLInputElement;
+    assert.ok(document.querySelector('#create-alert-form'));
+    const input = document.querySelector('#create-alert-form input[aria-label]') as HTMLInputElement;
     assert.ok(input);
     await act(async () => {
       Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value')!.set!.call(input, 'tesla');
       input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     });
     await pause(520);
-    assert.match(document.querySelector('[role="dialog"]')!.textContent!, /Test Tesla/);
+    assert.match(document.querySelector('#create-alert-form')!.textContent!, /Test Tesla/);
     assert.equal(calls, 1);
     await pause(1000);
     assert.equal(calls, 1);
-    assert.ok(document.querySelector('[role="dialog"] button[type="submit"][disabled]'));
+    assert.ok(document.querySelector('#create-alert-form button[type="submit"][disabled]'));
   } finally {
     await act(async () => root.unmount());
     marketDataApi.search = original;
