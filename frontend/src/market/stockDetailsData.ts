@@ -51,7 +51,9 @@ export function historyQuery(
   return {
     from: from.toISOString().slice(0, 10),
     to: to.toISOString().slice(0, 10),
-    interval: range === "MAX" ? "Month" : range === "5Y" ? "Week" : "Day",
+    // Daily bars keep the bounded MAX window valid across stock splits: upstream
+    // unadjusted monthly OHLC can mix pre-split opens with post-split highs/lows.
+    interval: range === "5Y" ? "Week" : "Day",
   };
 }
 export function historyPoints(history: StockHistory, locale: string) {

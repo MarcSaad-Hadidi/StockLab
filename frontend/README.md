@@ -126,11 +126,14 @@ individually and are not StockLab AI predictions. AI remains unavailable.
 All chart points come from returned OHLCV bars. 1D uses Minute bars for 24 hours ending
 at the last quote observation (+ one minute to include its bar), including when the
 market is closed. 5D uses Hour bars; 1M/3M/6M/1Y use calendar month subtraction with
-month-end clamping; YTD begins January 1; 5Y uses Week; Max uses Month across the
+month-end clamping; YTD begins January 1; 5Y uses Week; Max uses Day across the
 backend-supported 4999-day span (about 13 years), not all-time history. Calendar bars
 preserve PeriodDate, intraday bars display OpenTimeUtc. Range responses have a bounded
 five-minute memory cache keyed by canonical symbol and range, including when reopening
 a stock. No prefetch, polling, automatic retry or synthetic points.
+Max uses daily source bars because unadjusted monthly OHLC can be inconsistent
+across stock splits (observed for AAPL in June 2014). Prices are never repaired,
+rescaled, or fabricated to make an invalid aggregate pass validation.
 
 Run `npm run lint`, `npm run build`, `npm test`; development: `npm run dev -- --host
 127.0.0.1`, preview: `npm run preview -- --host 127.0.0.1`. The API must be running for

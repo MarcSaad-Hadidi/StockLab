@@ -29,14 +29,14 @@ const data: StockHistory = {
     },
   ],
 };
-test("all enabled ranges have honest half-open boundaries; MAX bounded monthly", () => {
+test("all enabled ranges have honest half-open boundaries; MAX uses bounded daily bars across splits", () => {
   for (const range of chartRanges.filter((r) => r !== "MAX")) {
     const query = historyQuery(range, now)!;
     assert.ok(query.from < query.to);
     if (["1D", "5D"].includes(range)) assert.ok(query.from.endsWith("Z"));
     else assert.match(query.from, /^\d{4}-\d{2}-\d{2}$/);
   }
-  assert.equal(historyQuery("MAX", now)?.interval, "Month");
+  assert.equal(historyQuery("MAX", now)?.interval, "Day");
   assert.equal(
     (Date.parse(historyQuery("MAX", now)!.to) -
       Date.parse(historyQuery("MAX", now)!.from)) /
@@ -63,6 +63,24 @@ test("preserves calendar dates and genuine bar count without synthetic points", 
     ],
   };
   assert.match(historyPoints(intraday, "en-US")[0].label, /UTC$/);
+});
+
+test("MAX reads actual daily prices across a split instead of accepting an inconsistent monthly aggregate", async () => {
+  const splitBars = [
+    { openTimeUtc: null, periodDate: '2014-06-06', open: 649.9, high: 651.26, low: 644.47, close: 645.57, volume: 1000 },
+    { openTimeUtc: null, periodDate: '2014-06-09', open: 92.7, high: 93.88, low: 91.75, close: 93.7, volume: 2000 },
+  ];
+  let calls = 0;
+  const api = createMarketDataApi('', async url => {
+    calls++;
+    assert.equal(new URL(String(url), 'http://localhost').searchParams.get('interval'), 'Day');
+    return Response.json({ symbol: 'AAPL', currency: 'USD', interval: 'Day', bars: splitBars });
+  });
+  const history = await api.history('AAPL', historyQuery('MAX', now)!, new AbortController().signal, 'MAX');
+  assert.deepEqual(historyPoints(history, 'en-US'), [
+    { label: '2014-06-06', value: 645.57 }, { label: '2014-06-09', value: 93.7 },
+  ]);
+  assert.equal(calls, 1);
 });
 test("range switching fetches once per uncached range and no prefetch", async () => {
   const calls: string[] = [];
@@ -135,7 +153,7 @@ test("all nine ranges send distinct bounded queries and symbols never share hist
     ["YTD", "Day", "2026-01-01", "2026-09-09"],
     ["1Y", "Day", "2025-09-08", "2026-09-09"],
     ["5Y", "Week", "2021-09-08", "2026-09-09"],
-    ["MAX", "Month", "2013-01-01", "2026-09-09"],
+    ["MAX", "Day", "2013-01-01", "2026-09-09"],
   ];
   for (const [range, interval, from, to] of expected) {
     await api.history("TSLA", historyQuery(range as typeof chartRanges[number], now)!, signal);
