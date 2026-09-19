@@ -1,6 +1,6 @@
 import { Sidebar } from '../components/layout/Sidebar'
+import { TopBar } from '../components/layout/TopBar'
 import { formatCurrency, formatNumber, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
-import { routeFor } from '../navigation/routes'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
@@ -77,36 +77,6 @@ function Icon({ name, size = 16, strokeWidth = 1.65, className }: IconProps) {
   }
 
   return <svg aria-hidden="true" className={className} height={size} viewBox="0 0 24 24" width={size}>{paths[name]}</svg>
-}
-
-type ToastHandler = (key: string) => void
-
-type TopbarProps = {
-  onMenuOpen: () => void
-  onQueryChange: (query: string) => void
-  onToast: ToastHandler
-  query: string
-}
-
-function Topbar({ onMenuOpen, onQueryChange, onToast, query }: TopbarProps) {
-  const { t } = useTranslation()
-  return (
-    <header className="transactions-topbar">
-      <div className="breadcrumb">
-        <button aria-label={t('common.openNavigation')} className="mobile-menu-button icon-button" onClick={onMenuOpen} type="button"><Icon name="menu" size={20} /></button>
-        <strong>{t('common.navigation.transactions')}</strong>
-      </div>
-      <div className="topbar-actions">
-        <label className="global-search">
-          <Icon name="search" size={16} />
-          <input aria-label={t('common.searchStocksEtfsNews')} onChange={(event) => onQueryChange(event.target.value)} placeholder={t('common.searchStocksEtfsNewsPlaceholder')} value={query} />
-        </label>
-        <button aria-label={t('common.notifications')} className="icon-button notification-button" onClick={() => onToast('common.notificationsCaughtUp')} type="button"><Icon name="bell" size={18} /></button>
-        <button aria-label={t('common.openMessages')} className="icon-button mail-button" onClick={() => onToast('common.noNewMessages')} type="button"><Icon name="mail" size={17} /></button>
-        <button aria-label={t('common.openAccountMenu')} className="topbar-account" onClick={() => window.location.assign(routeFor('profile'))} type="button"><span className="topbar-avatar">GA</span><Icon name="chevron-down" size={14} /></button>
-      </div>
-    </header>
-  )
 }
 
 type SummaryCardProps = {
@@ -237,7 +207,6 @@ export function TransactionsPage() {
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [toastKey, setToastKey] = useState('')
 
   const filteredTransactions = useMemo(() => filterTransactions(transactions, filters), [filters])
   const pageData = useMemo(() => paginateTransactions(filteredTransactions, page), [filteredTransactions, page])
@@ -247,11 +216,6 @@ export function TransactionsPage() {
     filters.action !== 'All',
     filters.from !== defaultFilters.from || filters.to !== defaultFilters.to,
   ].filter(Boolean).length
-
-  const showToast = (key: string) => {
-    setToastKey(key)
-    window.setTimeout(() => setToastKey(''), 2200)
-  }
 
   const updateFilter = (key: keyof TransactionFilters, value: string) => {
     setFilters((current) => ({ ...current, [key]: value } as TransactionFilters))
@@ -272,7 +236,7 @@ export function TransactionsPage() {
     <div className="transactions-page stocklab-layout">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="transactions-main">
-        <Topbar onMenuOpen={() => setSidebarOpen(true)} onQueryChange={(query) => updateFilter('query', query)} onToast={showToast} query={filters.query} />
+        <TopBar onMenuOpen={() => setSidebarOpen(true)} title={t('common.navigation.transactions')} />
         <div className="transactions-content">
           <section className="transactions-heading"><div><h1>{t('transactions.title')}</h1><p>{t('transactions.subtitle')}</p></div></section>
 
@@ -295,7 +259,6 @@ export function TransactionsPage() {
           <p className="simulation-note"><Icon name="activity" size={13} /> {t('businessData.backendPending')}</p>
         </div>
       </main>
-      <div aria-live="polite" className={`toast ${toastKey ? 'visible' : ''}`}>{toastKey ? t(toastKey) : ''}</div>
     </div>
   )
 }

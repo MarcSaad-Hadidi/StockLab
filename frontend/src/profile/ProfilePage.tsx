@@ -1,4 +1,5 @@
 import { Sidebar } from '../components/layout/Sidebar'
+import { TopBar } from '../components/layout/TopBar'
 import { formatCurrency, formatDate } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
 import { useTranslation } from 'react-i18next'
@@ -137,16 +138,7 @@ export default function ProfilePage() {
   return <div className={`profile-page stocklab-layout ${preferences.darkMode ? 'dark-mode' : ''}`}>
     <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
     <main className="profile-main">
-      <header className="profile-topbar">
-        <button aria-label={t('common.openNavigation')} className="mobile-menu-button icon-button" onClick={() => setSidebarOpen(true)} type="button"><Icon name="menu" size={20} /></button>
-        <div className="breadcrumb"><strong>{t('profile.title')}</strong></div>
-        <div className="topbar-actions">
-          <label className="global-search"><Icon name="search" size={16} /><input aria-label={t('common.searchStocks')} placeholder={t('common.searchStocksEtfsNewsPlaceholder')} /></label>
-          <button aria-label={t('common.notifications')} className="icon-button notification-button" onClick={() => showToast('common.notificationsCaughtUp')} type="button"><Icon name="bell" size={18} /><i>2</i></button>
-          <button aria-label={t('common.openMessages')} className="icon-button mail-button" onClick={() => showToast('common.noNewMessages')} type="button"><Icon name="mail" size={17} /></button>
-          <button aria-label={t('common.openAccountMenu')} className="topbar-account" onClick={() => window.location.assign(routeFor('profile'))} type="button"><ProfileAvatar small /><Icon name="chevron-down" size={14} /></button>
-        </div>
-      </header>
+      <TopBar onMenuOpen={() => setSidebarOpen(true)} title={t('profile.title')} />
       <div className="profile-content"><p role="status">{t('businessData.profileDemo')}</p>
         <section aria-labelledby="profile-summary-title" className="profile-summary-card">
           <div className="summary-identity"><ProfileAvatar /><div><h1 id="profile-summary-title">{profile.name}</h1><p>{profile.email}</p><span className="verified-badge"><i /> {t('profile.verifiedAccount')}</span></div></div>

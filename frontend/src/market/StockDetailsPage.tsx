@@ -226,7 +226,6 @@ function TradeTicket({
 
 export function StockDetailsPage({
   requestedSymbol,
-  onBack,
 }: {
   requestedSymbol: string;
   onBack: () => void;
@@ -323,18 +322,8 @@ export function StockDetailsPage({
   };
 
   return (
-    <MarketShell
-      topbarSearch
-      breadcrumb={<strong>{t("stockDetails.title")}</strong>}
-    >
-      <section
-        aria-labelledby="stock-details-title"
-        className="stock-details-page"
-      >
-        <button className="stock-details-back" onClick={onBack} type="button">
-          <MarketIcon name="arrowLeft" size={16} />{" "}
-          {t("stockDetails.backToMarket")}
-        </button>
+    <MarketShell breadcrumb={<strong>{t('stockDetails.title')}</strong>}>
+      <section aria-labelledby="stock-details-title" className="stock-details-page">
         <header className="stock-details-hero">
           <div className="stock-details-identity">
             <StockLogo size="large" symbol={symbol} load />
