@@ -14,6 +14,7 @@ export async function loadFeaturedQuotes(
   const results: { symbol: string; quote?: StockQuote; failed?: boolean }[] =
     featuredSymbols.map((symbol) => ({ symbol }));
   let cursor = 0;
+  let firstFailure: unknown;
   await Promise.all(
     Array.from({ length: 3 }, async () => {
       while (cursor < results.length) {
@@ -21,12 +22,14 @@ export async function loadFeaturedQuotes(
         const item = results[cursor++];
         try {
           item.quote = await load(item.symbol, signal);
-        } catch {
+        } catch (error) {
           signal.throwIfAborted();
           item.failed = true;
+          firstFailure ??= error;
         }
       }
     }),
   );
+  if (results.every((item) => item.failed)) throw firstFailure;
   return results;
 }

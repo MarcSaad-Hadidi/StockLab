@@ -110,6 +110,9 @@ export function MarketPage({
           </div>
           <div className="market-overview-list">
             <MarketRequestStatus {...popular} />
+            {popular.data?.some((item) => item.failed) && (
+              <MarketRequestStatus loading={false} error="marketApi.partialQuotes" retry={popular.retry} />
+            )}
             {(popular.data ?? []).map((item) => (
               <button
                 className="market-overview-row"
@@ -120,7 +123,7 @@ export function MarketPage({
                 <StockLogo symbol={item.symbol} />
                 <span className="market-stock-copy">
                   <strong>{item.symbol}</strong>
-                  <small>{item.quote?.name ?? item.symbol}</small>
+                  <small>{item.failed ? t("marketApi.quoteUnavailable") : item.quote?.name ?? item.symbol}</small>
                 </span>
                 <div className="market-stock-quote">
                   <strong>

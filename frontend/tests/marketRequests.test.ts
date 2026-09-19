@@ -265,3 +265,68 @@ test("alert draft search is debounced once and does not loop on result renders",
     marketDataApi.search = original;
   }
 });
+
+for (const mode of ["partial", "total"] as const) {
+  test("Market renders " + mode + " featured failure and explicit retry", async () => {
+    Object.assign(globalThis, { React: await import("react") });
+    await i18n.changeLanguage("en");
+    const { MarketPage } = await import("../src/market/MarketPage.tsx");
+    const { marketDataApi } = await import("../src/api/marketDataClient.ts");
+    const { MarketDataError } = await import("../src/api/marketDataApi.ts");
+    const original = { quote: marketDataApi.quote, logo: marketDataApi.logo };
+    let recovered = false;
+    marketDataApi.quote = async symbol => {
+      if (!recovered && (mode === "total" || symbol === "NVDA")) throw new MarketDataError(503);
+      return { symbol, name: "Real " + symbol, exchange: "NASDAQ", currency: "USD", price: 123.45,
+        change: null, changePercent: null, volume: null, asOfUtc: "2026-09-04T20:00:00Z",
+        open: null, high: null, low: null, previousClose: null, averageVolume: null,
+        isMarketOpen: false, fiftyTwoWeek: null };
+    };
+    marketDataApi.logo = async symbol => ({ symbol, pngUrl: null, svgUrl: null });
+    const root = createRoot(document.getElementById("root")!);
+    try {
+      await act(async () => root.render(createElement(MarketPage, { onOpenStock() {} })));
+      await pause();
+      const popular = document.querySelector(".market-overview-card-popular")!;
+      assert.ok(popular.querySelector('[role="alert"]'));
+      assert.equal(popular.querySelectorAll(".market-stock-quote strong").length, mode === "total" ? 0 : 5);
+      assert.doesNotMatch(popular.textContent!, /191.45|415.60|892.72/);
+      if (mode === "partial") {
+        assert.match(popular.textContent!, /123.45/);
+        const failed = Array.from(popular.querySelectorAll(".market-overview-row")).find(row => row.textContent?.includes("NVDA"))!;
+        assert.match(failed.textContent!, /unavailable/i);
+        assert.doesNotMatch(failed.textContent!, /123.45/);
+      } else assert.equal(popular.querySelectorAll(".market-overview-row").length, 0);
+      recovered = true;
+      const retry = popular.querySelector('[role="alert"] button') as HTMLButtonElement;
+      assert.ok(retry);
+      await act(async () => retry.click());
+      await pause();
+      assert.equal(popular.querySelector('[role="alert"]'), null);
+      assert.equal(popular.querySelectorAll(".market-overview-row").length, 5);
+      assert.ok(Array.from(popular.querySelectorAll(".market-stock-quote strong")).every(node => node.textContent?.includes("123.45")));
+    } finally {
+      await act(async () => root.unmount());
+      Object.assign(marketDataApi, original);
+    }
+  });
+}
+
+test("history 1M then 1Y then 5D cannot display an older response", async () => {
+  const root = createRoot(document.getElementById("root")!);
+  const requests: Array<{ signal: AbortSignal; complete: (value: string) => void }> = [];
+  const load = (signal: AbortSignal) => new Promise<string>(complete => requests.push({ signal, complete }));
+  try {
+    for (const range of ["TSLA:1M", "TSLA:1Y", "TSLA:5D"]) {
+      await act(async () => root.render(createElement(Probe, { query: range, load })));
+      await pause();
+    }
+    assert.equal(requests.length, 3);
+    assert.equal(requests[0].signal.aborted, true);
+    assert.equal(requests[1].signal.aborted, true);
+    await act(async () => requests[2].complete("current 5D"));
+    await act(async () => requests[1].complete("stale 1Y"));
+    await act(async () => requests[0].complete("stale 1M"));
+    assert.equal(document.getElementById("root")!.textContent, "current 5D");
+  } finally { await act(async () => root.unmount()); }
+});

@@ -870,6 +870,8 @@
     "joinCommunity": "Join the Vite community"
   },
   "marketApi": {
+    "partialQuotes": "Some quotes are unavailable. Retry to load missing prices.",
+    "quoteUnavailable": "Quote unavailable",
     "loading": "Loading…",
     "retry": "Retry",
     "invalid": "This request or interval is not supported. Choose another period.",

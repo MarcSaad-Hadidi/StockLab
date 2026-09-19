@@ -244,3 +244,29 @@ test("logo cache lasts thirty days with no repeated request during its lifetime"
     assert.equal(calls, 2);
   } finally { Date.now = originalNow; }
 });
+
+test("all five featured quotes preserve actual upstream values", async () => {
+  const rows = await loadFeaturedQuotes(async symbol => ({ ...quote, symbol }), signal());
+  assert.equal(rows.length, 5);
+  assert.ok(rows.every(row => row.quote?.price === 204.5 && !row.failed));
+});
+
+for (const status of [0, 429, 503]) {
+  test("total featured failure propagates the safe error, status " + status, async () => {
+    const error = new MarketDataError(status);
+    await assert.rejects(loadFeaturedQuotes(async () => { throw error; }, signal()),
+      caught => caught === error);
+  });
+}
+
+test("featured retry recovers from total failure without fake prices", async () => {
+  let available = false;
+  const load = async (symbol: string) => {
+    if (!available) throw new MarketDataError(503);
+    return { ...quote, symbol, price: 123.45 };
+  };
+  await assert.rejects(loadFeaturedQuotes(load, signal()));
+  available = true;
+  const rows = await loadFeaturedQuotes(load, signal());
+  assert.deepEqual(rows.map(row => row.quote?.price), [123.45, 123.45, 123.45, 123.45, 123.45]);
+});

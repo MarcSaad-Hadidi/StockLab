@@ -870,6 +870,8 @@
     "joinCommunity": "Rejoignez la communauté Vite"
   },
   "marketApi": {
+    "partialQuotes": "Certaines cotations sont indisponibles. Réessayez pour charger les prix manquants.",
+    "quoteUnavailable": "Cotation indisponible",
     "loading": "Chargement…",
     "retry": "Réessayer",
     "invalid": "Cette requête ou cet intervalle est indisponible. Choisissez une autre période.",
