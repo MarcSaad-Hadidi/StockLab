@@ -296,6 +296,7 @@ export function StockDetailsPage({
     `history:${symbol}:${activeRange}`,
     loadHistory,
     activeRange !== "1D" || !!quote.data,
+    300,
   );
   const metadata = marketDataApi.metadata(symbol);
   const companyName = quote.data?.name ?? metadata?.companyName ?? fundamentals.data?.name ?? symbol;
@@ -449,7 +450,7 @@ export function StockDetailsPage({
                   </div>
                 </div>
                 <div className="stock-price-chart">
-                  <MarketRequestStatus {...history} />
+                  <MarketRequestStatus {...history} loadingMessage="marketApi.loadingHistory" />
                   {history.data && !points.length && (
                     <p role="status">{t("marketApi.noHistory")}</p>
                   )}

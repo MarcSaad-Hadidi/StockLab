@@ -123,6 +123,50 @@ public sealed class RateLimitedMarketDataProviderTests
     }
 
     [Fact]
+    public async Task Changing_chart_range_removes_abandoned_shared_queue_work_without_spending_a_permit()
+    {
+        using var limiter = Limiter(1, 1);
+        var provider = new DeduplicatingMarketDataProvider(Wrap(limiter));
+        await provider.GetQuoteAsync("AAPL");
+        using var abandoned = new CancellationTokenSource();
+        var oldRange = provider.GetHistoryAsync(History, abandoned.Token);
+        Assert.Equal(1, limiter.GetStatistics()!.CurrentQueuedCount);
+        abandoned.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => oldRange);
+        Assert.Equal(0, limiter.GetStatistics()!.CurrentQueuedCount);
+        Assert.Equal(0, provider.InFlightCount);
+
+        // Revisit the same range immediately: it must start a fresh, usable flight.
+        var selectedRange = provider.GetHistoryAsync(History);
+        Assert.False(selectedRange.IsCompleted);
+        Assert.Equal(1, inner.Calls);
+        Assert.True(limiter.TryReplenish());
+        Assert.NotEmpty((await selectedRange.WaitAsync(TimeSpan.FromSeconds(5)))!.Bars);
+        Assert.Equal(2, inner.Calls);
+        Assert.Equal(0, provider.InFlightCount);
+        Assert.Empty(logger.Messages);
+    }
+
+    [Fact]
+    public async Task Shared_queued_history_survives_one_viewer_leaving_and_uses_one_permit()
+    {
+        using var limiter = Limiter(1, 1);
+        var provider = new DeduplicatingMarketDataProvider(Wrap(limiter));
+        await provider.GetQuoteAsync("AAPL");
+        using var departing = new CancellationTokenSource();
+        var first = provider.GetHistoryAsync(History, departing.Token);
+        var survivor = provider.GetHistoryAsync(History);
+        departing.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+        Assert.Equal(1, limiter.GetStatistics()!.CurrentQueuedCount);
+        Assert.False(survivor.IsCompleted);
+        Assert.True(limiter.TryReplenish());
+        Assert.NotEmpty((await survivor.WaitAsync(TimeSpan.FromSeconds(5)))!.Bars);
+        Assert.Equal(2, inner.Calls);
+        Assert.Equal(0, provider.InFlightCount);
+    }
+
+    [Fact]
     public async Task Provider_exception_is_unchanged_and_next_permit_remains_usable()
     {
         using var limiter = Limiter(2);

@@ -224,7 +224,7 @@ test("Stock Details keeps a real supplied quote when enrichment/history fail and
     const loadInsights = Array.from(document.querySelectorAll('button')).find(button => button.textContent?.trim() === i18n.t('marketApi.loadInsights'));
     assert.ok(loadInsights);
     await act(async () => loadInsights.click());
-    await pause(120);
+    await pause(350);
     assert.match(document.body.textContent!, /321.45/);
     assert.ok(document.querySelectorAll('[role="alert"]').length >= 3);
 
@@ -241,6 +241,47 @@ test("Stock Details keeps a real supplied quote when enrichment/history fail and
   }
 });
 
+
+test("chart clicks debounce to the selected period and cancel abandoned queued history", async () => {
+  Object.assign(globalThis, { React: await import("react") });
+  await i18n.changeLanguage("en");
+  const { StockDetailsPage } = await import("../src/market/StockDetailsPage.tsx");
+  const { marketDataApi } = await import("../src/api/marketDataClient.ts");
+  const original = { quote: marketDataApi.quote, history: marketDataApi.history };
+  const requests: Array<{ range?: string; signal: AbortSignal; complete: () => void }> = [];
+  marketDataApi.quote = async () => { throw new Error("offline quote fixture"); };
+  marketDataApi.history = (symbol, query, signal, range) => new Promise((resolve, reject) => {
+    requests.push({ range, signal: signal!, complete: () => resolve({ symbol, interval: query.interval, currency: 'USD', bars: [] }) });
+    signal!.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+  });
+  const root = createRoot(document.getElementById("root")!);
+  const clickRange = async (name: string) => {
+    const button = [...document.querySelectorAll('.stock-range-tabs button')].find(b => b.textContent === name) as HTMLButtonElement;
+    assert.ok(button, name);
+    await act(async () => button.click());
+  };
+  try {
+    await act(async () => root.render(createElement(StockDetailsPage, { requestedSymbol: 'AAPL', onBack() {} })));
+    await pause(350);
+    assert.deepEqual(requests.map(r => r.range), ['3M']);
+    await clickRange('1M');
+    await clickRange('6M');
+    await clickRange('1Y');
+    assert.equal(requests[0].signal.aborted, true);
+    assert.equal(requests.length, 1);
+    await pause(350);
+    assert.deepEqual(requests.map(r => r.range), ['3M', '1Y']);
+    assert.match(document.querySelector('.stock-price-chart')!.textContent!, /Loading price history/);
+    assert.equal(document.querySelector('.stock-price-chart [role="alert"]'), null);
+    await act(async () => requests[1].complete());
+    assert.match(document.querySelector('.stock-price-chart')!.textContent!, new RegExp(i18n.t('marketApi.noHistory')));
+    await pause(350);
+    assert.equal(requests.length, 2, 'No polling or automatic retries');
+  } finally {
+    await act(async () => root.unmount());
+    Object.assign(marketDataApi, original);
+  }
+});
 
 test("alert draft search is debounced once and does not loop on result renders", async () => {
   Object.assign(globalThis, { React: await import("react") });

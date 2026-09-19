@@ -131,7 +131,7 @@ public sealed class DeduplicatingMarketDataProviderTests
         var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
         Assert.Equal(caller.Token, error.CancellationToken);
         Assert.False(second.IsCompleted);
-        Assert.All(inner.Tokens, token => Assert.False(token.CanBeCanceled));
+        Assert.All(inner.Tokens, token => Assert.False(token.IsCancellationRequested));
         Assert.Equal(1, inner.Calls);
         inner.Release();
         Assert.NotNull(await second);

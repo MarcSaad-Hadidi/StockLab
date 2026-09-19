@@ -3,15 +3,17 @@ export function MarketRequestStatus({
   loading,
   error,
   retry,
-  label
+  label,
+  loadingMessage = 'marketApi.loading'
 }: {
   loading: boolean
   error?: string
   retry: () => void
   label?: string
+  loadingMessage?: string
 }) {
   const { t } = useTranslation()
-  if (loading) return <p className="market-request-status" role="status">{label && <strong>{t(label)} · </strong>}{t('marketApi.loading')}</p>
+  if (loading) return <p className="market-request-status" role="status">{label && <strong>{t(label)} · </strong>}{t(loadingMessage)}</p>
   if (error)
     return (
       <div className="market-request-status market-request-error" role="alert">

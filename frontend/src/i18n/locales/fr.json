@@ -909,6 +909,7 @@
     "partialQuotes": "Certaines cotations sont indisponibles. Réessayez pour charger les prix manquants.",
     "quoteUnavailable": "Cotation indisponible",
     "loading": "Chargement…",
+    "loadingHistory": "Chargement de l’historique… Si la limite de requêtes est atteinte, cette période sera chargée dès qu’un appel sera disponible. Vous pouvez choisir une autre période pendant l’attente.",
     "retry": "Réessayer",
     "invalid": "Cette requête ou cet intervalle est indisponible. Choisissez une autre période.",
     "notFound": "Action introuvable.",

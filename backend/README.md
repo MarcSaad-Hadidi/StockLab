@@ -399,8 +399,10 @@ invented. OpenAPI describes the 429 response on all three market data endpoints.
 
 Cancellation while queued stops that wait without calling the provider or becoming
 429. The received token is forwarded to the provider after admission. In the actual
-pipeline, dedup deliberately supplies an independent token; individual HTTP callers
-can abandon their own waits without cancelling shared queued work. This preserves #31.
+pipeline, dedup supplies a shared cancellation token. One caller leaving does not
+cancel work needed by other viewers. When the last caller leaves, the queued or
+active operation is cancelled and a later caller starts a fresh flight. Abandoned
+chart periods therefore cannot use a permit after the next renewal.
 
 Provider failures propagate unchanged and still consume the window permit: an
 attempt may already have spent external credits. Lease disposal is guaranteed but
@@ -629,17 +631,19 @@ starting the API (committed generic/offline defaults remain unchanged):
 
 ```powershell
 $env:MarketDataRateLimit__PermitLimit = "8"
-$env:MarketDataRateLimit__QueueLimit = "0"
+$env:MarketDataRateLimit__QueueLimit = "8"
 $env:MarketDataCache__QuoteTtl = "00:01:00"
 ```
 
 [Twelve Basic](https://twelvedata.com/pricing) currently provides 8 credits/minute and
 800/day. A 60-second quote cache supports navigation without spending five fresh credits
-on each visit to Market. The limiter rejects excess work instead of queuing a long burst;
-its local minute boundary and other clients can still differ from the provider quota.
-No polling, retries or fallback keys are used. Alpha's separate 20/day best-effort budget
-and 30-day logo cache protect its documented 25/day free limit. Only five popular logos
-load automatically; search/mover rows reuse cached images or ticker letters.
+on each visit to Market. Up to eight requests wait for the next local minute window;
+further requests receive a controlled 429. Cancelled periods leave this queue, while
+rapid chart clicks are debounced for 300 ms and loaded periods use the frontend cache.
+Its local minute boundary and other clients can still differ from the provider quota.
+No polling, retries or fallback keys are used. Alpha has a separate 20/day best-effort
+budget. UI logos load directly from Elbstream with attribution and consume no Alpha
+credits; unavailable logos keep the ticker fallback.
 
 Market providers cannot supply user holdings, cash, executions, alert rules, or StockLab
 ML decisions. Those account sections now render unavailable/empty states in the frontend

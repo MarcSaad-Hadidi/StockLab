@@ -909,6 +909,7 @@
     "partialQuotes": "Some quotes are unavailable. Retry to load missing prices.",
     "quoteUnavailable": "Quote unavailable",
     "loading": "Loading…",
+    "loadingHistory": "Loading price history… If the request limit is reached, this period will load when capacity is available. You can select another period while waiting.",
     "retry": "Retry",
     "invalid": "This request or interval is not supported. Choose another period.",
     "notFound": "Stock not found.",
