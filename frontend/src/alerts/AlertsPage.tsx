@@ -1,5 +1,5 @@
 import { MarketRequestStatus } from '../market/MarketRequestStatus'
-import { StockLogo } from '../market/StockLogo'
+import { StockLogo, LogoAttribution } from '../market/StockLogo'
 import { marketDataApi } from '../api/marketDataClient'
 import { useMarketRequest } from '../market/useMarketRequest'
 import { Sidebar } from '../components/layout/Sidebar'
@@ -238,7 +238,7 @@ export default function AlertsPage() {
         </div>
         <p className="simulation-note"><Icon name="activity" size={13} /> {t('businessData.backendPending')}</p>
       </div>
-    </main>
+    <LogoAttribution /></main>
     <div aria-live="polite" className={`toast ${toast ? 'visible' : ''}`}>{toast ? t(toast.key, toast.values) : ''}</div>
     {modalAlert !== undefined && <AlertModal alert={modalAlert} onClose={() => setModalAlert(undefined)} onSave={saveAlert} />}
   </div>

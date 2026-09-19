@@ -17,6 +17,22 @@ export type StockFundamentals = {
   dividendYield: number | null;
   beta: number | null;
   analystTargetPrice: number | null;
+  description?: string | null;
+  sector?: string | null;
+  industry?: string | null;
+  revenueTtm?: number | null;
+  grossProfitTtm?: number | null;
+  ebitda?: number | null;
+  profitMargin?: number | null;
+  operatingMarginTtm?: number | null;
+  returnOnEquityTtm?: number | null;
+  revenuePerShareTtm?: number | null;
+  quarterlyRevenueGrowthYoy?: number | null;
+  quarterlyEarningsGrowthYoy?: number | null;
+  bookValue?: number | null;
+  pegRatio?: number | null;
+  fiftyDayMovingAverage?: number | null;
+  twoHundredDayMovingAverage?: number | null;
   analystRatings: {
     strongBuy: number | null;
     buy: number | null;
@@ -31,6 +47,7 @@ export type MarketMovers = {
   losers: MarketMover[];
   mostActive: MarketMover[];
 };
+export type StockNews = { symbol: string; articles: Array<{ title: string; url: string; source: string; publishedAtUtc: string }> };
 export type MarketMover = {
   symbol: string;
   price: number;
@@ -239,7 +256,8 @@ export function createMarketDataApi(
         (v: unknown): v is StockFundamentals =>
           record(v) &&
           typeof v.symbol === "string" &&
-          ["name", "exchange", "currency"].every(key => v[key] === undefined || nullableString(v[key])) &&
+          ["name", "exchange", "currency", "description", "sector", "industry"].every(key => v[key] === undefined || nullableString(v[key])) &&
+          ["revenueTtm", "grossProfitTtm", "ebitda", "profitMargin", "operatingMarginTtm", "returnOnEquityTtm", "revenuePerShareTtm", "quarterlyRevenueGrowthYoy", "quarterlyEarningsGrowthYoy", "bookValue", "pegRatio", "fiftyDayMovingAverage", "twoHundredDayMovingAverage"].every(key => v[key] === undefined || nullableNumber(v[key])) &&
           ["fiftyTwoWeekLow", "fiftyTwoWeekHigh"].every(key => v[key] === undefined || nullableNumber(v[key])) &&
           [
             "marketCap",
@@ -286,6 +304,14 @@ export function createMarketDataApi(
         signal,
         2_592_000_000,
       );
+    },
+    news(symbol: string, signal: AbortSignal) {
+      return get(`/api/stocks/${encodeURIComponent(symbol.trim().toUpperCase())}/news`,
+        (v: unknown): v is StockNews => record(v) && typeof v.symbol === "string" && Array.isArray(v.articles) &&
+          v.articles.length <= 10 && v.articles.every(a => record(a) && typeof a.title === "string" &&
+            typeof a.source === "string" && typeof a.url === "string" && /^https:\/\//.test(a.url) &&
+            typeof a.publishedAtUtc === "string" && /(?:Z|\+00:00)$/.test(a.publishedAtUtc) && Number.isFinite(Date.parse(a.publishedAtUtc))),
+        signal, 3_600_000);
     },
     movers(signal: AbortSignal) {
       return get(

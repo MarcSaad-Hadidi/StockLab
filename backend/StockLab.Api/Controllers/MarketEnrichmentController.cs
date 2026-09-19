@@ -31,4 +31,7 @@ public sealed class MarketEnrichmentController(IMarketEnrichmentProvider enrichm
     [HttpGet("api/market/movers")]
     [ProducesResponseType(typeof(MarketMovers), 200)]
     public async Task<ActionResult<MarketMovers>> Movers(CancellationToken token) => Ok(await enrichment.GetMoversAsync(token));
+    [HttpGet("api/stocks/{symbol}/news")]
+    [ProducesResponseType(typeof(StockNews), 200)]
+    public async Task<ActionResult<StockNews>> News([FromRoute, Required] string symbol, CancellationToken token) => Ok(await enrichment.GetNewsAsync(symbol, token));
 }

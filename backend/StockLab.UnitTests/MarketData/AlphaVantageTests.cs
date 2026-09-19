@@ -190,6 +190,28 @@ public sealed class AlphaVantageTests
         Assert.Single(f.Handler.Requests);
     }
     private static HttpResponseMessage Response(string text,string media="application/json")=>new(HttpStatusCode.OK){Content=new StringContent(text,Encoding.UTF8,media)};
+    [Fact]
+    public async Task News_uses_ticker_filter_maps_safe_headlines_and_caches()
+    {
+        using var f = new Fixture("""{"feed":[{"title":"Microsoft earnings update","url":"https://example.com/news/msft","source":"Example News","time_published":"20260907T110000","ticker_sentiment":[{"ticker":"MSFT","relevance_score":"0.9"}]},{"title":"Broad market story only mentioning Microsoft","url":"https://example.com/broad","source":"Example","time_published":"20260907T120000","ticker_sentiment":[{"ticker":"MSFT","relevance_score":"0.05"},{"ticker":"AAPL","relevance_score":"0.95"}]},{"title":"Missing relevance","url":"https://example.com/missing","source":"Example","time_published":"20260907T120000","ticker_sentiment":[{"ticker":"MSFT"}]},{"title":"Unrelated","url":"https://example.com/other","source":"Example","time_published":"20260907T120000","ticker_sentiment":[{"ticker":"AAPL"}]},{"title":"Unsafe","url":"javascript:alert(1)","source":"Example","time_published":"20260907T120000","ticker_sentiment":[{"ticker":"MSFT","relevance_score":"0.9"}]}]}""");
+        var news = await f.Provider.GetNewsAsync("MSFT:NASDAQ");
+        var article = Assert.Single(news.Articles);
+        Assert.Equal("Microsoft earnings update", article.Title);
+        Assert.Equal(new DateTimeOffset(2026, 9, 7, 11, 0, 0, TimeSpan.Zero), article.PublishedAtUtc);
+        Assert.Equal("https://example.com/news/msft", article.Url);
+        await f.Provider.GetNewsAsync("MSFT:NASDAQ");
+        Assert.Contains("function=NEWS_SENTIMENT&tickers=MSFT&limit=20&sort=LATEST", Assert.Single(f.Handler.Requests));
+        f.Clock.Now = f.Clock.Now.AddHours(2);
+        await f.Provider.GetNewsAsync("MSFT:NASDAQ");
+        Assert.Equal(2, f.Handler.Requests.Count);
+    }
+    [Fact]
+    public async Task News_missing_feed_is_not_a_successful_empty_response()
+    {
+        using var f = new Fixture("{}");
+        var error = await Assert.ThrowsAsync<MarketEnrichmentException>(() => f.Provider.GetNewsAsync("MSFT"));
+        Assert.Equal(MarketEnrichmentFailure.MalformedResponse, error.Category);
+    }
     private sealed class Clock:TimeProvider { public DateTimeOffset Now=new(2026,9,7,12,0,0,TimeSpan.Zero); public override DateTimeOffset GetUtcNow()=>Now; }
     private sealed class Handler:HttpMessageHandler
     {

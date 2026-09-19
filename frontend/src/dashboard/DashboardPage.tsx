@@ -1,4 +1,4 @@
-import { StockLogo } from '../market/StockLogo'
+import { StockLogo, LogoAttribution } from '../market/StockLogo'
 import { UnavailableState } from '../components/UnavailableState'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
@@ -196,7 +196,7 @@ export function DashboardPage() {
           <section aria-labelledby="ai-trader-title" className="panel ai-panel"><div className="ai-heading"><div className="ai-title"><span className="ai-badge"><Icon name="sparkles" size={18} /></span><div><h2 id="ai-trader-title">{t('common.navigation.aiTrader')}</h2><p>{t('dashboard.aiSubtitle')}</p></div><span className="status-badge"><i /> {t('businessData.unavailable')}</span></div><button className="text-action" onClick={() => window.location.assign(routeFor('ai-trader'))} type="button">{t('dashboard.openAiTrader')} <Icon name="chevron-right" size={16} /></button></div><div className="ai-content"><div className="ai-stat ai-stat-primary"><span>{t('dashboard.aiReturn')}</span><strong>{formatSignedPercent(aiPerformance.return)}</strong><small><Icon name="trending-up" size={13} /> {t('businessData.unavailable')}</small></div><div className="ai-stat"><span>{t('dashboard.netPnl')}</span><strong>{formatSignedCurrency(aiPerformance.pnl)}</strong><small>{t('businessData.unavailable')}</small></div><div className="ai-stat"><span>{t('dashboard.winRate')}</span><strong>{formatPercent(aiPerformance.winRate, undefined, 1)}</strong><small>{t('businessData.ai')}</small></div><div className="ai-chart-wrap"><span>{t('dashboard.sevenDayPerformance')}</span><Sparkline /><div className="ai-chart-labels"><small>{t('common.days.mon')}</small><small>{t('dashboard.today')}</small></div></div></div></section>
           <p className="simulation-note"><span><Icon name="activity" size={14} /> {t('businessData.unavailable')}</span> {t('businessData.backendPending')}</p>
         </div>
-      </main>
+      <LogoAttribution /></main>
       <div aria-live="polite" className={`toast ${toastKey ? 'visible' : ''}`}>{toastKey ? t(toastKey) : ''}</div>
     </div>
   )

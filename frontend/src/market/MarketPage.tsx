@@ -25,8 +25,7 @@ export function MarketPage({
     (signal: AbortSignal) => marketDataApi.movers(signal),
     [],
   );
-  const [showMovers, setShowMovers] = useState(false);
-  const movers = useMarketRequest("movers", loadMovers, showMovers);
+  const movers = useMarketRequest("movers", loadMovers);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [assetFilter, setAssetFilter] = useState("all");
@@ -44,25 +43,10 @@ export function MarketPage({
         exchange: item.quote?.exchange ?? null,
         currency: item.quote?.currency ?? null,
       }));
-  const featuredMovers = (positive: boolean) =>
-    (popular.data ?? [])
-      .flatMap((item) =>
-        item.quote?.changePercent != null &&
-        (positive ? item.quote.changePercent > 0 : item.quote.changePercent < 0)
-          ? [
-              {
-                symbol: item.symbol,
-                price: item.quote.price,
-                changePercent: item.quote.changePercent,
-              },
-            ]
-          : [],
-      )
-      .sort((a, b) =>
-        positive
-          ? b.changePercent - a.changePercent
-          : a.changePercent - b.changePercent,
-      );
+  const rankedMovers = (positive: boolean) =>
+    (positive ? movers.data?.gainers ?? [] : movers.data?.losers ?? [])
+      .filter((stock) => positive ? stock.changePercent > 0 : stock.changePercent < 0)
+      .sort((a, b) => positive ? b.changePercent - a.changePercent : a.changePercent - b.changePercent);
   const pages = Math.max(1, Math.ceil(results.length / 10));
   return (
     <MarketShell>
@@ -136,8 +120,8 @@ export function MarketPage({
                   <span
                     className={
                       (item.quote?.changePercent ?? 0) >= 0
-                        ? "market-positive"
-                        : "market-negative"
+                        ? "market-stock-change market-positive"
+                        : "market-stock-change market-negative"
                     }
                   >
                     {item.quote?.changePercent == null
@@ -156,38 +140,21 @@ export function MarketPage({
           >
             <div className="market-overview-heading">
               <h2>
-                {movers.data
-                  ? t(`market.${section}`)
-                  : t(
-                      section === "topGainers"
-                        ? "marketApi.featuredGainers"
-                        : "marketApi.featuredLosers",
-                    )}
+                {t(`market.${section}`)}
               </h2>
             </div>
-            {!showMovers && (
-              <button
-                className="market-view-all"
-                onClick={() => setShowMovers(true)}
-                type="button"
-              >
-                {t("marketApi.loadMovers")}
-              </button>
-            )}
-            <MarketRequestStatus {...movers} />
+            <div className="market-movers-description">
             <small>
-              {t(
-                movers.data ? "marketApi.eodMovers" : "marketApi.featuredScope",
-              )}
+              {t("marketApi.eodMovers")}
               {movers.data?.lastUpdated && ` · ${movers.data.lastUpdated}`}
             </small>
+            </div>
+            <MarketRequestStatus {...movers} label="marketApi.marketRanking" />
+            {movers.data && rankedMovers(section === "topGainers").length === 0 && (
+              <p className="market-card-empty">{t("marketApi.noMovers")}</p>
+            )}
             <div className="market-overview-list">
-              {(
-                (section === "topGainers"
-                  ? movers.data?.gainers
-                  : movers.data?.losers) ??
-                featuredMovers(section === "topGainers")
-              )
+              {rankedMovers(section === "topGainers")
                 .slice(0, 5)
                 .map((stock) => (
                   <button
@@ -196,7 +163,7 @@ export function MarketPage({
                     type="button"
                     onClick={() => onOpenStock(stock.symbol)}
                   >
-                    <StockLogo symbol={stock.symbol} load={false} />
+                    <StockLogo symbol={stock.symbol} />
                     <span className="market-stock-copy">
                       <strong>{stock.symbol}</strong>
                       <small>{stock.symbol}</small>
@@ -212,8 +179,8 @@ export function MarketPage({
                       <span
                         className={
                           stock.changePercent >= 0
-                            ? "market-positive"
-                            : "market-negative"
+                            ? "market-stock-change market-positive"
+                            : "market-stock-change market-negative"
                         }
                       >
                         {formatSignedPercent(stock.changePercent)}
@@ -264,7 +231,7 @@ export function MarketPage({
                           type="button"
                           onClick={() => onOpenStock(stock.symbol)}
                         >
-                          <StockLogo symbol={stock.symbol} load={false} />
+                          <StockLogo symbol={stock.symbol} />
                           <strong>{stock.symbol}</strong>
                         </button>
                       </td>
@@ -316,16 +283,18 @@ export function MarketPage({
             </div>
             <div className="market-pagination">
               <button
+                className="market-page-arrow"
                 type="button"
                 disabled={page === 1}
                 onClick={() => setPage((n) => n - 1)}
               >
                 {t("common.previousPage")}
               </button>
-              <span>
+              <span className="market-page-count">
                 {page} / {pages}
               </span>
               <button
+                className="market-page-arrow"
                 type="button"
                 disabled={page === pages}
                 onClick={() => setPage((n) => n + 1)}

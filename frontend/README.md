@@ -113,15 +113,14 @@ with at most three concurrent quote requests. They contain no simulated prices.
 Total quote failure renders an error and explicit Retry; partial batches retain
 successful prices and mark failed rows unavailable with a batch Retry.
 Search is debounced 450ms, cancelled when stale, and never calls the API for an empty
-query. Search rows use provider metadata without an N+1 quote fanout. Popular-company logos load automatically (five maximum). Search and movers reuse cached logos or a ticker fallback, with no logo fanout. Clicking a result preserves its exchange-qualified symbol in the route.
+query. Search rows use provider metadata without an N+1 quote fanout. Visible company logos load lazily from Elbstream, without a key or Alpha API calls. No per-row quote or fundamentals fanout. Clicking a result preserves its exchange-qualified symbol in the route.
 
-Featured gainers/losers are explicitly labelled as a ranking of those five quotes.
-The user can load the separate latest available EOD market movers on demand. This
+Gainers/losers load the actual latest available EOD market rankings on page entry. This
 single call supplies both lists. Provider errors never become fabricated movers.
 Stock Details quotes/history load independently. Fundamentals + earnings load on explicit demand to protect the 25/day enrichment
 plan. Company logos load automatically for each visible company. Partial
 failures preserve the quote and chart. Logos use a public credential-free CDN URL;
-missing or broken images fall back to the ticker letter. Analyst counts are labelled
+missing or broken images fall back to the ticker. Elbstream requires visible attribution (at least 12pt), provided on every page using StockLogo. See https://elbstream.com/logos and https://elbstream.com/terms. US exchange qualifiers are normalized; unsupported foreign qualifiers do not substitute a potentially different US company logo. Analyst counts are labelled
 individually and are not StockLab AI predictions. AI remains unavailable.
 
 All chart points come from returned OHLCV bars. 1D uses Minute bars for 24 hours ending
@@ -143,7 +142,7 @@ real-data verification uses TwelveData configured externally. Trading controls o
 
 | Page | Runtime source / honest state |
 | --- | --- |
-| Market / Stock Details | Twelve quote/search/history; optional Alpha metadata, logos, earnings and EOD movers |
+| Market / Stock Details | Twelve quote/search/history; Alpha metadata, earnings and EOD movers; free Elbstream logos |
 | Dashboard | No account balances, holdings, watchlist, trades or synthetic performance; cards and tables retained |
 | Portfolio | Empty holdings and performance, unavailable totals; never substitute a stock chart for account value |
 | Transactions | Empty history; execution prices are never replaced with current prices; filters/table retained |
@@ -158,8 +157,29 @@ modules. Transaction test fixtures remain under `tests/`; backend MockMarketData
 remains available for explicit offline development. Curated symbols, UI range labels,
 filter options, icon geometry and CSS colors are presentation constants, not observations.
 No fake quote/history/fundamentals are substituted on API failure. The shared StockLogo
-uses only a public logo returned by StockLab or the requested symbol's first letter.
+uses the credential-free Elbstream CDN or an explicit ticker fallback. It never spends Alpha credits.
 
 EN/FR unavailable states distinguish unconnected account services from market API errors.
 No account backend is fabricated here: persistence, trading, alert delivery and ML remain
 separate future work. The original cards, sections, filters and AI tabs remain available.
+
+## Company tabs and headlines
+
+Stock Details has distinct Overview, Financials, News, Key Metrics, Forecast and
+Insights tabs. Chart is part of Overview. Financials uses reported Alpha overview
+figures (TTM/growth/margins), not fabricated statements. Forecast shows the external
+analyst target and raw rating counts; the target/current-price comparison is a
+calculation, not a model prediction. Insights is a deterministic summary of observed
+data, explicitly not AI or a trading recommendation. Opening the relevant tabs loads
+one cached overview; opening News requests only the selected company's headlines.
+
+`GET /api/stocks/{symbol}/news` uses Alpha `NEWS_SENTIMENT` with a ticker filter,
+latest-first order and a 20-item upstream limit. Only articles explicitly linked to
+the requested ticker with relevance at least 0.5 are retained. The API returns at
+most ten deduplicated HTTPS publisher links, source names, titles and UTC timestamps;
+the UI also requires the headline itself to name the selected company or ticker,
+excluding broad-market stories that merely mention it in provider metadata.
+no article body is reproduced. It shares the existing Alpha daily budget, total
+operation timeout and cancellation path, with a one-hour success cache. No automatic
+retry, polling, extra key, paid news subscription or ML service is required. An empty
+or unavailable company feed is displayed honestly.

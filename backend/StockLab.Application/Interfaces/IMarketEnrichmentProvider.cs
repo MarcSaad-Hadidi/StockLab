@@ -8,4 +8,5 @@ public interface IMarketEnrichmentProvider
     Task<CompanyLogo> GetLogoAsync(string symbol, CancellationToken cancellationToken = default);
     Task<StockEarnings> GetEarningsAsync(string symbol, CancellationToken cancellationToken = default);
     Task<MarketMovers> GetMoversAsync(CancellationToken cancellationToken = default);
+    Task<StockNews> GetNewsAsync(string symbol, CancellationToken cancellationToken = default);
 }

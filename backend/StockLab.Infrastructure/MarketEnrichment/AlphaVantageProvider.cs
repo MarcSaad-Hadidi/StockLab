@@ -44,6 +44,8 @@ public sealed class AlphaVantageProvider : IMarketEnrichmentProvider, IDisposabl
         (await Get<StockEarnings>("EARNINGS_CALENDAR", symbol, options.EarningsTtl, cancellationToken))!;
     public async Task<MarketMovers> GetMoversAsync(CancellationToken cancellationToken = default) =>
         (await Get<MarketMovers>("TOP_GAINERS_LOSERS", null, options.MoversTtl, cancellationToken))!;
+    public async Task<StockNews> GetNewsAsync(string symbol, CancellationToken cancellationToken = default) =>
+        (await Get<StockNews>("NEWS_SENTIMENT", symbol, options.NewsTtl, cancellationToken))!;
 
     private sealed record Cached(object? Value, DateTimeOffset Expires, MarketEnrichmentFailure? Failure = null);
     private async Task<T?> Get<T>(string operation, string? symbol, TimeSpan ttl, CancellationToken token) where T : class
@@ -128,7 +130,8 @@ public sealed class AlphaVantageProvider : IMarketEnrichmentProvider, IDisposabl
             if (used >= options.DailyRequestBudget) throw Failure(MarketEnrichmentFailure.LocalBudgetExceeded);
             using var client = factory.CreateClient("AlphaVantage");
             // Never log this URI, request, response body or an upstream exception.
-            var path = "query?function=" + operation + (upstream is null ? "" : "&symbol=" + Uri.EscapeDataString(upstream)) +
+            var path = "query?function=" + operation + (upstream is null ? "" :
+                operation == "NEWS_SENTIMENT" ? "&tickers=" + Uri.EscapeDataString(upstream) + "&limit=20&sort=LATEST" : "&symbol=" + Uri.EscapeDataString(upstream)) +
                 (operation == "EARNINGS_CALENDAR" ? "&horizon=12month" : "") + "&apikey=" + Uri.EscapeDataString(secret);
             using var request = new HttpRequestMessage(HttpMethod.Get, path);
             timeout.Token.ThrowIfCancellationRequested();
@@ -163,6 +166,7 @@ public sealed class AlphaVantageProvider : IMarketEnrichmentProvider, IDisposabl
                     "OVERVIEW" => Fundamentals(root, canonical, upstream!),
                     "COMPANY_LOGO" => Logo(root, canonical),
                     "TOP_GAINERS_LOSERS" => Movers(root),
+                    "NEWS_SENTIMENT" => News(root, canonical, upstream!),
                     _ => throw Failure(MarketEnrichmentFailure.MalformedResponse)
                 };
             }
@@ -268,6 +272,28 @@ public sealed class AlphaVantageProvider : IMarketEnrichmentProvider, IDisposabl
         return uri.AbsoluteUri;
     }
     private static MarketMovers Movers(JsonElement root) => new(Text(root, "last_updated"), Rows(root, "top_gainers"), Rows(root, "top_losers"), Rows(root, "most_actively_traded"));
+    private static StockNews News(JsonElement root, string canonical, string ticker)
+    {
+        var feed = root.GetProperty("feed");
+        if (feed.ValueKind != JsonValueKind.Array || feed.GetArrayLength() > 1000) throw new FormatException();
+        var articles = new List<StockNewsArticle>();
+        foreach (var row in feed.EnumerateArray())
+        {
+            // The upstream ticker filter includes passing mentions. Require a strong
+            // association with this company rather than displaying broad-market news.
+            if (!row.TryGetProperty("ticker_sentiment", out var tickers) || tickers.ValueKind != JsonValueKind.Array ||
+                !tickers.EnumerateArray().Any(t => Text(t, "ticker") == ticker &&
+                    decimal.TryParse(Text(t, "relevance_score"), NumberStyles.Float, CultureInfo.InvariantCulture, out var relevance) &&
+                    relevance is >= 0.5m and <= 1m)) continue;
+            var title = Text(row, "title"); var source = Text(row, "source"); var link = Text(row, "url");
+            if (title is null || title.Length > 500 || source is null || source.Length > 200 || link is null || link.Length > 2048 ||
+                !Uri.TryCreate(link, UriKind.Absolute, out var uri) || uri.Scheme != "https" || uri.UserInfo.Length != 0 ||
+                !DateTimeOffset.TryParseExact(Text(row, "time_published"), "yyyyMMdd'T'HHmmss", CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var published)) continue;
+            articles.Add(new(title, uri.AbsoluteUri, source, published));
+        }
+        return new(canonical, articles.DistinctBy(a => a.Url).OrderByDescending(a => a.PublishedAtUtc).Take(10).ToArray());
+    }
     private static IReadOnlyList<MarketMover> Rows(JsonElement root, string name)
     {
         var rows = root.GetProperty(name);

@@ -30,13 +30,13 @@ public sealed class EnrichmentApiTests
         });
         using var client=app.CreateClient(new(){BaseAddress=new("https://localhost")});
         var openapi=await client.GetStringAsync("/openapi/v1.json");
-        foreach(var route in new[]{"/api/stocks/{symbol}/fundamentals","/api/stocks/{symbol}/logo","/api/stocks/{symbol}/earnings","/api/market/movers"})Assert.Contains(route,openapi);
-        foreach(var route in new[]{"/api/stocks/MSFT/fundamentals","/api/stocks/MSFT/logo","/api/stocks/MSFT/earnings","/api/market/movers"})
+        foreach(var route in new[]{"/api/stocks/{symbol}/fundamentals","/api/stocks/{symbol}/logo","/api/stocks/{symbol}/earnings","/api/stocks/{symbol}/news","/api/market/movers"})Assert.Contains(route,openapi);
+        foreach(var route in new[]{"/api/stocks/MSFT/fundamentals","/api/stocks/MSFT/logo","/api/stocks/MSFT/earnings","/api/stocks/MSFT/news","/api/market/movers"})
         {
             var result=await client.GetAsync(route);Assert.Equal(HttpStatusCode.ServiceUnavailable,result.StatusCode);
             Assert.DoesNotContain("ALPHA-TEST-KEY",await result.Content.ReadAsStringAsync());
         }
-        Assert.Equal(4,alpha.Requests.Count);
+        Assert.Equal(5,alpha.Requests.Count);
         var quote=await client.GetAsync("/api/stocks/AAPL/quote");Assert.Equal(HttpStatusCode.OK,quote.StatusCode);Assert.Single(twelve.Requests);
         Assert.DoesNotContain("ALPHA-TEST-KEY",openapi);Assert.DoesNotContain("ALPHA-TEST-KEY",string.Join("\n",log.Messages));
         Assert.DoesNotContain("apikey=",string.Join("\n",log.Messages));

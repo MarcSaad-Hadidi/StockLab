@@ -11,6 +11,7 @@ import { MarketShell } from "./MarketShell";
 import { MarketIcon } from "./marketIcons";
 import { StockLogo } from "./StockLogo";
 import { MarketRequestStatus } from "./MarketRequestStatus";
+import { StockDataPanel } from "./StockDataPanel";
 import { useMarketRequest } from "./useMarketRequest";
 import {
   calculateTradeTotal,
@@ -33,12 +34,11 @@ type ToastState = {
 };
 const detailTabs = [
   "overview",
-  "chart",
   "financials",
   "news",
   "keyMetrics",
   "forecast",
-  "aiInsights",
+  "insights",
 ] as const;
 function StatCard({
   label,
@@ -263,7 +263,7 @@ export function StockDetailsPage({
   const fundamentals = useMarketRequest(
     `fundamentals:${symbol}`,
     loadFundamentals,
-    showEnrichment,
+    showEnrichment || ["financials", "keyMetrics", "forecast", "insights"].includes(activeTab),
   );
   const loadEarnings = useCallback(
     (signal: AbortSignal) => marketDataApi.earnings(symbol, signal),
@@ -274,6 +274,8 @@ export function StockDetailsPage({
     loadEarnings,
     showEnrichment,
   );
+  const loadNews = useCallback((signal: AbortSignal) => marketDataApi.news(symbol, signal), [symbol]);
+  const news = useMarketRequest(`news:${symbol}`, loadNews, activeTab === "news");
 
   // For a closed market, 1D follows the latest observed session rather than an empty weekend.
   const historyAnchorTime =
@@ -327,7 +329,7 @@ export function StockDetailsPage({
       <section aria-labelledby="stock-details-title" className="stock-details-page">
         <header className="stock-details-hero">
           <div className="stock-details-identity">
-            <StockLogo size="large" symbol={symbol} load />
+            <StockLogo size="large" symbol={symbol} />
             <div>
               <div className="stock-title-row">
                 <h1 id="stock-details-title">{companyName}</h1>
@@ -410,16 +412,11 @@ export function StockDetailsPage({
             </button>
           ))}
         </nav>
-        {!["overview", "chart"].includes(activeTab) ? (
-          <section className="stock-chart-card">
-            <p>
-              {t(
-                activeTab === "aiInsights"
-                  ? "marketApi.aiUnavailable"
-                  : "marketApi.notAvailable",
-              )}
-            </p>
-          </section>
+        {activeTab !== "overview" ? (
+          <>
+            {activeTab === "news" ? <MarketRequestStatus {...news} label="stockDetails.tabs.news" /> : <MarketRequestStatus {...fundamentals} label="marketApi.fundamentalsLabel" />}
+            <StockDataPanel tab={activeTab} quote={quote.data} fundamentals={fundamentals.data} news={news.data} />
+          </>
         ) : (
           <div className="stock-details-layout">
             <div className="stock-details-main-column">
@@ -543,8 +540,8 @@ export function StockDetailsPage({
                   }
                 />
               </section>
-              <MarketRequestStatus {...fundamentals} />
-              <MarketRequestStatus {...earnings} />
+              <MarketRequestStatus {...fundamentals} label="marketApi.fundamentalsLabel" />
+              <MarketRequestStatus {...earnings} label="stockDetails.stats.nextEarnings" />
               <section className="stock-metrics-card">
                 {(["open", "high", "low"] as const).map((key) => (
                   <StatCard
@@ -589,10 +586,11 @@ export function StockDetailsPage({
                 <div className="stock-card-heading">
                   <div className="stock-card-title">
                     <MarketIcon name="robot" size={16} />
-                    <h2>{t("stockDetails.aiInsight")}</h2>
+                    <h2>{t("stockDetails.tabs.insights")}</h2>
                   </div>
                 </div>
-                <p className="stock-ai-copy">{t("marketApi.aiUnavailable")}</p>
+                <p className="stock-ai-copy">{t("stockPanels.priceFact", { price: formatPrice(quote.data?.price), change: quote.data?.changePercent == null ? "—" : formatSignedPercent(quote.data.changePercent) })}</p>
+                <button className="stock-outline-button" type="button" onClick={() => setActiveTab("insights")}>{t("stockPanels.openInsights")}</button>
               </article>
               {!details && (
                 <article className="stock-trade-card">

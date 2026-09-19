@@ -7,6 +7,7 @@ public sealed class AlphaVantageOptions
     public TimeSpan LogoTtl { get; set; } = TimeSpan.FromDays(30);
     public TimeSpan EarningsTtl { get; set; } = TimeSpan.FromHours(24);
     public TimeSpan MoversTtl { get; set; } = TimeSpan.FromHours(12);
+    public TimeSpan NewsTtl { get; set; } = TimeSpan.FromHours(1);
     public bool IsValid() => DailyRequestBudget is > 0 and <= 25 && TimeoutSeconds is > 0 and <= 60 &&
-        new[] { OverviewTtl, LogoTtl, EarningsTtl, MoversTtl }.All(t => t > TimeSpan.Zero && t <= TimeSpan.FromDays(365));
+        new[] { OverviewTtl, LogoTtl, EarningsTtl, MoversTtl, NewsTtl }.All(t => t > TimeSpan.Zero && t <= TimeSpan.FromDays(365));
 }

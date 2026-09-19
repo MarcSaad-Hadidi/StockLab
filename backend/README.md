@@ -644,3 +644,15 @@ load automatically; search/mover rows reuse cached images or ticker letters.
 Market providers cannot supply user holdings, cash, executions, alert rules, or StockLab
 ML decisions. Those account sections now render unavailable/empty states in the frontend
 until their own services exist. No portfolio or ML behavior is added by this integration.
+
+### Company news
+
+`GET /api/stocks/{symbol}/news` uses `NEWS_SENTIMENT`, `tickers`, `sort=LATEST`
+and `limit=20`. It shares the Alpha transport deadline, semaphore, deduplication,
+budget and safe logging. `AlphaVantage:NewsTtl` defaults to one hour. Output is at
+most ten distinct HTTPS headline links with source and UTC publication date.
+Articles must explicitly match the ticker with provider relevance >= 0.5; missing
+feeds fail safely and an empty valid feed remains empty. The frontend additionally
+filters headlines for the selected company identity. Article bodies are not copied.
+Logos in the frontend now use the free Elbstream CDN with required attribution;
+Alpha logo endpoints remain available but are not called by StockLogo.

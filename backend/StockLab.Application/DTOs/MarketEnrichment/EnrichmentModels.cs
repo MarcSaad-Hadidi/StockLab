@@ -45,3 +45,5 @@ public sealed record StockEarnings(string Symbol, DateOnly? NextEarningsDate, Da
 public sealed record MarketMover(string Symbol, decimal Price, decimal Change, decimal ChangePercent, long Volume);
 /// <summary>Latest available EOD lists; never a live quote source.</summary>
 public sealed record MarketMovers(string? LastUpdated, IReadOnlyList<MarketMover> Gainers, IReadOnlyList<MarketMover> Losers, IReadOnlyList<MarketMover> MostActive);
+public sealed record StockNewsArticle(string Title, string Url, string Source, DateTimeOffset PublishedAtUtc);
+public sealed record StockNews(string Symbol, IReadOnlyList<StockNewsArticle> Articles);

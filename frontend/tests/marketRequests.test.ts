@@ -179,12 +179,17 @@ test("company logos load automatically and broken images retain the ticker fallb
       root.render(createElement(StockLogo, { symbol: "MSFT" })),
     );
     await pause();
-    assert.equal(calls, 1);
+    assert.equal(calls, 0);
     const img = host.querySelector("img")!;
     assert.ok(img);
+    assert.equal(img.getAttribute("src"), "https://api.elbstream.com/logos/symbol/MSFT");
     await act(async () => img.dispatchEvent(new dom.window.Event("error")));
-    assert.equal(host.textContent, "M");
-    assert.equal(calls, 1);
+    assert.equal(host.textContent, "MSFT");
+    assert.equal(calls, 0);
+    await act(async () => root.render(createElement(StockLogo, { symbol: "TSLA:NASDAQ" })));
+    assert.equal(host.querySelector('img')?.getAttribute('src'), 'https://api.elbstream.com/logos/symbol/TSLA');
+    await act(async () => root.render(createElement(StockLogo, { symbol: "ABC:LSE" })));
+    assert.equal(host.querySelector('img'), null, 'Never substitute a US logo for a foreign ticker');
   } finally {
     await act(async () => root.unmount());
     host.remove();
@@ -273,7 +278,7 @@ for (const mode of ["partial", "total"] as const) {
     const { MarketPage } = await import("../src/market/MarketPage.tsx");
     const { marketDataApi } = await import("../src/api/marketDataClient.ts");
     const { MarketDataError } = await import("../src/api/marketDataApi.ts");
-    const original = { quote: marketDataApi.quote, logo: marketDataApi.logo };
+    const original = { quote: marketDataApi.quote, logo: marketDataApi.logo, movers: marketDataApi.movers };
     let recovered = false;
     marketDataApi.quote = async symbol => {
       if (!recovered && (mode === "total" || symbol === "NVDA")) throw new MarketDataError(503);
@@ -283,11 +288,13 @@ for (const mode of ["partial", "total"] as const) {
         isMarketOpen: false, fiftyTwoWeek: null };
     };
     marketDataApi.logo = async symbol => ({ symbol, pngUrl: null, svgUrl: null });
+    marketDataApi.movers = async () => { throw new MarketDataError(503); };
     const root = createRoot(document.getElementById("root")!);
     try {
       await act(async () => root.render(createElement(MarketPage, { onOpenStock() {} })));
       await pause();
       const popular = document.querySelector(".market-overview-card-popular")!;
+      assert.equal(document.querySelectorAll('.market-overview-card-positive .market-overview-row, .market-overview-card-negative .market-overview-row').length, 0, 'Unavailable rankings never fall back to popular quotes');
       assert.ok(popular.querySelector('[role="alert"]'));
       assert.equal(popular.querySelectorAll(".market-stock-quote strong").length, mode === "total" ? 0 : 5);
       assert.doesNotMatch(popular.textContent!, /191.45|415.60|892.72/);
@@ -329,4 +336,74 @@ test("history 1M then 1Y then 5D cannot display an older response", async () => 
     await act(async () => requests[0].complete("stale 1M"));
     assert.equal(document.getElementById("root")!.textContent, "current 5D");
   } finally { await act(async () => root.unmount()); }
+});
+
+test("Market ranks actual market movers by direction without substituting popular symbols", async () => {
+  Object.assign(globalThis, { React: await import("react") });
+  const { MarketPage } = await import("../src/market/MarketPage.tsx");
+  const { marketDataApi } = await import("../src/api/marketDataClient.ts");
+  const original = { quote: marketDataApi.quote, movers: marketDataApi.movers };
+  marketDataApi.quote = async () => { throw new Error("offline quote fixture"); };
+  const row = (symbol: string, changePercent: number) => ({ symbol, price: 20, change: 1, changePercent, volume: 50 });
+  let calls = 0;
+  marketDataApi.movers = async () => { calls++; return { lastUpdated: "2026-09-18", gainers: [row("SECOND", 2), row("WRONG", -2), row("FIRST", 10), row("FLAT", 0)], losers: [row("DOWN", -3), row("UP", 3), row("LOWEST", -20)], mostActive: [] }; };
+  const root = createRoot(document.getElementById("root")!);
+  try {
+    await act(async () => root.render(createElement(MarketPage, { onOpenStock() {} })));
+    await pause();
+    const symbols = (className: string) => [...document.querySelectorAll(`${className} .market-stock-copy strong`)].map(e => e.textContent);
+    assert.deepEqual(symbols('.market-overview-card-positive'), ["FIRST", "SECOND"]);
+    assert.deepEqual(symbols('.market-overview-card-negative'), ["LOWEST", "DOWN"]);
+    assert.equal(calls, 1, 'One shared market request supplies both rankings');
+  } finally {
+    await act(async () => root.unmount());
+    Object.assign(marketDataApi, original);
+  }
+});
+
+test("Stock Details tabs show distinct real data, with no duplicate Chart or pretend AI", async () => {
+  Object.assign(globalThis, { React: await import("react") });
+  await i18n.changeLanguage("en");
+  const { StockDetailsPage } = await import("../src/market/StockDetailsPage.tsx");
+  const { marketDataApi } = await import("../src/api/marketDataClient.ts");
+  const original = { quote: marketDataApi.quote, history: marketDataApi.history, fundamentals: marketDataApi.fundamentals, earnings: marketDataApi.earnings, news: marketDataApi.news };
+  let fundamentalCalls = 0;
+  let newsCalls = 0;
+  marketDataApi.quote = async symbol => ({ symbol, name: "Fixture Company", exchange: "NASDAQ", currency: "USD", price: 100, change: 2, changePercent: 2, volume: 1000, asOfUtc: "2026-09-18T20:00:00Z", open: 98, high: 101, low: 97, previousClose: 98, averageVolume: 800, isMarketOpen: false, fiftyTwoWeek: null });
+  marketDataApi.history = async () => { throw new Error("fixture unavailable history"); };
+  marketDataApi.fundamentals = async symbol => { fundamentalCalls++; return { symbol, marketCap: 1000000, peRatio: 20, epsTtm: 5, dividendYield: .01, beta: 1.2, analystTargetPrice: 120, revenueTtm: 7654321, profitMargin: .25, analystRatings: { strongBuy: 2, buy: 3, hold: 1, sell: null, strongSell: null } }; };
+  marketDataApi.earnings = async symbol => ({ symbol, nextEarningsDate: null });
+  marketDataApi.news = async symbol => { newsCalls++; return { symbol, articles: [{ title: "Fixture Company: Real fixture headline", url: "https://example.com/article", source: "Fixture publisher", publishedAtUtc: "2026-09-18T18:00:00Z" }] }; };
+  const root = createRoot(document.getElementById("root")!);
+  const clickTab = async (name: string) => {
+    const button = [...document.querySelectorAll('.stock-detail-tabs button')].find(b => b.textContent === name) as HTMLButtonElement;
+    assert.ok(button, name);
+    await act(async () => button.click());
+    await pause();
+  };
+  try {
+    await act(async () => root.render(createElement(StockDetailsPage, { requestedSymbol: 'TEST', onBack() {} })));
+    await pause();
+    const labels = [...document.querySelectorAll('.stock-detail-tabs button')].map(b => b.textContent);
+    assert.ok(!labels.includes('Chart'));
+    assert.ok(!labels.includes('AI Insights'));
+    assert.equal(fundamentalCalls, 0);
+    assert.equal(newsCalls, 0);
+    await clickTab('Financials');
+    assert.match(document.querySelector('.stock-data-panel')!.textContent!, /7,654,321/);
+    await clickTab('Key Metrics');
+    assert.match(document.querySelector('.stock-data-panel')!.textContent!, /P\/E/);
+    await clickTab('Forecast');
+    assert.match(document.querySelector('.stock-data-panel')!.textContent!, /120.00/);
+    assert.match(document.querySelector('.stock-data-panel')!.textContent!, /20.00%/);
+    await clickTab('Insights');
+    assert.match(document.querySelector('.stock-data-panel')!.textContent!, /calculated from/);
+    await clickTab('News');
+    assert.equal(document.querySelector('.stock-news-list a')?.getAttribute('href'), 'https://example.com/article');
+    assert.match(document.querySelector('.stock-news-list')!.textContent!, /Real fixture headline/);
+    assert.equal(newsCalls, 1);
+  } finally {
+    await act(async () => root.unmount());
+    Object.assign(marketDataApi, original);
+  }
 });
