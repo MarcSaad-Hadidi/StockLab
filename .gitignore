@@ -11,9 +11,20 @@ dist/
 
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
 venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local ML datasets and trained models
+/ml/data/raw/*
+!/ml/data/raw/.gitkeep
+/ml/data/processed/*
+!/ml/data/processed/.gitkeep
+/ml/models/*
+!/ml/models/.gitkeep
 
 # Secrets / environment
 .env
