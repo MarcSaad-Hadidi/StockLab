@@ -43,6 +43,38 @@ class StorageError(HistoricalDataError):
     """Local persistence failed or would overwrite an existing file."""
 
 
+class DataCleaningError(HistoricalDataError):
+    """Cleaning cannot produce an unambiguous, nonempty daily dataset."""
+
+
+class SchemaValidationError(DataCleaningError):
+    """Missing, unexpected, or repeated OHLCV column names."""
+
+
+class DuplicateConflictError(DataCleaningError):
+    """Different valid observations share one normalized symbol/date key."""
+
+
+@dataclass(frozen=True)
+class DataCleaningReport:
+    input_rows: int
+    output_rows: int
+    rows_removed: int
+    removal_reasons: dict[str, int]  # one primary reason per removed row
+    date_min: str
+    date_max: str
+    symbols: list[str]
+    retention_ratio: float
+
+
+@dataclass(frozen=True)
+class CleanedDatasetResult:
+    dataframe: pd.DataFrame
+    report: DataCleaningReport
+    output_path: Path | None = None
+    report_path: Path | None = None
+
+
 @dataclass(frozen=True)
 class HistoricalRequest:
     symbol: str

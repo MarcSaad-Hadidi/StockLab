@@ -1,5 +1,8 @@
 """Deterministic local paths and atomic publication of individual files."""
 
+import csv
+from dataclasses import asdict
+import io
 import json
 import os
 from pathlib import Path
@@ -8,9 +11,10 @@ from urllib.parse import quote
 
 import pandas as pd
 
-from .models import HistoricalRequest, StorageError
+from .models import DataCleaningReport, HistoricalRequest, SchemaValidationError, StorageError
 
 DEFAULT_DATA_DIR = Path(__file__).resolve().parents[3] / "data"
+MAX_CLEANING_CSV_BYTES = 64 * 1024 * 1024
 
 
 def output_paths(request: HistoricalRequest, data_dir: Path) -> tuple[Path, Path]:
@@ -53,3 +57,46 @@ def save_raw(path: Path, payload: dict, *, overwrite: bool = False) -> None:
 
 def save_processed(path: Path, frame: pd.DataFrame, *, overwrite: bool = False) -> None:
     _atomic_write(path, frame.to_csv(index=False, date_format="%Y-%m-%d", lineterminator="\n"), overwrite)
+
+
+def save_cleaning_report(path: Path, report: DataCleaningReport, *, overwrite: bool = False) -> None:
+    _atomic_write(path, json.dumps(asdict(report), indent=2, allow_nan=False) + "\n", overwrite)
+
+
+def cleaning_paths(input_path: Path, output_path: Path | None, report_path: Path | None) -> tuple[Path, Path]:
+    output_path = output_path if output_path is not None else input_path.parent / "cleaned" / input_path.name
+    report_path = report_path if report_path is not None else output_path.with_suffix(".report.json")
+    paths = (input_path, output_path, report_path)
+    try:
+        for index, left in enumerate(paths):
+            for right in paths[index + 1:]:
+                if left.resolve() == right.resolve() or (left.exists() and right.exists() and left.samefile(right)):
+                    raise StorageError("Input, cleaned CSV, and report paths must be distinct.")
+    except OSError:
+        raise StorageError("Could not resolve local cleaning paths.") from None
+    return output_path, report_path
+
+
+def load_cleaning_csv(path: Path) -> pd.DataFrame:
+    """Read bounded UTF-8 local CSV, preserving cells and duplicate headers.
+
+    No dtype/NA inference: e.g. ticker NA and leading-zero symbols are text.
+    Malformed row widths fail instead of pandas silently inferring an index.
+    """
+    try:
+        with path.open("rb") as stream:
+            if os.fstat(stream.fileno()).st_size > MAX_CLEANING_CSV_BYTES:
+                raise StorageError("Cleaning CSV exceeds the 64 MiB size limit.")
+            content = stream.read(MAX_CLEANING_CSV_BYTES + 1)
+        if len(content) > MAX_CLEANING_CSV_BYTES:
+            raise StorageError("Cleaning CSV exceeds the 64 MiB size limit.")
+        reader = csv.reader(io.StringIO(content.decode("utf-8-sig"), newline=""), strict=True)
+        header = next(reader, [])
+        rows = []
+        for row in reader:
+            if len(row) != len(header):
+                raise SchemaValidationError("CSV rows must match the header width.")
+            rows.append(row)
+        return pd.DataFrame(rows, columns=header, dtype=object)
+    except (OSError, UnicodeError, csv.Error):
+        raise StorageError("Could not read a valid local UTF-8 CSV.") from None
