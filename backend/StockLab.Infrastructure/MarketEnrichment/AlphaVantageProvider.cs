@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
@@ -22,7 +21,13 @@ public sealed class AlphaVantageProvider : IMarketEnrichmentProvider, IDisposabl
     private readonly TimeProvider clock;
     private readonly ILogger<AlphaVantageProvider>? logger;
     private readonly MemoryCache cache = new(new MemoryCacheOptions { SizeLimit = 256 });
-    private readonly ConcurrentDictionary<string, TaskCompletionSource<object?>> flights = new();
+    private readonly Dictionary<string, Flight> flights = new();
+    private sealed class Flight
+    {
+        public readonly TaskCompletionSource<object?> Completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public readonly CancellationTokenSource Cancellation = new();
+        public int Callers;
+    }
     private readonly SemaphoreSlim transport = new(1, 1);
     private DateOnly budgetDay;
     private int used;
@@ -52,17 +57,37 @@ public sealed class AlphaVantageProvider : IMarketEnrichmentProvider, IDisposabl
             if (entry.Failure is { } failure) throw Failure(failure);
             return (T?)entry.Value;
         }
-        var candidate = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var shared = flights.GetOrAdd(key, candidate);
-        if (ReferenceEquals(shared, candidate)) _ = Complete(key, operation, canonical, upstream, ttl, candidate);
-        return (T?)await shared.Task.WaitAsync(token);
+        Flight flight;
+        bool owner;
+        lock (flights)
+        {
+            owner = !flights.TryGetValue(key, out flight!);
+            if (owner) flights.Add(key, flight = new Flight());
+            flight.Callers++;
+        }
+        if (owner) _ = Complete(key, operation, canonical, upstream, ttl, flight);
+        try { return (T?)await flight.Completion.Task.WaitAsync(token); }
+        finally
+        {
+            lock (flights)
+            {
+                if (--flight.Callers == 0 && !flight.Completion.Task.IsCompleted)
+                {
+                    // Nobody needs this operation anymore. Remove it before cancelling so a
+                    // new caller cannot join abandoned work that might still be in the queue.
+                    if (flights.TryGetValue(key, out var current) && ReferenceEquals(current, flight)) flights.Remove(key);
+                    flight.Cancellation.Cancel();
+                }
+            }
+        }
     }
-    private async Task Complete(string key, string operation, string canonical, string? upstream, TimeSpan ttl, TaskCompletionSource<object?> shared)
+    private async Task Complete(string key, string operation, string canonical, string? upstream, TimeSpan ttl, Flight flight)
     {
+        var shared = flight.Completion;
         try
         {
-            // Shared work survives cancellation of one HTTP caller; transport has its own timeout.
-            var result = await Load(operation, canonical, upstream);
+            // One caller can leave without cancelling remaining joiners.
+            var result = await Load(operation, canonical, upstream, flight.Cancellation.Token);
             cache.Set(key, new Cached(result, clock.GetUtcNow() + ttl), new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = ttl });
             shared.TrySetResult(result);
         }
@@ -75,25 +100,38 @@ public sealed class AlphaVantageProvider : IMarketEnrichmentProvider, IDisposabl
             cache.Set(key, new Cached(null, clock.GetUtcNow() + cooldown, error.Category), new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = cooldown });
             shared.TrySetException(error); _ = shared.Task.Exception;
         }
+        catch (OperationCanceledException) { shared.TrySetCanceled(); }
         catch (Exception error) { shared.TrySetException(error); _ = shared.Task.Exception; }
-        finally { flights.TryRemove(new KeyValuePair<string, TaskCompletionSource<object?>>(key, shared)); }
+        finally
+        {
+            lock (flights)
+            {
+                if (flights.TryGetValue(key, out var current) && ReferenceEquals(current, flight)) flights.Remove(key);
+                flight.Cancellation.Dispose();
+            }
+        }
     }
-    private async Task<object?> Load(string operation, string canonical, string? upstream)
+    private async Task<object?> Load(string operation, string canonical, string? upstream, CancellationToken cancellation)
     {
         var secret = config["AlphaVantage:ApiKey"] ?? config["ALPHA_VANTAGE_API_KEY"];
         if (string.IsNullOrWhiteSpace(secret)) throw Failure(MarketEnrichmentFailure.ProviderUnavailable);
-        await transport.WaitAsync();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(options.TimeoutSeconds), clock);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token, cancellation);
+        var acquired = false;
         try
         {
+            await transport.WaitAsync(timeout.Token);
+            acquired = true;
+            timeout.Token.ThrowIfCancellationRequested();
             var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
             if (today != budgetDay) { budgetDay = today; used = 0; }
             if (used >= options.DailyRequestBudget) throw Failure(MarketEnrichmentFailure.LocalBudgetExceeded);
             using var client = factory.CreateClient("AlphaVantage");
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(options.TimeoutSeconds));
             // Never log this URI, request, response body or an upstream exception.
             var path = "query?function=" + operation + (upstream is null ? "" : "&symbol=" + Uri.EscapeDataString(upstream)) +
                 (operation == "EARNINGS_CALENDAR" ? "&horizon=12month" : "") + "&apikey=" + Uri.EscapeDataString(secret);
             using var request = new HttpRequestMessage(HttpMethod.Get, path);
+            timeout.Token.ThrowIfCancellationRequested();
             used++; // Failed sent attempts consume the local budget too. No retry or cross-provider fallback.
             logger?.LogInformation("AlphaVantage operation {Operation}; local attempt {Attempt}", operation, used);
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
@@ -110,6 +148,7 @@ public sealed class AlphaVantageProvider : IMarketEnrichmentProvider, IDisposabl
                 if (bytes.Length + read > maxBytes) throw Failure(MarketEnrichmentFailure.MalformedResponse);
                 bytes.Write(buffer, 0, read);
             }
+            timeout.Token.ThrowIfCancellationRequested();
             var text = System.Text.Encoding.UTF8.GetString(bytes.ToArray());
             if (text.Contains(secret, StringComparison.Ordinal)) throw Failure(MarketEnrichmentFailure.MalformedResponse);
             var media = response.Content.Headers.ContentType?.MediaType;
@@ -132,11 +171,12 @@ public sealed class AlphaVantageProvider : IMarketEnrichmentProvider, IDisposabl
             return Earnings(text, canonical, upstream!, today);
         }
         catch (MarketEnrichmentException) { throw; }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { throw; }
         catch (OperationCanceledException) { throw Failure(MarketEnrichmentFailure.Timeout); }
         catch (HttpRequestException) { throw Failure(MarketEnrichmentFailure.ProviderUnavailable); }
         catch (Exception e) when (e is JsonException or FormatException or InvalidOperationException or OverflowException or MalformedLineException or IOException or KeyNotFoundException)
         { throw Failure(MarketEnrichmentFailure.MalformedResponse); }
-        finally { transport.Release(); }
+        finally { if (acquired) transport.Release(); }
     }
     private static MarketEnrichmentException Failure(MarketEnrichmentFailure kind) => new(kind);
     private static string? Text(JsonElement root, string name)

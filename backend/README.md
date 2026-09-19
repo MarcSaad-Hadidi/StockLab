@@ -603,6 +603,10 @@ currently documents 25 requests/day. Budget is per application instance and UTC 
 Other applications using the key can consume the provider quota independently.
 Only one Alpha transport request is active at once. Shared in-flight requests and
 cache hits do not consume additional budget. A sent failed attempt does count.
+`TimeoutSeconds` covers the entire operation, including semaphore wait and response
+body reads. A queued timeout sends no HTTP request and consumes no budget. When the
+last caller cancels, its queued or active work is cancelled; a surviving joined
+caller keeps the shared operation alive. Caller cancellation is never cached.
 No retries, polling or background refresh. Known failures have a protective cooldown
 (12 hours for quota/entitlement, one minute for other failures) so repeated logo
 requests cannot spend credits on the same outage. A spent local budget returns safe HTTP 429;
