@@ -14,6 +14,7 @@ from .models import (
 
 LIMIT_MESSAGE = "Requested range may exceed Twelve Data single-request limit. Reduce the period."
 COLUMNS = ["date", "symbol", "open", "high", "low", "close", "volume"]
+SYMBOL_PATTERN = r"[A-Z0-9][A-Z0-9.\^/-]{0,31}(?::[A-Z0-9][A-Z0-9._-]{0,15})?"
 
 
 def calendar_date(value: str | date) -> date:
@@ -31,7 +32,7 @@ def validate_request(symbol: str, start_date: str | date, end_date: str | date) 
     if not isinstance(symbol, str):
         raise DatasetValidationError("A single non-empty symbol is required.")
     symbol = symbol.strip().upper()
-    if not re.fullmatch(r"[A-Z0-9][A-Z0-9.\^/-]{0,31}(?::[A-Z0-9][A-Z0-9._-]{0,15})?", symbol):
+    if not re.fullmatch(SYMBOL_PATTERN, symbol):
         raise DatasetValidationError("Unsupported symbol format; supply one ticker.")
     start, end = calendar_date(start_date), calendar_date(end_date)
     if start >= end:

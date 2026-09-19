@@ -129,8 +129,8 @@ ML never executes trades. These responsibilities are documented only at this sta
 
 ## Current status
 
-**#54 provides the environment; #56 adds historical ingestion only.** Cleaning,
-imputation, feature engineering, returns, indicators, scaling, train/test splits,
+**#54 provides the environment; #56 adds historical ingestion; #58 adds a separate
+local cleaning stage.** Imputation, feature engineering, returns, indicators, scaling, train/test splits,
 training, predictions, risk management, backtesting, frontend/API integration,
 AWS, and Azure remain outside this module's current implementation. Installation
 downloads Python packages; pytest needs no external service, real API key, or credit.
@@ -316,3 +316,92 @@ From the repository root: `python -m pytest ml`. Tests block socket connections
 and replace only the HTTP transport. Coverage includes the emitted request,
 secret-free errors/storage, provider failures, strict data validation, chronology,
 deterministic replay, truncation protection, collisions, and atomic-write failures.
+
+## Data cleaning (#58)
+
+`stocklab_ml.data.cleaning.clean_historical_dataset(dataframe, *, as_of_date=None)`
+returns `CleanedDatasetResult(dataframe, report)` without mutating its input.
+`clean_processed_dataset(input_path, *, output_path=None, report_path=None,
+overwrite=False, as_of_date=None)` also saves local artifacts and returns their
+paths. Ingestion remains a separate, explicit stage; cleaning calls no provider
+or other API and requires no key or credits. No new dependencies are needed.
+
+Input must contain exactly `date,symbol,open,high,low,close,volume`, in any order.
+Missing, unexpected (including future/target), or repeated column names raise
+`SchemaValidationError`. Output uses that exact order, the #56 dtypes
+(`datetime64[ns]` naive date, `string` symbol, `float64` OHLC, `Int64` volume), a
+fresh index, and ascending `(symbol,date)` order. Multiple symbols are supported.
+
+Symbols are trimmed and uppercased using #56's symbol format; punctuation and
+explicit exchange qualifiers remain intact. Dates accept ISO `YYYY-MM-DD`, naive
+midnight ISO timestamps (space or `T`, optional zero fractional seconds), Python
+dates/datetimes, pandas timestamps, or NumPy datetimes within the nanosecond date
+range. Surrounding text whitespace is trimmed. Ambiguous date strings, timezone
+offsets, and non-midnight times are invalid; no timezone conversion occurs.
+`as_of_date` is inclusive and follows the same date rules. Its default is the
+machine's local date; supply it explicitly for reproducibility.
+
+Each removed row has **one primary reason**, in this priority order:
+
+1. `missing_value`: any null/NaN/NaT or blank required cell.
+2. `invalid_date`: unparseable, out-of-range, timezone-aware, or intraday date.
+3. `invalid_symbol`: non-text or unsupported symbol format.
+4. `invalid_numeric`: malformed, boolean, or nonfinite OHLC/volume (including
+   textual `NaN`/infinity). Decimal/scientific numeric strings are supported.
+5. `invalid_price`: any OHLC price <= 0.
+6. `invalid_ohlc`: `low <= min(open,close) <= max(open,close) <= high` fails.
+7. `invalid_volume`: negative, fractional, or outside signed Int64. `1000.0` is
+   accepted; volume strings are parsed without rounding through float64.
+8. `future_date`: date exceeds `as_of_date`.
+9. `duplicate_exact_removed`: repeated normalized observation with identical
+   `(symbol,date,open,high,low,close,volume)`; keep one.
+
+Invalid/future rows leave **before** duplicate detection. Different remaining
+observations for the same `(symbol,date)` raise `DuplicateConflictError`; none
+is chosen or averaged. An empty input or no surviving rows raises
+`DataCleaningError`. One valid row is sufficient, with no retention threshold.
+The final schema, types, values, dates, uniqueness, and ordering are explicitly
+validated. Repeating cleaning with the same cutoff is deterministic and
+idempotent; cleaning an already clean dataset removes zero rows.
+
+Missing values are dropped: no forward/backward fill, interpolation, mean/median
+fill, or invented OHLCV. No future observation repairs a past row. No synthetic
+weekend/holiday/session dates, statistical outlier removal, scaling, features, or
+targets are created. Large or small structurally valid prices remain unchanged.
+
+The report contains `input_rows`, `output_rows`, `rows_removed`, the nine
+`removal_reasons` counts (including zeros), retained `date_min`/`date_max`, sorted
+`symbols`, and `retention_ratio = output_rows / input_rows`. Reason counts sum to
+`rows_removed = input_rows - output_rows`. It contains no source rows, provider
+URLs, credentials, or generated timestamp.
+
+File input is local UTF-8 CSV (optional BOM), capped at **64 MiB**. Cells stay
+text until cleaning, preserving tickers such as `0700` and `NA`. Malformed CSV
+row widths fail. Default outputs are `<input-parent>/cleaned/<dataset>.csv` and
+`<dataset>.report.json`; for #56 this is `ml/data/processed/cleaned/`, already
+Git-ignored. CSV omits the index. The original stays intact; input/output/report
+aliases are rejected, including resolved paths and existing hard links.
+
+Both destinations are checked before writing. Default `overwrite=False` rejects
+either existing output; replacement requires `overwrite=True`. The existing #56
+atomic writer publishes each file. The pair is **not a transaction**: a report
+write failure can leave the new CSV and an absent/older report. Only a successful
+returned result means both artifacts were saved. Custom paths should stay in
+controlled, ignored local storage.
+
+From the Python session launched in `ml/src/` as above:
+
+```python
+from stocklab_ml.data.cleaning import clean_processed_dataset
+
+result = clean_processed_dataset(
+    "../data/processed/AAPL_1day_2016-01-01_2026-09-18.csv",
+    as_of_date="2026-09-18",
+)
+print(result.report)
+print(result.output_path, result.report_path)
+```
+
+The same offline pytest commands above cover cleaning, count consistency,
+immutability, idempotence, leakage prevention, #56 CSV compatibility, and atomic
+storage failure boundaries using synthetic fixtures and temporary directories.
