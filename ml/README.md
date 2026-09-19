@@ -130,7 +130,7 @@ ML never executes trades. These responsibilities are documented only at this sta
 ## Current status
 
 **#54 provides the environment; #56 adds historical ingestion; #58 adds a separate
-local cleaning stage.** Imputation, feature engineering, returns, indicators, scaling, train/test splits,
+local cleaning stage; #60 adds deterministic feature engineering.** Imputation, scaling, train/test splits,
 training, predictions, risk management, backtesting, frontend/API integration,
 AWS, and Azure remain outside this module's current implementation. Installation
 downloads Python packages; pytest needs no external service, real API key, or credit.
@@ -405,3 +405,112 @@ print(result.output_path, result.report_path)
 The same offline pytest commands above cover cleaning, count consistency,
 immutability, idempotence, leakage prevention, #56 CSV compatibility, and atomic
 storage failure boundaries using synthetic fixtures and temporary directories.
+
+## Feature engineering (#60)
+
+`stocklab_ml.features.engineer_features(dataframe)` returns a
+`FeatureDatasetResult(dataframe, report)` without mutating the caller's frame.
+It requires #58's **exact cleaned output contract**, including column order,
+normalized dtypes, ascending `(symbol,date)` order, unique keys, and a fresh
+integer index. Invalid input, extra columns, or reapplying it to a feature
+dataset raises `FeatureEngineeringError`; nothing is cleaned or repaired.
+The structural validator from #58 is reused. The cleaner owns the historical
+as-of cutoff; features do not read today's date or the system timezone.
+
+The source columns `date,symbol,open,high,low,close,volume` remain intact for
+lineage. Six derived float64 columns are appended in the order below; source
+volume remains observed `Int64`. `FEATURE_COLUMNS` selects the seven model
+inputs in this order:
+
+```python
+["return_1d", "ma_5", "ma_20", "rsi_14", "volume", "momentum_10", "volatility_20"]
+```
+
+All windows count **observations/sessions per symbol**, include the current
+session, and use only dates up to that session. Gaps, weekends, and holidays
+are neither filled nor added to the calendar.
+
+| Feature | Definition | First defined observation (1-based) |
+| --- | --- | --- |
+| `return_1d` | `close[t] / close[t-1] - 1`, decimal units | 2 |
+| `ma_5` | Simple mean of `close[t-4] ... close[t]`, `min_periods=5` | 5 |
+| `ma_20` | Simple mean of `close[t-19] ... close[t]`, `min_periods=20` | 20 |
+| `rsi_14` | Wilder RSI, defined below | 15 |
+| `volume` | Unchanged cleaned daily volume | 1 |
+| `momentum_10` | `close[t] / close[t-10] - 1`, decimal units | 11 |
+| `volatility_20` | Standard deviation of the last 20 `return_1d` values, `min_periods=20`, `ddof=0` | 21 |
+
+Volatility is **not annualized** and uses decimal return units. For example,
+`0.015` means a 1.5% daily-return standard deviation. Volume is not transformed.
+
+Wilder RSI starts with `gain=max(delta,0)` and `loss=max(-delta,0)`, where
+`delta=close[t]-close[t-1]`. Seed average gain/loss with the means of the first
+14 changes. Subsequently use `(previous_average * 13 + current_gain_or_loss)/14`.
+RSI is `100 - 100/(1 + average_gain/average_loss)`. Only gains gives 100, only
+losses gives 0, and both averages zero gives 50. The valid range is `[0,100]`.
+No external technical-analysis library is used.
+
+Each symbol requires **at least 21 observations**; a shorter symbol fails the
+entire request. The expected leading missing values are checked separately for
+each feature before removing warm-up rows. V1 removes 20 leading rows per
+symbol. An unexpected missing/nonfinite feature, even before another feature
+finishes warming up, fails instead of silently discarding valid source rows.
+The final nonempty dataset has exact columns, finite features, positive moving
+averages, bounded RSI, nonnegative volatility, ordered dates, and unique keys.
+
+The deterministic report includes actual `input_rows`, `output_rows`,
+`warmup_rows_removed`, sorted `symbols`, final `date_min`/`date_max`,
+`feature_columns`, `rows_per_symbol` (output counts), and
+`warmup_removed_per_symbol`. `parameters` records return period 1, MA windows
+5/20, RSI window 14, momentum window 10, volatility window 20, `volatility_ddof=0`,
+and `volatility_annualized=false`. There is no generated timestamp.
+
+**The same feature formulas must be used for training and inference.** This
+module is their single implementation. Prefix-invariance tests verify that
+appending future prices cannot change earlier features. Wilder RSI is recursive:
+exact parity also requires the **same historical starting point/seed**. Supplying
+only the latest 21 observations produces a causal result initialized from that
+slice, but its RSI can differ from one initialized on the full history. Future
+inference should replay the same history or explicitly preserve equivalent
+Wilder state; stateful inference is outside #60.
+
+No target/label, scaling, global normalization, statistical outlier removal,
+train/test split, model training, trading signal, or future value is created.
+There are no provider calls, required API credentials, or API credits.
+
+### Local feature files
+
+From the Python session launched in `ml/src/` as above:
+
+```python
+from stocklab_ml.features import FEATURE_COLUMNS, engineer_cleaned_dataset
+
+result = engineer_cleaned_dataset(
+    "../data/processed/cleaned/AAPL_1day_2016-01-01_2026-09-18.csv",
+)
+X = result.dataframe[FEATURE_COLUMNS]
+print(result.report)
+print(result.output_path, result.report_path)
+```
+
+`engineer_cleaned_dataset(input_path, *, output_path=None, report_path=None,
+overwrite=False)` decodes the local #58 CSV with explicit dtypes, preserving
+leading-zero/`NA` symbols and exact Int64 volume. It reuses the bounded CSV
+reader (64 MiB) and never invokes the cleaner. Dates must be `YYYY-MM-DD`.
+Default files are `ml/data/processed/features/<dataset>.csv` and
+`<dataset>.features.json`, independent of the working directory and already
+Git-ignored. CSV uses exact output columns, no index, ISO dates, and float64
+precision. Both destinations are checked before writing. All three paths must
+be distinct, including resolved aliases and existing hard links.
+
+The #56/#58 atomic writer is reused; `overwrite=False` refuses either existing
+file and concurrent writers cannot be clobbered. Each file is atomic, **not the
+CSV/report pair**. A report failure can leave a new CSV with an absent/older
+report; only a successful returned result denotes completion. The cleaned source
+is never overwritten. Keep explicit custom destinations in ignored local storage.
+
+The same offline test commands cover independent formula examples, a mixed
+Wilder RSI regression, flat/rising/falling prices, constant-return volatility,
+20/21-observation boundaries, multi-symbol isolation, prefix invariance, strict
+input rejection, unexpected NaN/inf, immutable input, reports, CSV round trips,
+collisions, and atomic publication failures. Tests block network connections.
