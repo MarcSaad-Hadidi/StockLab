@@ -286,6 +286,7 @@ export function StockDetailsPage({
         symbol,
         historyQuery(activeRange, new Date(historyAnchorTime))!,
         signal,
+        activeRange,
       ),
     [symbol, activeRange, historyAnchorTime],
   );

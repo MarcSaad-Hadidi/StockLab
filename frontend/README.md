@@ -110,6 +110,8 @@ public `VITE_STOCKLAB_API_BASE_URL`. Never put provider credentials in Vite or f
 
 Market automatically loads five curated identifiers (AAPL, MSFT, NVDA, AMZN, GOOGL)
 with at most three concurrent quote requests. They contain no simulated prices.
+Total quote failure renders an error and explicit Retry; partial batches retain
+successful prices and mark failed rows unavailable with a batch Retry.
 Search is debounced 450ms, cancelled when stale, and never calls the API for an empty
 query. Search rows use provider metadata without an N+1 quote fanout. Popular-company logos load automatically (five maximum). Search and movers reuse cached logos or a ticker fallback, with no logo fanout. Clicking a result preserves its exchange-qualified symbol in the route.
 
@@ -128,7 +130,8 @@ market is closed. 5D uses Hour bars; 1M/3M/6M/1Y use calendar month subtraction 
 month-end clamping; YTD begins January 1; 5Y uses Week; Max uses Month across the
 backend-supported 4999-day span (about 13 years), not all-time history. Calendar bars
 preserve PeriodDate, intraday bars display OpenTimeUtc. Range responses have a bounded
-five-minute memory cache. No prefetch, polling, automatic retry or synthetic points.
+five-minute memory cache keyed by canonical symbol and range, including when reopening
+a stock. No prefetch, polling, automatic retry or synthetic points.
 
 Run `npm run lint`, `npm run build`, `npm test`; development: `npm run dev -- --host
 127.0.0.1`, preview: `npm run preview -- --host 127.0.0.1`. The API must be running for

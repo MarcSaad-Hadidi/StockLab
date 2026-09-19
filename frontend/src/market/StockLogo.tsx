@@ -26,13 +26,12 @@ export function StockLogo({
   const url = available?.pngUrl ?? available?.svgUrl;
   return (
     <span
-      aria-hidden="true"
       className={`market-stock-logo market-stock-logo-${size} ${url && failedUrl !== url ? "market-stock-logo-image" : ""}`}
     >
       {url && failedUrl !== url ? (
         <img
           src={url}
-          alt=""
+          alt={symbol}
           width={size === "large" ? 52 : 32}
           height={size === "large" ? 52 : 32}
           style={{ objectFit: "contain", maxWidth: "100%", maxHeight: "100%" }}

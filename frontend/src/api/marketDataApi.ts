@@ -67,6 +67,7 @@ export type StockSearchResult = {
   currency: string | null;
 };
 export type HistoryInterval = "Minute" | "Hour" | "Day" | "Week" | "Month";
+export type HistoryRange = "1D" | "5D" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "5Y" | "MAX";
 export type HistoryBar = {
   openTimeUtc: string | null;
   periodDate: string | null;
@@ -187,9 +188,10 @@ export function createMarketDataApi(
     valid: (v: unknown) => v is T,
     signal: AbortSignal,
     ttl: number,
+    cacheKey = path,
   ): Promise<T> {
     signal.throwIfAborted();
-    const cached = cache.get(path);
+    const cached = cache.get(cacheKey);
     if (cached && cached.expires > Date.now()) return cached.value as T;
     let response: Response;
     try {
@@ -212,7 +214,7 @@ export function createMarketDataApi(
     signal.throwIfAborted();
     if (!valid(value)) throw new MarketDataError(502);
     if (cache.size >= 40) cache.delete(cache.keys().next().value!);
-    cache.set(path, { value, expires: Date.now() + ttl });
+    cache.set(cacheKey, { value, expires: Date.now() + ttl });
     if (path.endsWith("/logo")) logoListeners.forEach((listener) => listener());
     return value;
   }
@@ -335,12 +337,13 @@ export function createMarketDataApi(
     metadata(symbol: string) {
       return metadata.get(symbol.trim().toUpperCase());
     },
-    history(symbol: string, query: HistoryQuery, signal: AbortSignal) {
+    history(symbol: string, query: HistoryQuery, signal: AbortSignal, range?: HistoryRange) {
       return get(
         `/api/stocks/${encodeURIComponent(symbol.trim().toUpperCase())}/history?${new URLSearchParams(query)}`,
         history,
         signal,
         300_000,
+        range ? `history:${symbol.trim().toUpperCase()}:${range}` : undefined,
       );
     },
   };

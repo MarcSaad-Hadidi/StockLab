@@ -102,3 +102,11 @@ for (const [path, label] of [
       /191\.45|415\.60|892\.72|154\.32|48,294|128,547|v3\.2\.1|2024-05|<polyline|<canvas/,
     );
   });
+
+test("unconnected notifications and AI trade counts do not claim real activity", async () => {
+  const { DashboardPage } = await import("../src/dashboard/DashboardPage.tsx");
+  const html = renderToStaticMarkup(React.createElement(DashboardPage));
+  assert.doesNotMatch(html, /0 trades executed/);
+  const page = new JSDOM(html);
+  assert.equal(page.window.document.querySelector('button[aria-label="Notifications"]')?.textContent, "");
+});

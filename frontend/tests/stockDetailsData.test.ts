@@ -116,3 +116,61 @@ test("calendar month windows clamp month ends without rolling into the next mont
     "2023-02-28",
   );
 });
+
+test("all nine ranges send distinct bounded queries and symbols never share history", async () => {
+  const requests: string[] = [];
+  const api = createMarketDataApi("", async url => {
+    requests.push(String(url));
+    const parsed = new URL(String(url), "http://localhost");
+    return Response.json({ ...data, symbol: parsed.pathname.includes("TSLA") ? "TSLA" : "AAPL",
+      interval: parsed.searchParams.get("interval"), bars: [] });
+  });
+  const signal = new AbortController().signal;
+  const expected = [
+    ["1D", "Minute", "2026-09-07T12:30:00.000Z", "2026-09-08T12:30:00.000Z"],
+    ["5D", "Hour", "2026-09-03T12:30:00.000Z", "2026-09-08T12:30:00.000Z"],
+    ["1M", "Day", "2026-08-08", "2026-09-09"],
+    ["3M", "Day", "2026-06-08", "2026-09-09"],
+    ["6M", "Day", "2026-03-08", "2026-09-09"],
+    ["YTD", "Day", "2026-01-01", "2026-09-09"],
+    ["1Y", "Day", "2025-09-08", "2026-09-09"],
+    ["5Y", "Week", "2021-09-08", "2026-09-09"],
+    ["MAX", "Month", "2013-01-01", "2026-09-09"],
+  ];
+  for (const [range, interval, from, to] of expected) {
+    await api.history("TSLA", historyQuery(range as typeof chartRanges[number], now)!, signal);
+    const parsed = new URL(requests.at(-1)!, "http://localhost");
+    assert.equal(parsed.searchParams.get("interval"), interval);
+    assert.equal(parsed.searchParams.get("from"), from);
+    assert.equal(parsed.searchParams.get("to"), to);
+  }
+  assert.equal(new Set(requests).size, 9);
+  await api.history("TSLA", historyQuery("1M", now)!, signal);
+  assert.equal(requests.length, 9);
+  const apple = await api.history("AAPL", historyQuery("1M", now)!, signal);
+  assert.equal(apple.symbol, "AAPL");
+  assert.equal(requests.length, 10);
+});
+
+test("reopening the same symbol and range reuses history until its TTL expires", async () => {
+  let calls = 0;
+  let time = now.getTime();
+  const originalNow = Date.now;
+  Date.now = () => time;
+  const api = createMarketDataApi("", async url => {
+    calls++;
+    return Response.json({ ...data, symbol: String(url).includes("TSLA") ? "TSLA" : "AAPL", interval: "Hour", bars: [] });
+  });
+  const signal = new AbortController().signal;
+  try {
+    await api.history("TSLA", historyQuery("5D", new Date(time))!, signal, "5D");
+    time += 60_000;
+    await api.history("TSLA", historyQuery("5D", new Date(time))!, signal, "5D");
+    assert.equal(calls, 1);
+    await api.history("AAPL", historyQuery("5D", new Date(time))!, signal, "5D");
+    assert.equal(calls, 2);
+    time += 300_000;
+    await api.history("TSLA", historyQuery("5D", new Date(time))!, signal, "5D");
+    assert.equal(calls, 3);
+  } finally { Date.now = originalNow; }
+});

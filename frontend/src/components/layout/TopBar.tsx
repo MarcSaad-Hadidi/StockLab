@@ -7,7 +7,7 @@ type TopBarIconName = 'bell' | 'chevron' | 'menu'
 
 function TopBarIcon({ name }: { name: TopBarIconName }) {
   const paths: Record<TopBarIconName, ReactNode> = {
-    bell: <><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" /><circle cx="19" cy="5" r="3" fill="#4353f5" stroke="#fff" strokeWidth="1.5" /></>,
+    bell: <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" />,
     chevron: <path d="m9 6 6 6-6 6" />,
     menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   }
@@ -35,7 +35,6 @@ export function TopBar({ avatar = 'MS', onMenuOpen, title }: TopBarProps) {
       <div className="app-topbar-actions">
         <button aria-label={t('common.notifications')} className="app-topbar-notification" onClick={() => window.location.assign(routeFor('alerts'))} type="button">
           <TopBarIcon name="bell" />
-          <span aria-hidden="true" className="app-topbar-badge">2</span>
         </button>
         <button aria-label={t('common.openProfile')} className="app-topbar-account" onClick={() => window.location.assign(routeFor('profile'))} type="button">
           <span className="app-topbar-avatar">{avatar}</span>

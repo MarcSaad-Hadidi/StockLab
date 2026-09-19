@@ -110,4 +110,4 @@ export const watchlist: WatchlistItem[] = []
 
 export const transactions: Transaction[] = []
 
-export const aiPerformance = { return: null, pnl: null, winRate: null, trades: 0 }
+export const aiPerformance = { return: null, pnl: null, winRate: null, trades: null }
