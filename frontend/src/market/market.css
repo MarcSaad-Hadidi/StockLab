@@ -1012,427 +1012,6 @@ input:focus-visible {
 
 }
 
-@media (min-width: 701px) and (max-width: 900px) {
-
-  .market-topbar,
-  .market-content {
-    padding-right: 16px;
-    padding-left: 19px;
-  }
-
-  .market-topbar {
-    height: 43px;
-    gap: 8px;
-  }
-
-  .market-topbar-icon svg,
-  .market-account-chevron svg {
-    width: 12px;
-    height: 12px;
-  }
-
-  .market-topbar-actions {
-    gap: 7px;
-  }
-
-  .market-avatar {
-    height: 22px;
-    width: 22px;
-    font-size: 7px;
-  }
-
-  .market-account-chevron {
-    padding-top: 2px;
-    padding-bottom: 2px;
-  }
-
-  .market-notification-dot {
-    height: 8px;
-    width: 8px;
-    border-width: 1px;
-    font-size: 5px;
-  }
-
-  .market-overview-grid {
-    gap: 8px;
-  }
-
-  .market-overview-card {
-    padding: 10px 10px 6px;
-  }
-
-  .market-overview-heading {
-    margin-bottom: 4px;
-  }
-
-  .market-overview-heading h2,
-  .market-results-heading h2 {
-    font-size: 9px;
-  }
-
-  .market-view-all {
-    font-size: 7px;
-  }
-
-  .market-overview-row {
-    grid-template-columns: 15px minmax(0, 1fr) auto;
-    gap: 5px;
-    padding: 0.6px 0;
-  }
-
-  .market-stock-logo {
-    height: 14px;
-    width: 14px;
-    flex-basis: 14px;
-    border-radius: 4px;
-    font-size: 7px;
-  }
-
-  .market-stock-copy strong,
-  .market-stock-quote strong {
-    font-size: 7px;
-  }
-
-  .market-stock-copy small,
-  .market-stock-quote small {
-    font-size: 6px;
-  }
-
-  .market-stock-change,
-  .market-table-change {
-    padding: 2px 3px;
-    font-size: 6px;
-  }
-
-  .market-results-meta {
-    gap: 7px;
-    font-size: 7px;
-  }
-
-  .market-filter-row {
-    gap: 8px;
-    margin-top: 7px;
-    margin-bottom: 5px;
-  }
-
-  .market-filter-tabs,
-  .market-filter-actions {
-    gap: 5px;
-  }
-
-  .market-filter-tab,
-  .market-market-select,
-  .market-more-filter {
-    height: 17px;
-    gap: 4px;
-    border-radius: 5px;
-    padding: 0 8px;
-    font-size: 7px;
-  }
-
-  .market-filter-tab svg,
-  .market-market-select svg,
-  .market-more-filter svg {
-    width: 9px;
-    height: 9px;
-  }
-
-  .market-content {
-    padding-top: 11px;
-    padding-bottom: 12px;
-  }
-
-  .market-intro {
-    margin-bottom: 12px;
-  }
-
-  .market-intro h1 {
-    margin-bottom: 2px;
-    font-size: 14px;
-    letter-spacing: -0.4px;
-  }
-
-  .market-intro p {
-    font-size: 7px;
-  }
-
-  .market-search-bar {
-    height: 26px;
-    gap: 6px;
-    border-radius: 6px;
-    padding: 0 9px;
-  }
-
-  .market-search-bar input {
-    font-size: 7px;
-  }
-
-  .market-search-bar svg {
-    width: 11px;
-    height: 11px;
-  }
-
-  .market-results-panel {
-    margin-top: 8px;
-    padding: 10px 11px 5px;
-  }
-
-  .market-results-heading {
-    margin-bottom: 4px;
-  }
-
-  .market-page-button,
-  .market-page-arrow {
-    height: 17px;
-    min-width: 17px;
-    font-size: 7px;
-  }
-
-  .market-pagination {
-    gap: 4px;
-  }
-
-  .market-results-table {
-    min-width: 560px;
-  }
-
-  .market-results-table th {
-    padding: 0 6px 5px;
-    font-size: 6px;
-    line-height: 1;
-  }
-
-  .market-results-table td {
-    height: 20px;
-    padding: 2px 6px;
-    font-size: 7px;
-    line-height: 1;
-  }
-
-  .market-symbol-cell,
-  .market-company-cell {
-    gap: 5px;
-    font-size: 7px;
-  }
-
-  .market-symbol-cell .market-stock-logo {
-    height: 12px;
-    width: 12px;
-    flex-basis: 12px;
-    border-radius: 3px;
-    font-size: 6px;
-  }
-
-  .market-favorite-button {
-    padding: 2px;
-  }
-
-  .market-favorite-button svg {
-    width: 10px;
-    height: 10px;
-  }
-}
-
-@media (min-width: 901px) and (max-width: 1100px) {
-
-  .market-topbar,
-  .market-content {
-    padding-right: 2.4vw;
-    padding-left: 2.4vw;
-  }
-
-  .market-topbar {
-    height: clamp(50px, 5.82vw, 58px);
-    gap: 16px;
-  }
-
-  .market-topbar-icon svg,
-  .market-account-chevron svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  .market-topbar-actions {
-    gap: 10px;
-  }
-
-  .market-avatar {
-    height: 26px;
-    width: 26px;
-    font-size: 8px;
-  }
-
-  .market-notification-dot {
-    height: 10px;
-    width: 10px;
-    font-size: 6px;
-  }
-
-  .market-content {
-    padding-top: 15px;
-    padding-bottom: 20px;
-  }
-
-  .market-intro {
-    margin-bottom: 12px;
-  }
-
-  .market-intro h1 {
-    margin-bottom: 3px;
-    font-size: clamp(16px, 1.75vw, 19px);
-    letter-spacing: -0.55px;
-  }
-
-  .market-intro p {
-    font-size: 9px;
-  }
-
-  .market-search-bar {
-    height: 32px;
-    gap: 8px;
-    border-radius: 7px;
-    padding: 0 11px;
-  }
-
-  .market-search-bar input {
-    font-size: 9px;
-  }
-
-  .market-search-bar svg {
-    width: 13px;
-    height: 13px;
-  }
-
-  .market-filter-row {
-    gap: 10px;
-    margin-top: 11px;
-    margin-bottom: 13px;
-  }
-
-  .market-filter-tabs,
-  .market-filter-actions {
-    gap: 6px;
-  }
-
-  .market-filter-tab,
-  .market-market-select,
-  .market-more-filter {
-    height: 20px;
-    gap: 5px;
-    border-radius: 6px;
-    padding: 0 10px;
-    font-size: 8px;
-  }
-
-  .market-filter-tab svg,
-  .market-market-select svg,
-  .market-more-filter svg {
-    width: 10px;
-    height: 10px;
-  }
-
-  .market-overview-grid {
-    gap: 12px;
-  }
-
-  .market-overview-card {
-    padding: 8px 14px 10px;
-  }
-
-  .market-overview-heading {
-    margin-bottom: 2px;
-  }
-
-  .market-overview-heading h2,
-  .market-results-heading h2 {
-    font-size: 11px;
-  }
-
-  .market-view-all {
-    font-size: 8px;
-  }
-
-  .market-overview-row {
-    grid-template-columns: 20px minmax(0, 1fr) auto;
-    gap: 7px;
-    padding: 1.2px 0;
-  }
-
-  .market-stock-logo {
-    height: 19px;
-    width: 19px;
-    flex-basis: 19px;
-    border-radius: 5px;
-    font-size: 9px;
-  }
-
-  .market-stock-copy strong,
-  .market-stock-quote strong {
-    font-size: 8.5px;
-  }
-
-  .market-stock-copy small,
-  .market-stock-quote small {
-    font-size: 7px;
-  }
-
-  .market-stock-change,
-  .market-table-change {
-    padding: 1px 4px;
-    font-size: 8px;
-  }
-
-  .market-results-panel {
-    margin-top: 8px;
-    padding: 14px 15px 6px;
-  }
-
-  .market-results-heading {
-    margin-bottom: 6px;
-  }
-
-  .market-results-meta {
-    gap: 10px;
-    font-size: 8px;
-  }
-
-  .market-pagination {
-    gap: 5px;
-  }
-
-  .market-page-button,
-  .market-page-arrow {
-    height: 19px;
-    min-width: 19px;
-    font-size: 8px;
-  }
-
-  .market-results-table th {
-    padding: 0 7px 6px;
-    font-size: 7px;
-  }
-
-  .market-results-table td {
-    height: 27px;
-    padding: 4px 7px;
-    font-size: 8px;
-  }
-
-  .market-symbol-cell,
-  .market-company-cell {
-    gap: 6px;
-    font-size: 8px;
-  }
-
-  .market-symbol-cell .market-stock-logo {
-    height: 16px;
-    width: 16px;
-    flex-basis: 16px;
-    border-radius: 4px;
-    font-size: 8px;
-  }
-}
-
 @media (max-width: 700px) {
 
   .market-mobile-menu {
@@ -1556,4 +1135,86 @@ input:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+/* Transparent provider artwork needs a neutral canvas, not the dark ticker fallback. */
+.market-stock-logo-image {
+  background: #fff;
+  padding: 3px;
+  box-shadow: inset 0 0 0 1px #e5e9f1;
+  overflow: hidden;
+}
+.market-stock-logo-image img { display: block; width: 100%; height: 100%; object-fit: contain; }
+
+.market-request-status {
+  margin: 8px 0;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #526078;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.market-request-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.market-request-status p { flex: 1 1 160px; margin: 0; font-size: inherit; }
+.market-request-status strong { font-weight: 650; }
+.market-retry-button {
+  flex: 0 0 auto;
+  border: 1px solid #d8deed;
+  border-radius: 6px;
+  padding: 7px 12px;
+  background: #fff;
+  color: #4755c7;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.market-retry-button:hover { background: #eef1ff; }
+.market-movers-description { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 10px; }
+.market-movers-description small, .market-card-empty { color: #69778e; font-size: 11px; line-height: 1.5; }
+.market-card-empty { margin: 16px 0; }
+
+/* Keep financial data readable instead of shrinking the whole page on tablets. */
+.market-intro h1 { font-size: 26px; }
+.market-intro p { font-size: 13px; }
+.market-search-bar { height: 46px; }
+.market-search-bar input { font-size: 14px; }
+.market-filter-tab { min-height: 32px; font-size: 12px; }
+.market-overview-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; }
+.market-overview-card { padding: 18px; }
+.market-overview-heading { margin-bottom: 12px; }
+.market-overview-heading h2, .market-results-heading h2 { font-size: 14px; }
+.market-overview-row { grid-template-columns: 36px minmax(0, 1fr) auto; gap: 10px; padding: 12px 0; min-height: 62px; }
+.market-stock-copy strong, .market-stock-quote strong { font-size: 13px; line-height: 1.4; }
+.market-stock-copy small, .market-stock-quote small { font-size: 11px; line-height: 1.4; color: #6c788b; }
+.market-stock-change { font-size: 12px; line-height: 1.4; padding: 0; }
+.market-results-panel { padding: 18px; margin-top: 20px; }
+.market-results-heading { margin-bottom: 18px; }
+.market-results-heading > span { font-size: 13px; color: #64748b; }
+.market-results-table th { font-size: 11px; color: #65738a; padding: 10px 8px; }
+.market-results-table td { font-size: 12px; height: 56px; padding: 10px 8px; }
+.market-symbol-cell, .market-company-cell { font-size: 12px; }
+.market-company-cell { white-space: normal; text-align: left; line-height: 1.4; }
+.market-pagination { justify-content: flex-end; gap: 12px; padding-top: 16px; border-top: 1px solid #edf0f5; }
+.market-page-count { font-size: 12px; }
+.market-page-arrow { min-height: 34px; padding: 0 12px; border-color: #e2e8f0; font-size: 12px; background: #fff; }
+.market-movers-description small { font-size: 12px; }
+.market-app-shell .market-stock-logo { width: 36px; height: 36px; flex-basis: 36px; border-radius: 9px; font-size: 9px; }
+.market-app-shell .market-stock-logo-large { width: 52px; height: 52px; flex-basis: 52px; font-size: 12px; }
+.market-app-shell .market-stock-logo-image { padding: 5px; background: #fff; }
+
+@media (max-width: 700px) {
+  .market-overview-grid { grid-template-columns: 1fr; }
+  .market-content { padding: 20px 14px 30px; }
+  .market-results-panel { padding: 14px; }
+  .market-results-heading { flex-direction: row; align-items: center; }
 }

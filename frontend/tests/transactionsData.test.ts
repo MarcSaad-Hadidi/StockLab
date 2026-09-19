@@ -50,8 +50,8 @@ test('filters transactions by query, asset type, action, and inclusive date rang
   assert.deepEqual(results.map((transaction) => transaction.id), ['transaction-aapl-buy'])
 })
 
-test('filters the local history by asset type and action', () => {
-  const results = filterTransactions(transactions, {
+test('filters fixture history by asset type and action', () => {
+  const results = filterTransactions(fixtureTransactions, {
     query: '',
     assetType: 'ETF',
     action: 'BUY',
@@ -63,8 +63,10 @@ test('filters the local history by asset type and action', () => {
   assert.ok(results.every((transaction) => transaction.assetType === 'ETF' && transaction.action === 'BUY'))
 })
 
-test('paginates the 128 local transactions and clamps the last page', () => {
-  const lastPage = paginateTransactions(transactions, 99, 10)
+test('paginates fixtures and clamps the last page without runtime transactions', () => {
+  assert.deepEqual(transactions, [])
+  const testTransactions = Array.from({ length: 128 }, (_, index) => ({ ...fixtureTransactions[index % fixtureTransactions.length], id: `test-${index}` }))
+  const lastPage = paginateTransactions(testTransactions, 99, 10)
 
   assert.equal(lastPage.currentPage, 13)
   assert.equal(lastPage.totalPages, 13)

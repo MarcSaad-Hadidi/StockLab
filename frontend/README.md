@@ -100,3 +100,89 @@ export default defineConfig([
 ])
 
 ```
+
+
+## Market integration (#82)
+
+The central typed client in `src/api/marketDataApi.ts` calls only StockLab endpoints.
+Vite dev and preview proxy `/api` to `http://localhost:5274`; optionally configure the
+public `VITE_STOCKLAB_API_BASE_URL`. Never put provider credentials in Vite or frontend.
+
+Market automatically loads five curated identifiers (AAPL, MSFT, NVDA, AMZN, GOOGL)
+with at most three concurrent quote requests. They contain no simulated prices.
+Total quote failure renders an error and explicit Retry; partial batches retain
+successful prices and mark failed rows unavailable with a batch Retry.
+Search is debounced 450ms, cancelled when stale, and never calls the API for an empty
+query. Search rows use provider metadata without an N+1 quote fanout. Visible company logos load lazily from Elbstream, without a key or Alpha API calls. No per-row quote or fundamentals fanout. Clicking a result preserves its exchange-qualified symbol in the route.
+
+Gainers/losers load the actual latest available EOD market rankings on page entry. This
+single call supplies both lists. Provider errors never become fabricated movers.
+Stock Details quotes/history load independently. Fundamentals + earnings load on explicit demand to protect the 25/day enrichment
+plan. Company logos load automatically for each visible company. Partial
+failures preserve the quote and chart. Logos use a public credential-free CDN URL;
+missing or broken images fall back to the ticker. Elbstream requires visible attribution (at least 12pt), provided on every page using StockLogo. See https://elbstream.com/logos and https://elbstream.com/terms. US exchange qualifiers are normalized; unsupported foreign qualifiers do not substitute a potentially different US company logo. Analyst counts are labelled
+individually and are not StockLab AI predictions. AI remains unavailable.
+
+All chart points come from returned OHLCV bars. 1D uses Minute bars for 24 hours ending
+at the last quote observation (+ one minute to include its bar), including when the
+market is closed. 5D uses Hour bars; 1M/3M/6M/1Y use calendar month subtraction with
+month-end clamping; YTD begins January 1; 5Y uses Week; Max uses Day across the
+backend-supported 4999-day span (about 13 years), not all-time history. Calendar bars
+preserve PeriodDate, intraday bars display OpenTimeUtc. Range responses have a bounded
+five-minute memory cache keyed by canonical symbol and range, including when reopening
+a stock. No prefetch, polling, automatic retry or synthetic points.
+Max uses daily source bars because unadjusted monthly OHLC can be inconsistent
+across stock splits (observed for AAPL in June 2014). Prices are never repaired,
+rescaled, or fabricated to make an invalid aggregate pass validation.
+
+Run `npm run lint`, `npm run build`, `npm test`; development: `npm run dev -- --host
+127.0.0.1`, preview: `npm run preview -- --host 127.0.0.1`. The API must be running for
+market data. Its committed default remains Mock for offline development; final local
+real-data verification uses TwelveData configured externally. Trading controls only preview estimates. Order submission, watchlist saving and alert saving are disabled until their dedicated services exist.
+
+
+## Account data audit (#82)
+
+| Page | Runtime source / honest state |
+| --- | --- |
+| Market / Stock Details | Twelve quote/search/history; Alpha metadata, earnings and EOD movers; free Elbstream logos |
+| Dashboard | No account balances, holdings, watchlist, trades or synthetic performance; cards and tables retained |
+| Portfolio | Empty holdings and performance, unavailable totals; never substitute a stock chart for account value |
+| Transactions | Empty history; execution prices are never replaced with current prices; filters/table retained |
+| Watchlist | Empty list pending persistence; no manufactured saved stocks or market status |
+| Alerts | Empty alerts; draft asset search uses Twelve; saving/monitoring unavailable |
+| AI Trader | Empty positions/decisions/trades/model/backtests; metrics unavailable and activation disabled |
+| Profile | Explicit preview label; existing profile mock remains a known auth/persistence gap |
+| Login / Register | Existing authentication previews, unchanged; no real auth in #82 |
+
+All business seed arrays and generated 2024 transactions were removed from production
+modules. Transaction test fixtures remain under `tests/`; backend MockMarketDataProvider
+remains available for explicit offline development. Curated symbols, UI range labels,
+filter options, icon geometry and CSS colors are presentation constants, not observations.
+No fake quote/history/fundamentals are substituted on API failure. The shared StockLogo
+uses the credential-free Elbstream CDN or an explicit ticker fallback. It never spends Alpha credits.
+
+EN/FR unavailable states distinguish unconnected account services from market API errors.
+No account backend is fabricated here: persistence, trading, alert delivery and ML remain
+separate future work. The original cards, sections, filters and AI tabs remain available.
+
+## Company tabs and headlines
+
+Stock Details has distinct Overview, Financials, News, Key Metrics, Forecast and
+Insights tabs. Chart is part of Overview. Financials uses reported Alpha overview
+figures (TTM/growth/margins), not fabricated statements. Forecast shows the external
+analyst target and raw rating counts; the target/current-price comparison is a
+calculation, not a model prediction. Insights is a deterministic summary of observed
+data, explicitly not AI or a trading recommendation. Opening the relevant tabs loads
+one cached overview; opening News requests only the selected company's headlines.
+
+`GET /api/stocks/{symbol}/news` uses Alpha `NEWS_SENTIMENT` with a ticker filter,
+latest-first order and a 20-item upstream limit. Only articles explicitly linked to
+the requested ticker with relevance at least 0.5 are retained. The API returns at
+most ten deduplicated HTTPS publisher links, source names, titles and UTC timestamps;
+the UI also requires the headline itself to name the selected company or ticker,
+excluding broad-market stories that merely mention it in provider metadata.
+no article body is reproduced. It shares the existing Alpha daily budget, total
+operation timeout and cancellation path, with a one-hour success cache. No automatic
+retry, polling, extra key, paid news subscription or ML service is required. An empty
+or unavailable company feed is displayed honestly.

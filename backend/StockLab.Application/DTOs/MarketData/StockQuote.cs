@@ -15,4 +15,16 @@ public sealed record StockQuote(
     decimal? Change,
     decimal? ChangePercent,
     long? Volume,
-    DateTimeOffset AsOfUtc);
+    DateTimeOffset AsOfUtc,
+    string? Name = null,
+    string? Exchange = null,
+    decimal? Open = null,
+    decimal? High = null,
+    decimal? Low = null,
+    decimal? PreviousClose = null,
+    long? AverageVolume = null,
+    bool? IsMarketOpen = null,
+    StockFiftyTwoWeek? FiftyTwoWeek = null);
+
+/// <summary>Provider-reported 52-week bounds; never inferred from a partial history.</summary>
+public sealed record StockFiftyTwoWeek(decimal? Low, decimal? High, string? Range);

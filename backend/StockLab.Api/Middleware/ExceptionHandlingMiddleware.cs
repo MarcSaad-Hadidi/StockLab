@@ -41,10 +41,11 @@ public sealed class ExceptionHandlingMiddleware(
         }
         catch (Exception exception)
         {
+            var enrichment = exception as MarketEnrichmentException;
             var invalidRequest = exception is ArgumentException or NotSupportedException;
             var rateLimited = exception is MarketDataRateLimitException;
             var providerFailure = exception as MarketDataProviderException;
-            if (!invalidRequest && !rateLimited && providerFailure is null)
+            if (!invalidRequest && !rateLimited && providerFailure is null && enrichment is null)
             {
                 // Exception messages, stacks and request values may contain credentials.
                 // Log only the category and correlation ID, not the exception object.
@@ -59,11 +60,17 @@ public sealed class ExceptionHandlingMiddleware(
             }
 
             context.Response.Clear();
-            context.Response.StatusCode = providerFailure is not null ? ProviderStatus(providerFailure.Category) : rateLimited ? StatusCodes.Status429TooManyRequests : invalidRequest
+            context.Response.StatusCode = enrichment is not null ? enrichment.Category switch
+            {
+                MarketEnrichmentFailure.LocalBudgetExceeded => 429,
+                MarketEnrichmentFailure.Timeout => 504,
+                MarketEnrichmentFailure.MalformedResponse => 502,
+                _ => 503
+            } : providerFailure is not null ? ProviderStatus(providerFailure.Category) : rateLimited ? StatusCodes.Status429TooManyRequests : invalidRequest
                 ? StatusCodes.Status400BadRequest
                 : StatusCodes.Status500InternalServerError;
 
-            var error = providerFailure is not null ? ProviderError(providerFailure.Category) : rateLimited
+            var error = enrichment is not null ? new ApiErrorResponse("market_enrichment_temporarily_unavailable", "Market enrichment is temporarily unavailable.") : providerFailure is not null ? ProviderError(providerFailure.Category) : rateLimited
                 ? new ApiErrorResponse("market_data_rate_limited", "Market data requests are temporarily rate limited.")
                 : exception is NotSupportedException
                 ? new ApiErrorResponse("unsupported_operation", "The requested operation or interval is not supported.")

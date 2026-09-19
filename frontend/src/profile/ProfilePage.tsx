@@ -139,7 +139,7 @@ export default function ProfilePage() {
     <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
     <main className="profile-main">
       <TopBar onMenuOpen={() => setSidebarOpen(true)} title={t('profile.title')} />
-      <div className="profile-content">
+      <div className="profile-content"><p role="status">{t('businessData.profileDemo')}</p>
         <section aria-labelledby="profile-summary-title" className="profile-summary-card">
           <div className="summary-identity"><ProfileAvatar /><div><h1 id="profile-summary-title">{profile.name}</h1><p>{profile.email}</p><span className="verified-badge"><i /> {t('profile.verifiedAccount')}</span></div></div>
           <div className="summary-details">

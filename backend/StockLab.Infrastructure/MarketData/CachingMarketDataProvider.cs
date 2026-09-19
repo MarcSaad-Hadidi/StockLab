@@ -87,7 +87,7 @@ public sealed class CachingMarketDataProvider : IMarketDataProvider
     // This is a bounded accounting budget, not an exact measurement of the CLR heap.
     private static long EstimatePayloadSize(object result) => result switch
     {
-        StockQuote quote => 128L + TextSize(quote.Symbol) + TextSize(quote.Currency),
+        StockQuote quote => 256L + TextSize(quote.Symbol) + TextSize(quote.Currency) + TextSize(quote.Name) + TextSize(quote.Exchange) + TextSize(quote.FiftyTwoWeek?.Range),
         IReadOnlyList<StockSearchResult> stocks => stocks.Sum(stock =>
             128L + TextSize(stock.Symbol) + TextSize(stock.CompanyName) + TextSize(stock.Exchange) + TextSize(stock.Currency)),
         StockHistory history => 128L + TextSize(history.Symbol) + TextSize(history.Currency) + 128L * history.Bars.Count,

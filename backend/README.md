@@ -399,8 +399,10 @@ invented. OpenAPI describes the 429 response on all three market data endpoints.
 
 Cancellation while queued stops that wait without calling the provider or becoming
 429. The received token is forwarded to the provider after admission. In the actual
-pipeline, dedup deliberately supplies an independent token; individual HTTP callers
-can abandon their own waits without cancelling shared queued work. This preserves #31.
+pipeline, dedup supplies a shared cancellation token. One caller leaving does not
+cancel work needed by other viewers. When the last caller leaves, the queued or
+active operation is cancelled and a later caller starts a fresh flight. Abandoned
+chart periods therefore cannot use a permit after the next renewal.
 
 Provider failures propagate unchanged and still consume the window permit: an
 attempt may already have spent external credits. Lease disposal is guaranteed but
@@ -545,3 +547,116 @@ Invoke-RestMethod 'http://localhost:5274/api/stocks/TSLA/history?from=2026-08-28
 This is at most three external requests. Never exercise real quotas, cache expiry,
 Fallback or ML credentials as a smoke test. Availability and delay depend on the plan;
 a successful response is not proof of a real-time entitlement.
+
+
+## Market enrichment and frontend integration (#82)
+
+Twelve Data remains the only source for quote prices, changes, volume, stock search
+and OHLCV history. Quote metadata and optional open/high/low/previous close,
+average volume, market status and 52-week bounds come from the **same** quote call.
+No premium Twelve Data fundamentals, movers or logo calls are made.
+
+`IMarketEnrichmentProvider` is separate from `IMarketDataProvider`. Its Alpha Vantage
+implementation exposes these independent, optional resources:
+
+| StockLab endpoint | Upstream operation | Default cache |
+| --- | --- | --- |
+| `/api/stocks/{symbol}/fundamentals` | `OVERVIEW` | 24 hours |
+| `/api/stocks/{symbol}/logo` | `COMPANY_LOGO` | 30 days |
+| `/api/stocks/{symbol}/earnings` | `EARNINGS_CALENDAR`, symbol, 12-month horizon | 24 hours |
+| `/api/market/movers` | `TOP_GAINERS_LOSERS`, no entitlement parameter | 12 hours |
+
+Fundamentals expose nullable financial decimals and analyst counts, without deriving
+an AI recommendation or inventing a provider consensus. Dividend yield is a ratio
+(e.g. 0.012 means 1.2%); mover changePercent is percentage points. Earnings are parsed
+as CSV, including quoted fields, and select the next report date on/after the UTC
+current date. No scheduled event returns null fields. Movers are latest available EOD
+data, not realtime quotes. Missing logos return nullable PNG/SVG URLs and the UI uses
+a ticker letter. Only HTTPS URLs on the official `cdn.alphavantage.co/logos/` path,
+with the expected extension and no credentials/query/fragment, can reach the client.
+The metadata response is size/content-type checked; images are public CDN references,
+not fetched or proxied by this API. Image loading errors use the UI fallback.
+
+Official references: [Alpha Vantage documentation](https://www.alphavantage.co/documentation/)
+and [free quota support](https://www.alphavantage.co/support/). The public logo demo
+returns `symbol`, `logo_url_png`, and `logo_url_svg`; OVERVIEW includes analyst counts.
+Availability for the installed key is still subject to provider entitlement.
+Advanced financial statements, news and earnings forecasts are deferred and never
+prefetched. Alpha errors never trigger a Twelve Data fallback, or vice versa.
+
+### Local configuration and quota protection
+
+Configure the key externally, for example:
+
+```powershell
+dotnet user-secrets set "AlphaVantage:ApiKey" "<ALPHA_VANTAGE_API_KEY>" --project backend/StockLab.Api
+```
+
+`ALPHA_VANTAGE_API_KEY` is an environment alternative. No key setting belongs in
+tracked appsettings or Vite configuration. Alpha uses the official apikey query
+parameter upstream; its named HttpClient removes HTTP loggers and disables redirects.
+Upstream URIs, bodies, request objects and exceptions are never logged or returned.
+Twelve Data continues to use its separate Website Authorization header; no automatic
+Fallback key selection and no ML credential sharing.
+
+Defaults: `AlphaVantage:DailyRequestBudget=20`, `TimeoutSeconds=10`. The free plan
+currently documents 25 requests/day. Budget is per application instance and UTC day,
+**in memory**, and resets on restart: it is a safeguard, not the provider quota ledger.
+Other applications using the key can consume the provider quota independently.
+Only one Alpha transport request is active at once. Shared in-flight requests and
+cache hits do not consume additional budget. A sent failed attempt does count.
+`TimeoutSeconds` covers the entire operation, including semaphore wait and response
+body reads. A queued timeout sends no HTTP request and consumes no budget. When the
+last caller cancels, its queued or active work is cancelled; a surviving joined
+caller keeps the shared operation alive. Caller cancellation is never cached.
+No retries, polling or background refresh. Known failures have a protective cooldown
+(12 hours for quota/entitlement, one minute for other failures) so repeated logo
+requests cannot spend credits on the same outage. A spent local budget returns safe HTTP 429;
+provider/entitlement failures 503, malformed data 502 and timeout 504. HTTP 200
+Information/Note/Error Message envelopes are handled as failures, never data.
+
+Cache TTL options: `OverviewTtl`, `LogoTtl`, `EarningsTtl`, `MoversTtl` under
+`AlphaVantage`, using .NET TimeSpan strings. All are validated at startup as positive
+and at most 365 days; budget is 1..25 and timeout 1..60 seconds. Earnings cache keys
+include the UTC day so yesterday's event cannot become today's next earnings.
+
+US canonical suffixes (NASDAQ/NYSE/NYSEAMERICAN/AMEX) are resolved explicitly for
+Alpha upstream requests while preserving the StockLab response symbol. Unqualified
+international dot suffixes are retained; unsupported exchange qualifiers are rejected
+instead of silently querying a different security.
+
+
+For a local Twelve Basic runtime, use these **non-secret** environment settings before
+starting the API (committed generic/offline defaults remain unchanged):
+
+```powershell
+$env:MarketDataRateLimit__PermitLimit = "8"
+$env:MarketDataRateLimit__QueueLimit = "8"
+$env:MarketDataCache__QuoteTtl = "00:01:00"
+```
+
+[Twelve Basic](https://twelvedata.com/pricing) currently provides 8 credits/minute and
+800/day. A 60-second quote cache supports navigation without spending five fresh credits
+on each visit to Market. Up to eight requests wait for the next local minute window;
+further requests receive a controlled 429. Cancelled periods leave this queue, while
+rapid chart clicks are debounced for 300 ms and loaded periods use the frontend cache.
+Its local minute boundary and other clients can still differ from the provider quota.
+No polling, retries or fallback keys are used. Alpha has a separate 20/day best-effort
+budget. UI logos load directly from Elbstream with attribution and consume no Alpha
+credits; unavailable logos keep the ticker fallback.
+
+Market providers cannot supply user holdings, cash, executions, alert rules, or StockLab
+ML decisions. Those account sections now render unavailable/empty states in the frontend
+until their own services exist. No portfolio or ML behavior is added by this integration.
+
+### Company news
+
+`GET /api/stocks/{symbol}/news` uses `NEWS_SENTIMENT`, `tickers`, `sort=LATEST`
+and `limit=20`. It shares the Alpha transport deadline, semaphore, deduplication,
+budget and safe logging. `AlphaVantage:NewsTtl` defaults to one hour. Output is at
+most ten distinct HTTPS headline links with source and UTC publication date.
+Articles must explicitly match the ticker with provider relevance >= 0.5; missing
+feeds fail safely and an empty valid feed remains empty. The frontend additionally
+filters headlines for the selected company identity. Article bodies are not copied.
+Logos in the frontend now use the free Elbstream CDN with required attribution;
+Alpha logo endpoints remain available but are not called by StockLogo.

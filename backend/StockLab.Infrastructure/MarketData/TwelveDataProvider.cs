@@ -23,7 +23,11 @@ public sealed class TwelveDataProvider(
         return ExecuteAsync<StockQuote>("Quote", "quote?symbol=" + Escape(symbol), root =>
             new StockQuote(Canonical(root, symbol), Required(root, "currency"),
                 PositivePrice(root, "close"), OptionalNumber(root, "change"), OptionalNumber(root, "percent_change"),
-                Volume(root), DateTimeOffset.FromUnixTimeSeconds(Integer(root, "last_quote_at"))),
+                Volume(root), DateTimeOffset.FromUnixTimeSeconds(Integer(root, "last_quote_at")),
+                OptionalText(root, "name"), OptionalText(root, "exchange"),
+                OptionalPrice(root, "open"), OptionalPrice(root, "high"), OptionalPrice(root, "low"),
+                OptionalPrice(root, "previous_close"), Volume(root, "average_volume"),
+                OptionalBoolean(root, "is_market_open"), FiftyTwoWeek(root)),
             cancellationToken);
     }
 
@@ -186,6 +190,25 @@ public sealed class TwelveDataProvider(
         return value > 0 ? value : throw new FormatException();
     }
 
+    private static decimal? OptionalPrice(JsonElement root, string name)
+    {
+        var value = OptionalNumber(root, name);
+        return value is null or > 0 ? value : throw new FormatException();
+    }
+    private static bool? OptionalBoolean(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null) return null;
+        return value.GetBoolean();
+    }
+    private static StockFiftyTwoWeek? FiftyTwoWeek(JsonElement root)
+    {
+        if (!root.TryGetProperty("fifty_two_week", out var value) || value.ValueKind == JsonValueKind.Null) return null;
+        var low = OptionalPrice(value, "low");
+        var high = OptionalPrice(value, "high");
+        if (low > high) throw new FormatException();
+        return new StockFiftyTwoWeek(low, high, OptionalText(value, "range"));
+    }
+
     private static string Escape(string value) => Uri.EscapeDataString(value);
     private static string NormalizeSymbol(string symbol)
     {
@@ -219,10 +242,10 @@ public sealed class TwelveDataProvider(
         ? decimal.Parse(text, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent, CultureInfo.InvariantCulture) : null;
     private static long Integer(JsonElement root, string name) =>
         long.Parse(NumericText(root, name) ?? throw new FormatException(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
-    private static long? Volume(JsonElement root)
+    private static long? Volume(JsonElement root, string name = "volume")
     {
-        if (NumericText(root, "volume") is null) return null;
-        var result = Integer(root, "volume");
+        if (NumericText(root, name) is null) return null;
+        var result = Integer(root, name);
         return result >= 0 ? result : throw new FormatException();
     }
 }
