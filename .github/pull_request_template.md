@@ -14,11 +14,11 @@ Closes #
 
 ## Tests performed
 
-<!-- List the commands and checks used to validate the changes. -->
+<!-- Run these commands from the repository root and list any additional checks. -->
 
-- [ ] `npm run lint`
-- [ ] `npm run build`
-- [ ] `npm test`
+- [ ] `npm --prefix frontend run lint`
+- [ ] `npm --prefix frontend run build`
+- [ ] `npm --prefix frontend test`
 - [ ] Other: <!-- describe any additional validation or write N/A -->
 
 ## Screenshots
