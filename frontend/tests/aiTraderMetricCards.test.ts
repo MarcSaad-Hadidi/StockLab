@@ -11,8 +11,9 @@ test('AI Trader metric cards contain only text content and their change value', 
 
   assert.match(
     tsx,
-    /function MetricCard\(\{ label, value, change, tone \}: \{ label: string; value: string; change\?: string; tone: string \}\)/,
+    /function MetricCard\(\{ label, value, change, tone, trend = 'neutral' \}: \{ label: string; value: string; change\?: string; tone: string; trend\?: TrendTone \}\)/,
   )
+  assert.doesNotMatch(tsx, /change\.startsWith\('-'\)/)
   assert.doesNotMatch(tsx, /<span className="metric-icon">/)
   assert.doesNotMatch(tsx, /<MetricCard[^>]*\bicon=/)
   assert.doesNotMatch(css, /\.metric-(?:icon|blue \.metric-icon|green \.metric-icon|purple \.metric-icon|orange \.metric-icon|red \.metric-icon)\b/)
