@@ -32,48 +32,48 @@ for (const config of ['vite.config.ts', 'vite.dashboard.config.ts']) {
         const server = mode === 'dev'
           ? await createServer({ ...options, server: { host: '127.0.0.1', port: 0 } })
           : await preview({ ...options, build: { outDir }, preview: { host: '127.0.0.1', port: 0 } })
-        try {
-          if ('listen' in server) await server.listen()
-          const base = server.resolvedUrls!.local[0]
+        t.after(() => {
+          void server.close()
+        })
+        if ('listen' in server) await server.listen()
+        const base = server.resolvedUrls!.local[0]
 
-          await t.test('clean, trailing slash and legacy URLs keep queries and select the right document', async () => {
-            for (const page of Object.values(pages)) {
-              const html = await readFile(join(mode === 'dev' ? root : outDir, page.entry), 'utf8')
-              const scripts = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(match => match[1])
-              assert.ok(scripts.length > 0, page.entry)
-              for (const path of [page.path, `${page.path}/`, `/${page.entry}`]) {
-                const url = new URL(`${path}?symbol=aapl&return=%2Fportfolio%3Fx%3D1`, base).href
-                const response = await fetch(url)
-                assert.equal(response.status, 200, url)
-                assert.equal(response.url, url, 'rewrites must not redirect the visible URL')
-                const body = await response.text()
-                for (const script of scripts) assert.ok(body.includes(`src="${script}"`), `${url}: missing ${script}`)
-              }
+        await t.test('clean, trailing slash and legacy URLs keep queries and select the right document', async () => {
+          for (const page of Object.values(pages)) {
+            const html = await readFile(join(mode === 'dev' ? root : outDir, page.entry), 'utf8')
+            const scripts = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/g)].map(match => match[1])
+            assert.ok(scripts.length > 0, page.entry)
+            for (const path of [page.path, `${page.path}/`, `/${page.entry}`]) {
+              const url = new URL(`${path}?symbol=aapl&return=%2Fportfolio%3Fx%3D1`, base).href
+              const response = await fetch(url)
+              assert.equal(response.status, 200, url)
+              assert.equal(response.url, url, 'rewrites must not redirect the visible URL')
+              const body = await response.text()
+              for (const script of scripts) assert.ok(body.includes(`src="${script}"`), `${url}: missing ${script}`)
             }
-            const unknown = await fetch(new URL('/unknown/nested/?symbol=aapl', base))
-            const notFound = await fetch(new URL('/not-found?symbol=aapl', base))
-            assert.equal(await unknown.text(), await notFound.text())
-            const rootResponse = await fetch(base)
-            assert.equal(rootResponse.status, 200)
-            const rootHtml = await rootResponse.text()
-            assert.match(rootHtml, /http-equiv="refresh"/i)
-            assert.match(rootHtml, /window\.location\.replace\(['"]\/login['"]\)/)
-          })
+          }
+          const unknown = await fetch(new URL('/unknown/nested/?symbol=aapl', base))
+          const notFound = await fetch(new URL('/not-found?symbol=aapl', base))
+          assert.equal(await unknown.text(), await notFound.text())
+          const rootResponse = await fetch(base)
+          assert.equal(rootResponse.status, 200)
+          const rootHtml = await rootResponse.text()
+          assert.match(rootHtml, /http-equiv="refresh"/i)
+          assert.match(rootHtml, /window\.location\.replace\(['"]\/login['"]\)/)
+        })
 
-          await t.test('missing static assets and Vite modules never fall back to an HTML document', async () => {
-            for (const path of ['/assets/missing.js', '/assets/missing', '/src/missing', '/@vite/missing', '/node_modules/missing', '/missing.svg?x=1']) {
-              const response = await fetch(new URL(path, base))
-              assert.equal(response.status, 404, path)
-              assert.doesNotMatch(await response.text(), /<!doctype html|<html/i, path)
-            }
-            const favicon = await fetch(new URL('/favicon.svg', base))
-            assert.equal(favicon.status, 200)
-            assert.match(favicon.headers.get('content-type') ?? '', /image\/svg\+xml/)
-          })
-        } finally {
-          await server.close()
-        }
+        await t.test('missing static assets and Vite modules never fall back to an HTML document', async () => {
+          for (const path of ['/assets/missing.js', '/assets/missing', '/src/missing', '/@vite/missing', '/node_modules/missing', '/missing.svg?x=1']) {
+            const response = await fetch(new URL(path, base))
+            assert.equal(response.status, 404, path)
+            assert.doesNotMatch(await response.text(), /<!doctype html|<html/i, path)
+          }
+          const favicon = await fetch(new URL('/favicon.svg', base))
+          assert.equal(favicon.status, 200)
+          assert.match(favicon.headers.get('content-type') ?? '', /image\/svg\+xml/)
+        })
       })
     }
   })
 }
+
