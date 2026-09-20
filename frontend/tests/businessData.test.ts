@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { registerHooks } from "node:module";
+import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -24,6 +26,16 @@ registerHooks({
         format: "module",
         shortCircuit: true,
         source: "export default {}",
+      };
+    if (
+      url.includes("/node_modules/") &&
+      (url.endsWith(".js") || url.endsWith(".cjs")) &&
+      context.format !== "module"
+    )
+      return {
+        format: "commonjs",
+        shortCircuit: true,
+        source: readFileSync(fileURLToPath(url), "utf8"),
       };
     return nextLoad(url, context);
   },

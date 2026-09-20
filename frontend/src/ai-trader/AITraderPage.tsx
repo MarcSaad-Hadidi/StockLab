@@ -1,5 +1,6 @@
 import { StockLogo, LogoAttribution } from '../market/StockLogo'
 import { UnavailableState } from '../components/UnavailableState'
+import { PerformanceLineChart } from '../components/charts/PerformanceLineChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
 import { formatCurrency, formatNumber, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
@@ -9,6 +10,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import {
   backtestSummary,
   currentDecisions,
+  performanceLabels,
+  performanceSeries,
   positions,
   recentTrades,
   rejectedDecisions,
@@ -51,7 +54,22 @@ function MetricCard({ label, value, change, tone }: { label: string; value: stri
   return <article className={`metric-card metric-${tone}`}><span className="metric-label">{label}</span><strong>{value}</strong>{change && <small className={change.startsWith('-') ? 'negative' : 'positive'}>{change}</small>}</article>
 }
 
-function PerformanceChart() { return <UnavailableState message="businessData.portfolio" /> }
+function PerformanceChart() {
+  const { i18n, t } = useTranslation()
+  const labels = performanceLabels.map(label => t(label))
+  return (
+    <PerformanceLineChart
+      ariaLabel={t('aiTrader.performanceChart')}
+      formatValue={value => formatCurrency(value, i18n.language)}
+      formatTick={value => formatCurrency(value, i18n.language, 0)}
+      labels={labels}
+      pointLabel={index => t('aiTrader.chartPoint', { label: labels[index], value: formatCurrency(performanceSeries[index], i18n.language) })}
+      size="compact"
+      unavailableMessage="businessData.portfolio"
+      values={performanceSeries}
+    />
+  )
+}
 
 function PositionTable({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation()

@@ -81,19 +81,15 @@ a { text-decoration: none; }
 }
 .topbar-account { gap: 7px; padding: 0 0 0 4px; color: #75849b; }
 .mobile-menu-button { display: none; }
-.profile-avatar { display: inline-block; flex: 0 0 auto; width: 78px; height: 78px; overflow: hidden; background: #d7d9dc; border: 4px solid #f1f3f6; border-radius: 50%; }
-.profile-avatar svg { display: block; width: 100%; height: 100%; }
-.profile-avatar-small { width: 31px; height: 31px; border-width: 1px; }
-
 .profile-content { width: min(100%, 1220px); margin: 0 auto; padding: 22px 18px 34px; }
 .profile-summary-card, .panel { background: #fff; border: 1px solid #e8edf4; border-radius: 12px; box-shadow: 0 5px 18px rgba(31, 55, 91, .035); }
 .profile-summary-card {
   display: grid;
-  grid-template-columns: minmax(235px, 1.1fr) minmax(310px, 1.45fr) minmax(150px, .72fr);
+  grid-template-columns: minmax(190px, .9fr) minmax(310px, 1.5fr) minmax(150px, .72fr);
   min-height: 165px;
   padding: 22px 20px;
 }
-.summary-identity { display: flex; align-items: center; gap: 15px; min-width: 0; }
+.summary-identity { display: flex; align-items: center; min-width: 0; padding: 0 10px; }
 .summary-identity > div { min-width: 0; }
 .summary-identity h1 { margin: 0 0 5px; overflow: hidden; color: #15233a; font-size: 22px; font-weight: 800; letter-spacing: -.04em; text-overflow: ellipsis; white-space: nowrap; }
 .summary-identity p { margin: 0 0 8px; overflow: hidden; color: #8d99aa; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
@@ -201,7 +197,7 @@ a { text-decoration: none; }
 
 @media (max-width: 1100px) {
   .profile-topbar { padding: 0 20px; }
-  .profile-summary-card { grid-template-columns: minmax(215px, 1fr) minmax(280px, 1.3fr) 145px; }
+  .profile-summary-card { grid-template-columns: minmax(190px, 1fr) minmax(280px, 1.3fr) 145px; }
   .summary-details { gap: 16px 14px; margin: 0 12px; padding: 0 14px; }
 }
 @media (max-width: 930px) {
@@ -227,7 +223,6 @@ a { text-decoration: none; }
 @media (max-width: 520px) {
   .breadcrumb { font-size: 11px; }
   .global-search, .mail-button { display: none; }
-  .profile-avatar { width: 68px; height: 68px; }
   .summary-identity h1 { font-size: 20px; }
   .summary-details { grid-template-columns: 1fr; gap: 13px; }
   .summary-actions { display: flex; }
