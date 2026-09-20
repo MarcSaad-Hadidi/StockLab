@@ -1,14 +1,16 @@
 import { StockLogo, LogoAttribution } from '../market/StockLogo'
 import { UnavailableState } from '../components/UnavailableState'
+import { PerformanceLineChart } from '../components/charts/PerformanceLineChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
-import { formatTime, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
+import { formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   aiPerformance,
   metrics,
+  performanceSeries,
   positions,
   transactions,
   type IconName,
@@ -68,7 +70,22 @@ function Icon({ name, size = 20, strokeWidth = 1.8, className }: IconProps) {
 
 function StockMark({ symbol, size = 'medium' }: { symbol: string; size?: 'small' | 'medium' }) { return <span data-size={size}><StockLogo symbol={symbol} /></span> }
 
-function PerformanceChart() { return <UnavailableState message="businessData.portfolio" /> }
+function PerformanceChart({ range }: { range: PerformanceRange }) {
+  const { i18n, t } = useTranslation()
+  const series = performanceSeries[range]
+  const labels = series.labels.map(label => t(`dashboard.chartLabels.${label}`))
+  return (
+    <PerformanceLineChart
+      ariaLabel={t('dashboard.performanceChart', { range: t(`common.timeRanges.${range}`) })}
+      formatTick={value => formatCompactCurrency(value * 1000, i18n.language)}
+      formatValue={value => formatCompactCurrency(value * 1000, i18n.language)}
+      labels={labels}
+      pointLabel={index => t('dashboard.chartPoint', { label: labels[index], value: formatCompactCurrency(series.values[index] * 1000, i18n.language) })}
+      unavailableMessage="businessData.portfolio"
+      values={series.values}
+    />
+  )
+}
 
 function Sparkline() { return <UnavailableState message="businessData.ai" /> }
 
@@ -184,7 +201,7 @@ export function DashboardPage() {
           <section aria-label={t('dashboard.portfolioSummary')} className="metrics-grid">{metrics.map((metric) => <MetricCard key={metric.label} metric={metric} />)}</section>
 
           <div className="dashboard-grid dashboard-grid-top">
-            <section aria-labelledby="performance-title" className="panel performance-panel"><PanelHeading id="performance-title" subtitle={t('dashboard.performanceSubtitle')} title={t('dashboard.performanceTitle')} /><div className="range-tabs" role="tablist" aria-label={t('common.performanceTimeRange')}>{ranges.map((item) => <button aria-selected={range === item} className={range === item ? 'selected' : ''} key={item} onClick={() => setRange(item)} role="tab" type="button">{t(`common.timeRanges.${item}`)}</button>)}</div><PerformanceChart key={range} /></section>
+            <section aria-labelledby="performance-title" className="panel performance-panel"><PanelHeading id="performance-title" subtitle={t('dashboard.performanceSubtitle')} title={t('dashboard.performanceTitle')} /><div className="range-tabs" role="tablist" aria-label={t('common.performanceTimeRange')}>{ranges.map((item) => <button aria-selected={range === item} className={range === item ? 'selected' : ''} key={item} onClick={() => setRange(item)} role="tab" type="button">{t(`common.timeRanges.${item}`)}</button>)}</div><PerformanceChart key={range} range={range} /></section>
             <section aria-labelledby="watchlist-title" className="panel watchlist-panel"><PanelHeading action={t('common.viewAll')} destination="watchlist" id="watchlist-title" subtitle={t('dashboard.watchlistSubtitle')} title={t('common.navigation.watchlist')} /><div className="watchlist-filter"><Icon name="search" size={15} /><input aria-label={t('dashboard.filterWatchlist')} onChange={(event) => setQuery(event.target.value)} placeholder={t('dashboard.filterPlaceholder')} value={query} /></div>{filteredWatchlist.length > 0 ? <ul className="watchlist-list">{filteredWatchlist.map((item) => <WatchlistRow item={item} key={item.symbol} />)}</ul> : <div className="empty-state">{t('businessData.watchlist')}</div>}<button className="add-watchlist" onClick={() => showToast('businessData.unavailable')} type="button"><span>+</span> {t('dashboard.addToWatchlist')}</button></section>
           </div>
 

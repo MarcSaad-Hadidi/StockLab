@@ -1,8 +1,9 @@
 import { StockLogo, LogoAttribution } from '../market/StockLogo'
 import { UnavailableState } from '../components/UnavailableState'
+import { PerformanceLineChart } from '../components/charts/PerformanceLineChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
-import { formatCurrency, formatNumber, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
+import { formatCompactCurrency, formatCurrency, formatNumber, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -40,7 +41,21 @@ function MetricCard({ label, value, detail, tone = 'neutral' }: { label: string;
   return <article className={`metric-card ${tone}`}><p>{label}</p><strong>{value}</strong>{detail && <span>{detail}</span>}</article>
 }
 
-function PerformanceChart() { return <UnavailableState message="businessData.portfolio" /> }
+function PerformanceChart({ range }: { range: TimeRange }) {
+  const { i18n, t } = useTranslation()
+  const series = performanceSeries[range]
+  const labels = series.labels.map((label) => new Intl.DateTimeFormat(i18n.language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${label}T00:00:00.000Z`)))
+  return (
+    <PerformanceLineChart
+      ariaLabel={t('portfolio.performanceChart', { range: t(`common.timeRanges.${range}`) })}
+      formatValue={value => formatCompactCurrency(value * 1000, i18n.language)}
+      labels={labels}
+      pointLabel={index => t('portfolio.chartPoint', { label: labels[index], value: formatCompactCurrency(series.values[index] * 1000, i18n.language) })}
+      unavailableMessage="businessData.portfolio"
+      values={series.values}
+    />
+  )
+}
 
 function AllocationPanel() {
   const { t } = useTranslation()
@@ -64,5 +79,5 @@ export default function PortfolioPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [range, setRange] = useState<TimeRange>('3M')
 
-  return <div className="portfolio-app stocklab-layout"><Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} /><div className="portfolio-main"><TopBar onMenuOpen={() => setSidebarOpen(true)} title={t('common.navigation.portfolio')} /><main className="portfolio-content"><section className="metrics-grid"><MetricCard label={t('portfolio.totalPortfolioValue')} value={'—'} detail={`${'—'} (${'—'})`} tone="positive" /><MetricCard label={t('portfolio.availableCash')} value={'—'} /><MetricCard label={t('portfolio.investedCapital')} value={'—'} /><MetricCard label={t('portfolio.totalReturnYtd')} value={'—'} detail={'—'} tone="positive" /></section><section className="overview-grid"><section className="panel performance-panel"><div className="panel-header"><h2>{t('portfolio.performanceTitle')} <Icon name="info" /></h2></div><div className="range-tabs" role="tablist" aria-label={t('common.performanceTimeRange')}>{(Object.keys(performanceSeries) as TimeRange[]).map((option) => <button key={option} type="button" className={range === option ? 'selected' : ''} aria-selected={range === option} onClick={() => setRange(option)} role="tab">{t(`common.timeRanges.${option}`)}</button>)}</div><PerformanceChart key={range} /></section><AllocationPanel /></section><PositionsTable /><LogoAttribution /></main></div></div>
+  return <div className="portfolio-app stocklab-layout"><Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} /><div className="portfolio-main"><TopBar onMenuOpen={() => setSidebarOpen(true)} title={t('common.navigation.portfolio')} /><main className="portfolio-content"><section className="metrics-grid"><MetricCard label={t('portfolio.totalPortfolioValue')} value={'—'} detail={`${'—'} (${'—'})`} tone="positive" /><MetricCard label={t('portfolio.availableCash')} value={'—'} /><MetricCard label={t('portfolio.investedCapital')} value={'—'} /><MetricCard label={t('portfolio.totalReturnYtd')} value={'—'} detail={'—'} tone="positive" /></section><section className="overview-grid"><section className="panel performance-panel"><div className="panel-header"><h2>{t('portfolio.performanceTitle')} <Icon name="info" /></h2></div><div className="range-tabs" role="tablist" aria-label={t('common.performanceTimeRange')}>{(Object.keys(performanceSeries) as TimeRange[]).map((option) => <button key={option} type="button" className={range === option ? 'selected' : ''} aria-selected={range === option} onClick={() => setRange(option)} role="tab">{t(`common.timeRanges.${option}`)}</button>)}</div><PerformanceChart key={range} range={range} /></section><AllocationPanel /></section><PositionsTable /><LogoAttribution /></main></div></div>
 }
