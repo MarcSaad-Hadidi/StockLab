@@ -67,7 +67,7 @@ jobs:
 
       - name: test
         working-directory: frontend
-        run: npm test
+        run: npm test -- --test-concurrency=1
 
   ml:
     name: python tests
