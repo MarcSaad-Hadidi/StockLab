@@ -19,53 +19,19 @@ import './ai-trader.css'
 
 type IconName =
   | 'activity'
-  | 'bell'
-  | 'briefcase'
-  | 'chart'
   | 'chevron-down'
   | 'chevron-right'
-  | 'clock'
-  | 'edit'
-  | 'grid'
-  | 'mail'
-  | 'menu'
-  | 'pause'
-  | 'pie-chart'
   | 'play'
-  | 'search'
   | 'settings'
-  | 'sparkles'
-  | 'star'
-  | 'trending-up'
-  | 'user'
-  | 'wallet'
-  | 'x'
 
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const common = { fill: 'none', stroke: 'currentColor', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, strokeWidth: 1.8 }
   const paths: Record<IconName, ReactNode> = {
     activity: <path d="M3 12h3l2.2-6 3.6 12 2.2-6H21" {...common} />,
-    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" {...common} /><path d="M10 21h4" {...common} /></>,
-    briefcase: <><rect x="3" y="7" width="18" height="13" rx="2" {...common} /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18M10 12v2h4v-2" {...common} /></>,
-    chart: <><path d="M4 19V5M4 19h17" {...common} /><path d="m7 15 3-4 3 2 5-7" {...common} /><path d="M16 6h2v2" {...common} /></>,
     'chevron-down': <path d="m6 9 6 6 6-6" {...common} />,
     'chevron-right': <path d="m9 6 6 6-6 6" {...common} />,
-    clock: <><circle cx="12" cy="12" r="8.5" {...common} /><path d="M12 7v5l3 2" {...common} /></>,
-    edit: <><path d="m4 16.5-.8 3.3 3.3-.8L18 7.5 15.5 5 4 16.5Z" {...common} /><path d="m13.8 6.7 2.5 2.5M17.2 4.1l2.7 2.7" {...common} /></>,
-    grid: <><rect x="3" y="3" width="7" height="7" rx="1" {...common} /><rect x="14" y="3" width="7" height="7" rx="1" {...common} /><rect x="3" y="14" width="7" height="7" rx="1" {...common} /><rect x="14" y="14" width="7" height="7" rx="1" {...common} /></>,
-    mail: <><rect x="3" y="5" width="18" height="14" rx="2" {...common} /><path d="m4 7 8 6 8-6" {...common} /></>,
-    menu: <path d="M4 7h16M4 12h16M4 17h16" {...common} />,
-    pause: <><path d="M8 5v14M16 5v14" {...common} /></>,
-    'pie-chart': <><path d="M12 3v9h9" {...common} /><path d="M20.5 15A9 9 0 1 1 9 3.5" {...common} /></>,
     play: <path d="m8 5 11 7-11 7V5Z" {...common} />,
-    search: <><circle cx="10.8" cy="10.8" r="6.8" {...common} /><path d="m16 16 4.5 4.5" {...common} /></>,
     settings: <><circle cx="12" cy="12" r="3" {...common} /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 1.7-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-2.4v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L8 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H6.7v-2.4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9L8 8.6l1.7-1.7.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.2h2.4v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.7 1.7-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2V14h-.2a1.7 1.7 0 0 0-1.5 1Z" {...common} /></>,
-    sparkles: <><path d="m12 3 1.2 4.8L18 9l-4.8 1.2L12 15l-1.2-4.8L6 9l4.8-1.2L12 3ZM19 15l.6 2.4L22 18l-2.4.6L19 21l-.6-2.4L16 18l2.4-.6L19 15Z" {...common} /></>,
-    star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z" {...common} />,
-    'trending-up': <><path d="M3 17 9 11l4 4 8-9" {...common} /><path d="M15 6h6v6" {...common} /></>,
-    user: <><circle cx="12" cy="8" r="3.2" {...common} /><path d="M5.2 20a6.8 6.8 0 0 1 13.6 0" {...common} /></>,
-    wallet: <><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H19a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5.5A2.5 2.5 0 0 1 3 17.5v-9A2.5 2.5 0 0 1 4 6.5Z" {...common} /><path d="M21 10h-5a2 2 0 0 0 0 4h5M16.5 12h.01" {...common} /></>,
-    x: <path d="m6 6 12 12M18 6 6 18" {...common} />,
   }
   return <svg aria-hidden="true" className="icon" height={size} viewBox="0 0 24 24" width={size}>{paths[name]}</svg>
 }
@@ -81,8 +47,8 @@ function PanelHeading({ title, subtitle, action, onAction }: { title: string; su
   return <div className="panel-heading"><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>{action && <button className="text-action" onClick={onAction} type="button">{action}<Icon name="chevron-right" size={14} /></button>}</div>
 }
 
-function MetricCard({ label, value, change, icon, tone }: { label: string; value: string; change?: string; icon: IconName; tone: string }) {
-  return <article className={`metric-card metric-${tone}`}><span className="metric-icon"><Icon name={icon} size={17} /></span><span className="metric-label">{label}</span><strong>{value}</strong>{change && <small className={change.startsWith('-') ? 'negative' : 'positive'}>{change}</small>}</article>
+function MetricCard({ label, value, change, tone }: { label: string; value: string; change?: string; tone: string }) {
+  return <article className={`metric-card metric-${tone}`}><span className="metric-label">{label}</span><strong>{value}</strong>{change && <small className={change.startsWith('-') ? 'negative' : 'positive'}>{change}</small>}</article>
 }
 
 function PerformanceChart() { return <UnavailableState message="businessData.portfolio" /> }
@@ -131,7 +97,7 @@ type TabName = typeof tabs[number]
 
 function Overview({ setActiveTab }: { setActiveTab: (tab: TabName) => void }) {
   const { t } = useTranslation()
-  return <><section className="metric-grid"><MetricCard change={'—'} icon="wallet" label={t('aiTrader.initialCapital')} tone="blue" value={formatCurrency(traderSummary.initialCapital)} /><MetricCard change={formatSignedPercent(traderSummary.returnPercent)} icon="chart" label={t('aiTrader.currentValueMetric')} tone="green" value={formatCurrency(traderSummary.currentValue)} /><MetricCard change={formatSignedPercent(traderSummary.returnPercent)} icon="trending-up" label={t('aiTrader.totalProfitLoss')} tone="purple" value={formatSignedCurrency(traderSummary.profitLoss)} /><MetricCard change={'—'} icon="activity" label={t('aiTrader.winRate')} tone="orange" value={formatPercent(traderSummary.winRate, undefined, 1)} /><MetricCard change={`↓ ${'—'}`} icon="pie-chart" label={t('aiTrader.maxDrawdown')} tone="red" value={formatSignedPercent(traderSummary.maxDrawdown)} /></section><section className="panel performance-panel"><PanelHeading title={t('dashboard.performanceTitle')} subtitle={t('aiTrader.portfolioValueOverTime')} action={t('aiTrader.viewDetails')} onAction={() => setActiveTab('Performance')} /><div className="range-tabs" role="tablist"><button className="selected" type="button">{t('common.timeRanges.1M')}</button><button type="button">{t('common.timeRanges.3M')}</button><button type="button">{t('common.timeRanges.6M')}</button><button type="button">{t('common.timeRanges.1Y')}</button><button type="button">{t('common.timeRanges.ALL')}</button></div><PerformanceChart /></section><div className="overview-grid overview-grid-top"><section className="panel positions-panel"><PanelHeading title={t('aiTrader.openPositions', { count: positions.length })} subtitle={t('aiTrader.currentBotHoldings')} action={t('common.viewAll')} onAction={() => setActiveTab('Positions')} /><PositionTable compact /><span className="panel-footnote">{t('aiTrader.totalUnrealizedPnl')} <strong className="positive">{'—'} ({'—'})</strong></span></section><section className="panel decisions-panel"><PanelHeading title={t('aiTrader.currentDecisions')} subtitle={t('aiTrader.latestModelSignals')} action={t('common.viewAll')} onAction={() => setActiveTab('Decisions')} /><DecisionTable /></section><section className="panel rejected-panel"><PanelHeading title={t('aiTrader.rejectedDecisionsRisk')} subtitle={t('aiTrader.signalsBlockedBySafeguards')} action={t('common.viewAll')} onAction={() => setActiveTab('Decisions')} /><RejectedTable /></section></div><section className="panel trades-panel"><PanelHeading title={t('aiTrader.recentTrades')} subtitle={t('aiTrader.latestExecutedOrders')} action={t('common.viewAll')} onAction={() => setActiveTab('Trades')} /><TradesTable compact /></section><div className="overview-grid overview-grid-bottom"><PerformanceStatsPanel /><ModelPanel /><BacktestPanel /></div></>
+  return <><section className="metric-grid"><MetricCard change={'—'} label={t('aiTrader.initialCapital')} tone="blue" value={formatCurrency(traderSummary.initialCapital)} /><MetricCard change={formatSignedPercent(traderSummary.returnPercent)} label={t('aiTrader.currentValueMetric')} tone="green" value={formatCurrency(traderSummary.currentValue)} /><MetricCard change={formatSignedPercent(traderSummary.returnPercent)} label={t('aiTrader.totalProfitLoss')} tone="purple" value={formatSignedCurrency(traderSummary.profitLoss)} /><MetricCard change={'—'} label={t('aiTrader.winRate')} tone="orange" value={formatPercent(traderSummary.winRate, undefined, 1)} /><MetricCard change={`↓ ${'—'}`} label={t('aiTrader.maxDrawdown')} tone="red" value={formatSignedPercent(traderSummary.maxDrawdown)} /></section><section className="panel performance-panel"><PanelHeading title={t('dashboard.performanceTitle')} subtitle={t('aiTrader.portfolioValueOverTime')} action={t('aiTrader.viewDetails')} onAction={() => setActiveTab('Performance')} /><div className="range-tabs" role="tablist"><button className="selected" type="button">{t('common.timeRanges.1M')}</button><button type="button">{t('common.timeRanges.3M')}</button><button type="button">{t('common.timeRanges.6M')}</button><button type="button">{t('common.timeRanges.1Y')}</button><button type="button">{t('common.timeRanges.ALL')}</button></div><PerformanceChart /></section><div className="overview-grid overview-grid-top"><section className="panel positions-panel"><PanelHeading title={t('aiTrader.openPositions', { count: positions.length })} subtitle={t('aiTrader.currentBotHoldings')} action={t('common.viewAll')} onAction={() => setActiveTab('Positions')} /><PositionTable compact /><span className="panel-footnote">{t('aiTrader.totalUnrealizedPnl')} <strong className="positive">{'—'} ({'—'})</strong></span></section><section className="panel decisions-panel"><PanelHeading title={t('aiTrader.currentDecisions')} subtitle={t('aiTrader.latestModelSignals')} action={t('common.viewAll')} onAction={() => setActiveTab('Decisions')} /><DecisionTable /></section><section className="panel rejected-panel"><PanelHeading title={t('aiTrader.rejectedDecisionsRisk')} subtitle={t('aiTrader.signalsBlockedBySafeguards')} action={t('common.viewAll')} onAction={() => setActiveTab('Decisions')} /><RejectedTable /></section></div><section className="panel trades-panel"><PanelHeading title={t('aiTrader.recentTrades')} subtitle={t('aiTrader.latestExecutedOrders')} action={t('common.viewAll')} onAction={() => setActiveTab('Trades')} /><TradesTable compact /></section><div className="overview-grid overview-grid-bottom"><PerformanceStatsPanel /><ModelPanel /><BacktestPanel /></div></>
 }
 
 function TabContent({ activeTab, setActiveTab }: { activeTab: TabName; setActiveTab: (tab: TabName) => void }) {
