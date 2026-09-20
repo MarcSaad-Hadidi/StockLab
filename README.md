@@ -116,7 +116,7 @@ Le frontend utilise Vite en mode multi-pages plutôt qu’un routeur côté clie
 Installez les éléments suivants avant de commencer le développement local :
 
 - Git.
-- Node.js et npm compatibles avec l’outillage Vite ; Node.js 20 ou une version plus récente est recommandé.
+- Node.js et npm compatibles avec l’outillage Vite : Node.js 20.19.0 ou une version ultérieure, ou Node.js 22.12.0 ou une version ultérieure. La branche Node.js 21.x n’est pas prise en charge.
 - SDK .NET 10.
 - Python 3.12.x, pip et le module standard venv pour le travail ML.
 - PowerShell sous Windows ou un shell POSIX sous macOS/Linux.
