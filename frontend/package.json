@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "build:dashboard": "tsc -b && vite build --config vite.dashboard.config.ts",
     "lint": "eslint .",
-    "test": "node --import tsx --test tests/*.test.ts",
+    "test": "node --import tsx --test --test-concurrency=1 tests/*.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
