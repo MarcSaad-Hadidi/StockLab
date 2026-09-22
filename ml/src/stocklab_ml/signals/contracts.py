@@ -45,3 +45,28 @@ class TradingSignalsResult:
 class SavedTradingSignals:
     signals_path: Path
     report_path: Path
+
+
+class ConfidenceScoreError(Exception):
+    """Invalid signal result, upstream policy, or confidence score."""
+
+
+@dataclass(frozen=True)
+class ConfidenceScoresReport(TradingSignalsReport):
+    """Descriptive alignment statistics; not model ranking or risk approval."""
+
+    confidence_min: float
+    confidence_max: float
+    confidence_mean: float
+
+
+@dataclass(frozen=True)
+class ConfidenceSignalsResult:
+    """ML decisions with confidence, a deterministic signal-alignment score.
+
+    Not guaranteed to represent probability of trade success, expected return,
+    probability of profit, or calibrated forecast accuracy.
+    """
+
+    signals: pd.DataFrame
+    report: ConfidenceScoresReport
