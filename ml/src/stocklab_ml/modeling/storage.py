@@ -13,13 +13,17 @@ from stocklab_ml.data.storage import (
     check_collisions, cleaning_paths, load_cleaning_csv, save_processed, save_raw,
 )
 from stocklab_ml.features.models import OUTPUT_COLUMNS
-from .contracts import LogisticRegressionResult, ModelDatasetError, RandomForestResult, SavedModelResults
+from .contracts import (
+    LogisticRegressionResult, ModelComparisonReport, ModelDatasetError,
+    ModelEvaluationError, RandomForestResult, SavedModelResults,
+)
 from .dataset import _validate_feature_dataset
 from .logistic import train_logistic_regression
 from .random_forest import train_random_forest
 
 DEFAULT_RESULTS_DIR = Path(__file__).resolve().parents[3] / "results" / "logistic_regression"
 DEFAULT_RANDOM_FOREST_RESULTS_DIR = DEFAULT_RESULTS_DIR.parent / "random_forest"
+DEFAULT_EVALUATION_DIR = DEFAULT_RESULTS_DIR.parent / "evaluation"
 
 
 def load_feature_csv(input_path: str | Path) -> pd.DataFrame:
@@ -93,4 +97,19 @@ def train_random_forest_from_feature_file(
     """Train and compare from a local #60 file, preserving its source protection."""
     source = Path(input_path).resolve()
     result = train_random_forest(load_feature_csv(source), test_fraction=test_fraction)
-    return replace(result, source_path=source)
+    baseline = result.baseline_result
+    if baseline is not None:
+        baseline = replace(baseline, source_path=source)
+    return replace(result, source_path=source, baseline_result=baseline)
+
+
+def save_evaluation_report(
+    report: ModelComparisonReport, *, output_path: str | Path | None = None,
+    overwrite: bool = False,
+) -> Path:
+    """Publish only deterministic comparison metadata using the shared atomic writer."""
+    if not isinstance(report, ModelComparisonReport):
+        raise ModelEvaluationError("A ModelComparisonReport is required for evaluation storage.")
+    destination = Path(output_path) if output_path is not None else DEFAULT_EVALUATION_DIR / "comparison.json"
+    save_raw(destination, asdict(report), overwrite=overwrite)
+    return destination

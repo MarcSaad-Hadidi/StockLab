@@ -96,4 +96,4 @@ def train_random_forest(
         baseline_accuracy=baseline.report.test_accuracy,
         accuracy_delta=accuracy - baseline.report.test_accuracy,
     )
-    return RandomForestResult(model, predictions, report)
+    return RandomForestResult(model, predictions, report, baseline_result=baseline)
