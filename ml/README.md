@@ -514,3 +514,141 @@ Wilder RSI regression, flat/rising/falling prices, constant-return volatility,
 20/21-observation boundaries, multi-symbol isolation, prefix invariance, strict
 input rejection, unexpected NaN/inf, immutable input, reports, CSV round trips,
 collisions, and atomic publication failures. Tests block network connections.
+
+## Logistic Regression baseline (#61)
+
+`stocklab_ml.modeling.train_logistic_regression(feature_dataframe,
+test_fraction=0.20)` fits a real scikit-learn `LogisticRegression` and returns
+`LogisticRegressionResult(pipeline, predictions, report)`. The input must be
+the exact #60 `OUTPUT_COLUMNS` contract, with its dtypes, finite values, unique
+keys, ascending `(symbol, date)` order and fresh integer index. Raw cleaned
+OHLCV is insufficient. Modeling does not repair, recompute, or modify features.
+
+The only model inputs, in order, are the existing
+`stocklab_ml.features.FEATURE_COLUMNS`: `return_1d`, `ma_5`, `ma_20`, `rsi_14`,
+`volume`, `momentum_10`, `volatility_20`. Neither identifiers nor raw prices nor
+labels/target dates enter X. Multi-symbol observations are pooled; symbol is
+not encoded as a feature.
+
+### Target and availability
+
+`target_up_1d[t] = 1` when the **next observed clean session** closes above
+`close[t]`; equal or lower produces integer `0`. It is a supervised label.
+`build_supervised_dataset(feature_dataframe)` returns a copied DataFrame and
+report. It shifts close and date separately **within each symbol**, records
+`target_date`, and removes the last unlabeled row of every symbol. Removed
+counts are reported as `unlabeled_rows_removed_per_symbol`. An entirely
+unlabeled input fails. Weekends, holidays and missing dates are not synthesized;
+Friday-to-Monday is one observed session, not one calendar day.
+
+Features for t include `close[t]`, so the prediction is available **only after
+the close of t**. It predicts direction at the next observed session close.
+Future backtests must respect that availability and must never execute at an
+earlier price using information from `close[t]`.
+
+### Reusable chronological holdout
+
+`chronological_holdout_split(supervised.dataframe, test_fraction=0.20)` is the
+shared split API for #62. Sort distinct supervised feature dates ascending;
+for N dates reserve the latest `ceil(test_fraction * N)` dates for test.
+`split_date` is the first reserved date. This is approximately 80/20 by dates,
+not necessarily by row counts, and uses one boundary for all symbols.
+
+Train requires both `date < split_date` **and** `target_date < split_date`.
+Rows before the boundary whose target lands on or after it are purged. Test
+requires `date >= split_date` and an observable target. Returned partitions
+are sorted by `(date, symbol)`. There is no shuffle, stratification, resampling,
+cross-validation or tuning. Empty partitions, invalid fractions and a single
+training class fail clearly. A single-class test set is allowed.
+
+`HoldoutReport` records the exact boundary, fraction, train/test counts,
+`purged_boundary_rows`, feature-date ranges, counts per symbol and positive
+rates. To compare #62 fairly, reuse these public target/split functions on the
+same feature dataset and fraction; preserve the resulting test identifiers.
+
+### Fitting, inference and evaluation
+
+The pipeline is `StandardScaler -> LogisticRegression(solver="lbfgs", C=1.0,
+max_iter=1000, class_weight=None)`. Only the purged training matrix enters
+`pipeline.fit(X_train, y_train)`. The scaler never fits the full dataset or
+test data. Nonconvergence raises `ModelTrainingError`; successful reports
+include convergence status and actual iteration counts.
+
+`predict_direction(fitted_pipeline, feature_rows)` reuses the fitted scaler
+and exact feature order. It requires finite real numeric `FEATURE_COLUMNS`
+and valid daily `date`/`symbol` identifiers, but no raw close, future close or
+label. Rows retain their input order. It returns identifiers, integer
+`predicted_class` and raw `probability_up`, using the explicit class-1 index
+from the classifier's `classes_`. All probabilities must be finite in `[0,1]`.
+Test predictions also contain `target_date` and integer `actual_class`.
+
+Evaluation is only `test_accuracy` using sklearn `accuracy_score`, plus the
+reported class balance. This is a technical baseline, with no claim about
+financial performance. #63 owns precision/recall/F1 and model comparison.
+There are no BUY/SELL/HOLD signals, confidence score, risk decisions, orders,
+position sizing, portfolio or backtesting operations. No provider, API key,
+network request or API credit is involved. Results are reproducible for the
+same data, sklearn version and configuration.
+
+### Local results and feature files
+
+From the Python session in `ml/src/`:
+
+```python
+from stocklab_ml.modeling import (
+    load_feature_csv, predict_direction, save_model_results,
+    train_logistic_from_feature_file,
+)
+
+source = "../data/processed/features/AAPL_1day_2016-01-01_2026-09-18.csv"
+result = train_logistic_from_feature_file(source)
+saved = save_model_results(result)
+print(result.report.test_accuracy, result.report.split)
+print(saved.report_path, saved.predictions_path)
+latest = load_feature_csv(source).tail(1)
+print(predict_direction(result.pipeline, latest))
+```
+
+`load_feature_csv` reuses the bounded local CSV reader, preserves symbols such
+as `NA` and exact Int64 volume, and restores the #60 dtypes without calculating
+features. Malformed data fails. The file-training helper records the source
+path in memory to protect it during saving; this path is excluded from JSON.
+For a DataFrame loaded by your own code, supply its `source_path` explicitly
+to `save_model_results` to enable the same source protection.
+
+Default output is `ml/results/logistic_regression/report.json` and
+`predictions.csv`, independent of the working directory. Optional
+`report_path` and `predictions_path` select other local destinations.
+`overwrite=False` is the default. Both destinations are checked before writing;
+known source paths and both outputs must be distinct, including resolved
+aliases and existing hard links. The #56 atomic writer is reused: each file
+is atomic, **the pair is not a transaction**. A second-file failure may leave
+a complete predictions CSV with an absent/older report, and raises an error.
+
+JSON contains deterministic metadata: feature list, target definition,
+prediction timing, split rule/report, sample counts, unlabeled row counts,
+accuracy, scaler, all classifier hyperparameters and convergence iterations.
+It contains no model object, raw dataset, absolute source path or timestamp.
+CSV has `date,target_date,symbol,actual_class,predicted_class,probability_up`,
+ISO dates and no index. The results directory ignores generated files; custom
+destinations should also be kept in ignored local storage. The fitted pipeline
+stays in memory: no pickle, joblib artifact, model version, registry or cloud
+storage is created. Model persistence/versioning belongs to later issues (#75).
+
+The offline tests cover per-symbol labeling, equal/down prices, last-row
+removal, sparse multi-symbol dates, boundary purging, single-class/empty
+partitions, exact training columns, train-only scaling and coefficients,
+class-order-safe probabilities, inference parity, immutability, determinism,
+nonconvergence, CSV round trips and atomic publication failures. Tests block
+network connections and use synthetic data and temporary output directories.
+
+Run the reproducible synthetic smoke from `ml/` (no market data download):
+
+```powershell
+$env:PYTHONPATH = "src"
+python examples/logistic_regression_smoke.py
+```
+
+It generates two symbols locally, runs the existing feature engineering,
+trains the baseline, verifies row/probability/accuracy invariants, and writes
+ignored results. The synthetic accuracy checks mechanics, not market quality.
