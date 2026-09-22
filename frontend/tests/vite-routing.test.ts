@@ -30,11 +30,16 @@ for (const config of ['vite.config.ts', 'vite.dashboard.config.ts']) {
         process.env.NODE_ENV = mode === 'dev' ? 'development' : 'production'
         const options = { root, configFile, cacheDir: join(outDir, '.vite-test'), logLevel: 'silent' as const }
         const server = mode === 'dev'
-          ? await createServer({ ...options, server: { host: '127.0.0.1', port: 0 } })
+          ? await createServer({
+              ...options,
+              // These tests fetch documents, not their scripts. Avoid background
+              // module transforms racing dependency optimization during shutdown.
+              server: { host: '127.0.0.1', port: 0, preTransformRequests: false },
+            })
           : await preview({ ...options, build: { outDir }, preview: { host: '127.0.0.1', port: 0 } })
         t.after(async () => {
           await server.close()
-        })
+        }, { timeout: 10_000 })
         if ('listen' in server) await server.listen()
         const base = server.resolvedUrls!.local[0]
 
