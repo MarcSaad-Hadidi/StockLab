@@ -788,3 +788,130 @@ importances, and saves ignored RF results. Synthetic accuracy verifies mechanics
 only. The offline pytest suite additionally tests every fitted tree for invariance
 when only test features change, repeat-run determinism, raw training features,
 comparison mismatch rejection, target-free inference and storage failure cases.
+
+## Model evaluation (#63)
+
+`stocklab_ml.modeling.evaluate_predictions(*, model_name, predictions)` is the
+generic, offline evaluator for any model that produces the existing prediction
+contract. It requires no estimator and never calls fit. It evaluates the supplied
+integer `predicted_class` directly, without recomputing it from probability,
+changing the threshold, calibrating probabilities or modifying its input.
+
+Positive class is **UP = 1**: the next observed clean session of the same symbol
+closes higher. Negative class 0 means equal or lower. The shared target,
+features, after-close availability, chronological split and boundary purge are
+unchanged. Evaluation uses the holdout predictions from #61/#62; it does not
+construct a different dataset or split.
+
+### Metrics and edge cases
+
+The four metrics use `sklearn.metrics` with positive label 1. Undefined
+precision/recall/F1 explicitly use `zero_division=0`, without warnings. A
+single-class actual holdout, no positive predictions and all-wrong predictions
+are supported. For an all-negative perfect holdout, accuracy is 1 while
+positive-class precision/recall/F1 are 0 under this policy.
+
+| Metric | Definition |
+| --- | --- |
+| Accuracy | Correct predictions / total predictions |
+| Precision | TP / (TP + FP) |
+| Recall | TP / (TP + FN) |
+| F1 | 2 × precision × recall / (precision + recall) |
+
+`confusion_matrix(labels=[0,1])` has orientation `[[TN, FP], [FN, TP]]`.
+`ModelEvaluationMetrics` contains `model_name`, `accuracy`, `precision`,
+`recall`, `f1`, `true_positive`, `true_negative`, `false_positive`,
+`false_negative`, `support_positive=TP+FN`, `support_negative=TN+FP`, and
+`total_rows`. Counts must sum to the row count and metric values must be finite
+in `[0,1]`. Values retain full float precision; presentation may round later.
+
+Predictions must be a nonempty DataFrame with exactly these ordered columns:
+`date,target_date,symbol,actual_class,predicted_class,probability_up`.
+Classes must be integer 0/1 (not bool, float or text). Probabilities must be
+finite real numbers in `[0,1]`; they are validated but not scored as log loss,
+AUC, Brier score or calibration. Dates must be timezone-naive daily datetime
+values, with `target_date > date`. Symbols must follow the existing symbol
+contract and `(date,symbol)` keys must be unique. Missing/invalid data raises
+`ModelEvaluationError`; no rows are repaired, reordered or dropped.
+
+### Strict model comparison
+
+`compare_model_results(logistic_result, random_forest_result)` compares already
+trained results. It requires identical **complete holdout reports**, including
+split date, test fraction, row counts, ranges, class balances, per-symbol counts
+and boundary purge counts. Ordered `date,target_date,symbol,actual_class` values
+must match exactly; the function does not sort mismatched rows into alignment.
+It also verifies the current shared feature list, target name/definition,
+prediction timing and split rule. Matching but stale test counts, ranges,
+per-symbol counts or positive rates are rejected against the actual predictions.
+Each recomputed accuracy must exactly equal its model report's `test_accuracy`.
+Any discrepancy raises `ModelEvaluationError` instead of returning a comparison.
+
+`ModelComparisonReport` contains the feature/target/timing/split contract,
+`positive_class=1`, `zero_division=0`, split date, test fraction, test row count,
+test date range, model metrics and `metric_deltas`. Model order is always
+`logistic_regression_baseline`, then `random_forest_baseline`. All four deltas
+are **Random Forest minus Logistic Regression**, in decimal units and within
+`[-1,1]`; `0.60 - 0.55` is stored as approximately `0.05`, without an implicit
+percentage-point conversion. No winner, active model or promotion is selected.
+
+### Evaluate once, save locally
+
+`evaluate_model_baselines(feature_dataframe, test_fraction=0.20)` is a thin
+convenience API returning the comparison report. It calls the existing RF
+training API, which already trains Logistic for #62's baseline comparison.
+`RandomForestResult` now retains that in-memory result as optional
+`baseline_result`, so the workflow fits each estimator **once**. Existing
+constructors/imports remain compatible; training parameters, splits and model
+outputs are unchanged. Neither evaluation nor observed metric values cause a
+subsequent refit. Existing results can always be compared directly.
+
+From a Python session in `ml/src/`:
+
+```python
+from stocklab_ml.modeling import (
+    compare_model_results, load_feature_csv, save_evaluation_report,
+    save_model_results, train_random_forest,
+)
+
+source = "../data/processed/features/AAPL_1day_2016-01-01_2026-09-18.csv"
+forest = train_random_forest(load_feature_csv(source))
+logistic = forest.baseline_result
+comparison = compare_model_results(logistic, forest)
+print(comparison.models, comparison.metric_deltas)
+save_model_results(logistic, source_path=source)
+save_model_results(forest, source_path=source)
+print(save_evaluation_report(comparison))
+```
+
+`save_evaluation_report(report, output_path=None, overwrite=False)` uses the
+existing atomic JSON writer. The default is
+`ml/results/evaluation/comparison.json`, independent of the working directory.
+An existing destination is refused unless overwrite is explicitly enabled.
+Publication failures leave no partially published JSON; concurrent writers
+cannot be silently overwritten by the default mode. The generated report is
+Git-ignored and contains only deterministic metadata, metrics and deltas: no
+raw predictions, market dataset, timestamp, absolute source path or model object.
+The existing per-model prediction CSVs remain available through their storage API.
+
+There is no new model, dependency, network request, API key or API credit.
+There is no tuning, threshold search, winner promotion (#78), model versioning
+or binary persistence (#75/#76), BUY/SELL/HOLD (#64), confidence conversion
+(#65), trading, risk management, backtest metrics (#73), benchmark (#74), cloud
+integration or frontend/API work. Classification measurements do not establish
+profitability or justify model promotion.
+
+Run the standalone synthetic evaluation smoke from `ml/`:
+
+```powershell
+$env:PYTHONPATH = "src"
+python examples/model_evaluation_smoke.py
+```
+
+It builds 480 synthetic #60 feature rows, fits both existing estimators once,
+checks the same holdout, finite metrics, confusion counts and deltas, then saves
+the ignored comparison JSON. The output is a mechanics check, not a measurement
+of market performance. Offline tests include explicit hand-calculated symmetric
+and asymmetric examples, perfect/all-wrong predictions, zero-division cases,
+contract/label/order mismatches, report accuracy consistency, input immutability,
+determinism, single-fit orchestration and atomic storage failures.
