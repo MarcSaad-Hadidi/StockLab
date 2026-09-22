@@ -97,7 +97,10 @@ def train_random_forest_from_feature_file(
     """Train and compare from a local #60 file, preserving its source protection."""
     source = Path(input_path).resolve()
     result = train_random_forest(load_feature_csv(source), test_fraction=test_fraction)
-    return replace(result, source_path=source)
+    baseline = result.baseline_result
+    if baseline is not None:
+        baseline = replace(baseline, source_path=source)
+    return replace(result, source_path=source, baseline_result=baseline)
 
 
 def save_evaluation_report(

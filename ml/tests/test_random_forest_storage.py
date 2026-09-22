@@ -32,7 +32,30 @@ def test_file_training_matches_dataframe_and_remembers_source(tmp_path):
     pd.testing.assert_frame_equal(actual.predictions, expected.predictions, check_exact=True)
     assert actual.report == expected.report
     assert actual.source_path == source.resolve()
+    assert actual.baseline_result.source_path == source.resolve()
+    pd.testing.assert_frame_equal(actual.baseline_result.predictions, expected.baseline_result.predictions, check_exact=True)
+    assert actual.baseline_result.report == expected.baseline_result.report
     assert source.read_bytes() == before
+
+
+@pytest.mark.parametrize("destination", ["report", "predictions"])
+@pytest.mark.parametrize("hardlink", [False, True])
+def test_retained_baseline_cannot_overwrite_feature_source(tmp_path, destination, hardlink):
+    source = tmp_path / "features.csv"
+    shared_storage.save_processed(source, feature_frame())
+    before = source.read_bytes()
+    baseline = train_random_forest_from_feature_file(source).baseline_result
+    paths = {"report": tmp_path / "report.json", "predictions": tmp_path / "predictions.csv"}
+    if hardlink:
+        os.link(source, paths[destination])
+    else:
+        paths[destination] = source
+    with pytest.raises(StorageError, match="distinct"):
+        save_model_results(baseline, report_path=paths["report"],
+                           predictions_path=paths["predictions"], overwrite=True)
+    assert source.read_bytes() == before
+    assert paths[destination].read_bytes() == before
+    assert not paths["predictions" if destination == "report" else "report"].exists()
 
 
 def test_default_destinations_keep_both_models_separate(tmp_path, monkeypatch, forest):
