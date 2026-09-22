@@ -15,6 +15,7 @@ export type IconName =
   | 'settings'
   | 'sparkles'
   | 'star'
+  | 'trending-down'
   | 'trending-up'
   | 'wallet'
   | 'x'

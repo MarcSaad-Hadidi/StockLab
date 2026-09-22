@@ -3,6 +3,7 @@ import { UnavailableState } from '../components/UnavailableState'
 import { PerformanceLineChart } from '../components/charts/PerformanceLineChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
+import { getTrendClass, getTrendIcon, getTrendTone } from '../components/trend/trend'
 import { formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
 import { useTranslation } from 'react-i18next'
@@ -56,6 +57,7 @@ function Icon({ name, size = 20, strokeWidth = 1.8, className }: IconProps) {
     settings: <><circle cx="12" cy="12" r="3" {...common} /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 1.7-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.2h-2.4v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L8 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H6.7v-2.4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9L8 8.6l1.7-1.7.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.5v-.2h2.4v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.7 1.7-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.2V14h-.2a1.7 1.7 0 0 0-1.5 1Z" {...common} /></>,
     sparkles: <><path d="m12 3 1.2 4.8L18 9l-4.8 1.2L12 15l-1.2-4.8L6 9l4.8-1.2L12 3ZM19 15l.6 2.4L22 18l-2.4.6L19 21l-.6-2.4L16 18l2.4-.6L19 15Z" {...common} /></>,
     star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z" {...common} />,
+    'trending-down': <><path d="M3 7 9 13l4-4 8 9" {...common} /><path d="M15 18h6v-6" {...common} /></>,
     'trending-up': <><path d="M3 17 9 11l4 4 8-9" {...common} /><path d="M15 6h6v6" {...common} /></>,
     wallet: <><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H19a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5.5A2.5 2.5 0 0 1 3 17.5v-9A2 2 0 0 1 5 6.5h14" {...common} /><path d="M21 10h-5a2 2 0 0 0 0 4h5M16.5 12h.01" {...common} /></>,
     x: <><path d="m6 6 12 12M18 6 6 18" {...common} /></>,
@@ -103,12 +105,14 @@ function PanelHeading({ title, subtitle, action, id, destination }: { title: str
 
 function MetricCard({ metric }: { metric: (typeof metrics)[number] }) {
   const { t } = useTranslation()
+  const trendTone = getTrendTone(metric.change)
+  const trendIcon = getTrendIcon(trendTone)
   return (
     <article className="metric-card">
       <div className={`metric-icon metric-icon-${metric.tone}`}><Icon name={metric.icon} size={20} /></div>
       <p>{t(metric.label)}</p>
       <strong>{metric.label === 'dashboard.metrics.return' ? formatPercent(metric.value) : formatCurrency(metric.value)}</strong>
-      <span className="metric-change"><Icon name="trending-up" size={13} /> {formatSignedPercent(metric.change)} <em>{t(metric.detail)}</em></span>
+      <span className={`metric-change ${getTrendClass(trendTone)}`}>{trendIcon && <Icon name={trendIcon} size={13} />} {formatSignedPercent(metric.change)} <em>{t(metric.detail)}</em></span>
     </article>
   )
 }
@@ -170,6 +174,8 @@ export function DashboardPage() {
   const [toastKey, setToastKey] = useState('')
   const dashboardUserName = ''
   const [greetingPeriod, setGreetingPeriod] = useState(() => getGreetingPeriod(new Date()))
+  const aiReturnTone = getTrendTone(aiPerformance.return)
+  const aiReturnIcon = getTrendIcon(aiReturnTone)
 
   useEffect(() => {
     return startDashboardGreetingTimer(() => setGreetingPeriod(getGreetingPeriod(new Date())), dashboardUserName)
@@ -210,7 +216,7 @@ export function DashboardPage() {
             <section aria-labelledby="transactions-title" className="panel transactions-panel"><PanelHeading action={t('common.viewAll')} destination="transactions" id="transactions-title" subtitle={t('dashboard.transactionsSubtitle')} title={t('dashboard.recentTransactions')} /><ul className="transaction-list">{transactions.length === 0 && <li><UnavailableState message="businessData.transactions" /></li>}{transactions.map((transaction) => <TransactionRow key={`${transaction.symbol}-${transaction.timeKey}`} transaction={transaction} />)}</ul></section>
           </div>
 
-          <section aria-labelledby="ai-trader-title" className="panel ai-panel"><div className="ai-heading"><div className="ai-title"><span className="ai-badge"><Icon name="sparkles" size={18} /></span><div><h2 id="ai-trader-title">{t('common.navigation.aiTrader')}</h2><p>{t('dashboard.aiSubtitle')}</p></div><span className="status-badge"><i /> {t('businessData.unavailable')}</span></div><button className="text-action" onClick={() => window.location.assign(routeFor('ai-trader'))} type="button">{t('dashboard.openAiTrader')} <Icon name="chevron-right" size={16} /></button></div><div className="ai-content"><div className="ai-stat ai-stat-primary"><span>{t('dashboard.aiReturn')}</span><strong>{formatSignedPercent(aiPerformance.return)}</strong><small><Icon name="trending-up" size={13} /> {t('businessData.unavailable')}</small></div><div className="ai-stat"><span>{t('dashboard.netPnl')}</span><strong>{formatSignedCurrency(aiPerformance.pnl)}</strong><small>{t('businessData.unavailable')}</small></div><div className="ai-stat"><span>{t('dashboard.winRate')}</span><strong>{formatPercent(aiPerformance.winRate, undefined, 1)}</strong><small>{t('businessData.ai')}</small></div><div className="ai-chart-wrap"><span>{t('dashboard.sevenDayPerformance')}</span><Sparkline /><div className="ai-chart-labels"><small>{t('common.days.mon')}</small><small>{t('dashboard.today')}</small></div></div></div></section>
+          <section aria-labelledby="ai-trader-title" className="panel ai-panel"><div className="ai-heading"><div className="ai-title"><span className="ai-badge"><Icon name="sparkles" size={18} /></span><div><h2 id="ai-trader-title">{t('common.navigation.aiTrader')}</h2><p>{t('dashboard.aiSubtitle')}</p></div><span className="status-badge"><i /> {t('businessData.unavailable')}</span></div><button className="text-action" onClick={() => window.location.assign(routeFor('ai-trader'))} type="button">{t('dashboard.openAiTrader')} <Icon name="chevron-right" size={16} /></button></div><div className="ai-content"><div className={`ai-stat ai-stat-primary ${getTrendClass(aiReturnTone)}`}><span>{t('dashboard.aiReturn')}</span><strong>{formatSignedPercent(aiPerformance.return)}</strong><small className={getTrendClass(aiReturnTone)}>{aiReturnIcon && <Icon name={aiReturnIcon} size={13} />} {t('businessData.unavailable')}</small></div><div className="ai-stat"><span>{t('dashboard.netPnl')}</span><strong>{formatSignedCurrency(aiPerformance.pnl)}</strong><small>{t('businessData.unavailable')}</small></div><div className="ai-stat"><span>{t('dashboard.winRate')}</span><strong>{formatPercent(aiPerformance.winRate, undefined, 1)}</strong><small>{t('businessData.ai')}</small></div><div className="ai-chart-wrap"><span>{t('dashboard.sevenDayPerformance')}</span><Sparkline /><div className="ai-chart-labels"><small>{t('common.days.mon')}</small><small>{t('dashboard.today')}</small></div></div></div></section>
           <p className="simulation-note"><span><Icon name="activity" size={14} /> {t('businessData.unavailable')}</span> {t('businessData.backendPending')}</p>
         </div>
       <LogoAttribution /></main>
