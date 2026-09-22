@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 
 TARGET_NAME = "target_up_1d"
@@ -83,6 +84,34 @@ class LogisticRegressionResult:
     pipeline: Pipeline
     predictions: pd.DataFrame
     report: LogisticRegressionReport
+    source_path: Path | None = None
+
+
+@dataclass(frozen=True)
+class RandomForestReport:
+    model_name: str
+    feature_columns: list[str]
+    target_name: str
+    target_definition: str
+    prediction_timing: str
+    split_rule: str
+    dataset: SupervisedDatasetReport
+    split: HoldoutReport
+    scaler: None
+    hyperparameters: dict[str, object]
+    test_accuracy: float
+    feature_importances: dict[str, float]
+    random_state: int
+    baseline_model_name: str
+    baseline_accuracy: float
+    accuracy_delta: float
+
+
+@dataclass(frozen=True)
+class RandomForestResult:
+    model: RandomForestClassifier
+    predictions: pd.DataFrame
+    report: RandomForestReport
     source_path: Path | None = None
 
 

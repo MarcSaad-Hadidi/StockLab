@@ -13,11 +13,13 @@ from stocklab_ml.data.storage import (
     check_collisions, cleaning_paths, load_cleaning_csv, save_processed, save_raw,
 )
 from stocklab_ml.features.models import OUTPUT_COLUMNS
-from .contracts import LogisticRegressionResult, ModelDatasetError, SavedModelResults
+from .contracts import LogisticRegressionResult, ModelDatasetError, RandomForestResult, SavedModelResults
 from .dataset import _validate_feature_dataset
 from .logistic import train_logistic_regression
+from .random_forest import train_random_forest
 
 DEFAULT_RESULTS_DIR = Path(__file__).resolve().parents[3] / "results" / "logistic_regression"
+DEFAULT_RANDOM_FOREST_RESULTS_DIR = DEFAULT_RESULTS_DIR.parent / "random_forest"
 
 
 def load_feature_csv(input_path: str | Path) -> pd.DataFrame:
@@ -53,7 +55,7 @@ def train_logistic_from_feature_file(
 
 
 def save_model_results(
-    result: LogisticRegressionResult, *, report_path: str | Path | None = None,
+    result: LogisticRegressionResult | RandomForestResult, *, report_path: str | Path | None = None,
     predictions_path: str | Path | None = None, source_path: str | Path | None = None,
     overwrite: bool = False,
 ) -> SavedModelResults:
@@ -64,8 +66,9 @@ def save_model_results(
     DataFrame callers loading their own file should supply source_path; the
     file-training API records it automatically. All known sources are protected.
     """
-    report = Path(report_path) if report_path is not None else DEFAULT_RESULTS_DIR / "report.json"
-    predictions = Path(predictions_path) if predictions_path is not None else DEFAULT_RESULTS_DIR / "predictions.csv"
+    directory = DEFAULT_RANDOM_FOREST_RESULTS_DIR if isinstance(result, RandomForestResult) else DEFAULT_RESULTS_DIR
+    report = Path(report_path) if report_path is not None else directory / "report.json"
+    predictions = Path(predictions_path) if predictions_path is not None else directory / "predictions.csv"
     # Reuse the existing alias/hard-link checks as well as its atomic writer.
     sources = [path for path in (result.source_path, source_path) if path is not None]
     if sources:
@@ -82,3 +85,12 @@ def save_model_results(
     save_processed(predictions, result.predictions, overwrite=overwrite)
     save_raw(report, asdict(result.report), overwrite=overwrite)
     return SavedModelResults(report, predictions)
+
+
+def train_random_forest_from_feature_file(
+    input_path: str | Path, *, test_fraction: float = 0.20,
+) -> RandomForestResult:
+    """Train and compare from a local #60 file, preserving its source protection."""
+    source = Path(input_path).resolve()
+    result = train_random_forest(load_feature_csv(source), test_fraction=test_fraction)
+    return replace(result, source_path=source)
