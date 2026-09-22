@@ -652,3 +652,139 @@ python examples/logistic_regression_smoke.py
 It generates two symbols locally, runs the existing feature engineering,
 trains the baseline, verifies row/probability/accuracy invariants, and writes
 ignored results. The synthetic accuracy checks mechanics, not market quality.
+
+## Random Forest baseline (#62)
+
+`stocklab_ml.modeling.train_random_forest(feature_dataframe,
+test_fraction=0.20)` trains a real scikit-learn `RandomForestClassifier` and
+returns `RandomForestResult(model, predictions, report)`. It also runs the
+unchanged #61 Logistic Regression baseline on the same input and fraction to
+report a minimal accuracy comparison. It neither replaces nor promotes a model.
+
+### Shared dataset and holdout
+
+RF calls the existing `build_supervised_dataset` and
+`chronological_holdout_split`. `FEATURE_COLUMNS`, `TARGET_NAME`,
+`TARGET_DEFINITION`, `SPLIT_RULE` and `PREDICTION_TIMING` remain unchanged.
+The exact seven features are consumed in their existing order; symbol, date,
+raw OHLC prices, target dates, labels and future closes never enter X.
+No feature is recomputed, dropped, clipped or normalized, and input is not mutated.
+
+The label is still integer `target_up_1d`: 1 if the next observed clean session
+of the same symbol closes higher, otherwise 0. The final unlabeled row per
+symbol is excluded. Features at t, including its close, are available only
+after close[t]. This predicts the next observed session, not the next calendar
+day; future backtests must respect the same after-close availability.
+
+The shared holdout uses the latest `ceil(test_fraction * unique feature dates)`
+dates, with one global boundary for all symbols. Train requires both feature
+and target dates before that boundary; crossing targets are purged. Fit sees
+only this purged train partition. Single-class training and empty partitions
+retain #61's errors; single-class test sets are supported.
+
+Before computing a comparison, the implementation checks that the complete
+holdout reports and ordered `(date, target_date, symbol, actual_class)` test
+columns match exactly. A discrepancy raises `ModelTrainingError`; accuracy
+from different validation datasets is never compared.
+
+### Fixed estimator and inference
+
+| Parameter | Value |
+| --- | --- |
+| `n_estimators` | `300` |
+| `criterion` | `"gini"` |
+| `max_depth` | `None` |
+| `min_samples_split` | `2` |
+| `min_samples_leaf` | `1` |
+| `max_features` | `"sqrt"` |
+| `bootstrap` | `True` |
+| `class_weight` | `None` |
+| `random_state` | `42` |
+| `n_jobs` | `1` |
+
+These parameters were checked against the project's installed scikit-learn
+1.9.1. Internal bootstrap/feature randomness has a fixed seed, and `n_jobs=1`
+keeps execution independent of available machine parallelism. Repeated runs
+with the same dataset, configuration and sklearn version are deterministic.
+There is no hyperparameter search, cross-validation, test-set optimization,
+resampling or automatic class weighting.
+
+**RF has no scaler.** Trees consume raw #60 features and use thresholds; they
+do not require standardization. The separate Logistic comparator retains its
+train-only `StandardScaler -> LogisticRegression` pipeline and all its original
+hyperparameters. No Logistic public API or behavior is changed.
+
+`predict_random_forest_direction(fitted_model, feature_rows)` requires valid
+`date`/`symbol` identifiers and finite real numeric `FEATURE_COLUMNS`. It needs
+no target, raw close or future observation, preserves row order and never fits.
+Outputs are `date,symbol,predicted_class,probability_up`. Class 1 is looked up
+explicitly in `classes_`, which must contain exactly `{0,1}`. Predicted classes
+are integers; probabilities must be finite in `[0,1]` with one value per row.
+Holdout predictions use the same six columns and order as #61:
+`date,target_date,symbol,actual_class,predicted_class,probability_up`.
+
+### Importances and minimal comparison
+
+`RandomForestReport` records `random_forest_baseline`, the shared feature/target/
+timing/split metadata, dataset and holdout reports, all actual hyperparameters,
+`random_state=42`, `scaler=None`, `test_accuracy`, `baseline_model_name`,
+`baseline_accuracy` and `accuracy_delta = RF accuracy - Logistic accuracy`.
+Accuracy uses sklearn's `accuracy_score` without internal rounding. A negative
+delta is valid; there is no expected winner or financial performance guarantee.
+#63 `feature/ml-model-evaluation` owns precision/recall/F1 and full comparison.
+
+`feature_importances` maps `feature_importances_` to the exact `FEATURE_COLUMNS`
+order. These impurity-based values must be finite, nonnegative and sum to
+approximately 1. A forest with no impurity-reducing splits (for example, all
+constant input features) has undefined normalized importance and raises a clear
+`ModelTrainingError`; no importance is fabricated. These are properties of the
+fitted model, **not evidence that a feature causes market movements**. No SHAP
+or permutation-importance framework is introduced.
+
+### Local files and verification
+
+From the Python session in `ml/src/`:
+
+```python
+from stocklab_ml.modeling import (
+    load_feature_csv, predict_random_forest_direction, save_model_results,
+    train_random_forest_from_feature_file,
+)
+
+source = "../data/processed/features/AAPL_1day_2016-01-01_2026-09-18.csv"
+result = train_random_forest_from_feature_file(source)
+print(result.report.test_accuracy, result.report.baseline_accuracy,
+      result.report.accuracy_delta)
+saved = save_model_results(result)
+latest = load_feature_csv(source).tail(1)
+print(predict_random_forest_direction(result.model, latest))
+```
+
+The existing strict CSV loader and atomic writer are reused. RF defaults to
+`ml/results/random_forest/report.json` and `predictions.csv`; Logistic keeps
+its existing directory. JSON includes importances and comparison metadata, with
+no model object or absolute source path. `overwrite=False`, source/alias checks,
+CSV without index and **per-file** atomicity are unchanged. The two-file pair
+is not a transaction; a report failure may leave a complete predictions CSV.
+File-based training records the source for overwrite protection; callers who
+load their own DataFrame should pass `source_path` when saving.
+
+Outputs are Git-ignored. The estimator stays in memory: no pickle, joblib, ONNX,
+model registry/version or cloud storage is added; #75/#76 own persistence.
+There are no BUY/SELL/HOLD signals, confidence score, risk/position decisions,
+trading operations, external provider calls, API keys or API credits. No new
+dependencies are required. #63 is not implemented here.
+
+Run the synthetic comparison smoke from `ml/`:
+
+```powershell
+$env:PYTHONPATH = "src"
+python examples/random_forest_smoke.py
+```
+
+It creates 480 #60 feature rows across two symbols locally, verifies identical
+holdout identifiers and labels, validates both probability outputs and RF
+importances, and saves ignored RF results. Synthetic accuracy verifies mechanics
+only. The offline pytest suite additionally tests every fitted tree for invariance
+when only test features change, repeat-run determinism, raw training features,
+comparison mismatch rejection, target-free inference and storage failure cases.
