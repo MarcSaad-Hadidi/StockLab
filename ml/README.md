@@ -915,3 +915,130 @@ of market performance. Offline tests include explicit hand-calculated symmetric
 and asymmetric examples, perfect/all-wrong predictions, zero-division cases,
 contract/label/order mismatches, report accuracy consistency, input immutability,
 determinism, single-fit orchestration and atomic storage failures.
+
+## Trading signals (#64)
+
+`stocklab_ml.signals.generate_trading_signals` converts existing model predictions
+into daily ML decisions. It does not fit a model or call inference. The caller
+provides one explicit `model_name` and that model's prediction DataFrame per batch.
+Logistic Regression, Random Forest and future models use the same policy.
+Evaluation metrics and `comparison.json` are not used to choose a model.
+
+| Raw `probability_up` | Signal |
+| --- | --- |
+| `p >= 0.60` | `BUY` |
+| `p <= 0.40` | `SELL` |
+| `0.40 < p < 0.60` | `HOLD` |
+
+BUY and SELL include their boundaries: `0.60` is BUY, `0.40` is SELL.
+Examples: `0.81` BUY, `0.59` HOLD, `0.50` HOLD, `0.41` HOLD, `0.15` SELL.
+The HOLD interval is `]0.40, 0.60[`: it expresses uncertainty around 0.50.
+`predicted_class` is retained for audit only. A predicted class of 1 with
+probability 0.55 still gives HOLD; a class of 0 with probability 0.45 also gives
+HOLD. Neither the class nor another symbol's probability overrides the policy.
+
+`BUY_THRESHOLD = 0.60`, `SELL_THRESHOLD = 0.40` and the string enum
+`TradingSignal.BUY / SELL / HOLD` are centralized in `signals.contracts` and
+exported by `signals`. The API accepts explicit threshold arguments, validated
+as real numeric, finite, non-boolean `0 <= sell < buy <= 1`. Defaults are a V1
+policy fixed before trading evaluation. Valid thresholds are represented as
+float64 for both mapping and reporting; thresholds that collapse to the same
+float are rejected. This implementation never searches or
+tunes thresholds on the holdout, metrics or returns; #73 will assess trading
+consequences.
+
+### Prediction and decision contract
+
+Required input columns are `date`, `symbol`, `predicted_class`, `probability_up`.
+Historical predictions may additionally have `actual_class` and `target_date`.
+Only the four required columns are read: optional historical values are not
+validated, copied to the output or used in decisions. Changing or omitting them
+produces exactly the same signals and report. Future inference therefore needs
+no outcome labels or future session dates. Extra columns, including an input
+`model_name` column, are rejected; model identity comes from the explicit argument.
+
+Inputs must be nonempty, with unique column names, valid timezone-naive daily
+datetime values representable in nanoseconds, normalized symbols under the
+existing symbol contract, integer non-boolean classes 0/1, and finite real
+non-boolean probabilities in [0,1]. Invalid rows, null required values and duplicate
+`(date, symbol)` keys reject the whole operation with `TradingSignalError`.
+No clipping, missing-row removal, symbol repair or silent threshold correction
+occurs. Model names contain 1–128 ASCII letters, digits, underscores, dots or
+hyphens, beginning with a letter or digit; whitespace is rejected, not trimmed
+silently. Names are preserved and are not limited to a model whitelist.
+
+The returned `TradingSignalsResult` contains `signals` and `report`.
+Signals have exactly these columns, sorted by `(date, symbol)` with a fresh index:
+
+| Column | dtype / meaning |
+| --- | --- |
+| `date` | `datetime64[ns]`; feature/prediction session date |
+| `symbol` | `string`; unchanged normalized symbol, e.g. `TSLA:NASDAQ` |
+| `model_name` | `string`; caller's explicit model identity |
+| `predicted_class` | `int64`; original class for audit |
+| `probability_up` | `float64`; raw model probability, uncalibrated here |
+| `signal` | `string`; exactly `BUY`, `SELL`, or `HOLD` |
+
+The logical unique key is `(model_name, symbol, date)`. All valid rows are retained.
+The deterministic report contains model name, input/output rows, BUY/SELL/HOLD
+counts, thresholds, ISO date bounds and sorted symbols. Counts sum to output rows,
+which equal input rows. The caller's DataFrame is never mutated.
+
+`date` is the decision's daily calendar date: features at close[t] become available
+only **after close[t]**, and the decision concerns the next observed session.
+There is no invented 09:30/16:00 timestamp and no claim of pre-close availability.
+Future backtesting and execution must respect this timing.
+
+```python
+from stocklab_ml.signals import generate_trading_signals, save_trading_signals
+
+# Existing Logistic or RF result; no retraining happens in the signal generator.
+signals = generate_trading_signals(
+    result.predictions, model_name=result.report.model_name,
+)
+print(signals.signals)
+print(signals.report)
+saved = save_trading_signals(signals)
+
+# Target-free predictions from the existing inference API work identically:
+# predictions = predict_direction(fitted_pipeline, feature_rows)
+# or predict_random_forest_direction(fitted_forest, feature_rows)
+# signals = generate_trading_signals(predictions, model_name="my_model_v2")
+```
+
+### Local storage and boundaries
+
+`save_trading_signals(result, signals_path=None, report_path=None,
+source_path=None, overwrite=False)` writes ignored `ml/results/signals/signals.csv`
+and `ml/results/signals/report.json`. Defaults are independent of the working
+directory. CSV contains the six columns above with no artificial index; JSON
+contains only report metadata, never actual outcomes, models or source data.
+Pass separate destination paths when retaining multiple model batches.
+
+Storage reuses the existing atomic CSV/JSON writer. Both collisions are checked
+before writing and replacement requires `overwrite=True`. Files are atomic
+individually, not as a pair: if report publication fails, a complete CSV can
+remain. Temporary files are cleaned up. Output aliases and hard links are
+rejected. Callers loading predictions from a file should pass `source_path` to
+protect that source from overwrite, including through aliases or hard links.
+
+`probability_up` is a raw model probability. **Confidence is not yet implemented**;
+#65 will define confidence scores for downstream use. There is no model promotion
+(#78), quantity, cash/position/exposure check, stop loss, take profit, allocation,
+Risk Manager (#67), trade execution (#68), portfolio update or decision-history
+database (#69). HOLD comes only from the probability zone, never from risk
+rejection. No model training or evaluation is changed. No new dependency,
+network request, API credit, cloud service, frontend or backend is involved.
+
+Run the offline smoke from `ml/`:
+
+```powershell
+$env:PYTHONPATH = "src"
+python examples/trading_signals_smoke.py
+```
+
+It verifies AAPL 0.75 → BUY, MSFT 0.50 → HOLD, NVDA 0.20 → SELL, saves the CSV
+and report (explicitly overwriting earlier smoke outputs), and runs the same
+policy on both real estimators fitted locally on synthetic data. Historical
+and target-free results match exactly. These are mechanics checks; no trade
+is executed and no market performance is measured.
