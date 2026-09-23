@@ -44,7 +44,7 @@ Fonctionnalités non implémentées ou non connectées :
 - Authentification Login/Register réelle, autorisations, profils utilisateurs et persistance des comptes.
 - Portefeuilles, transactions, watchlists, alertes et exécution persistante des ordres de paper trading.
 - Entraînement des modèles AI Trader, prédictions, Risk Manager, backtesting et intégration API.
-- Persistance Entity Framework Core/Azure SQL, événements Azure Service Bus et services AWS S3/SQS/Lambda.
+- Migrations et services de compte utilisant la couche Entity Framework Core/Azure SQL, événements Azure Service Bus et services AWS S3/SQS/Lambda.
 
 ## Stack technique
 
@@ -54,7 +54,7 @@ Fonctionnalités non implémentées ou non connectées :
 | API backend | ASP.NET Core sur .NET 10, C#, OpenAPI, xUnit | Implémenté pour les données de marché |
 | Données de marché | Twelve Data, Alpha Vantage, fournisseur local simulé | Le mode simulé est utilisé par défaut ; les adaptateurs externes sont facultatifs |
 | Apprentissage automatique | Python 3.12, NumPy, pandas, scikit-learn, pytest, requests | Ingestion, nettoyage et création de variables implémentés |
-| Persistance relationnelle | Azure SQL et Entity Framework Core | Prévu ; aucune intégration EF Core/Azure SQL n’est encore versionnée |
+| Persistance relationnelle | Azure SQL et Entity Framework Core | Modèle EF Core et fournisseur SQL Server configurés ; migrations et services de compte à venir |
 | Messagerie | Azure Service Bus | Prévu |
 | Traitement et stockage cloud | AWS S3, SQS, Lambda, IAM | Prévu |
 
@@ -226,7 +226,7 @@ Le fournisseur ML Python lit uniquement TWELVE_DATA_ML_API_KEY. Définissez-la d
 
 ### Configuration cloud prévue
 
-Azure SQL, Entity Framework Core, Azure Service Bus, AWS S3, AWS SQS, AWS Lambda et IAM sont des intégrations prévues. Aucun secret cloud ni chaîne de connexion ne doit être placé dans ce dépôt, et le code actuel n’en a pas besoin pour lancer le frontend, le backend simulé ou les tests ML hors ligne.
+La couche Entity Framework Core est configurée pour Azure SQL, mais les migrations et les services de compte restent à faire. Azure Service Bus, AWS S3, AWS SQS, AWS Lambda et IAM sont des intégrations prévues. Aucun secret cloud ni chaîne de connexion ne doit être placé dans ce dépôt, et le code actuel n’en a pas besoin pour lancer le frontend, le backend simulé ou les tests hors ligne.
 
 ## Commandes utiles
 

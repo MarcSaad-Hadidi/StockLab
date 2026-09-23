@@ -34,7 +34,7 @@ backend/
 | --- | --- | --- |
 | StockLab.Domain | Business entities, enums, value objects, exceptions and domain rules. Independent of ASP.NET Core and external providers. | None |
 | StockLab.Application | Use cases, services, application DTOs and interfaces implemented by infrastructure. | Domain |
-| StockLab.Infrastructure | Future persistence, market-data and cloud implementations behind application interfaces. | Application, Domain |
+| StockLab.Infrastructure | EF Core persistence, market-data and future cloud implementations behind application interfaces. | Application, Domain |
 | StockLab.Api | Controllers, HTTP configuration, OpenAPI, CORS, health checks and dependency injection composition root. | Application, Infrastructure |
 
 Domain is the innermost layer. Application depends on Domain, and Infrastructure
@@ -46,8 +46,42 @@ concrete provider implementations.
 `Program.cs` is the composition root and registers the available ASP.NET Core
 services. Register future application interfaces and implementations here as their
 issues introduce them. Application defines the market-data contracts below;
-Infrastructure implements the local mock provider, while Domain remains a placeholder.
-There are no EF Core, Azure, AWS, Twelve Data or authentication integrations.
+Infrastructure implements the local mock provider and the EF Core SQL Server mapping.
+There are no account services, database migrations or authentication endpoints yet.
+
+## Entity Framework Core
+
+`StockLab.Infrastructure/Persistence/StockLabDbContext.cs` owns the six currently
+supported entities: User, Portfolio, Holding, Transaction, Watchlist and
+PriceAlert. Their business properties and navigations live in
+`StockLab.Domain/Entities`; no EF Core annotations or dependencies enter Domain.
+Each SQL Server mapping is in `StockLab.Infrastructure/Persistence/Configurations`.
+The context discovers these configurations from the Infrastructure assembly. They
+define table names, keys, indexes, decimal and string types, check constraints,
+`rowversion` concurrency tokens and `NO ACTION` foreign keys according to
+`database-schema.md`. AI/ML and snapshot tables remain outside this first model.
+
+`StockLab.Api/Program.cs` calls `AddPersistence`, which registers the scoped
+`StockLabDbContext` with the SQL Server provider. It reads the named setting
+`ConnectionStrings:StockLab` when a context is resolved. To configure it locally,
+use User Secrets with the API project (substitute your private connection string):
+
+```powershell
+dotnet user-secrets set "ConnectionStrings:StockLab" "<AZURE_SQL_CONNECTION_STRING>" --project backend/StockLab.Api/StockLab.Api.csproj
+```
+
+The environment variable `ConnectionStrings__StockLab` is an alternative. Neither
+the connection string nor database credentials belong in tracked appsettings or Git.
+The API's market-data endpoints can still start without a database connection; a
+context requires the named setting when used. The model uses UTC `DateTime` values;
+application services must supply UTC timestamps and normalized uppercase symbols.
+
+Issue #22 configures EF Core only. Do not call `EnsureCreated`, `EnsureDeleted` or
+`Migrate` at API startup. Issue #23 owns `InitialCreate` and migration application.
+The persistence tests inspect the SQL Server model and run EF add/read/update against
+an isolated SQLite database. A separate read-only `CanConnectAsync`/open-connection
+smoke check may use the configured Azure SQL setting; normal tests need no cloud
+credentials and never create Azure tables.
 
 ## Market-data contracts
 
