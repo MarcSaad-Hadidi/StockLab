@@ -1022,8 +1022,8 @@ remain. Temporary files are cleaned up. Output aliases and hard links are
 rejected. Callers loading predictions from a file should pass `source_path` to
 protect that source from overwrite, including through aliases or hard links.
 
-`probability_up` is a raw model probability. **Confidence is not yet implemented**;
-#65 will define confidence scores for downstream use. There is no model promotion
+`probability_up` is a raw model probability. The separate confidence stage (#65)
+below enriches these signals for downstream use. There is no model promotion
 (#78), quantity, cash/position/exposure check, stop loss, take profit, allocation,
 Risk Manager (#67), trade execution (#68), portfolio update or decision-history
 database (#69). HOLD comes only from the probability zone, never from risk
@@ -1042,3 +1042,127 @@ and report (explicitly overwriting earlier smoke outputs), and runs the same
 policy on both real estimators fitted locally on synthetic data. Historical
 and target-free results match exactly. These are mechanics checks; no trade
 is executed and no market performance is measured.
+
+## Confidence score (#65)
+
+`add_confidence_scores(signals_result: TradingSignalsResult) -> ConfidenceSignalsResult`
+enriches the existing #64 decisions with one `confidence` field. It consumes the
+six-column signal DataFrame and its `TradingSignalsReport`. It does not regenerate
+signals, call a model, repeat inference, or perform feature engineering.
+
+**`confidence` is a deterministic signal-alignment score.** It is NOT guaranteed
+to represent probability of trade success, expected return, probability of profit,
+or calibrated forecast accuracy. No statistical calibration is performed.
+
+| Existing signal | V1 confidence formula | Examples |
+| --- | --- | --- |
+| BUY | `probability_up` | p=0.60 → 0.60; p=0.75 → 0.75; p=1 → 1 |
+| SELL | `1 - probability_up` | p=0.40 → 0.60; p=0.25 → 0.75; p=0 → 1 |
+| HOLD | `1 - 2 * abs(probability_up - 0.5)` | p=0.50 → 1; p=0.55/0.45 → 0.90; p=0.59/0.41 → 0.82 |
+
+The score is finite `float64` in **[0,1]**, stored as a decimal such as `0.82`,
+never a percentage integer such as `82`. HOLD measures the **strength of model
+neutrality**, not the probability of no trade or of an unchanged price. BUY at
+p=1, SELL at p=0, and HOLD at p=0.5 all intentionally reach 1: each score measures
+alignment with its own decision, not the same probabilistic hypothesis.
+BUY/SELL and opposite HOLD probabilities are symmetric within floating-point
+precision. The V1 formula is used without rounding or clipping. A very small
+positive HOLD probability under thresholds `(sell=0, buy=1)` can round to zero
+in float64; zero is valid and is retained, as are low positive scores.
+
+### Thresholds, validation, and immutable decisions
+
+The existing signal is the source of truth. Coherence is checked against
+`buy_threshold` and `sell_threshold` from its report, including inclusive BUY and
+SELL boundaries and the strict HOLD interval. Defaults remain 0.60 and 0.40.
+For custom thresholds 0.70/0.30, p=0.65 is valid HOLD with confidence 0.70.
+Thresholds determine the signal but **do not change the confidence formula**.
+
+Malformed inputs raise `ConfidenceScoreError`: invalid probabilities, signals,
+thresholds, schema/dtypes, model identities, dates, symbols, duplicate decisions,
+or report row/count/metadata mismatches. Thus p=0.80 + HOLD under default thresholds
+fails clearly; it is never repaired. Invalid computed confidence also raises.
+No row is removed and no value is silently normalized or clipped by this stage.
+
+Output columns and dtypes, in order:
+
+| Column | dtype |
+| --- | --- |
+| `date` | `datetime64[ns]` |
+| `symbol` | `string` |
+| `model_name` | `string` |
+| `predicted_class` | `int64` |
+| `probability_up` | `float64` |
+| `signal` | `string` |
+| `confidence` | `float64` |
+
+All six input columns, their values, row order, and index are preserved in a new
+DataFrame. The unique key remains `(model_name, symbol, date)`. Neither the source
+DataFrame nor its report (including the symbols list) is mutated or shared with
+the output. `probability_up` remains the raw model output for audit: SELL at
+p=0.20 retains probability 0.20 alongside confidence 0.80. `predicted_class`
+remains audit-only. Each symbol and row is scored independently.
+
+`ConfidenceScoresReport` retains model name, input/output row counts, BUY/SELL/HOLD
+counts, thresholds, symbols and ISO date bounds, and adds `confidence_min`,
+`confidence_max`, and `confidence_mean`. Input and output rows and signal counts
+match #64. Means describe this batch only: they are not performance metrics and
+must not be used to rank, select or promote Logistic Regression versus Random Forest.
+Identical input gives identical decisions and report; there is no clock or random state.
+Validated numeric report fields are copied to native Python integers/floats for
+JSON storage, including when a caller constructs a report with NumPy counters.
+
+### Usage, storage, and Risk Manager handoff
+
+```python
+from stocklab_ml.signals import (
+    add_confidence_scores, generate_trading_signals, save_confidence_signals,
+)
+
+# Existing historical or target-free predictions from either model:
+signals = generate_trading_signals(predictions, model_name="my_model_v2")
+decisions = add_confidence_scores(signals)
+print(decisions.signals)
+saved = save_confidence_signals(decisions)
+```
+
+Target-free inference requires no historical outcome. Confidence uses only the
+current signal and `probability_up`, never `actual_class`, `target_date`, future
+close or future return. Historical label columns may be present before #64;
+#64 discards them, and #65's exact input schema excludes them. Logistic Regression,
+Random Forest and future models use the same formulas without model-specific rules.
+
+`save_confidence_signals(result, signals_path=None, report_path=None,
+source_path=None, overwrite=False)` writes ignored
+`ml/results/confidence/decisions.csv` and `ml/results/confidence/report.json`.
+Defaults are independent of the working directory. CSV contains exactly the seven
+columns above, with `index=False`. JSON contains the deterministic report, without
+timestamps, secrets, model objects or raw feature matrices. Storage validates both
+decisions and report before any write, including formula consistency.
+It reuses #64's collision/source-path protection and the existing atomic writer.
+Replacement requires `overwrite=True`; pass `source_path` when loading from a file.
+Writes are atomic **per file, not as a pair**: a failed report write can leave a
+complete CSV. Temporary files are removed on failure.
+
+Each output row is conceptually an ML decision ready for the future #67 Risk
+Manager. For example, `{signal: "BUY", confidence: 0.78}` flows to that future
+component, which will apply minimum confidence, exposure, cash and position rules.
+HOLD confidence is useful for audit and the standard format; a future Risk Manager
+will not execute HOLD. **#65 applies no minimum confidence and no risk approval**:
+even confidence 0.01 is passed through, and confidence 1 grants no approval.
+There is no ACCEPT/REJECT, quantity, sizing, execution, portfolio update, database,
+cloud integration, backtest or performance evaluation. No dependency is added.
+The confidence calculation and storage are offline and consume zero API credits.
+
+Run the smoke from `ml/`:
+
+```powershell
+$env:PYTHONPATH = "src"
+python examples/confidence_scores_smoke.py
+```
+
+It blocks network connections, verifies AAPL 0.75 → BUY/0.75, MSFT 0.50 → HOLD/1,
+NVDA 0.20 → SELL/0.80, checks immutability and finite bounds, then saves the ignored
+CSV/report with explicit overwrite. Automated tests also cover both real estimators
+fitted on synthetic data and their target-free inference outputs, with model calls
+forbidden during confidence scoring.
