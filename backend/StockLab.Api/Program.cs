@@ -17,6 +17,7 @@ using StockLab.Api.DTOs;
 using StockLab.Infrastructure.MarketEnrichment;
 using StockLab.Infrastructure.Persistence;
 using StockLab.Infrastructure.Identity;
+using StockLab.Infrastructure.Trading;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -59,6 +60,7 @@ builder.Services.AddOpenApi(options =>
 builder.Services.AddHealthChecks();
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddUserRegistration();
+builder.Services.AddPaperTrading();
 builder.Services.AddOptions<JwtOptions>()
     .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
     .Validate(options => options.IsValid(), JwtOptions.ValidationMessage)
