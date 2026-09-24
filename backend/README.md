@@ -47,7 +47,7 @@ concrete provider implementations.
 services. Register future application interfaces and implementations here as their
 issues introduce them. Application defines the market-data contracts below;
 Infrastructure implements the local mock provider and the EF Core SQL Server mapping.
-There are no account services, database migrations or authentication endpoints yet.
+There are no account services or authentication endpoints yet.
 
 ## Entity Framework Core
 
@@ -76,12 +76,40 @@ The API's market-data endpoints can still start without a database connection; a
 context requires the named setting when used. The model uses UTC `DateTime` values;
 application services must supply UTC timestamps and normalized uppercase symbols.
 
-Issue #22 configures EF Core only. Do not call `EnsureCreated`, `EnsureDeleted` or
-`Migrate` at API startup. Issue #23 owns `InitialCreate` and migration application.
+Issue #22 configured the EF Core model. Issue #23 adds the `InitialCreate`
+migration. Do not call `EnsureCreated`, `EnsureDeleted` or `Migrate` at API startup;
+migrations remain an explicit operator action.
 The persistence tests inspect the SQL Server model and run EF add/read/update against
 an isolated SQLite database. A separate read-only `CanConnectAsync`/open-connection
 smoke check may use the configured Azure SQL setting; normal tests need no cloud
 credentials and never create Azure tables.
+
+### Managing migrations
+
+The repository pins `dotnet-ef` in its local tool manifest. From the repository root,
+restore the tool and specify both the project containing the context and the API
+startup project:
+
+```powershell
+dotnet tool restore
+
+dotnet ef migrations list `
+  --project backend/StockLab.Infrastructure/StockLab.Infrastructure.csproj `
+  --startup-project backend/StockLab.Api/StockLab.Api.csproj
+
+dotnet ef database update `
+  --project backend/StockLab.Infrastructure/StockLab.Infrastructure.csproj `
+  --startup-project backend/StockLab.Api/StockLab.Api.csproj
+
+dotnet ef migrations script `
+  --project backend/StockLab.Infrastructure/StockLab.Infrastructure.csproj `
+  --startup-project backend/StockLab.Api/StockLab.Api.csproj
+```
+
+`database update` uses `ConnectionStrings:StockLab` from User Secrets or
+`ConnectionStrings__StockLab`. Review generated SQL before applying it, and use the
+StockLab development database for development migration work. No database update
+runs automatically when the API starts.
 
 ## Market-data contracts
 
