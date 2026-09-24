@@ -231,14 +231,17 @@ public sealed class UserLoginApiTests
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
     }
 
-    [Fact]
-    public async Task Login_rate_limit_separates_client_ips_forwarded_by_a_configured_proxy()
+    [Theory]
+    [InlineData("127.0.0.1")]
+    [InlineData("::ffff:127.0.0.1")]
+    public async Task Login_rate_limit_separates_client_ips_forwarded_by_a_configured_proxy(string remoteProxyAddress)
     {
         var hasher = new CountingPasswordHasher();
         await using var fixture = await LoginFixture.CreateAsync(
             passwordHasher: hasher,
             loginPermitLimit: 1,
-            trustedProxyAddress: "127.0.0.1");
+            trustedProxyAddress: "127.0.0.1",
+            remoteProxyAddress: remoteProxyAddress);
         await RegisterAsync(fixture, "Ghaith", "ghaith@example.com", "correct-password");
 
         using var firstClientAttempt = await SendLoginFromForwardedIpAsync(fixture, "203.0.113.10");
@@ -249,6 +252,25 @@ public sealed class UserLoginApiTests
         Assert.Equal(HttpStatusCode.TooManyRequests, repeatedClientAttempt.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, secondClientAttempt.StatusCode);
         Assert.Equal(2, hasher.VerifyCount);
+    }
+
+    [Fact]
+    public async Task Login_rate_limit_ignores_forwarded_client_ips_from_an_untrusted_mapped_proxy()
+    {
+        var hasher = new CountingPasswordHasher();
+        await using var fixture = await LoginFixture.CreateAsync(
+            passwordHasher: hasher,
+            loginPermitLimit: 1,
+            trustedProxyAddress: "127.0.0.1",
+            remoteProxyAddress: "::ffff:127.0.0.2");
+        await RegisterAsync(fixture, "Ghaith", "ghaith@example.com", "correct-password");
+
+        using var firstAttempt = await SendLoginFromForwardedIpAsync(fixture, "203.0.113.10");
+        using var secondAttempt = await SendLoginFromForwardedIpAsync(fixture, "203.0.113.11");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, firstAttempt.StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, secondAttempt.StatusCode);
+        Assert.Equal(1, hasher.VerifyCount);
     }
 
     [Fact]
@@ -489,7 +511,8 @@ public sealed class UserLoginApiTests
             string accessTokenMinutes = "60",
             int loginPermitLimit = 5,
             string loginWindow = "00:01:00",
-            string? trustedProxyAddress = null)
+            string? trustedProxyAddress = null,
+            string? remoteProxyAddress = null)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
@@ -535,7 +558,7 @@ public sealed class UserLoginApiTests
                     if (trustedProxyAddress is not null)
                     {
                         services.AddSingleton<IStartupFilter>(
-                            new FixedRemoteIpStartupFilter(IPAddress.Parse(trustedProxyAddress)));
+                            new FixedRemoteIpStartupFilter(IPAddress.Parse(remoteProxyAddress ?? trustedProxyAddress)));
                     }
                 });
             });
