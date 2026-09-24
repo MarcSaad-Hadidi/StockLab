@@ -22,6 +22,7 @@ public sealed class PaperTradingEngine(
 
         await using (var databaseTransaction = await dbContext.Database.BeginTransactionAsync(cancellationToken))
         {
+            var executionSucceeded = false;
             try
             {
                 var portfolio = await dbContext.Portfolios
@@ -41,6 +42,7 @@ public sealed class PaperTradingEngine(
                     EnsureSameOrder(existingTransaction, order);
                     var existingResult = await LoadCommittedResultAsync(existingTransaction, cancellationToken);
                     await databaseTransaction.CommitAsync(cancellationToken);
+                    executionSucceeded = true;
                     return existingResult;
                 }
 
@@ -121,13 +123,22 @@ public sealed class PaperTradingEngine(
                 await dbContext.SaveChangesAsync(cancellationToken);
                 await databaseTransaction.CommitAsync(cancellationToken);
 
-                return CreateResult(transaction, portfolio, holding);
+                var result = CreateResult(transaction, portfolio, holding);
+                executionSucceeded = true;
+                return result;
             }
             catch (DbUpdateException exception)
             {
                 await databaseTransaction.RollbackAsync(CancellationToken.None);
-                dbContext.ChangeTracker.Clear();
                 saveException = exception;
+            }
+            finally
+            {
+                if (!executionSucceeded)
+                {
+                    // Saving accepts tracked changes before commit. A rollback does not undo that state.
+                    dbContext.ChangeTracker.Clear();
+                }
             }
         }
 

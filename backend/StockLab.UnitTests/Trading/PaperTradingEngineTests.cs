@@ -252,6 +252,85 @@ public sealed class PaperTradingEngineTests
         Assert.Single(await fixture.Context.Transactions.ToListAsync());
     }
 
+    [Theory]
+    [InlineData("BUY", 0, true, true)]
+    [InlineData("BUY", 0, true, false)]
+    [InlineData("BUY", 4, true, true)]
+    [InlineData("BUY", 4, true, false)]
+    [InlineData("SELL", 4, true, true)]
+    [InlineData("SELL", 4, true, false)]
+    [InlineData("SELL", 2, true, true)]
+    [InlineData("SELL", 2, true, false)]
+    [InlineData("BUY", 0, false, true)]
+    [InlineData("BUY", 0, false, false)]
+    public async Task Failed_execution_does_not_leak_changes_into_the_next_order(
+        string side, int initialQuantity, bool failDuringCommit, bool cancelExecution)
+    {
+        var commitInterceptor = new CommitFailureInterceptor();
+        await using var fixture = await TradingFixture.CreateAsync(commitInterceptor: commitInterceptor);
+        if (initialQuantity > 0)
+        {
+            await fixture.AddHoldingAsync("AAPL", initialQuantity, 80m);
+        }
+
+        var engine = fixture.CreateEngine();
+        using var cancellation = new CancellationTokenSource();
+        Exception failure = cancelExecution
+            ? new OperationCanceledException(cancellation.Token)
+            : new InvalidOperationException("Simulated execution failure.");
+        void FailExecution()
+        {
+            if (cancelExecution)
+            {
+                cancellation.Cancel();
+            }
+
+            throw failure;
+        }
+
+        if (failDuringCommit)
+        {
+            // SaveChanges has already written to the real SQLite transaction at this boundary.
+            commitInterceptor.BeforeCommit = FailExecution;
+        }
+        else
+        {
+            fixture.Context.BeforeSave = FailExecution;
+        }
+
+        var failedOrder = new PaperTradeRequest(Guid.NewGuid(), side, "AAPL", 2m, 100m);
+        var error = await Record.ExceptionAsync(() => engine.ExecuteAsync(
+            fixture.PortfolioId, failedOrder, cancellation.Token));
+
+        Assert.Same(failure, error);
+        Assert.Null(fixture.Context.Database.CurrentTransaction);
+        var rolledBackPortfolio = await fixture.Context.Portfolios.AsNoTracking()
+            .Include(row => row.Holdings).SingleAsync();
+        Assert.Equal(100_000m, rolledBackPortfolio.CashBalance);
+        Assert.Equal((decimal)initialQuantity, rolledBackPortfolio.Holdings.Sum(row => row.Quantity));
+        Assert.Empty(await fixture.Context.Transactions.AsNoTracking().ToListAsync());
+
+        // Reuse both engine and context, without clearing or reloading tracked entities in the test.
+        var nextOrder = new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL", 1m, 120m);
+        var result = await engine.ExecuteAsync(fixture.PortfolioId, nextOrder);
+        var expectedAverageCost = decimal.Round(
+            (initialQuantity * 80m + 120m) / (initialQuantity + 1), 4, MidpointRounding.AwayFromZero);
+
+        Assert.Equal(99_880m, result.CashBalance);
+        Assert.Equal(initialQuantity + 1m, result.HoldingQuantity);
+        Assert.Equal(expectedAverageCost, result.AverageCost);
+
+        var persistedPortfolio = await fixture.Context.Portfolios.AsNoTracking()
+            .Include(row => row.Holdings).SingleAsync();
+        Assert.Equal(99_880m, persistedPortfolio.CashBalance);
+        var holding = Assert.Single(persistedPortfolio.Holdings);
+        Assert.Equal(initialQuantity + 1m, holding.Quantity);
+        Assert.Equal(expectedAverageCost, holding.AverageCost);
+        var transaction = Assert.Single(await fixture.Context.Transactions.AsNoTracking().ToListAsync());
+        Assert.Equal(nextOrder.OrderId, transaction.OrderId);
+        Assert.Equal(result.TransactionId, transaction.Id);
+    }
+
     private sealed class TradingFixture(SqliteConnection connection, SqliteTradingDbContext context,
         Guid portfolioId) : IAsyncDisposable
     {
@@ -261,7 +340,8 @@ public sealed class PaperTradingEngineTests
         public Guid PortfolioId { get; } = portfolioId;
 
         public static async Task<TradingFixture> CreateAsync(
-            decimal initialCapital = 100_000m, DbCommandInterceptor? lookupInterceptor = null)
+            decimal initialCapital = 100_000m, DbCommandInterceptor? lookupInterceptor = null,
+            DbTransactionInterceptor? commitInterceptor = null)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
@@ -276,6 +356,10 @@ public sealed class PaperTradingEngineTests
             if (lookupInterceptor is not null)
             {
                 optionsBuilder.AddInterceptors(lookupInterceptor);
+            }
+            if (commitInterceptor is not null)
+            {
+                optionsBuilder.AddInterceptors(commitInterceptor);
             }
 
             var context = new SqliteTradingDbContext(optionsBuilder.Options);
@@ -338,6 +422,7 @@ public sealed class PaperTradingEngineTests
         public bool HideTransactions { get; set; }
         public bool RecoveryQueriesRequireDisposedTransaction { get; private set; }
         public SimulatedSaveFailure SaveFailure { get; set; }
+        public Action? BeforeSave { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -349,6 +434,10 @@ public sealed class PaperTradingEngineTests
 
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
+            var beforeSave = BeforeSave;
+            BeforeSave = null;
+            beforeSave?.Invoke();
+
             if (SaveFailure != SimulatedSaveFailure.None)
             {
                 HideTransactions = false;
@@ -362,6 +451,21 @@ public sealed class PaperTradingEngineTests
             }
 
             return base.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private sealed class CommitFailureInterceptor : DbTransactionInterceptor
+    {
+        public Action? BeforeCommit { get; set; }
+
+        public override ValueTask<InterceptionResult> TransactionCommittingAsync(
+            DbTransaction transaction, TransactionEventData eventData, InterceptionResult result,
+            CancellationToken cancellationToken = default)
+        {
+            var beforeCommit = BeforeCommit;
+            BeforeCommit = null;
+            beforeCommit?.Invoke();
+            return new ValueTask<InterceptionResult>(result);
         }
     }
 
