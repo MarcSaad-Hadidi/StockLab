@@ -129,6 +129,86 @@ public sealed class PaperTradingEngineTests
     }
 
     [Theory]
+    [InlineData("BUY", 0, 99_800, 2, 100)]
+    [InlineData("BUY", 2, 99_800, 4, 90)]
+    [InlineData("SELL", 4, 100_200, 2, 80)]
+    [InlineData("SELL", 2, 100_200, 0, null)]
+    public async Task Duplicate_committed_during_lookup_returns_fresh_cash_and_holdings(
+        string side, int initialQuantity, int expectedCash, int expectedQuantity, int? expectedAverageCost)
+    {
+        var lookupInterceptor = new ConcurrentOrderLookupInterceptor();
+        await using var fixture = await TradingFixture.CreateAsync(lookupInterceptor: lookupInterceptor);
+        if (initialQuantity > 0)
+        {
+            await fixture.AddHoldingAsync("AAPL", initialQuantity, 80m);
+        }
+
+        var orderId = Guid.NewGuid();
+        var transactionId = Guid.NewGuid();
+        var now = TradingFixture.FixedUtcNow;
+        // SQLite serializes writers. Inject the winner's SQL changes at the lookup boundary
+        // to model SQL Server READ COMMITTED without refreshing the retry's tracked entities.
+        lookupInterceptor.BeforeLookup = async cancellationToken =>
+        {
+            await fixture.Context.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE Portfolios SET CashBalance = {expectedCash} WHERE Id = {fixture.PortfolioId}
+                """, cancellationToken);
+            if (expectedQuantity == 0)
+            {
+                await fixture.Context.Database.ExecuteSqlInterpolatedAsync($"""
+                    DELETE FROM Holdings WHERE PortfolioId = {fixture.PortfolioId} AND Symbol = {"AAPL"}
+                    """, cancellationToken);
+            }
+            else if (initialQuantity == 0)
+            {
+                await fixture.Context.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO Holdings (Id, PortfolioId, Symbol, Quantity, AverageCost, UpdatedAtUtc)
+                    VALUES ({Guid.NewGuid()}, {fixture.PortfolioId}, {"AAPL"},
+                            {expectedQuantity}, {expectedAverageCost}, {now})
+                    """, cancellationToken);
+            }
+            else
+            {
+                await fixture.Context.Database.ExecuteSqlInterpolatedAsync($"""
+                    UPDATE Holdings SET Quantity = {expectedQuantity}, AverageCost = {expectedAverageCost},
+                        UpdatedAtUtc = {now}
+                    WHERE PortfolioId = {fixture.PortfolioId} AND Symbol = {"AAPL"}
+                    """, cancellationToken);
+            }
+
+            await fixture.Context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO Transactions
+                    (Id, PortfolioId, OrderId, Side, Symbol, Quantity, ExecutionPrice, TotalAmount, ExecutedAtUtc)
+                VALUES ({transactionId}, {fixture.PortfolioId}, {orderId}, {side}, {"AAPL"},
+                        {2m}, {100m}, {200m}, {now})
+                """, cancellationToken);
+        };
+
+        var result = await fixture.CreateEngine().ExecuteAsync(fixture.PortfolioId,
+            new PaperTradeRequest(orderId, side, " aapl ", 2m, 100m));
+
+        Assert.Equal(transactionId, result.TransactionId);
+        Assert.Equal((decimal)expectedCash, result.CashBalance);
+        Assert.Equal((decimal)expectedQuantity, result.HoldingQuantity);
+        Assert.Equal((decimal?)expectedAverageCost, result.AverageCost);
+        Assert.Single(await fixture.Context.Transactions.AsNoTracking().ToListAsync());
+
+        var persistedPortfolio = await fixture.Context.Portfolios.AsNoTracking()
+            .Include(row => row.Holdings).SingleAsync(row => row.Id == fixture.PortfolioId);
+        Assert.Equal((decimal)expectedCash, persistedPortfolio.CashBalance);
+        if (expectedQuantity == 0)
+        {
+            Assert.Empty(persistedPortfolio.Holdings);
+        }
+        else
+        {
+            var holding = Assert.Single(persistedPortfolio.Holdings);
+            Assert.Equal((decimal)expectedQuantity, holding.Quantity);
+            Assert.Equal((decimal)expectedAverageCost!.Value, holding.AverageCost);
+        }
+    }
+
+    [Theory]
     [InlineData(SimulatedSaveFailure.Concurrency)]
     [InlineData(SimulatedSaveFailure.Update)]
     public async Task Concurrent_duplicate_order_recovers_after_disposing_the_rolled_back_transaction(
@@ -180,20 +260,25 @@ public sealed class PaperTradingEngineTests
         public SqliteTradingDbContext Context { get; } = context;
         public Guid PortfolioId { get; } = portfolioId;
 
-        public static async Task<TradingFixture> CreateAsync(decimal initialCapital = 100_000m)
+        public static async Task<TradingFixture> CreateAsync(
+            decimal initialCapital = 100_000m, DbCommandInterceptor? lookupInterceptor = null)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
             var transactionLifecycle = new TransactionLifecycleState();
-            var options = new DbContextOptionsBuilder<StockLabDbContext>()
+            var optionsBuilder = new DbContextOptionsBuilder<StockLabDbContext>()
                 .UseSqlite(connection)
                 .LogTo(
                     (eventId, _) => eventId == RelationalEventId.TransactionRolledBack
                                     || eventId == RelationalEventId.TransactionDisposed,
                     transactionLifecycle.Record)
-                .AddInterceptors(new CompletedTransactionGuardInterceptor(transactionLifecycle))
-                .Options;
-            var context = new SqliteTradingDbContext(options);
+                .AddInterceptors(new CompletedTransactionGuardInterceptor(transactionLifecycle));
+            if (lookupInterceptor is not null)
+            {
+                optionsBuilder.AddInterceptors(lookupInterceptor);
+            }
+
+            var context = new SqliteTradingDbContext(optionsBuilder.Options);
             await context.Database.EnsureCreatedAsync();
 
             var userId = Guid.NewGuid();
@@ -294,6 +379,27 @@ public sealed class PaperTradingEngineTests
             {
                 RolledBackTransactionAwaitingDisposal = false;
             }
+        }
+    }
+
+    private sealed class ConcurrentOrderLookupInterceptor : DbCommandInterceptor
+    {
+        public Func<CancellationToken, Task>? BeforeLookup { get; set; }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (BeforeLookup is { } beforeLookup
+                && command.CommandText.Contains("FROM \"Transactions\"", StringComparison.Ordinal))
+            {
+                BeforeLookup = null;
+                await beforeLookup(cancellationToken);
+            }
+
+            return result;
         }
     }
 

@@ -39,8 +39,9 @@ public sealed class PaperTradingEngine(
                 if (existingTransaction is not null)
                 {
                     EnsureSameOrder(existingTransaction, order);
+                    var existingResult = await LoadCommittedResultAsync(existingTransaction, cancellationToken);
                     await databaseTransaction.CommitAsync(cancellationToken);
-                    return CreateResult(existingTransaction, portfolio);
+                    return existingResult;
                 }
 
                 var now = timeProvider.GetUtcNow().UtcDateTime;
@@ -142,17 +143,7 @@ public sealed class PaperTradingEngine(
         if (committedTransaction is not null)
         {
             EnsureSameOrder(committedTransaction, order);
-
-            var committedPortfolio = await dbContext.Portfolios
-                .AsNoTracking()
-                .Include(row => row.Holdings)
-                .SingleOrDefaultAsync(row => row.Id == portfolioId, cancellationToken);
-            if (committedPortfolio is null)
-            {
-                throw new PaperTradingException(PaperTradingFailure.PortfolioNotFound);
-            }
-
-            return CreateResult(committedTransaction, committedPortfolio);
+            return await LoadCommittedResultAsync(committedTransaction, cancellationToken);
         }
 
         if (saveException is DbUpdateConcurrencyException)
@@ -162,6 +153,22 @@ public sealed class PaperTradingEngine(
 
         ExceptionDispatchInfo.Capture(saveException).Throw();
         throw new InvalidOperationException("Unreachable paper-trading recovery path.");
+    }
+
+    private async Task<PaperTradeResult> LoadCommittedResultAsync(
+        Transaction transaction, CancellationToken cancellationToken)
+    {
+        // A concurrent order may have changed cash and holdings since the tracked portfolio was loaded.
+        var portfolio = await dbContext.Portfolios
+            .AsNoTracking()
+            .Include(row => row.Holdings)
+            .SingleOrDefaultAsync(row => row.Id == transaction.PortfolioId, cancellationToken);
+        if (portfolio is null)
+        {
+            throw new PaperTradingException(PaperTradingFailure.PortfolioNotFound);
+        }
+
+        return CreateResult(transaction, portfolio);
     }
 
     private static NormalizedOrder Normalize(Guid portfolioId, PaperTradeRequest request)
