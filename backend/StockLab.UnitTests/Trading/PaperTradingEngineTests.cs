@@ -18,7 +18,7 @@ public sealed class PaperTradingEngineTests
         await using var fixture = await TradingFixture.CreateAsync();
         var engine = fixture.CreateEngine();
 
-        var result = await engine.ExecuteAsync(fixture.PortfolioId,
+        var result = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId,
             new PaperTradeRequest(Guid.NewGuid(), "BUY", " aapl ", 10m, 125m));
 
         Assert.Equal("BUY", result.Side);
@@ -43,7 +43,7 @@ public sealed class PaperTradingEngineTests
         var engine = fixture.CreateEngine();
 
         var error = await Assert.ThrowsAsync<PaperTradingException>(() => engine.ExecuteAsync(
-            fixture.PortfolioId, new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL", 11m, 100m)));
+            fixture.UserId, fixture.PortfolioId, new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL", 11m, 100m)));
 
         Assert.Equal(PaperTradingFailure.InsufficientCash, error.Category);
         var portfolio = await fixture.Context.Portfolios.AsNoTracking()
@@ -60,7 +60,7 @@ public sealed class PaperTradingEngineTests
         await fixture.AddHoldingAsync("MSFT", 10m, 200m);
         var engine = fixture.CreateEngine();
 
-        var result = await engine.ExecuteAsync(fixture.PortfolioId,
+        var result = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId,
             new PaperTradeRequest(Guid.NewGuid(), "SELL", "MSFT", 10m, 240m));
 
         Assert.Equal("SELL", result.Side);
@@ -79,7 +79,7 @@ public sealed class PaperTradingEngineTests
         var engine = fixture.CreateEngine();
 
         var error = await Assert.ThrowsAsync<PaperTradingException>(() => engine.ExecuteAsync(
-            fixture.PortfolioId, new PaperTradeRequest(Guid.NewGuid(), "SELL", "NVDA", 2.01m, 110m)));
+            fixture.UserId, fixture.PortfolioId, new PaperTradeRequest(Guid.NewGuid(), "SELL", "NVDA", 2.01m, 110m)));
 
         Assert.Equal(PaperTradingFailure.InsufficientHoldings, error.Category);
         var holding = await fixture.Context.Holdings.AsNoTracking().SingleAsync();
@@ -94,9 +94,9 @@ public sealed class PaperTradingEngineTests
         await using var fixture = await TradingFixture.CreateAsync(initialCapital: 2_000m);
         var engine = fixture.CreateEngine();
 
-        await engine.ExecuteAsync(fixture.PortfolioId,
+        await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId,
             new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL", 10m, 100m));
-        var result = await engine.ExecuteAsync(fixture.PortfolioId,
+        var result = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId,
             new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL", 5m, 130m));
 
         Assert.Equal(15m, result.HoldingQuantity);
@@ -116,15 +116,15 @@ public sealed class PaperTradingEngineTests
         var orderId = Guid.NewGuid();
         var request = new PaperTradeRequest(orderId, "BUY", "AAPL", 2m, 100m);
 
-        var first = await engine.ExecuteAsync(fixture.PortfolioId, request);
-        var retry = await engine.ExecuteAsync(fixture.PortfolioId, request);
+        var first = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request);
+        var retry = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request);
 
         Assert.Equal(first.TransactionId, retry.TransactionId);
         Assert.Equal(99_800m, retry.CashBalance);
         Assert.Equal(1, await fixture.Context.Transactions.CountAsync());
 
         var error = await Assert.ThrowsAsync<PaperTradingException>(() => engine.ExecuteAsync(
-            fixture.PortfolioId, request with { Quantity = 3m }));
+            fixture.UserId, fixture.PortfolioId, request with { Quantity = 3m }));
         Assert.Equal(PaperTradingFailure.DuplicateOrder, error.Category);
     }
 
@@ -184,7 +184,7 @@ public sealed class PaperTradingEngineTests
                 """, cancellationToken);
         };
 
-        var result = await fixture.CreateEngine().ExecuteAsync(fixture.PortfolioId,
+        var result = await fixture.CreateEngine().ExecuteAsync(fixture.UserId, fixture.PortfolioId,
             new PaperTradeRequest(orderId, side, " aapl ", 2m, 100m));
 
         Assert.Equal(transactionId, result.TransactionId);
@@ -209,10 +209,12 @@ public sealed class PaperTradingEngineTests
     }
 
     [Theory]
-    [InlineData(SimulatedSaveFailure.Concurrency)]
-    [InlineData(SimulatedSaveFailure.Update)]
+    [InlineData(SimulatedSaveFailure.Concurrency, false)]
+    [InlineData(SimulatedSaveFailure.Update, false)]
+    [InlineData(SimulatedSaveFailure.Concurrency, true)]
+    [InlineData(SimulatedSaveFailure.Update, true)]
     public async Task Concurrent_duplicate_order_recovers_after_disposing_the_rolled_back_transaction(
-        SimulatedSaveFailure saveFailure)
+        SimulatedSaveFailure saveFailure, bool changedPayload)
     {
         await using var fixture = await TradingFixture.CreateAsync();
         var orderId = Guid.NewGuid();
@@ -246,13 +248,58 @@ public sealed class PaperTradingEngineTests
             context.HideTransactions = true;
             context.SaveFailure = saveFailure;
         };
-        var result = await fixture.CreateEngine().ExecuteAsync(fixture.PortfolioId,
-            new PaperTradeRequest(orderId, "BUY", "AAPL", 2m, 100m));
-
-        Assert.Equal(orderId, result.OrderId);
-        Assert.Equal(99_800m, result.CashBalance);
-        Assert.Equal(2m, result.HoldingQuantity);
+        var request = new PaperTradeRequest(orderId, "BUY", "AAPL", changedPayload ? 3m : 2m, 100m);
+        if (changedPayload)
+        {
+            var error = await Assert.ThrowsAsync<PaperTradingException>(() => fixture.CreateEngine().ExecuteAsync(
+                fixture.UserId, fixture.PortfolioId, request));
+            Assert.Equal(PaperTradingFailure.DuplicateOrder, error.Category);
+        }
+        else
+        {
+            var result = await fixture.CreateEngine().ExecuteAsync(fixture.UserId, fixture.PortfolioId, request);
+            Assert.Equal(orderId, result.OrderId);
+            Assert.Equal(99_800m, result.CashBalance);
+            Assert.Equal(2m, result.HoldingQuantity);
+        }
+        Assert.Equal(99_800m, await fixture.Context.Portfolios.Select(row => row.CashBalance).SingleAsync());
+        Assert.Equal(2m, await fixture.Context.Holdings.Select(row => row.Quantity).SingleAsync());
         Assert.Single(await fixture.Context.Transactions.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData(SimulatedSaveFailure.Concurrency)]
+    [InlineData(SimulatedSaveFailure.Update)]
+    public async Task Failed_save_without_a_committed_duplicate_preserves_state_and_allows_the_next_order(
+        SimulatedSaveFailure saveFailure)
+    {
+        await using var fixture = await TradingFixture.CreateAsync();
+        await fixture.AddHoldingAsync("AAPL", 5m, 80m);
+        fixture.ContextFactory.ConfigureNextContext = context => context.SaveFailure = saveFailure;
+        var engine = fixture.CreateEngine();
+        var failedOrder = new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL", 2m, 100m);
+
+        var error = await Record.ExceptionAsync(() => engine.ExecuteAsync(
+            fixture.UserId, fixture.PortfolioId, failedOrder));
+
+        if (saveFailure == SimulatedSaveFailure.Concurrency)
+        {
+            Assert.Equal(PaperTradingFailure.ConcurrencyConflict,
+                Assert.IsType<PaperTradingException>(error).Category);
+        }
+        else
+        {
+            Assert.IsType<DbUpdateException>(error);
+        }
+        Assert.Equal(100_000m, await fixture.Context.Portfolios.Select(row => row.CashBalance).SingleAsync());
+        Assert.Equal(5m, await fixture.Context.Holdings.Select(row => row.Quantity).SingleAsync());
+        Assert.Empty(await fixture.Context.Transactions.ToListAsync());
+
+        var nextOrder = failedOrder with { OrderId = Guid.NewGuid() };
+        var result = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, nextOrder);
+        Assert.Equal(99_800m, result.CashBalance);
+        Assert.Equal(7m, result.HoldingQuantity);
+        Assert.Equal(nextOrder.OrderId, Assert.Single(await fixture.Context.Transactions.AsNoTracking().ToListAsync()).OrderId);
     }
 
     [Theory]
@@ -303,7 +350,7 @@ public sealed class PaperTradingEngineTests
 
         var failedOrder = new PaperTradeRequest(Guid.NewGuid(), side, "AAPL", 2m, 100m);
         var error = await Record.ExceptionAsync(() => engine.ExecuteAsync(
-            fixture.PortfolioId, failedOrder, cancellation.Token));
+            fixture.UserId, fixture.PortfolioId, failedOrder, cancellation.Token));
 
         Assert.Same(failure, error);
         Assert.Null(fixture.Context.Database.CurrentTransaction);
@@ -315,7 +362,7 @@ public sealed class PaperTradingEngineTests
 
         // Reuse the engine; each execution must start from the committed database state.
         var nextOrder = new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL", 1m, 120m);
-        var result = await engine.ExecuteAsync(fixture.PortfolioId, nextOrder);
+        var result = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, nextOrder);
         var expectedAverageCost = decimal.Round(
             (initialQuantity * 80m + 120m) / (initialQuantity + 1), 4, MidpointRounding.AwayFromZero);
 
@@ -359,7 +406,7 @@ public sealed class PaperTradingEngineTests
         var order = new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL", 2m, 100m);
         if (outcome == TradeOutcome.DuplicateOrder)
         {
-            await engine.ExecuteAsync(fixture.PortfolioId, order);
+            await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, order);
             order = order with { Quantity = 3m };
         }
         else if (outcome == TradeOutcome.InsufficientCash)
@@ -402,7 +449,7 @@ public sealed class PaperTradingEngineTests
         }
 
         var error = await Record.ExceptionAsync(() => engine.ExecuteAsync(
-            fixture.PortfolioId, order, cancellation.Token));
+            fixture.UserId, fixture.PortfolioId, order, cancellation.Token));
         if (commitFailure is not null)
         {
             Assert.Same(commitFailure, error);
@@ -435,13 +482,92 @@ public sealed class PaperTradingEngineTests
             Assert.Single(await fixture.Context.Watchlists.AsNoTracking().ToListAsync()).Id);
     }
 
+    [Theory]
+    [InlineData("BUY", 0)]
+    [InlineData("SELL", 0)]
+    [InlineData("BUY", 1)]
+    [InlineData("SELL", 1)]
+    [InlineData("BUY", 2)]
+    [InlineData("SELL", 2)]
+    public async Task Another_user_cannot_execute_or_retrieve_an_order(
+        string side, int retryKind)
+    {
+        await using var fixture = await TradingFixture.CreateAsync();
+        await fixture.AddHoldingAsync("AAPL", 5m, 80m);
+        var otherUser = new User
+        {
+            Id = Guid.NewGuid(), DisplayName = "Other user", Email = "other@example.com",
+            NormalizedEmail = "OTHER@EXAMPLE.COM", PasswordHash = "test-hash",
+            CreatedAtUtc = TradingFixture.FixedUtcNow, UpdatedAtUtc = TradingFixture.FixedUtcNow,
+            Version = new byte[8]
+        };
+        fixture.Context.Users.Add(otherUser);
+        await fixture.Context.SaveChangesAsync();
+
+        var engine = fixture.CreateEngine();
+        var request = new PaperTradeRequest(Guid.NewGuid(), side, "AAPL", 2m, 100m);
+        if (retryKind > 0)
+        {
+            await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request);
+        }
+        if (retryKind == 2)
+        {
+            request = request with { Quantity = 3m };
+        }
+
+        var before = await fixture.Context.Portfolios.AsNoTracking().Include(row => row.Holdings).SingleAsync();
+        var transactionsBefore = await fixture.Context.Transactions.AsNoTracking().ToListAsync();
+
+        var error = await Assert.ThrowsAsync<PaperTradingException>(() => engine.ExecuteAsync(
+            otherUser.Id, fixture.PortfolioId, request));
+
+        Assert.Equal(PaperTradingFailure.PortfolioNotFound, error.Category);
+        var after = await fixture.Context.Portfolios.AsNoTracking().Include(row => row.Holdings).SingleAsync();
+        Assert.Equal(before.CashBalance, after.CashBalance);
+        var beforeHolding = Assert.Single(before.Holdings);
+        var afterHolding = Assert.Single(after.Holdings);
+        Assert.Equal(beforeHolding.Id, afterHolding.Id);
+        Assert.Equal(beforeHolding.Quantity, afterHolding.Quantity);
+        Assert.Equal(beforeHolding.AverageCost, afterHolding.AverageCost);
+        Assert.Equal(transactionsBefore.Select(row => row.Id).Order(),
+            (await fixture.Context.Transactions.AsNoTracking().ToListAsync()).Select(row => row.Id).Order());
+    }
+
+    [Fact]
+    public async Task Missing_authenticated_user_is_rejected_without_executing_an_order()
+    {
+        await using var fixture = await TradingFixture.CreateAsync();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.CreateEngine().ExecuteAsync(
+            Guid.Empty, fixture.PortfolioId,
+            new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL", 2m, 100m)));
+
+        Assert.Equal(100_000m, await fixture.Context.Portfolios.Select(row => row.CashBalance).SingleAsync());
+        Assert.Empty(await fixture.Context.Holdings.ToListAsync());
+        Assert.Empty(await fixture.Context.Transactions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Missing_portfolio_returns_the_same_failure_as_another_users_portfolio()
+    {
+        await using var fixture = await TradingFixture.CreateAsync();
+
+        var error = await Assert.ThrowsAsync<PaperTradingException>(() => fixture.CreateEngine().ExecuteAsync(
+            fixture.UserId, Guid.NewGuid(),
+            new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL", 2m, 100m)));
+
+        Assert.Equal(PaperTradingFailure.PortfolioNotFound, error.Category);
+        Assert.Empty(await fixture.Context.Transactions.ToListAsync());
+    }
+
     private sealed class TradingFixture(SqliteConnection connection, SqliteTradingDbContext context,
-        SqliteTradingContextFactory contextFactory, Guid portfolioId) : IAsyncDisposable
+        SqliteTradingContextFactory contextFactory, Guid userId, Guid portfolioId) : IAsyncDisposable
     {
         public static readonly DateTime FixedUtcNow = new(2026, 9, 24, 18, 0, 0, DateTimeKind.Utc);
 
         public SqliteTradingDbContext Context { get; } = context;
         public SqliteTradingContextFactory ContextFactory { get; } = contextFactory;
+        public Guid UserId { get; } = userId;
         public Guid PortfolioId { get; } = portfolioId;
 
         public static async Task<TradingFixture> CreateAsync(
@@ -497,7 +623,7 @@ public sealed class PaperTradingEngineTests
             });
             await context.SaveChangesAsync();
             return new TradingFixture(connection, context,
-                new SqliteTradingContextFactory(optionsBuilder.Options), portfolioId);
+                new SqliteTradingContextFactory(optionsBuilder.Options), userId, portfolioId);
         }
 
         public PaperTradingEngine CreateEngine() => new(ContextFactory, new FixedTimeProvider(FixedUtcNow));

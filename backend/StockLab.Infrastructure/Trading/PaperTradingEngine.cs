@@ -13,10 +13,16 @@ public sealed class PaperTradingEngine(
     TimeProvider timeProvider) : IPaperTradingEngine
 {
     public async Task<PaperTradeResult> ExecuteAsync(
+        Guid authenticatedUserId,
         Guid portfolioId,
         PaperTradeRequest request,
         CancellationToken cancellationToken = default)
     {
+        if (authenticatedUserId == Guid.Empty)
+        {
+            throw new ArgumentException("An authenticated user identifier is required.", nameof(authenticatedUserId));
+        }
+
         var order = Normalize(portfolioId, request);
         // Each order owns its unit of work; never save or discard another scoped service's edits.
         await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -28,7 +34,8 @@ public sealed class PaperTradingEngine(
             {
                 var portfolio = await dbContext.Portfolios
                     .Include(row => row.Holdings)
-                    .SingleOrDefaultAsync(row => row.Id == portfolioId, cancellationToken);
+                    .SingleOrDefaultAsync(row => row.Id == portfolioId && row.UserId == authenticatedUserId,
+                        cancellationToken);
                 if (portfolio is null)
                 {
                     throw new PaperTradingException(PaperTradingFailure.PortfolioNotFound);
@@ -36,12 +43,14 @@ public sealed class PaperTradingEngine(
 
                 var existingTransaction = await dbContext.Transactions
                     .AsNoTracking()
-                    .SingleOrDefaultAsync(row => row.PortfolioId == portfolioId && row.OrderId == order.OrderId,
+                    .SingleOrDefaultAsync(row => row.PortfolioId == portfolioId && row.OrderId == order.OrderId
+                        && row.Portfolio.UserId == authenticatedUserId,
                         cancellationToken);
                 if (existingTransaction is not null)
                 {
                     EnsureSameOrder(existingTransaction, order);
-                    var existingResult = await LoadCommittedResultAsync(dbContext, existingTransaction, cancellationToken);
+                    var existingResult = await LoadCommittedResultAsync(
+                        dbContext, authenticatedUserId, existingTransaction, cancellationToken);
                     await databaseTransaction.CommitAsync(cancellationToken);
                     return existingResult;
                 }
@@ -139,12 +148,13 @@ public sealed class PaperTradingEngine(
 
         var committedTransaction = await dbContext.Transactions
             .AsNoTracking()
-            .SingleOrDefaultAsync(row => row.PortfolioId == portfolioId && row.OrderId == order.OrderId,
+            .SingleOrDefaultAsync(row => row.PortfolioId == portfolioId && row.OrderId == order.OrderId
+                && row.Portfolio.UserId == authenticatedUserId,
                 cancellationToken);
         if (committedTransaction is not null)
         {
             EnsureSameOrder(committedTransaction, order);
-            return await LoadCommittedResultAsync(dbContext, committedTransaction, cancellationToken);
+            return await LoadCommittedResultAsync(dbContext, authenticatedUserId, committedTransaction, cancellationToken);
         }
 
         if (saveException is DbUpdateConcurrencyException)
@@ -157,13 +167,15 @@ public sealed class PaperTradingEngine(
     }
 
     private static async Task<PaperTradeResult> LoadCommittedResultAsync(
-        StockLabDbContext dbContext, Transaction transaction, CancellationToken cancellationToken)
+        StockLabDbContext dbContext, Guid authenticatedUserId, Transaction transaction,
+        CancellationToken cancellationToken)
     {
         // A concurrent order may have changed cash and holdings since the tracked portfolio was loaded.
         var portfolio = await dbContext.Portfolios
             .AsNoTracking()
             .Include(row => row.Holdings)
-            .SingleOrDefaultAsync(row => row.Id == transaction.PortfolioId, cancellationToken);
+            .SingleOrDefaultAsync(row => row.Id == transaction.PortfolioId && row.UserId == authenticatedUserId,
+                cancellationToken);
         if (portfolio is null)
         {
             throw new PaperTradingException(PaperTradingFailure.PortfolioNotFound);
