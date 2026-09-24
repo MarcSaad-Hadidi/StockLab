@@ -148,20 +148,20 @@ public sealed class PaperTradingEngineTests
         var now = TradingFixture.FixedUtcNow;
         // SQLite serializes writers. Inject the winner's SQL changes at the lookup boundary
         // to model SQL Server READ COMMITTED without refreshing the retry's tracked entities.
-        lookupInterceptor.BeforeLookup = async cancellationToken =>
+        lookupInterceptor.BeforeLookup = async (context, cancellationToken) =>
         {
-            await fixture.Context.Database.ExecuteSqlInterpolatedAsync($"""
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
                 UPDATE Portfolios SET CashBalance = {expectedCash} WHERE Id = {fixture.PortfolioId}
                 """, cancellationToken);
             if (expectedQuantity == 0)
             {
-                await fixture.Context.Database.ExecuteSqlInterpolatedAsync($"""
+                await context.Database.ExecuteSqlInterpolatedAsync($"""
                     DELETE FROM Holdings WHERE PortfolioId = {fixture.PortfolioId} AND Symbol = {"AAPL"}
                     """, cancellationToken);
             }
             else if (initialQuantity == 0)
             {
-                await fixture.Context.Database.ExecuteSqlInterpolatedAsync($"""
+                await context.Database.ExecuteSqlInterpolatedAsync($"""
                     INSERT INTO Holdings (Id, PortfolioId, Symbol, Quantity, AverageCost, UpdatedAtUtc)
                     VALUES ({Guid.NewGuid()}, {fixture.PortfolioId}, {"AAPL"},
                             {expectedQuantity}, {expectedAverageCost}, {now})
@@ -169,14 +169,14 @@ public sealed class PaperTradingEngineTests
             }
             else
             {
-                await fixture.Context.Database.ExecuteSqlInterpolatedAsync($"""
+                await context.Database.ExecuteSqlInterpolatedAsync($"""
                     UPDATE Holdings SET Quantity = {expectedQuantity}, AverageCost = {expectedAverageCost},
                         UpdatedAtUtc = {now}
                     WHERE PortfolioId = {fixture.PortfolioId} AND Symbol = {"AAPL"}
                     """, cancellationToken);
             }
 
-            await fixture.Context.Database.ExecuteSqlInterpolatedAsync($"""
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO Transactions
                     (Id, PortfolioId, OrderId, Side, Symbol, Quantity, ExecutionPrice, TotalAmount, ExecutedAtUtc)
                 VALUES ({transactionId}, {fixture.PortfolioId}, {orderId}, {side}, {"AAPL"},
@@ -241,8 +241,11 @@ public sealed class PaperTradingEngineTests
         });
         await fixture.Context.SaveChangesAsync();
 
-        fixture.Context.HideTransactions = true;
-        fixture.Context.SaveFailure = saveFailure;
+        fixture.ContextFactory.ConfigureNextContext = context =>
+        {
+            context.HideTransactions = true;
+            context.SaveFailure = saveFailure;
+        };
         var result = await fixture.CreateEngine().ExecuteAsync(fixture.PortfolioId,
             new PaperTradeRequest(orderId, "BUY", "AAPL", 2m, 100m));
 
@@ -295,7 +298,7 @@ public sealed class PaperTradingEngineTests
         }
         else
         {
-            fixture.Context.BeforeSave = FailExecution;
+            fixture.ContextFactory.ConfigureNextContext = context => context.BeforeSave = FailExecution;
         }
 
         var failedOrder = new PaperTradeRequest(Guid.NewGuid(), side, "AAPL", 2m, 100m);
@@ -310,7 +313,7 @@ public sealed class PaperTradingEngineTests
         Assert.Equal((decimal)initialQuantity, rolledBackPortfolio.Holdings.Sum(row => row.Quantity));
         Assert.Empty(await fixture.Context.Transactions.AsNoTracking().ToListAsync());
 
-        // Reuse both engine and context, without clearing or reloading tracked entities in the test.
+        // Reuse the engine; each execution must start from the committed database state.
         var nextOrder = new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL", 1m, 120m);
         var result = await engine.ExecuteAsync(fixture.PortfolioId, nextOrder);
         var expectedAverageCost = decimal.Round(
@@ -331,12 +334,114 @@ public sealed class PaperTradingEngineTests
         Assert.Equal(result.TransactionId, transaction.Id);
     }
 
+    [Theory]
+    [InlineData(TradeOutcome.InsufficientCash)]
+    [InlineData(TradeOutcome.InsufficientHoldings)]
+    [InlineData(TradeOutcome.DuplicateOrder)]
+    [InlineData(TradeOutcome.CommitCancelled)]
+    [InlineData(TradeOutcome.CommitFailed)]
+    [InlineData(TradeOutcome.Success)]
+    public async Task Trade_outcomes_preserve_unrelated_pending_changes(TradeOutcome outcome)
+    {
+        var commitInterceptor = new CommitFailureInterceptor();
+        await using var fixture = await TradingFixture.CreateAsync(
+            initialCapital: 1_000m, commitInterceptor: commitInterceptor);
+        var engine = fixture.CreateEngine();
+        var user = await fixture.Context.Users.SingleAsync();
+        var removedWatchlist = new Watchlist
+        {
+            Id = Guid.NewGuid(), UserId = user.Id, Symbol = "MSFT",
+            CreatedAtUtc = TradingFixture.FixedUtcNow
+        };
+        fixture.Context.Watchlists.Add(removedWatchlist);
+        await fixture.Context.SaveChangesAsync();
+
+        var order = new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL", 2m, 100m);
+        if (outcome == TradeOutcome.DuplicateOrder)
+        {
+            await engine.ExecuteAsync(fixture.PortfolioId, order);
+            order = order with { Quantity = 3m };
+        }
+        else if (outcome == TradeOutcome.InsufficientCash)
+        {
+            order = order with { Quantity = 11m };
+        }
+        else if (outcome == TradeOutcome.InsufficientHoldings)
+        {
+            order = order with { Side = "SELL" };
+        }
+
+        // These edits belong to the caller, not to the order being executed.
+        var originalName = user.DisplayName;
+        user.DisplayName = "Pending profile edit";
+        var addedWatchlist = new Watchlist
+        {
+            Id = Guid.NewGuid(), UserId = user.Id, Symbol = "NVDA",
+            CreatedAtUtc = TradingFixture.FixedUtcNow
+        };
+        fixture.Context.Watchlists.Add(addedWatchlist);
+        fixture.Context.Watchlists.Remove(removedWatchlist);
+
+        using var cancellation = new CancellationTokenSource();
+        Exception? commitFailure = outcome switch
+        {
+            TradeOutcome.CommitCancelled => new OperationCanceledException(cancellation.Token),
+            TradeOutcome.CommitFailed => new InvalidOperationException("Simulated commit failure."),
+            _ => null
+        };
+        if (commitFailure is not null)
+        {
+            commitInterceptor.BeforeCommit = () =>
+            {
+                if (outcome == TradeOutcome.CommitCancelled)
+                {
+                    cancellation.Cancel();
+                }
+                throw commitFailure;
+            };
+        }
+
+        var error = await Record.ExceptionAsync(() => engine.ExecuteAsync(
+            fixture.PortfolioId, order, cancellation.Token));
+        if (commitFailure is not null)
+        {
+            Assert.Same(commitFailure, error);
+        }
+        else if (outcome == TradeOutcome.Success)
+        {
+            Assert.Null(error);
+        }
+        else
+        {
+            var tradingError = Assert.IsType<PaperTradingException>(error);
+            var expectedFailure = outcome switch
+            {
+                TradeOutcome.InsufficientCash => PaperTradingFailure.InsufficientCash,
+                TradeOutcome.InsufficientHoldings => PaperTradingFailure.InsufficientHoldings,
+                _ => PaperTradingFailure.DuplicateOrder
+            };
+            Assert.Equal(expectedFailure, tradingError.Category);
+        }
+
+        // Trading must neither save these edits early nor discard them on failure.
+        Assert.Equal(originalName, (await fixture.Context.Users.AsNoTracking().SingleAsync()).DisplayName);
+        Assert.Equal(removedWatchlist.Id,
+            Assert.Single(await fixture.Context.Watchlists.AsNoTracking().ToListAsync()).Id);
+
+        await fixture.Context.SaveChangesAsync();
+
+        Assert.Equal("Pending profile edit", (await fixture.Context.Users.AsNoTracking().SingleAsync()).DisplayName);
+        Assert.Equal(addedWatchlist.Id,
+            Assert.Single(await fixture.Context.Watchlists.AsNoTracking().ToListAsync()).Id);
+    }
+
     private sealed class TradingFixture(SqliteConnection connection, SqliteTradingDbContext context,
-        Guid portfolioId) : IAsyncDisposable
+        SqliteTradingContextFactory contextFactory, Guid portfolioId) : IAsyncDisposable
     {
         public static readonly DateTime FixedUtcNow = new(2026, 9, 24, 18, 0, 0, DateTimeKind.Utc);
 
         public SqliteTradingDbContext Context { get; } = context;
+        public SqliteTradingContextFactory ContextFactory { get; } = contextFactory;
         public Guid PortfolioId { get; } = portfolioId;
 
         public static async Task<TradingFixture> CreateAsync(
@@ -391,10 +496,11 @@ public sealed class PaperTradingEngineTests
                 Version = new byte[8]
             });
             await context.SaveChangesAsync();
-            return new TradingFixture(connection, context, portfolioId);
+            return new TradingFixture(connection, context,
+                new SqliteTradingContextFactory(optionsBuilder.Options), portfolioId);
         }
 
-        public PaperTradingEngine CreateEngine() => new(Context, new FixedTimeProvider(FixedUtcNow));
+        public PaperTradingEngine CreateEngine() => new(ContextFactory, new FixedTimeProvider(FixedUtcNow));
 
         public async Task AddHoldingAsync(string symbol, decimal quantity, decimal averageCost)
         {
@@ -414,6 +520,21 @@ public sealed class PaperTradingEngineTests
         {
             await Context.DisposeAsync();
             await connection.DisposeAsync();
+        }
+    }
+
+    private sealed class SqliteTradingContextFactory(DbContextOptions<StockLabDbContext> options)
+        : IDbContextFactory<StockLabDbContext>
+    {
+        public Action<SqliteTradingDbContext>? ConfigureNextContext { get; set; }
+
+        public StockLabDbContext CreateDbContext()
+        {
+            var context = new SqliteTradingDbContext(options);
+            var configureContext = ConfigureNextContext;
+            ConfigureNextContext = null;
+            configureContext?.Invoke(context);
+            return context;
         }
     }
 
@@ -488,7 +609,7 @@ public sealed class PaperTradingEngineTests
 
     private sealed class ConcurrentOrderLookupInterceptor : DbCommandInterceptor
     {
-        public Func<CancellationToken, Task>? BeforeLookup { get; set; }
+        public Func<StockLabDbContext, CancellationToken, Task>? BeforeLookup { get; set; }
 
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
             DbCommand command,
@@ -500,7 +621,7 @@ public sealed class PaperTradingEngineTests
                 && command.CommandText.Contains("FROM \"Transactions\"", StringComparison.Ordinal))
             {
                 BeforeLookup = null;
-                await beforeLookup(cancellationToken);
+                await beforeLookup((StockLabDbContext)eventData.Context!, cancellationToken);
             }
 
             return result;
@@ -528,6 +649,16 @@ public sealed class PaperTradingEngineTests
 
             return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
         }
+    }
+
+    public enum TradeOutcome
+    {
+        InsufficientCash,
+        InsufficientHoldings,
+        DuplicateOrder,
+        CommitCancelled,
+        CommitFailed,
+        Success
     }
 
     public enum SimulatedSaveFailure

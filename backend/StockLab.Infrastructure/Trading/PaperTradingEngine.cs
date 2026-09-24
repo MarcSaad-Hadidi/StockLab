@@ -9,7 +9,7 @@ using StockLab.Infrastructure.Persistence;
 namespace StockLab.Infrastructure.Trading;
 
 public sealed class PaperTradingEngine(
-    StockLabDbContext dbContext,
+    IDbContextFactory<StockLabDbContext> dbContextFactory,
     TimeProvider timeProvider) : IPaperTradingEngine
 {
     public async Task<PaperTradeResult> ExecuteAsync(
@@ -18,11 +18,12 @@ public sealed class PaperTradingEngine(
         CancellationToken cancellationToken = default)
     {
         var order = Normalize(portfolioId, request);
+        // Each order owns its unit of work; never save or discard another scoped service's edits.
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         DbUpdateException? saveException = null;
 
         await using (var databaseTransaction = await dbContext.Database.BeginTransactionAsync(cancellationToken))
         {
-            var executionSucceeded = false;
             try
             {
                 var portfolio = await dbContext.Portfolios
@@ -40,9 +41,8 @@ public sealed class PaperTradingEngine(
                 if (existingTransaction is not null)
                 {
                     EnsureSameOrder(existingTransaction, order);
-                    var existingResult = await LoadCommittedResultAsync(existingTransaction, cancellationToken);
+                    var existingResult = await LoadCommittedResultAsync(dbContext, existingTransaction, cancellationToken);
                     await databaseTransaction.CommitAsync(cancellationToken);
-                    executionSucceeded = true;
                     return existingResult;
                 }
 
@@ -123,22 +123,12 @@ public sealed class PaperTradingEngine(
                 await dbContext.SaveChangesAsync(cancellationToken);
                 await databaseTransaction.CommitAsync(cancellationToken);
 
-                var result = CreateResult(transaction, portfolio, holding);
-                executionSucceeded = true;
-                return result;
+                return CreateResult(transaction, portfolio, holding);
             }
             catch (DbUpdateException exception)
             {
                 await databaseTransaction.RollbackAsync(CancellationToken.None);
                 saveException = exception;
-            }
-            finally
-            {
-                if (!executionSucceeded)
-                {
-                    // Saving accepts tracked changes before commit. A rollback does not undo that state.
-                    dbContext.ChangeTracker.Clear();
-                }
             }
         }
 
@@ -154,7 +144,7 @@ public sealed class PaperTradingEngine(
         if (committedTransaction is not null)
         {
             EnsureSameOrder(committedTransaction, order);
-            return await LoadCommittedResultAsync(committedTransaction, cancellationToken);
+            return await LoadCommittedResultAsync(dbContext, committedTransaction, cancellationToken);
         }
 
         if (saveException is DbUpdateConcurrencyException)
@@ -166,8 +156,8 @@ public sealed class PaperTradingEngine(
         throw new InvalidOperationException("Unreachable paper-trading recovery path.");
     }
 
-    private async Task<PaperTradeResult> LoadCommittedResultAsync(
-        Transaction transaction, CancellationToken cancellationToken)
+    private static async Task<PaperTradeResult> LoadCommittedResultAsync(
+        StockLabDbContext dbContext, Transaction transaction, CancellationToken cancellationToken)
     {
         // A concurrent order may have changed cash and holdings since the tracked portfolio was loaded.
         var portfolio = await dbContext.Portfolios
