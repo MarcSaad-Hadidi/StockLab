@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Microsoft.EntityFrameworkCore;
 using StockLab.Application.DTOs.Trading;
 using StockLab.Application.Exceptions;
@@ -17,149 +18,150 @@ public sealed class PaperTradingEngine(
         CancellationToken cancellationToken = default)
     {
         var order = Normalize(portfolioId, request);
+        DbUpdateException? saveException = null;
 
-        await using var databaseTransaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
+        await using (var databaseTransaction = await dbContext.Database.BeginTransactionAsync(cancellationToken))
         {
-            var portfolio = await dbContext.Portfolios
-                .Include(row => row.Holdings)
-                .SingleOrDefaultAsync(row => row.Id == portfolioId, cancellationToken);
-            if (portfolio is null)
+            try
             {
-                throw new PaperTradingException(PaperTradingFailure.PortfolioNotFound);
-            }
-
-            var existingTransaction = await dbContext.Transactions
-                .AsNoTracking()
-                .SingleOrDefaultAsync(row => row.PortfolioId == portfolioId && row.OrderId == order.OrderId,
-                    cancellationToken);
-            if (existingTransaction is not null)
-            {
-                EnsureSameOrder(existingTransaction, order);
-                await databaseTransaction.CommitAsync(cancellationToken);
-                return CreateResult(existingTransaction, portfolio);
-            }
-
-            var now = timeProvider.GetUtcNow().UtcDateTime;
-            var holding = portfolio.Holdings.SingleOrDefault(row => row.Symbol == order.Symbol);
-
-            if (order.Side == "BUY")
-            {
-                if (portfolio.CashBalance < order.TotalAmount)
-                {
-                    throw new PaperTradingException(PaperTradingFailure.InsufficientCash);
-                }
-
-                portfolio.CashBalance = decimal.Round(
-                    portfolio.CashBalance - order.TotalAmount, 4, MidpointRounding.AwayFromZero);
-                if (holding is null)
-                {
-                    holding = new Holding
-                    {
-                        Id = Guid.NewGuid(),
-                        PortfolioId = portfolioId,
-                        Portfolio = portfolio,
-                        Symbol = order.Symbol,
-                        Quantity = order.Quantity,
-                        AverageCost = order.ExecutionPrice,
-                        UpdatedAtUtc = now
-                    };
-                    dbContext.Holdings.Add(holding);
-                }
-                else
-                {
-                    var newQuantity = holding.Quantity + order.Quantity;
-                    holding.AverageCost = decimal.Round(
-                        ((holding.Quantity * holding.AverageCost) + (order.Quantity * order.ExecutionPrice))
-                        / newQuantity,
-                        4,
-                        MidpointRounding.AwayFromZero);
-                    holding.Quantity = newQuantity;
-                    holding.UpdatedAtUtc = now;
-                }
-            }
-            else
-            {
-                if (holding is null || holding.Quantity < order.Quantity)
-                {
-                    throw new PaperTradingException(PaperTradingFailure.InsufficientHoldings);
-                }
-
-                portfolio.CashBalance = decimal.Round(
-                    portfolio.CashBalance + order.TotalAmount, 4, MidpointRounding.AwayFromZero);
-                holding.Quantity -= order.Quantity;
-                if (holding.Quantity == 0m)
-                {
-                    dbContext.Holdings.Remove(holding);
-                    portfolio.Holdings.Remove(holding);
-                    holding = null;
-                }
-                else
-                {
-                    holding.UpdatedAtUtc = now;
-                }
-            }
-
-            var transaction = new Transaction
-            {
-                Id = Guid.NewGuid(),
-                PortfolioId = portfolioId,
-                Portfolio = portfolio,
-                OrderId = order.OrderId,
-                Side = order.Side,
-                Symbol = order.Symbol,
-                Quantity = order.Quantity,
-                ExecutionPrice = order.ExecutionPrice,
-                TotalAmount = order.TotalAmount,
-                ExecutedAtUtc = now
-            };
-            dbContext.Transactions.Add(transaction);
-            await dbContext.SaveChangesAsync(cancellationToken);
-            await databaseTransaction.CommitAsync(cancellationToken);
-
-            return CreateResult(transaction, portfolio, holding);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            await databaseTransaction.RollbackAsync(CancellationToken.None);
-            dbContext.ChangeTracker.Clear();
-
-            var committedTransaction = await dbContext.Transactions
-                .AsNoTracking()
-                .SingleOrDefaultAsync(row => row.PortfolioId == portfolioId && row.OrderId == order.OrderId,
-                    cancellationToken);
-            if (committedTransaction is not null)
-            {
-                EnsureSameOrder(committedTransaction, order);
-
-                var committedPortfolio = await dbContext.Portfolios
-                    .AsNoTracking()
+                var portfolio = await dbContext.Portfolios
                     .Include(row => row.Holdings)
                     .SingleOrDefaultAsync(row => row.Id == portfolioId, cancellationToken);
-                if (committedPortfolio is null)
+                if (portfolio is null)
                 {
                     throw new PaperTradingException(PaperTradingFailure.PortfolioNotFound);
                 }
 
-                return CreateResult(committedTransaction, committedPortfolio);
+                var existingTransaction = await dbContext.Transactions
+                    .AsNoTracking()
+                    .SingleOrDefaultAsync(row => row.PortfolioId == portfolioId && row.OrderId == order.OrderId,
+                        cancellationToken);
+                if (existingTransaction is not null)
+                {
+                    EnsureSameOrder(existingTransaction, order);
+                    await databaseTransaction.CommitAsync(cancellationToken);
+                    return CreateResult(existingTransaction, portfolio);
+                }
+
+                var now = timeProvider.GetUtcNow().UtcDateTime;
+                var holding = portfolio.Holdings.SingleOrDefault(row => row.Symbol == order.Symbol);
+
+                if (order.Side == "BUY")
+                {
+                    if (portfolio.CashBalance < order.TotalAmount)
+                    {
+                        throw new PaperTradingException(PaperTradingFailure.InsufficientCash);
+                    }
+
+                    portfolio.CashBalance = decimal.Round(
+                        portfolio.CashBalance - order.TotalAmount, 4, MidpointRounding.AwayFromZero);
+                    if (holding is null)
+                    {
+                        holding = new Holding
+                        {
+                            Id = Guid.NewGuid(),
+                            PortfolioId = portfolioId,
+                            Portfolio = portfolio,
+                            Symbol = order.Symbol,
+                            Quantity = order.Quantity,
+                            AverageCost = order.ExecutionPrice,
+                            UpdatedAtUtc = now
+                        };
+                        dbContext.Holdings.Add(holding);
+                    }
+                    else
+                    {
+                        var newQuantity = holding.Quantity + order.Quantity;
+                        holding.AverageCost = decimal.Round(
+                            ((holding.Quantity * holding.AverageCost) + (order.Quantity * order.ExecutionPrice))
+                            / newQuantity,
+                            4,
+                            MidpointRounding.AwayFromZero);
+                        holding.Quantity = newQuantity;
+                        holding.UpdatedAtUtc = now;
+                    }
+                }
+                else
+                {
+                    if (holding is null || holding.Quantity < order.Quantity)
+                    {
+                        throw new PaperTradingException(PaperTradingFailure.InsufficientHoldings);
+                    }
+
+                    portfolio.CashBalance = decimal.Round(
+                        portfolio.CashBalance + order.TotalAmount, 4, MidpointRounding.AwayFromZero);
+                    holding.Quantity -= order.Quantity;
+                    if (holding.Quantity == 0m)
+                    {
+                        dbContext.Holdings.Remove(holding);
+                        portfolio.Holdings.Remove(holding);
+                        holding = null;
+                    }
+                    else
+                    {
+                        holding.UpdatedAtUtc = now;
+                    }
+                }
+
+                var transaction = new Transaction
+                {
+                    Id = Guid.NewGuid(),
+                    PortfolioId = portfolioId,
+                    Portfolio = portfolio,
+                    OrderId = order.OrderId,
+                    Side = order.Side,
+                    Symbol = order.Symbol,
+                    Quantity = order.Quantity,
+                    ExecutionPrice = order.ExecutionPrice,
+                    TotalAmount = order.TotalAmount,
+                    ExecutedAtUtc = now
+                };
+                dbContext.Transactions.Add(transaction);
+                await dbContext.SaveChangesAsync(cancellationToken);
+                await databaseTransaction.CommitAsync(cancellationToken);
+
+                return CreateResult(transaction, portfolio, holding);
+            }
+            catch (DbUpdateException exception)
+            {
+                await databaseTransaction.RollbackAsync(CancellationToken.None);
+                dbContext.ChangeTracker.Clear();
+                saveException = exception;
+            }
+        }
+
+        if (saveException is null)
+        {
+            throw new InvalidOperationException("The paper-trading transaction ended without a result.");
+        }
+
+        var committedTransaction = await dbContext.Transactions
+            .AsNoTracking()
+            .SingleOrDefaultAsync(row => row.PortfolioId == portfolioId && row.OrderId == order.OrderId,
+                cancellationToken);
+        if (committedTransaction is not null)
+        {
+            EnsureSameOrder(committedTransaction, order);
+
+            var committedPortfolio = await dbContext.Portfolios
+                .AsNoTracking()
+                .Include(row => row.Holdings)
+                .SingleOrDefaultAsync(row => row.Id == portfolioId, cancellationToken);
+            if (committedPortfolio is null)
+            {
+                throw new PaperTradingException(PaperTradingFailure.PortfolioNotFound);
             }
 
+            return CreateResult(committedTransaction, committedPortfolio);
+        }
+
+        if (saveException is DbUpdateConcurrencyException)
+        {
             throw new PaperTradingException(PaperTradingFailure.ConcurrencyConflict);
         }
-        catch (DbUpdateException)
-        {
-            await databaseTransaction.RollbackAsync(CancellationToken.None);
-            dbContext.ChangeTracker.Clear();
 
-            if (await dbContext.Transactions.AsNoTracking()
-                    .AnyAsync(row => row.PortfolioId == portfolioId && row.OrderId == order.OrderId,
-                        cancellationToken))
-            {
-                throw new PaperTradingException(PaperTradingFailure.DuplicateOrder);
-            }
-
-            throw;
-        }
+        ExceptionDispatchInfo.Capture(saveException).Throw();
+        throw new InvalidOperationException("Unreachable paper-trading recovery path.");
     }
 
     private static NormalizedOrder Normalize(Guid portfolioId, PaperTradeRequest request)

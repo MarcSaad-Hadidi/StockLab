@@ -1,5 +1,7 @@
+using System.Data.Common;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using StockLab.Application.DTOs.Trading;
 using StockLab.Application.Exceptions;
 using StockLab.Domain.Entities;
@@ -126,8 +128,11 @@ public sealed class PaperTradingEngineTests
         Assert.Equal(PaperTradingFailure.DuplicateOrder, error.Category);
     }
 
-    [Fact]
-    public async Task Concurrent_duplicate_order_returns_the_committed_result_after_conflict()
+    [Theory]
+    [InlineData(SimulatedSaveFailure.Concurrency)]
+    [InlineData(SimulatedSaveFailure.Update)]
+    public async Task Concurrent_duplicate_order_recovers_after_disposing_the_rolled_back_transaction(
+        SimulatedSaveFailure saveFailure)
     {
         await using var fixture = await TradingFixture.CreateAsync();
         var orderId = Guid.NewGuid();
@@ -157,7 +162,7 @@ public sealed class PaperTradingEngineTests
         await fixture.Context.SaveChangesAsync();
 
         fixture.Context.HideTransactions = true;
-        fixture.Context.ThrowConcurrencyOnSave = true;
+        fixture.Context.SaveFailure = saveFailure;
         var result = await fixture.CreateEngine().ExecuteAsync(fixture.PortfolioId,
             new PaperTradeRequest(orderId, "BUY", "AAPL", 2m, 100m));
 
@@ -179,8 +184,14 @@ public sealed class PaperTradingEngineTests
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
+            var transactionLifecycle = new TransactionLifecycleState();
             var options = new DbContextOptionsBuilder<StockLabDbContext>()
                 .UseSqlite(connection)
+                .LogTo(
+                    (eventId, _) => eventId == RelationalEventId.TransactionRolledBack
+                                    || eventId == RelationalEventId.TransactionDisposed,
+                    transactionLifecycle.Record)
+                .AddInterceptors(new CompletedTransactionGuardInterceptor(transactionLifecycle))
                 .Options;
             var context = new SqliteTradingDbContext(options);
             await context.Database.EnsureCreatedAsync();
@@ -240,7 +251,8 @@ public sealed class PaperTradingEngineTests
     private sealed class SqliteTradingDbContext(DbContextOptions<StockLabDbContext> options) : StockLabDbContext(options)
     {
         public bool HideTransactions { get; set; }
-        public bool ThrowConcurrencyOnSave { get; set; }
+        public bool RecoveryQueriesRequireDisposedTransaction { get; private set; }
+        public SimulatedSaveFailure SaveFailure { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -252,14 +264,67 @@ public sealed class PaperTradingEngineTests
 
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
-            if (ThrowConcurrencyOnSave)
+            if (SaveFailure != SimulatedSaveFailure.None)
             {
                 HideTransactions = false;
-                throw new DbUpdateConcurrencyException("Simulated concurrent paper-trading order.");
+                RecoveryQueriesRequireDisposedTransaction = true;
+                if (SaveFailure == SimulatedSaveFailure.Concurrency)
+                {
+                    throw new DbUpdateConcurrencyException("Simulated concurrent paper-trading order.");
+                }
+
+                throw new DbUpdateException("Simulated duplicate paper-trading order.");
             }
 
             return base.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    private sealed class TransactionLifecycleState
+    {
+        public bool RolledBackTransactionAwaitingDisposal { get; private set; }
+
+        public void Record(EventData eventData)
+        {
+            if (eventData.EventId == RelationalEventId.TransactionRolledBack)
+            {
+                RolledBackTransactionAwaitingDisposal = true;
+            }
+            else if (eventData.EventId == RelationalEventId.TransactionDisposed)
+            {
+                RolledBackTransactionAwaitingDisposal = false;
+            }
+        }
+    }
+
+    private sealed class CompletedTransactionGuardInterceptor(TransactionLifecycleState transactionLifecycle)
+        : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context is SqliteTradingDbContext
+                {
+                    RecoveryQueriesRequireDisposedTransaction: true
+                }
+                && transactionLifecycle.RolledBackTransactionAwaitingDisposal)
+            {
+                throw new InvalidOperationException(
+                    "Recovery queries cannot reuse a completed database transaction.");
+            }
+
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
+    public enum SimulatedSaveFailure
+    {
+        None,
+        Concurrency,
+        Update
     }
 
     private sealed class FixedTimeProvider(DateTime utcNow) : TimeProvider
