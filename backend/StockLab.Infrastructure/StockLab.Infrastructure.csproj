@@ -11,7 +11,6 @@
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.12" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.12" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
     <PackageReference Include="System.Threading.RateLimiting" Version="10.0.10" />
     <ProjectReference Include="..\StockLab.Application\StockLab.Application.csproj" />
     <ProjectReference Include="..\StockLab.Domain\StockLab.Domain.csproj" />

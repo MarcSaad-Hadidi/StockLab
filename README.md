@@ -2,7 +2,7 @@
 
 StockLab est une plateforme d’apprentissage des marchés boursiers fondée sur l’investissement simulé. Elle associe une interface React pour explorer les marchés et gérer un portefeuille, une API .NET pour les données de marché et un module Python indépendant pour préparer les données destinées à l’apprentissage automatique.
 
-Le dépôt est encore en développement. Le code actuel fournit un frontend fonctionnel, une API de données de marché avec des adaptateurs simulés et externes, une API backend d’inscription et de connexion avec jeton JWT, ainsi que les premières étapes de préparation des données ML. Le frontend n’est pas encore relié à l’authentification backend; les API de portefeuille, les ordres, les alertes et les services cloud prévus restent à faire. Ces limites sont précisées dans ce document afin qu’un nouveau membre puisse lancer le projet sans confondre les données de démonstration avec de vraies données de compte.
+Le dépôt est encore en développement. Le code actuel fournit un frontend fonctionnel, une API de données de marché avec des adaptateurs simulés et externes, ainsi que les premières étapes de préparation des données ML. L’authentification, la persistance des comptes, l’exécution des ordres, la persistance des alertes et les services cloud prévus ne sont pas encore des intégrations de production. Ces limites sont précisées dans ce document afin qu’un nouveau membre puisse lancer le projet sans confondre les données de démonstration avec de vraies données de compte.
 
 ## Sommaire
 
@@ -26,7 +26,7 @@ Le dépôt est encore en développement. Le code actuel fournit un frontend fonc
 Le produit aide l’utilisateur à explorer les données de marché et à s’exercer à prendre des décisions de portefeuille sans envoyer d’ordres à un courtier.
 
 - **Marché et détails d’une action** proposent la recherche de symboles, les cotations, les graphiques historiques OHLCV, les valeurs en mouvement, les informations sur les sociétés, les actualités et des états responsives.
-- **Dashboard, Portfolio, Transactions, Watchlist, Alerts, Profile et AI Trader** présentent les parcours et les écrans prévus pour les services de compte et de trading. L’API sait inscrire et authentifier un utilisateur, mais les données de ces écrans restent indisponibles tant que les API métier correspondantes ne sont pas créées.
+- **Dashboard, Portfolio, Transactions, Watchlist, Alerts, Profile et AI Trader** présentent les parcours et les écrans prévus pour les services de compte et de trading. Les données liées au compte sont actuellement vides ou indiquées comme indisponibles lorsqu’aucun service backend n’existe encore.
 - **Paper trading** est le parcours de trading simulé prévu : valider les ordres BUY et SELL, mettre à jour la trésorerie et les positions, calculer la performance du portefeuille et conserver l’historique des transactions. Le service complet d’exécution est prévu ; les contrôles du frontend restent des aperçus tant que ce service n’est pas connecté.
 - **AI Trader** sépare les signaux ML, l’approbation du risque et l’exécution simulée. La couche ML produit un signal et un niveau de confiance, le Risk Manager décide s’il peut être accepté, puis le Paper Trading Engine exécute l’ordre simulé approuvé. Le module Python prépare actuellement les données historiques et les variables ; il n’exécute pas de transactions.
 
@@ -35,13 +35,13 @@ Le produit aide l’utilisateur à explorer les données de marché et à s’ex
 Fonctionnalités présentes dans ce dépôt :
 
 - Frontend React/TypeScript/Vite multi-pages avec les routes Login, Register, Dashboard, Market, Stock Details, Portfolio, Transactions, Watchlist, Alerts, AI Trader, Profile et Not Found.
-- API ASP.NET Core avec inscription, login JWT et autorisation Bearer, contrôles de santé, OpenAPI en développement, réponses d’erreur sûres, validation des requêtes, mise en cache, déduplication, limitation du débit, fournisseur local simulé de données de marché et adaptateurs Twelve Data et Alpha Vantage facultatifs.
+- API ASP.NET Core avec contrôles de santé, OpenAPI en développement, réponses d’erreur sûres, validation des requêtes, mise en cache, déduplication, limitation du débit, fournisseur local simulé de données de marché et adaptateurs Twelve Data et Alpha Vantage facultatifs.
 - Module ML Python 3.12 avec ingestion historique Twelve Data, validation stricte, stockage local des données brutes et traitées, nettoyage déterministe et création de variables.
 - Traductions frontend française et anglaise, mises en page responsives et tests frontend, backend et ML.
 
 Fonctionnalités non implémentées ou non connectées :
 
-- Intégration des pages Login/Register au backend, gestion de session frontend et profil utilisateur.
+- Authentification Login/Register réelle, autorisations, profils utilisateurs et persistance des comptes.
 - Portefeuilles, transactions, watchlists, alertes et exécution persistante des ordres de paper trading.
 - Entraînement des modèles AI Trader, prédictions, Risk Manager, backtesting et intégration API.
 - Migrations et services de compte utilisant la couche Entity Framework Core/Azure SQL, événements Azure Service Bus et services AWS S3/SQS/Lambda.
@@ -51,7 +51,7 @@ Fonctionnalités non implémentées ou non connectées :
 | Domaine | Technologie | État dans ce dépôt |
 | --- | --- | --- |
 | Frontend | React 19, TypeScript, Vite, i18next, MUI X Charts | Implémenté |
-| API backend | ASP.NET Core sur .NET 10, C#, JWT Bearer, OpenAPI, xUnit | Données de marché, inscription et connexion implémentées |
+| API backend | ASP.NET Core sur .NET 10, C#, OpenAPI, xUnit | Implémenté pour les données de marché |
 | Données de marché | Twelve Data, Alpha Vantage, fournisseur local simulé | Le mode simulé est utilisé par défaut ; les adaptateurs externes sont facultatifs |
 | Apprentissage automatique | Python 3.12, NumPy, pandas, scikit-learn, pytest, requests | Ingestion, nettoyage et création de variables implémentés |
 | Persistance relationnelle | Azure SQL et Entity Framework Core | Modèle EF Core et fournisseur SQL Server configurés ; migrations et services de compte à venir |
@@ -137,7 +137,7 @@ Installez les dépendances et démarrez le serveur de développement Vite :
     npm --prefix frontend install
     npm --prefix frontend run dev -- --host 127.0.0.1
 
-Ouvrez http://localhost:5173/. La route racine redirige vers Login. Les autres routes utiles sont /market, /dashboard, /portfolio, /transactions, /watchlist, /alerts, /ai-trader et /profile. Les pages Login et Register ne sont pas encore reliées aux endpoints backend.
+Ouvrez http://localhost:5173/. La route racine redirige vers Login. Les autres routes utiles sont /market, /dashboard, /portfolio, /transactions, /watchlist, /alerts, /ai-trader et /profile.
 
 Pour générer un build de production et le prévisualiser localement :
 
@@ -163,7 +163,7 @@ Vérifiez que l’API fonctionne :
 
     curl http://localhost:5274/health
 
-En environnement Development, OpenAPI est disponible depuis l’endpoint OpenAPI généré par l’API. Les principales routes HTTP sont :
+En environnement Development, OpenAPI est disponible depuis l’endpoint OpenAPI généré par l’API. Les routes de marché actuelles sont :
 
 | Méthode | Route | Fonction |
 | --- | --- | --- |
@@ -176,10 +176,6 @@ En environnement Development, OpenAPI est disponible depuis l’endpoint OpenAPI
 | GET | /api/stocks/{symbol}/logo | Métadonnées du logo |
 | GET | /api/stocks/{symbol}/earnings | Informations sur les résultats |
 | GET | /api/stocks/{symbol}/news | Actualités d’une société |
-| POST | /api/auth/register | Créer un compte et son portefeuille initial |
-| POST | /api/auth/login | Vérifier les identifiants et recevoir un jeton Bearer |
-
-Après connexion, les futures routes privées utiliseront `Authorization: Bearer <token>`.
 
 ### Module ML (facultatif)
 
@@ -221,9 +217,8 @@ Pour les secrets locaux, préférez les user-secrets .NET depuis la racine du d�
     dotnet user-secrets set "TwelveData:Keys:Website" "<TWELVE_DATA_WEBSITE_KEY>" --project backend/StockLab.Api/StockLab.Api.csproj
     dotnet user-secrets set "TwelveData:Keys:Fallback" "<TWELVE_DATA_FALLBACK_KEY>" --project backend/StockLab.Api/StockLab.Api.csproj
     dotnet user-secrets set "AlphaVantage:ApiKey" "<ALPHA_VANTAGE_KEY>" --project backend/StockLab.Api/StockLab.Api.csproj
-    dotnet user-secrets set "Jwt:SigningKey" "<RANDOM_SECRET_AT_LEAST_32_BYTES>" --project backend/StockLab.Api/StockLab.Api.csproj
 
-La configuration versionnée définit `Jwt:Issuer`, `Jwt:Audience` et `Jwt:AccessTokenMinutes` (60 minutes). La valeur `Jwt:SigningKey` doit rester secrète, contenir au moins 32 octets UTF-8, et ne doit jamais être ajoutée à `appsettings*.json`, au README ou à Git. Avec des variables d’environnement au lieu des user-secrets, .NET transforme les clés de configuration imbriquées en double soulignement : `Jwt__SigningKey`, `TwelveData__Keys__Website`, `TwelveData__ActiveWebsiteKey`, `AlphaVantage__ApiKey` et `MarketData__Provider=TwelveData`. `Cors__AllowedOrigins__0` contrôle l’origine frontend autorisée par l’API. Le fournisseur simulé par défaut ne demande aucune clé et doit rester utilisé pour les tests hors ligne.
+Avec des variables d’environnement au lieu des user-secrets, .NET transforme les clés de configuration imbriquées en double soulignement : TwelveData__Keys__Website, TwelveData__ActiveWebsiteKey, AlphaVantage__ApiKey et MarketData__Provider=TwelveData. Cors__AllowedOrigins__0 contrôle l’origine frontend autorisée par l’API. Le fournisseur simulé par défaut ne demande aucune clé et doit rester utilisé pour les tests hors ligne.
 
 ### Variable ML
 
@@ -231,7 +226,7 @@ Le fournisseur ML Python lit uniquement TWELVE_DATA_ML_API_KEY. Définissez-la d
 
 ### Configuration cloud prévue
 
-La couche Entity Framework Core est configurée pour Azure SQL. L’inscription et la connexion backend sont présentes; les API privées de portefeuille, les migrations additionnelles et les autres services de compte restent à faire. Azure Service Bus, AWS S3, AWS SQS, AWS Lambda et IAM sont des intégrations prévues. Aucun secret cloud ni chaîne de connexion ne doit être placé dans ce dépôt, et les tests hors ligne n’en ont pas besoin.
+La couche Entity Framework Core est configurée pour Azure SQL, mais les migrations et les services de compte restent à faire. Azure Service Bus, AWS S3, AWS SQS, AWS Lambda et IAM sont des intégrations prévues. Aucun secret cloud ni chaîne de connexion ne doit être placé dans ce dépôt, et le code actuel n’en a pas besoin pour lancer le frontend, le backend simulé ou les tests hors ligne.
 
 ## Commandes utiles
 
@@ -275,7 +270,7 @@ Ne poussez pas directement vers main ou develop. Gardez les changements liés à
 
 L’interface affiche volontairement des états indisponibles lorsqu’aucun service de compte n’est connecté. Les travaux suivants restent prévus :
 
-- Intégration de session dans le frontend et premières APIs utilisateur protégées, à commencer par Profile.
+- Authentification et autorisation reposant sur un service utilisateur.
 - Persistance Azure SQL via Entity Framework Core pour les utilisateurs, portefeuilles, transactions, watchlists et alertes.
 - Validation et exécution des ordres simulés, positions et historique des transactions.
 - Événements Azure Service Bus pour les traitements longs ou interservices.

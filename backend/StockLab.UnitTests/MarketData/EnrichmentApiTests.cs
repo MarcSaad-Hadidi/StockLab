@@ -21,8 +21,7 @@ public sealed class EnrichmentApiTests
             b.UseEnvironment("Development");
             b.ConfigureAppConfiguration((_,c)=>c.AddInMemoryCollection(new Dictionary<string,string?>{
                 ["MarketData:Provider"]="TwelveData",["TwelveData:Keys:Website"]="WEBSITE-TEST-KEY",["TwelveData:ActiveWebsiteKey"]="Website",
-                ["AlphaVantage:ApiKey"]="ALPHA-TEST-KEY",["Jwt:Issuer"]="StockLab.Api.Tests",
-                ["Jwt:Audience"]="StockLab.Tests",["Jwt:SigningKey"]="test-only-signing-key-at-least-32-bytes-long"}));
+                ["AlphaVantage:ApiKey"]="ALPHA-TEST-KEY"}));
             b.ConfigureServices(s=>{
                 s.AddHttpClient("AlphaVantage").ConfigurePrimaryHttpMessageHandler(()=>alpha);
                 s.AddHttpClient("TwelveData").ConfigurePrimaryHttpMessageHandler(()=>twelve);
