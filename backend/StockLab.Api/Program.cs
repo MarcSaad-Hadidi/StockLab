@@ -6,6 +6,7 @@ using StockLab.Api.Configuration;
 
 using StockLab.Infrastructure.MarketEnrichment;
 using StockLab.Infrastructure.Persistence;
+using StockLab.Infrastructure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +16,7 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(ApiValidation.Conf
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
 builder.Services.AddPersistence(builder.Configuration);
+builder.Services.AddUserRegistration();
 builder.Services.AddOptions<MarketDataCacheOptions>()
     .Bind(builder.Configuration.GetSection(MarketDataCacheOptions.SectionName))
     .Validate(options => options.HasValidTtls(), "Cache TTLs must be positive and at most 365 days.")

@@ -22,6 +22,7 @@ backend/
 |   `-- Exceptions/
 |-- StockLab.Infrastructure/
 |   |-- Persistence/
+|   |-- Identity/
 |   |-- MarketData/
 |   |-- Azure/
 |   `-- AWS/
@@ -45,9 +46,10 @@ concrete provider implementations.
 
 `Program.cs` is the composition root and registers the available ASP.NET Core
 services. Register future application interfaces and implementations here as their
-issues introduce them. Application defines the market-data contracts below;
-Infrastructure implements the local mock provider and the EF Core SQL Server mapping.
-There are no account services or authentication endpoints yet.
+issues introduce them. Application defines the market-data and registration
+contracts; Infrastructure implements their providers and the EF Core SQL Server
+mapping. Registration creates an account only; portfolio creation and login are
+separate flows.
 
 ## Entity Framework Core
 
@@ -191,6 +193,25 @@ segment does not match this route and returns 404.
 
 This route and its 200/400/404/500 response schemas appear in Development OpenAPI.
 Search and history HTTP endpoints are described below; frontend integration is separate.
+
+## User registration
+
+`POST /api/auth/register` validates and creates a user account. For example, send:
+
+```json
+{
+  "displayName": "Example User",
+  "email": "example.user@example.com",
+  "password": "example-only-password"
+}
+```
+
+Success returns `201 Created` with the user's `id`, `displayName`, `email` and
+`createdAtUtc`. Invalid input returns the shared `validation_error` response, and
+an email already in use returns `409 Conflict` with `email_already_registered`.
+The service stores only an ASP.NET Core password hash; plaintext passwords are not
+persisted or returned. This endpoint does not create a portfolio or issue an
+authentication token.
 
 ## Global exception handling
 
