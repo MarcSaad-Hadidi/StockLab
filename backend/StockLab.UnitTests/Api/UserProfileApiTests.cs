@@ -72,6 +72,8 @@ public sealed class UserProfileApiTests
         Assert.Equal(accountA.Id, bodyA.RootElement.GetProperty("id").GetGuid());
         Assert.Equal("User A", bodyA.RootElement.GetProperty("displayName").GetString());
         Assert.Equal("a@example.com", bodyA.RootElement.GetProperty("email").GetString());
+        Assert.EndsWith("Z", bodyA.RootElement.GetProperty("createdAtUtc").GetString());
+        Assert.EndsWith("Z", bodyA.RootElement.GetProperty("updatedAtUtc").GetString());
         Assert.Equal(accountB.Id, bodyB.RootElement.GetProperty("id").GetGuid());
         Assert.Equal("User B", bodyB.RootElement.GetProperty("displayName").GetString());
         Assert.Equal("b@example.com", bodyB.RootElement.GetProperty("email").GetString());
@@ -197,6 +199,8 @@ public sealed class UserProfileApiTests
             Assert.Equal(fixture.ExpectedUtcNow.UtcDateTime,
                 body.RootElement.GetProperty("createdAtUtc").GetDateTime());
             Assert.Equal(updateTime.UtcDateTime, body.RootElement.GetProperty("updatedAtUtc").GetDateTime());
+            Assert.EndsWith("Z", body.RootElement.GetProperty("createdAtUtc").GetString());
+            Assert.EndsWith("Z", body.RootElement.GetProperty("updatedAtUtc").GetString());
             Assert.Equal(
                 new[] { "id", "displayName", "email", "createdAtUtc", "updatedAtUtc" },
                 body.RootElement.EnumerateObject().Select(property => property.Name).ToArray());

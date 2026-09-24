@@ -76,5 +76,7 @@ public sealed class ProfileController(IUserProfileService userProfileService) : 
         new("profile_not_found", "The profile was not found.");
 
     private static UserProfileResponse ToResponse(User user) =>
-        new(user.Id, user.DisplayName, user.Email, user.CreatedAtUtc, user.UpdatedAtUtc);
+        new(user.Id, user.DisplayName, user.Email,
+            DateTime.SpecifyKind(user.CreatedAtUtc, DateTimeKind.Utc),
+            DateTime.SpecifyKind(user.UpdatedAtUtc, DateTimeKind.Utc));
 }
