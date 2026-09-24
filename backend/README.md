@@ -46,9 +46,10 @@ concrete provider implementations.
 
 `Program.cs` is the composition root and registers the available ASP.NET Core
 services. Register future application interfaces and implementations here as their
-issues introduce them. Application defines the market-data, registration and
-login contracts; Infrastructure implements their providers and the EF Core SQL
-Server mapping. Registration atomically creates an account and its default USD
+issues introduce them. Application defines the market-data, registration, login
+and profile contracts;
+Infrastructure implements these services and the EF Core SQL Server mapping. Registration atomically creates an account and its default
+USD
 paper-trading portfolio. Login verifies the stored password hash and returns a
 stateless JWT access token.
 
@@ -248,9 +249,9 @@ forwarded headers from untrusted clients.
 
 Send the token to endpoints marked `[Authorize]` as
 `Authorization: Bearer <token>`. Missing, malformed, expired, incorrectly signed,
-or otherwise invalid tokens return the safe `unauthorized` response. Current
-market-data routes, health checks, registration and login remain public. Access
-tokens expire after `Jwt:AccessTokenMinutes` (60 minutes by default); there is no
+or otherwise invalid tokens return the safe `unauthorized` response.
+Current market-data routes, health checks, registration and login remain public.
+The profile routes require a valid access token. Access tokens expire after `Jwt:AccessTokenMinutes` (60 minutes by default); there is no
 refresh-token flow yet. Frontend session storage and login-page integration are
 separate work.
 
@@ -258,6 +259,34 @@ The token issuer, audience and lifetime are configured by `Jwt:Issuer`,
 `Jwt:Audience` and `Jwt:AccessTokenMinutes`. Set the signing key only in User
 Secrets or an environment variable; startup rejects missing or weak keys. See
 the repository README's backend secrets section for local setup.
+
+## User profile
+
+The authenticated user's profile is available at <code>GET /api/profile</code> and
+<code>PUT /api/profile</code>. Send the login token in the
+<code>Authorization: Bearer &lt;access-token&gt;</code> header.
+
+GET returns <code>id</code>, <code>displayName</code>, <code>email</code>,
+<code>createdAtUtc</code> and <code>updatedAtUtc</code>. PUT accepts the complete
+editable profile:
+
+~~~http
+PUT /api/profile
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "displayName": "Example User",
+  "email": "example.user@example.com"
+}
+~~~
+
+Only <code>displayName</code> and <code>email</code> can be changed here. The
+authenticated user's ID comes from the JWT <code>sub</code> claim; clients never
+send a user ID to select a profile. Email trimming and normalization match
+registration. A duplicate email returns <code>409 Conflict</code> with
+<code>email_already_registered</code>. These routes do not change passwords or
+portfolio data, and they require no database migration.
 
 ## Global exception handling
 

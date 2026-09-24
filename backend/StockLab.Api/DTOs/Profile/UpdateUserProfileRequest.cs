@@ -1,0 +1,26 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace StockLab.Api.DTOs.Profile;
+
+public sealed class UpdateUserProfileRequest
+{
+    private string displayName = string.Empty;
+    private string email = string.Empty;
+
+    [Required]
+    [StringLength(100)]
+    public string DisplayName
+    {
+        get => displayName;
+        init => displayName = value?.Trim() ?? string.Empty;
+    }
+
+    [Required]
+    [EmailAddress]
+    [StringLength(254)]
+    public string Email
+    {
+        get => email;
+        init => email = value?.Trim() ?? string.Empty;
+    }
+}

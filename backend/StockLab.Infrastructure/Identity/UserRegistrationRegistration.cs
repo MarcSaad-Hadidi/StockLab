@@ -12,6 +12,7 @@ public static class UserRegistrationRegistration
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
         services.AddScoped<IUserRegistrationService, UserRegistrationService>();
         services.AddScoped<IUserLoginService, UserLoginService>();
+        services.AddScoped<IUserProfileService, UserProfileService>();
         services.AddSingleton<IAccessTokenService, JwtAccessTokenService>();
         return services;
     }
