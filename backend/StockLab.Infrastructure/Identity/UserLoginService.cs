@@ -13,7 +13,7 @@ public sealed class UserLoginService(
     public async Task<User?> AuthenticateAsync(string email, string password, CancellationToken cancellationToken)
     {
         var normalizedEmail = EmailAddressNormalizer.Normalize(email);
-        var user = await dbContext.Users.SingleOrDefaultAsync(
+        User? user = await dbContext.Users.SingleOrDefaultAsync(
             value => value.NormalizedEmail == normalizedEmail,
             cancellationToken);
         if (user is null)
@@ -22,19 +22,40 @@ public sealed class UserLoginService(
         }
 
         var verification = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password);
-        if (verification == PasswordVerificationResult.Failed)
+        if (verification is not (PasswordVerificationResult.Success or PasswordVerificationResult.SuccessRehashNeeded))
         {
             return null;
         }
 
-        if (verification == PasswordVerificationResult.SuccessRehashNeeded)
+        for (var rehashAttempt = 0;
+             verification == PasswordVerificationResult.SuccessRehashNeeded && rehashAttempt < 2;
+             rehashAttempt++)
         {
             user.PasswordHash = passwordHasher.HashPassword(user, password);
-            await dbContext.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+                break;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                dbContext.Entry(user).State = EntityState.Detached;
+                user = await dbContext.Users.SingleOrDefaultAsync(
+                    value => value.NormalizedEmail == normalizedEmail,
+                    cancellationToken);
+                if (user is null)
+                {
+                    return null;
+                }
+
+                verification = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password);
+                if (verification is not (PasswordVerificationResult.Success or PasswordVerificationResult.SuccessRehashNeeded))
+                {
+                    return null;
+                }
+            }
         }
 
-        return verification is PasswordVerificationResult.Success or PasswordVerificationResult.SuccessRehashNeeded
-            ? user
-            : null;
+        return user;
     }
 }

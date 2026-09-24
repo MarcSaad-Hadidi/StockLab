@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -194,6 +195,28 @@ public sealed class UserLoginApiTests
     }
 
     [Fact]
+    public async Task Concurrent_rehash_conflict_reloads_the_user_and_retries_the_hash_update()
+    {
+        var hasher = new RehashingPasswordHasher();
+        var saveChangesInterceptor = new FailFirstRehashSaveInterceptor();
+        await using var fixture = await LoginFixture.CreateAsync(hasher, saveChangesInterceptor);
+        var userId = await RegisterAsync(fixture, "Ghaith", "ghaith@example.com", "old-password");
+
+        using var response = await fixture.Client.PostAsync("/api/auth/login", Json(JsonSerializer.Serialize(new
+        {
+            email = "ghaith@example.com",
+            password = "old-password"
+        })));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(1, saveChangesInterceptor.Conflicts);
+        using var scope = fixture.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        var user = await context.Users.AsNoTracking().SingleAsync(value => value.Id == userId);
+        Assert.Equal("test-hash-3:old-password", user.PasswordHash);
+    }
+
+    [Fact]
     public async Task Authorize_accepts_a_valid_bearer_token_and_returns_a_safe_401_for_missing_tokens()
     {
         await using var fixture = await LoginFixture.CreateAsync();
@@ -368,6 +391,7 @@ public sealed class UserLoginApiTests
 
         public static async Task<LoginFixture> CreateAsync(
             IPasswordHasher<User>? passwordHasher = null,
+            SaveChangesInterceptor? saveChangesInterceptor = null,
             string issuer = TestIssuer,
             string audience = TestAudience,
             string signingKey = TestSigningKey,
@@ -375,7 +399,12 @@ public sealed class UserLoginApiTests
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
-            var options = new DbContextOptionsBuilder<StockLabDbContext>().UseSqlite(connection).Options;
+            var optionsBuilder = new DbContextOptionsBuilder<StockLabDbContext>().UseSqlite(connection);
+            if (saveChangesInterceptor is not null)
+            {
+                optionsBuilder.AddInterceptors(saveChangesInterceptor);
+            }
+            var options = optionsBuilder.Options;
             var now = DateTimeOffset.UtcNow;
             var expectedUtcNow = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, now.Minute,
                 now.Second, TimeSpan.Zero);
@@ -457,6 +486,28 @@ public sealed class UserLoginApiTests
             providedPassword == "old-password"
                 ? PasswordVerificationResult.SuccessRehashNeeded
                 : PasswordVerificationResult.Failed;
+    }
+
+    private sealed class FailFirstRehashSaveInterceptor : SaveChangesInterceptor
+    {
+        private int conflicts;
+
+        public int Conflicts => Volatile.Read(ref conflicts);
+
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            var rehashIsPending = eventData.Context?.ChangeTracker.Entries<User>()
+                .Any(entry => entry.State == EntityState.Modified && entry.Property(user => user.PasswordHash).IsModified) == true;
+            if (rehashIsPending && Interlocked.CompareExchange(ref conflicts, 1, 0) == 0)
+            {
+                throw new DbUpdateConcurrencyException("Simulated concurrent password rehash.");
+            }
+
+            return ValueTask.FromResult(result);
+        }
     }
 }
 
