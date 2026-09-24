@@ -215,7 +215,10 @@ public sealed class TwelveDataCompositionTests
                 ["MarketData:Provider"] = provider, ["TwelveData:ActiveWebsiteKey"] = active,
                 ["TwelveData:TimeoutSeconds"] = timeout.ToString(),
                 ["TwelveData:Keys:Website"] = website, ["TwelveData:Keys:Fallback"] = fallback,
-                ["TWELVE_DATA_ML_API_KEY"] = "ML-TEST-KEY"
+                ["TWELVE_DATA_ML_API_KEY"] = "ML-TEST-KEY",
+                ["Jwt:Issuer"] = "StockLab.Api.Tests",
+                ["Jwt:Audience"] = "StockLab.Tests",
+                ["Jwt:SigningKey"] = "test-only-signing-key-at-least-32-bytes-long"
             }));
             builder.ConfigureServices(services => services.AddHttpClient(TwelveDataProvider.ClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => handler));

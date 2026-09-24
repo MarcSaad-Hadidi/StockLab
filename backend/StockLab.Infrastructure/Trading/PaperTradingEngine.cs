@@ -123,6 +123,27 @@ public sealed class PaperTradingEngine(
         {
             await databaseTransaction.RollbackAsync(CancellationToken.None);
             dbContext.ChangeTracker.Clear();
+
+            var committedTransaction = await dbContext.Transactions
+                .AsNoTracking()
+                .SingleOrDefaultAsync(row => row.PortfolioId == portfolioId && row.OrderId == order.OrderId,
+                    cancellationToken);
+            if (committedTransaction is not null)
+            {
+                EnsureSameOrder(committedTransaction, order);
+
+                var committedPortfolio = await dbContext.Portfolios
+                    .AsNoTracking()
+                    .Include(row => row.Holdings)
+                    .SingleOrDefaultAsync(row => row.Id == portfolioId, cancellationToken);
+                if (committedPortfolio is null)
+                {
+                    throw new PaperTradingException(PaperTradingFailure.PortfolioNotFound);
+                }
+
+                return CreateResult(committedTransaction, committedPortfolio);
+            }
+
             throw new PaperTradingException(PaperTradingFailure.ConcurrencyConflict);
         }
         catch (DbUpdateException)

@@ -126,10 +126,51 @@ public sealed class PaperTradingEngineTests
         Assert.Equal(PaperTradingFailure.DuplicateOrder, error.Category);
     }
 
+    [Fact]
+    public async Task Concurrent_duplicate_order_returns_the_committed_result_after_conflict()
+    {
+        await using var fixture = await TradingFixture.CreateAsync();
+        var orderId = Guid.NewGuid();
+        var portfolio = await fixture.Context.Portfolios.SingleAsync(row => row.Id == fixture.PortfolioId);
+        portfolio.CashBalance = 99_800m;
+        fixture.Context.Holdings.Add(new Holding
+        {
+            Id = Guid.NewGuid(),
+            PortfolioId = fixture.PortfolioId,
+            Symbol = "AAPL",
+            Quantity = 2m,
+            AverageCost = 100m,
+            UpdatedAtUtc = TradingFixture.FixedUtcNow
+        });
+        fixture.Context.Transactions.Add(new Transaction
+        {
+            Id = Guid.NewGuid(),
+            PortfolioId = fixture.PortfolioId,
+            OrderId = orderId,
+            Side = "BUY",
+            Symbol = "AAPL",
+            Quantity = 2m,
+            ExecutionPrice = 100m,
+            TotalAmount = 200m,
+            ExecutedAtUtc = TradingFixture.FixedUtcNow
+        });
+        await fixture.Context.SaveChangesAsync();
+
+        fixture.Context.HideTransactions = true;
+        fixture.Context.ThrowConcurrencyOnSave = true;
+        var result = await fixture.CreateEngine().ExecuteAsync(fixture.PortfolioId,
+            new PaperTradeRequest(orderId, "BUY", "AAPL", 2m, 100m));
+
+        Assert.Equal(orderId, result.OrderId);
+        Assert.Equal(99_800m, result.CashBalance);
+        Assert.Equal(2m, result.HoldingQuantity);
+        Assert.Single(await fixture.Context.Transactions.ToListAsync());
+    }
+
     private sealed class TradingFixture(SqliteConnection connection, SqliteTradingDbContext context,
         Guid portfolioId) : IAsyncDisposable
     {
-        private static readonly DateTime FixedUtcNow = new(2026, 9, 24, 18, 0, 0, DateTimeKind.Utc);
+        public static readonly DateTime FixedUtcNow = new(2026, 9, 24, 18, 0, 0, DateTimeKind.Utc);
 
         public SqliteTradingDbContext Context { get; } = context;
         public Guid PortfolioId { get; } = portfolioId;
@@ -198,11 +239,26 @@ public sealed class PaperTradingEngineTests
 
     private sealed class SqliteTradingDbContext(DbContextOptions<StockLabDbContext> options) : StockLabDbContext(options)
     {
+        public bool HideTransactions { get; set; }
+        public bool ThrowConcurrencyOnSave { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<User>().Property(user => user.Version).ValueGeneratedNever();
             modelBuilder.Entity<Portfolio>().Property(portfolio => portfolio.Version).ValueGeneratedNever();
+            modelBuilder.Entity<Transaction>().HasQueryFilter(transaction => !HideTransactions);
+        }
+
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            if (ThrowConcurrencyOnSave)
+            {
+                HideTransactions = false;
+                throw new DbUpdateConcurrencyException("Simulated concurrent paper-trading order.");
+            }
+
+            return base.SaveChangesAsync(cancellationToken);
         }
     }
 
