@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using StockLab.Application.Exceptions;
@@ -21,7 +20,7 @@ public sealed class UserRegistrationService(
     {
         var trimmedDisplayName = displayName.Trim();
         var trimmedEmail = email.Trim();
-        var normalizedEmail = trimmedEmail.ToUpper(CultureInfo.InvariantCulture);
+        var normalizedEmail = EmailAddressNormalizer.Normalize(trimmedEmail);
 
         if (await dbContext.Users.AsNoTracking()
                 .AnyAsync(user => user.NormalizedEmail == normalizedEmail, cancellationToken))

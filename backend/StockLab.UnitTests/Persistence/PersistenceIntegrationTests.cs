@@ -17,7 +17,10 @@ public sealed class PersistenceIntegrationTests
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
-                    ["ConnectionStrings:StockLab"] = "Server=localhost;Database=StockLabTestOnly;Integrated Security=true;TrustServerCertificate=true"
+                    ["ConnectionStrings:StockLab"] = "Server=localhost;Database=StockLabTestOnly;Integrated Security=true;TrustServerCertificate=true",
+                    ["Jwt:Issuer"] = "StockLab.Api.Tests",
+                    ["Jwt:Audience"] = "StockLab.Tests",
+                    ["Jwt:SigningKey"] = "test-only-signing-key-at-least-32-bytes-long"
                 })));
         using var scope = app.Services.CreateScope();
 
