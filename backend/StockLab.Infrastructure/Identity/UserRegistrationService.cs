@@ -13,6 +13,9 @@ public sealed class UserRegistrationService(
     IPasswordHasher<User> passwordHasher,
     TimeProvider timeProvider) : IUserRegistrationService
 {
+    private const string DefaultCurrency = "USD";
+    private const decimal DefaultInitialCapital = 100_000m;
+
     public async Task<User> RegisterAsync(string displayName, string email, string password,
         CancellationToken cancellationToken)
     {
@@ -37,6 +40,17 @@ public sealed class UserRegistrationService(
             UpdatedAtUtc = now
         };
         user.PasswordHash = passwordHasher.HashPassword(user, password);
+
+        user.Portfolio = new Portfolio
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            User = user,
+            Currency = DefaultCurrency,
+            InitialCapital = DefaultInitialCapital,
+            CashBalance = DefaultInitialCapital,
+            CreatedAtUtc = now
+        };
 
         dbContext.Users.Add(user);
         try
