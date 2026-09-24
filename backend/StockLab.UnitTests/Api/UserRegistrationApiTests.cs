@@ -32,6 +32,7 @@ public sealed class UserRegistrationApiTests
             yield return [JsonSerializer.Serialize(new { displayName = "Person", email = "person@example.com" }), "password"];
             yield return [JsonSerializer.Serialize(new { displayName = "Person", email = "person@example.com", password = "" }), "password"];
             yield return [JsonSerializer.Serialize(new { displayName = "Person", email = "person@example.com", password = "   " }), "password"];
+            yield return [JsonSerializer.Serialize(new { displayName = "Person", email = "person@example.com", password = "short" }), "password"];
         }
     }
 
