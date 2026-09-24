@@ -90,7 +90,7 @@ public sealed class UserRegistrationApiTests
 
         using var scope = fixture.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
-        var user = await context.Users.AsNoTracking().SingleAsync();
+        var user = await context.Users.AsNoTracking().Include(user => user.Portfolio).SingleAsync();
         Assert.Equal(id, user.Id);
         Assert.Equal("Ghaith", user.DisplayName);
         Assert.Equal("Ghaith@Test.com", user.Email);
@@ -98,6 +98,21 @@ public sealed class UserRegistrationApiTests
         Assert.Equal(RegistrationFixture.ExpectedUtcNow.UtcDateTime, user.CreatedAtUtc);
         Assert.Equal(user.CreatedAtUtc, user.UpdatedAtUtc);
         Assert.NotEqual(password, user.PasswordHash);
+        Assert.Equal(1, await context.Users.CountAsync());
+        Assert.Equal(1, await context.Portfolios.CountAsync());
+        Assert.NotNull(user.Portfolio);
+        Assert.Equal(user.Id, user.Portfolio.UserId);
+        Assert.Equal("USD", user.Portfolio.Currency);
+        Assert.Equal(100_000m, user.Portfolio.InitialCapital);
+        Assert.Equal(100_000m, user.Portfolio.CashBalance);
+        Assert.Equal(user.CreatedAtUtc, user.Portfolio.CreatedAtUtc);
+        Assert.Equal(0, await context.Holdings.CountAsync());
+        Assert.Equal(0, await context.Transactions.CountAsync());
+
+        var portfolioWithUser = await context.Portfolios.AsNoTracking()
+            .Include(portfolio => portfolio.User)
+            .SingleAsync();
+        Assert.Equal(user.Id, portfolioWithUser.User.Id);
 
         var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>();
         var verification = hasher.VerifyHashedPassword(user, user.PasswordHash, password);
@@ -105,6 +120,41 @@ public sealed class UserRegistrationApiTests
         {
             PasswordVerificationResult.Success,
             PasswordVerificationResult.SuccessRehashNeeded
+        });
+    }
+
+    [Fact]
+    public async Task Separate_registrations_create_one_default_portfolio_per_user()
+    {
+        await using var fixture = await RegistrationFixture.CreateAsync();
+        using var first = await fixture.Client.PostAsync("/api/auth/register", Json(JsonSerializer.Serialize(new
+        {
+            displayName = "First User",
+            email = "first@example.com",
+            password = "first secret"
+        })));
+        using var second = await fixture.Client.PostAsync("/api/auth/register", Json(JsonSerializer.Serialize(new
+        {
+            displayName = "Second User",
+            email = "second@example.com",
+            password = "second secret"
+        })));
+
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+
+        using var scope = fixture.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        var users = await context.Users.AsNoTracking().Include(user => user.Portfolio).ToListAsync();
+        Assert.Equal(2, users.Count);
+        Assert.Equal(2, await context.Portfolios.CountAsync());
+        Assert.All(users, user =>
+        {
+            Assert.NotNull(user.Portfolio);
+            Assert.Equal(user.Id, user.Portfolio.UserId);
+            Assert.Equal("USD", user.Portfolio.Currency);
+            Assert.Equal(100_000m, user.Portfolio.InitialCapital);
+            Assert.Equal(100_000m, user.Portfolio.CashBalance);
         });
     }
 
@@ -136,7 +186,9 @@ public sealed class UserRegistrationApiTests
         Assert.DoesNotContain("password", responseText, StringComparison.OrdinalIgnoreCase);
 
         using var scope = fixture.CreateScope();
-        Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<StockLabDbContext>().Users.CountAsync());
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        Assert.Equal(1, await context.Users.CountAsync());
+        Assert.Equal(1, await context.Portfolios.CountAsync());
     }
 
     [Fact]
@@ -157,7 +209,30 @@ public sealed class UserRegistrationApiTests
         Assert.DoesNotContain("Sqlite", responseText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("race@example.com", responseText, StringComparison.OrdinalIgnoreCase);
         using var scope = fixture.CreateScope();
-        Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<StockLabDbContext>().Users.CountAsync());
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        Assert.Equal(1, await context.Users.CountAsync());
+        Assert.Equal(1, await context.Portfolios.CountAsync());
+        var persistedUser = await context.Users.AsNoTracking().Include(user => user.Portfolio).SingleAsync();
+        Assert.NotNull(persistedUser.Portfolio);
+        Assert.Equal(persistedUser.Id, persistedUser.Portfolio.UserId);
+    }
+
+    [Fact]
+    public async Task Portfolio_persistence_failure_rolls_back_the_user_registration()
+    {
+        await using var fixture = await RegistrationFixture.CreateAsync(new RejectPortfolioBeforeSave());
+        using var response = await fixture.Client.PostAsync("/api/auth/register", Json(JsonSerializer.Serialize(new
+        {
+            displayName = "Failure User",
+            email = "failure@example.com",
+            password = "failure secret"
+        })));
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        using var scope = fixture.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        Assert.Equal(0, await context.Users.CountAsync());
+        Assert.Equal(0, await context.Portfolios.CountAsync());
     }
 
     [Fact]
@@ -261,6 +336,7 @@ public sealed class UserRegistrationApiTests
         {
             base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<User>().Property(user => user.Version).ValueGeneratedNever();
+            modelBuilder.Entity<Portfolio>().Property(portfolio => portfolio.Version).ValueGeneratedNever();
         }
     }
 
@@ -294,9 +370,34 @@ public sealed class UserRegistrationApiTests
                 command.Parameters.AddWithValue("$updatedAtUtc", now);
                 command.Parameters.AddWithValue("$version", new byte[8]);
                 await command.ExecuteNonQueryAsync(cancellationToken);
+
+                await using var portfolioCommand = connection.CreateCommand();
+                portfolioCommand.CommandText = """
+                    INSERT INTO "Portfolios" ("Id", "UserId", "Currency", "InitialCapital", "CashBalance", "CreatedAtUtc", "Version")
+                    VALUES ($portfolioId, $userId, 'USD', 100000, 100000, $createdAtUtc, $version)
+                    """;
+                portfolioCommand.Parameters.AddWithValue("$portfolioId", Guid.NewGuid().ToString("D"));
+                portfolioCommand.Parameters.AddWithValue("$userId", command.Parameters["$id"].Value);
+                portfolioCommand.Parameters.AddWithValue("$createdAtUtc", now);
+                portfolioCommand.Parameters.AddWithValue("$version", new byte[8]);
+                await portfolioCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
             return result;
+        }
+    }
+
+    private sealed class RejectPortfolioBeforeSave : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            var portfolio = eventData.Context?.ChangeTracker.Entries<Portfolio>()
+                .SingleOrDefault(entry => entry.State == EntityState.Added);
+            if (portfolio is not null)
+                portfolio.Entity.InitialCapital = -1m;
+
+            return ValueTask.FromResult(result);
         }
     }
 }

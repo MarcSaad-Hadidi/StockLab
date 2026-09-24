@@ -48,8 +48,8 @@ concrete provider implementations.
 services. Register future application interfaces and implementations here as their
 issues introduce them. Application defines the market-data and registration
 contracts; Infrastructure implements their providers and the EF Core SQL Server
-mapping. Registration creates an account only; portfolio creation and login are
-separate flows.
+mapping. Registration atomically creates an account and its default USD
+paper-trading portfolio; login remains a separate flow.
 
 ## Entity Framework Core
 
@@ -196,7 +196,8 @@ Search and history HTTP endpoints are described below; frontend integration is s
 
 ## User registration
 
-`POST /api/auth/register` validates and creates a user account. For example, send:
+`POST /api/auth/register` validates and creates a user account together with its
+default paper-trading portfolio. For example, send:
 
 ```json
 {
@@ -210,8 +211,11 @@ Success returns `201 Created` with the user's `id`, `displayName`, `email` and
 `createdAtUtc`. Invalid input returns the shared `validation_error` response, and
 an email already in use returns `409 Conflict` with `email_already_registered`.
 The service stores only an ASP.NET Core password hash; plaintext passwords are not
-persisted or returned. This endpoint does not create a portfolio or issue an
-authentication token.
+persisted or returned. A successful registration atomically persists exactly one
+portfolio with `USD` currency, `$100,000` initial capital and `$100,000` available
+cash. It starts with no holdings or transactions. Portfolio details are not part
+of the registration response, and this endpoint does not issue an authentication
+token.
 
 ## Global exception handling
 
