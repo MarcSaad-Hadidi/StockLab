@@ -235,6 +235,16 @@ with HMAC SHA-256 and contains the user's immutable ID in `sub`. Unknown email
 and wrong password both return `401 Unauthorized` with the same
 `invalid_credentials` response. Invalid request data uses the shared
 `validation_error` response.
+Login attempts are limited to five requests per minute per client IP by default;
+excess requests receive `429 Too Many Requests` with a `too_many_requests` error.
+Configure `LoginRateLimit:PermitLimit` and `LoginRateLimit:Window` to adjust this
+limit. The in-process limit is applied independently by each API instance. When
+running behind a reverse proxy, configure its address under
+`ForwardedHeaders:KnownProxies` (for example,
+`ForwardedHeaders__KnownProxies__0=10.0.0.10`). The API then uses
+`X-Forwarded-For` only when the immediate peer is on that trusted list; without
+that configuration, the immediate peer address is used. Do not trust arbitrary
+forwarded headers from untrusted clients.
 
 Send the token to endpoints marked `[Authorize]` as
 `Authorization: Bearer <token>`. Missing, malformed, expired, incorrectly signed,

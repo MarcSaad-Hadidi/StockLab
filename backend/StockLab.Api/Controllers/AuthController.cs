@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
+using StockLab.Api.Configuration;
 using StockLab.Api.DTOs;
 using StockLab.Api.DTOs.Auth;
 using StockLab.Application.Exceptions;
@@ -45,10 +47,12 @@ public sealed class AuthController(
     /// <summary>Authenticates a user and returns a signed access token.</summary>
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting(LoginRateLimitOptions.PolicyName)]
     [Consumes("application/json")]
     [ProducesResponseType(typeof(LoginUserResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiValidationErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<LoginUserResponse>> LoginAsync(
         [FromBody] LoginUserRequest request,

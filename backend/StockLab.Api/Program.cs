@@ -1,6 +1,10 @@
 using System.Text;
+using System.Threading.RateLimiting;
+using System.Net;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using StockLab.Application.Interfaces;
@@ -93,6 +97,66 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
         };
     });
 builder.Services.AddAuthorization();
+builder.Services.AddOptions<ForwardedHeadersOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
+    {
+        var trustedForwardedHeaderProxies = configuration
+            .GetSection("ForwardedHeaders:KnownProxies")
+            .GetChildren()
+            .Select(proxyConfiguration => proxyConfiguration.Value)
+            .Where(proxyAddress => !string.IsNullOrWhiteSpace(proxyAddress))
+            .Select(proxyAddress => proxyAddress!)
+            .ToArray();
+        var parsedTrustedForwardedHeaderProxies = new List<IPAddress>(trustedForwardedHeaderProxies.Length);
+        foreach (var proxyAddress in trustedForwardedHeaderProxies)
+        {
+            if (!IPAddress.TryParse(proxyAddress, out var parsedProxyAddress))
+            {
+                throw new InvalidOperationException("ForwardedHeaders:KnownProxies must contain valid IP addresses.");
+            }
+
+            parsedTrustedForwardedHeaderProxies.Add(parsedProxyAddress);
+        }
+
+        options.ForwardedHeaders = parsedTrustedForwardedHeaderProxies.Count > 0
+            ? ForwardedHeaders.XForwardedFor
+            : ForwardedHeaders.None;
+        options.ForwardLimit = 1;
+        options.KnownProxies.Clear();
+        options.KnownIPNetworks.Clear();
+        foreach (var proxyAddress in parsedTrustedForwardedHeaderProxies)
+        {
+            options.KnownProxies.Add(proxyAddress);
+        }
+    });
+builder.Services.AddOptions<LoginRateLimitOptions>()
+    .Bind(builder.Configuration.GetSection(LoginRateLimitOptions.SectionName))
+    .Validate(options => options.IsValid(), LoginRateLimitOptions.ValidationMessage)
+    .ValidateOnStart();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new ApiErrorResponse("too_many_requests", "Too many login attempts. Try again later."),
+            cancellationToken);
+    };
+    options.AddPolicy(LoginRateLimitOptions.PolicyName, httpContext =>
+    {
+        var remoteAddress = httpContext.Connection.RemoteIpAddress;
+        var partitionKey = remoteAddress is null
+            ? "unknown"
+            : remoteAddress.IsIPv4MappedToIPv6
+                ? remoteAddress.MapToIPv4().ToString()
+                : remoteAddress.ToString();
+        var loginRateLimitOptions = httpContext.RequestServices
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<LoginRateLimitOptions>>().Value;
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => loginRateLimitOptions.CreateLimiterOptions());
+    });
+});
 builder.Services.AddOptions<MarketDataCacheOptions>()
     .Bind(builder.Configuration.GetSection(MarketDataCacheOptions.SectionName))
     .Validate(options => options.HasValidTtls(), "Cache TTLs must be positive and at most 365 days.")
@@ -147,6 +211,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 if (app.Environment.IsDevelopment())
@@ -155,7 +220,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseRouting();
 app.UseCors(frontendCorsPolicy);
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

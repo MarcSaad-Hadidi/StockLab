@@ -3,9 +3,11 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -48,6 +50,15 @@ public sealed class UserLoginApiTests
         }
     }
 
+    public static IEnumerable<object[]> InvalidLoginRateLimitConfigurations
+    {
+        get
+        {
+            yield return [0, "00:01:00"];
+            yield return [5, "00:00:00"];
+        }
+    }
+
     [Theory]
     [MemberData(nameof(InvalidLoginPayloads))]
     public async Task Invalid_login_request_uses_global_validation(string payload, string field)
@@ -75,6 +86,15 @@ public sealed class UserLoginApiTests
             audience: audience,
             signingKey: signingKey,
             accessTokenMinutes: accessTokenMinutes));
+    }
+
+    [Theory]
+    [MemberData(nameof(InvalidLoginRateLimitConfigurations))]
+    public async Task Invalid_login_rate_limit_configuration_prevents_api_startup(int permitLimit, string window)
+    {
+        await Assert.ThrowsAnyAsync<Exception>(() => LoginFixture.CreateAsync(
+            loginPermitLimit: permitLimit,
+            loginWindow: window));
     }
 
     [Fact]
@@ -172,6 +192,63 @@ public sealed class UserLoginApiTests
         Assert.DoesNotContain("private-password-marker", wrongPasswordText, StringComparison.Ordinal);
         Assert.DoesNotContain("ghaith@example.com", wrongPasswordText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("PasswordHash", wrongPasswordText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Repeated_login_attempts_from_the_same_ip_are_throttled_before_password_verification()
+    {
+        var hasher = new CountingPasswordHasher();
+        await using var fixture = await LoginFixture.CreateAsync(passwordHasher: hasher, loginPermitLimit: 2);
+        await RegisterAsync(fixture, "Ghaith", "ghaith@example.com", "correct-password");
+
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            using var response = await fixture.Client.PostAsync("/api/auth/login", Json(JsonSerializer.Serialize(new
+            {
+                email = "ghaith@example.com",
+                password = "wrong-password"
+            })));
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
+        {
+            Content = Json(JsonSerializer.Serialize(new
+            {
+                email = "GHAITH@EXAMPLE.COM",
+                password = "wrong-password"
+            }))
+        };
+        request.Headers.TryAddWithoutValidation("X-Forwarded-For", "203.0.113.9");
+        using var throttled = await fixture.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, throttled.StatusCode);
+        using var body = JsonDocument.Parse(await throttled.Content.ReadAsStringAsync());
+        Assert.Equal("too_many_requests", body.RootElement.GetProperty("error").GetString());
+        Assert.Equal(2, hasher.VerifyCount);
+
+        using var health = await fixture.Client.GetAsync("/health");
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+    }
+
+    [Fact]
+    public async Task Login_rate_limit_separates_client_ips_forwarded_by_a_configured_proxy()
+    {
+        var hasher = new CountingPasswordHasher();
+        await using var fixture = await LoginFixture.CreateAsync(
+            passwordHasher: hasher,
+            loginPermitLimit: 1,
+            trustedProxyAddress: "127.0.0.1");
+        await RegisterAsync(fixture, "Ghaith", "ghaith@example.com", "correct-password");
+
+        using var firstClientAttempt = await SendLoginFromForwardedIpAsync(fixture, "203.0.113.10");
+        using var repeatedClientAttempt = await SendLoginFromForwardedIpAsync(fixture, "203.0.113.10");
+        using var secondClientAttempt = await SendLoginFromForwardedIpAsync(fixture, "203.0.113.11");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, firstClientAttempt.StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, repeatedClientAttempt.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, secondClientAttempt.StatusCode);
+        Assert.Equal(2, hasher.VerifyCount);
     }
 
     [Fact]
@@ -285,7 +362,7 @@ public sealed class UserLoginApiTests
         var root = document.RootElement;
         var login = root.GetProperty("paths").GetProperty("/api/auth/login").GetProperty("post");
         var responses = login.GetProperty("responses");
-        foreach (var status in new[] { "200", "400", "401", "500" })
+        foreach (var status in new[] { "200", "400", "401", "429", "500" })
             Assert.True(responses.TryGetProperty(status, out _), $"Missing OpenAPI response {status}.");
 
         var requestSchema = GetSchemaProperties(root, login.GetProperty("requestBody").GetProperty("content")
@@ -336,6 +413,20 @@ public sealed class UserLoginApiTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         return body.RootElement.GetProperty("accessToken").GetString()!;
+    }
+
+    private static Task<HttpResponseMessage> SendLoginFromForwardedIpAsync(LoginFixture fixture, string ipAddress)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login")
+        {
+            Content = Json(JsonSerializer.Serialize(new
+            {
+                email = "ghaith@example.com",
+                password = "wrong-password"
+            }))
+        };
+        request.Headers.TryAddWithoutValidation("X-Forwarded-For", ipAddress);
+        return fixture.Client.SendAsync(request);
     }
 
     private static JsonElement ReadAndVerifyToken(string token)
@@ -395,7 +486,10 @@ public sealed class UserLoginApiTests
             string issuer = TestIssuer,
             string audience = TestAudience,
             string signingKey = TestSigningKey,
-            string accessTokenMinutes = "60")
+            string accessTokenMinutes = "60",
+            int loginPermitLimit = 5,
+            string loginWindow = "00:01:00",
+            string? trustedProxyAddress = null)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
@@ -418,7 +512,10 @@ public sealed class UserLoginApiTests
                         ["Jwt:Issuer"] = issuer,
                         ["Jwt:Audience"] = audience,
                         ["Jwt:SigningKey"] = signingKey,
-                        ["Jwt:AccessTokenMinutes"] = accessTokenMinutes
+                        ["Jwt:AccessTokenMinutes"] = accessTokenMinutes,
+                        ["LoginRateLimit:PermitLimit"] = loginPermitLimit.ToString(),
+                        ["LoginRateLimit:Window"] = loginWindow,
+                        ["ForwardedHeaders:KnownProxies:0"] = trustedProxyAddress
                     }));
                 builder.ConfigureTestServices(services =>
                 {
@@ -434,6 +531,11 @@ public sealed class UserLoginApiTests
                     {
                         services.RemoveAll<IPasswordHasher<User>>();
                         services.AddSingleton(passwordHasher);
+                    }
+                    if (trustedProxyAddress is not null)
+                    {
+                        services.AddSingleton<IStartupFilter>(
+                            new FixedRemoteIpStartupFilter(IPAddress.Parse(trustedProxyAddress)));
                     }
                 });
             });
@@ -486,6 +588,36 @@ public sealed class UserLoginApiTests
             providedPassword == "old-password"
                 ? PasswordVerificationResult.SuccessRehashNeeded
                 : PasswordVerificationResult.Failed;
+    }
+
+    private sealed class CountingPasswordHasher : IPasswordHasher<User>
+    {
+        private int verifyCount;
+
+        public int VerifyCount => Volatile.Read(ref verifyCount);
+
+        public string HashPassword(User user, string password) => $"test-hash:{password}";
+
+        public PasswordVerificationResult VerifyHashedPassword(User user, string hashedPassword, string providedPassword)
+        {
+            Interlocked.Increment(ref verifyCount);
+            return hashedPassword == $"test-hash:{providedPassword}"
+                ? PasswordVerificationResult.Success
+                : PasswordVerificationResult.Failed;
+        }
+    }
+
+    private sealed class FixedRemoteIpStartupFilter(IPAddress remoteIpAddress) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => application =>
+        {
+            application.Use(async (context, nextMiddleware) =>
+            {
+                context.Connection.RemoteIpAddress = remoteIpAddress;
+                await nextMiddleware();
+            });
+            next(application);
+        };
     }
 
     private sealed class FailFirstRehashSaveInterceptor : SaveChangesInterceptor
