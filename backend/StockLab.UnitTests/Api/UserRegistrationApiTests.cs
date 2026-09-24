@@ -293,7 +293,11 @@ public sealed class UserRegistrationApiTests
                 builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
                     new Dictionary<string, string?>
                     {
-                        ["ConnectionStrings:StockLab"] = "Server=localhost;Database=RegistrationTestsNeverUsed;Integrated Security=true;TrustServerCertificate=true"
+                        ["ConnectionStrings:StockLab"] = "Server=localhost;Database=RegistrationTestsNeverUsed;Integrated Security=true;TrustServerCertificate=true",
+                        ["Jwt:Issuer"] = "StockLab.Api.Tests",
+                        ["Jwt:Audience"] = "StockLab.Tests",
+                        ["Jwt:SigningKey"] = "test-only-signing-key-at-least-32-bytes-long",
+                        ["Jwt:AccessTokenMinutes"] = "60"
                     }));
                 builder.ConfigureTestServices(services =>
                 {

@@ -46,10 +46,11 @@ concrete provider implementations.
 
 `Program.cs` is the composition root and registers the available ASP.NET Core
 services. Register future application interfaces and implementations here as their
-issues introduce them. Application defines the market-data and registration
-contracts; Infrastructure implements their providers and the EF Core SQL Server
-mapping. Registration atomically creates an account and its default USD
-paper-trading portfolio; login remains a separate flow.
+issues introduce them. Application defines the market-data, registration and
+login contracts; Infrastructure implements their providers and the EF Core SQL
+Server mapping. Registration atomically creates an account and its default USD
+paper-trading portfolio. Login verifies the stored password hash and returns a
+stateless JWT access token.
 
 ## Entity Framework Core
 
@@ -215,7 +216,38 @@ persisted or returned. A successful registration atomically persists exactly one
 portfolio with `USD` currency, `$100,000` initial capital and `$100,000` available
 cash. It starts with no holdings or transactions. Portfolio details are not part
 of the registration response, and this endpoint does not issue an authentication
-token.
+token. Use `POST /api/auth/login` to authenticate after registration.
+
+## User authentication
+
+`POST /api/auth/login` accepts the email and password used for registration:
+
+```json
+{
+  "email": "example.user@example.com",
+  "password": "example-only-password"
+}
+```
+
+A successful login returns `200 OK` with a Bearer access token, its UTC expiry,
+and the user's public `id`, `displayName` and `email` fields. The token is signed
+with HMAC SHA-256 and contains the user's immutable ID in `sub`. Unknown email
+and wrong password both return `401 Unauthorized` with the same
+`invalid_credentials` response. Invalid request data uses the shared
+`validation_error` response.
+
+Send the token to endpoints marked `[Authorize]` as
+`Authorization: Bearer <token>`. Missing, malformed, expired, incorrectly signed,
+or otherwise invalid tokens return the safe `unauthorized` response. Current
+market-data routes, health checks, registration and login remain public. Access
+tokens expire after `Jwt:AccessTokenMinutes` (60 minutes by default); there is no
+refresh-token flow yet. Frontend session storage and login-page integration are
+separate work.
+
+The token issuer, audience and lifetime are configured by `Jwt:Issuer`,
+`Jwt:Audience` and `Jwt:AccessTokenMinutes`. Set the signing key only in User
+Secrets or an environment variable; startup rejects missing or weak keys. See
+the repository README's backend secrets section for local setup.
 
 ## Global exception handling
 

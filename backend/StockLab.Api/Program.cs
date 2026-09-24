@@ -1,8 +1,14 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 using StockLab.Application.Interfaces;
 using StockLab.Infrastructure.MarketData;
 using StockLab.Api.Middleware;
 using StockLab.Api.Validation;
 using StockLab.Api.Configuration;
+using StockLab.Api.DTOs;
 
 using StockLab.Infrastructure.MarketEnrichment;
 using StockLab.Infrastructure.Persistence;
@@ -13,10 +19,80 @@ var builder = WebApplication.CreateBuilder(args);
 const string frontendCorsPolicy = "Frontend";
 
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(ApiValidation.Configure);
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, _, _) =>
+    {
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
+        {
+            ["Bearer"] = new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.Http,
+                Scheme = "bearer",
+                In = ParameterLocation.Header,
+                BearerFormat = "JWT"
+            }
+        };
+        return Task.CompletedTask;
+    });
+    options.AddOperationTransformer((operation, context, _) =>
+    {
+        var metadata = context.Description.ActionDescriptor.EndpointMetadata;
+        if (metadata.OfType<IAllowAnonymous>().Any() || !metadata.OfType<IAuthorizeData>().Any())
+        {
+            return Task.CompletedTask;
+        }
+
+        operation.Security ??= [];
+        operation.Security.Add(new OpenApiSecurityRequirement
+        {
+            [new OpenApiSecuritySchemeReference("Bearer", context.Document)] = []
+        });
+        return Task.CompletedTask;
+    });
+});
 builder.Services.AddHealthChecks();
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddUserRegistration();
+builder.Services.AddOptions<JwtOptions>()
+    .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
+    .Validate(options => options.IsValid(), JwtOptions.ValidationMessage)
+    .ValidateOnStart();
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer();
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<Microsoft.Extensions.Options.IOptions<JwtOptions>>((options, jwtOptionsAccessor) =>
+    {
+        var jwtConfiguration = jwtOptionsAccessor.Value;
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtConfiguration.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwtConfiguration.Audience,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = string.IsNullOrWhiteSpace(jwtConfiguration.SigningKey)
+                ? null
+                : new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtConfiguration.SigningKey)),
+            ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                context.HandleResponse();
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(
+                    new ApiErrorResponse("unauthorized", "Authentication is required."),
+                    context.HttpContext.RequestAborted);
+            }
+        };
+    });
+builder.Services.AddAuthorization();
 builder.Services.AddOptions<MarketDataCacheOptions>()
     .Bind(builder.Configuration.GetSection(MarketDataCacheOptions.SectionName))
     .Validate(options => options.HasValidTtls(), "Cache TTLs must be positive and at most 365 days.")
@@ -80,6 +156,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors(frontendCorsPolicy);
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 app.MapHealthChecks("/health");
