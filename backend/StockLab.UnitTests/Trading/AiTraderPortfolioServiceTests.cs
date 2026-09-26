@@ -178,6 +178,18 @@ public sealed class AiTraderPortfolioServiceTests
         Assert.Equal(275, Assert.IsType<SqliteException>(error.InnerException).SqliteExtendedErrorCode);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Database_rejects_blank_portfolio_names(string name)
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await using var context = fixture.CreateDbContext();
+        context.AiTraderPortfolios.Add(new AiTraderPortfolio { Id = Guid.NewGuid(), PortfolioKey = name });
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+        Assert.Equal(275, Assert.IsType<SqliteException>(error.InnerException).SqliteExtendedErrorCode);
+    }
+
     [Fact]
     public async Task Database_rejects_duplicate_portfolios_and_positions()
     {

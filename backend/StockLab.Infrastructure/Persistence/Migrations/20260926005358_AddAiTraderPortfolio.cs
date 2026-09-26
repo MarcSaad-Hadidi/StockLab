@@ -12,11 +12,11 @@ namespace StockLab.Infrastructure.Persistence.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "AiTraderPortfolios",
+                name: "AiPortfolios",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    PortfolioKey = table.Column<string>(type: "nvarchar(32)", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(100)", nullable: false),
                     Currency = table.Column<string>(type: "char(3)", nullable: false),
                     InitialCapital = table.Column<decimal>(type: "decimal(19,4)", nullable: false),
                     CashBalance = table.Column<decimal>(type: "decimal(19,4)", nullable: false),
@@ -26,18 +26,19 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_AiTraderPortfolios", x => x.Id);
-                    table.CheckConstraint("CK_AiTraderPortfolios_CashBalance", "[CashBalance] >= 0");
-                    table.CheckConstraint("CK_AiTraderPortfolios_Currency", "[Currency] = 'USD'");
-                    table.CheckConstraint("CK_AiTraderPortfolios_InitialCapital", "[InitialCapital] = 100000");
+                    table.PrimaryKey("PK_AiPortfolios", x => x.Id);
+                    table.CheckConstraint("CK_AiPortfolios_CashBalance", "[CashBalance] >= 0");
+                    table.CheckConstraint("CK_AiPortfolios_Currency", "[Currency] = 'USD'");
+                    table.CheckConstraint("CK_AiPortfolios_InitialCapital", "[InitialCapital] = 100000");
+                    table.CheckConstraint("CK_AiPortfolios_Name_NotBlank", "LTRIM(RTRIM([Name])) <> ''");
                 });
 
             migrationBuilder.CreateTable(
-                name: "AiTraderPositions",
+                name: "AiPositions",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    AiTraderPortfolioId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    AiPortfolioId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Symbol = table.Column<string>(type: "nvarchar(32)", nullable: false),
                     Quantity = table.Column<decimal>(type: "decimal(19,8)", nullable: false),
                     AverageCost = table.Column<decimal>(type: "decimal(19,4)", nullable: false),
@@ -46,26 +47,26 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_AiTraderPositions", x => x.Id);
-                    table.CheckConstraint("CK_AiTraderPositions_AverageCost", "[AverageCost] > 0");
-                    table.CheckConstraint("CK_AiTraderPositions_Quantity", "[Quantity] > 0");
+                    table.PrimaryKey("PK_AiPositions", x => x.Id);
+                    table.CheckConstraint("CK_AiPositions_AverageCost", "[AverageCost] > 0");
+                    table.CheckConstraint("CK_AiPositions_Quantity", "[Quantity] > 0");
                     table.ForeignKey(
-                        name: "FK_AiTraderPositions_AiTraderPortfolios_AiTraderPortfolioId",
-                        column: x => x.AiTraderPortfolioId,
-                        principalTable: "AiTraderPortfolios",
+                        name: "FK_AiPositions_AiPortfolios_AiPortfolioId",
+                        column: x => x.AiPortfolioId,
+                        principalTable: "AiPortfolios",
                         principalColumn: "Id");
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_AiTraderPortfolios_PortfolioKey",
-                table: "AiTraderPortfolios",
-                column: "PortfolioKey",
+                name: "IX_AiPortfolios_Name",
+                table: "AiPortfolios",
+                column: "Name",
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_AiTraderPositions_AiTraderPortfolioId_Symbol",
-                table: "AiTraderPositions",
-                columns: new[] { "AiTraderPortfolioId", "Symbol" },
+                name: "IX_AiPositions_AiPortfolioId_Symbol",
+                table: "AiPositions",
+                columns: new[] { "AiPortfolioId", "Symbol" },
                 unique: true);
         }
 
@@ -73,10 +74,10 @@ namespace StockLab.Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "AiTraderPositions");
+                name: "AiPositions");
 
             migrationBuilder.DropTable(
-                name: "AiTraderPortfolios");
+                name: "AiPortfolios");
         }
     }
 }

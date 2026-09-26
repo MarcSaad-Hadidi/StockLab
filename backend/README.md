@@ -118,11 +118,14 @@ runs automatically when the API starts.
 ### AI Trader portfolio (#66)
 
 `IAiTraderPortfolioService` initializes and reads the system-owned `AI_TRADER`
-portfolio in `AiTraderPortfolios` and its positions in `AiTraderPositions`. These
+portfolio in `AiPortfolios` and its positions in `AiPositions`. These
 entities have no user relationship and never reuse user portfolios or holdings.
 The first call creates **100000 USD cash**, with no positions. Subsequent calls,
 including after a restart, preserve cash and positions. A unique portfolio key
 and recovery limited to SQL Server duplicate-key errors protect concurrent creation.
+The mappings follow `database-schema.md`: application `PortfolioKey` maps to the
+unique, nonblank `Name` column (`nvarchar(100)`), and position `AiTraderPortfolioId`
+maps to the `AiPortfolioId` foreign key column.
 Each operation owns its EF context; it cannot save pending edits from other services.
 
 `GetStateAsync` reads persisted cash, quantity and average cost without market data.

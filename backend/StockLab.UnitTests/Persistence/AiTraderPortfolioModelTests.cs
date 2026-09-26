@@ -17,10 +17,18 @@ public sealed class AiTraderPortfolioModelTests
         var assembly = context.GetService<IMigrationsAssembly>();
         var definition = Assert.Single(assembly.Migrations, m => m.Key.EndsWith("_AddAiTraderPortfolio"));
         var migration = assembly.CreateMigration(definition.Value, context.Database.ProviderName!);
-        Assert.Equal(["AiTraderPortfolios", "AiTraderPositions"],
+        Assert.Equal(["AiPortfolios", "AiPositions"],
             migration.UpOperations.OfType<CreateTableOperation>().Select(o => o.Name));
         Assert.All(migration.UpOperations, operation => Assert.True(operation is CreateTableOperation or CreateIndexOperation));
-        Assert.Equal(["AiTraderPositions", "AiTraderPortfolios"],
+        var tables = migration.UpOperations.OfType<CreateTableOperation>().ToArray();
+        var name = Assert.Single(tables[0].Columns, column => column.Name == "Name");
+        Assert.Equal("nvarchar(100)", name.ColumnType);
+        Assert.False(name.IsNullable);
+        Assert.Contains(tables[0].CheckConstraints, check => check.Sql == "LTRIM(RTRIM([Name])) <> ''");
+        var foreignKey = Assert.Single(tables[1].ForeignKeys);
+        Assert.Equal("AiPortfolios", foreignKey.PrincipalTable);
+        Assert.Equal(["AiPortfolioId"], foreignKey.Columns);
+        Assert.Equal(["AiPositions", "AiPortfolios"],
             migration.DownOperations.Select(o => Assert.IsType<DropTableOperation>(o).Name));
         Assert.False(context.Database.HasPendingModelChanges());
     }
@@ -35,8 +43,13 @@ public sealed class AiTraderPortfolioModelTests
         var position = model.FindEntityType("StockLab.Domain.Entities.AiTraderPosition");
         Assert.NotNull(portfolio);
         Assert.NotNull(position);
-        Assert.Equal("AiTraderPortfolios", portfolio.GetTableName());
-        Assert.Equal("AiTraderPositions", position.GetTableName());
+        Assert.Equal("AiPortfolios", portfolio.GetTableName());
+        Assert.Equal("AiPositions", position.GetTableName());
+        var portfolioTable = StoreObjectIdentifier.Table("AiPortfolios", null);
+        var positionTable = StoreObjectIdentifier.Table("AiPositions", null);
+        Assert.Equal("Name", portfolio.FindProperty("PortfolioKey")!.GetColumnName(portfolioTable));
+        Assert.Equal("nvarchar(100)", portfolio.FindProperty("PortfolioKey")!.GetColumnType());
+        Assert.Equal("AiPortfolioId", position.FindProperty("AiTraderPortfolioId")!.GetColumnName(positionTable));
         Assert.Null(portfolio.FindProperty("UserId"));
         Assert.Empty(portfolio.GetForeignKeys());
         Assert.Equal(["Positions"], portfolio.GetNavigations().Select(n => n.Name));

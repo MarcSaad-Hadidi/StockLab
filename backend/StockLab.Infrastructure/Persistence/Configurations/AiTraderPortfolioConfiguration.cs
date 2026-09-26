@@ -8,14 +8,15 @@ public sealed class AiTraderPortfolioConfiguration : IEntityTypeConfiguration<Ai
 {
     public void Configure(EntityTypeBuilder<AiTraderPortfolio> builder)
     {
-        builder.ToTable("AiTraderPortfolios", table =>
+        builder.ToTable("AiPortfolios", table =>
         {
-            table.HasCheckConstraint("CK_AiTraderPortfolios_InitialCapital", "[InitialCapital] = 100000");
-            table.HasCheckConstraint("CK_AiTraderPortfolios_CashBalance", "[CashBalance] >= 0");
-            table.HasCheckConstraint("CK_AiTraderPortfolios_Currency", "[Currency] = 'USD'");
+            table.HasCheckConstraint("CK_AiPortfolios_Name_NotBlank", "LTRIM(RTRIM([Name])) <> ''");
+            table.HasCheckConstraint("CK_AiPortfolios_InitialCapital", "[InitialCapital] = 100000");
+            table.HasCheckConstraint("CK_AiPortfolios_CashBalance", "[CashBalance] >= 0");
+            table.HasCheckConstraint("CK_AiPortfolios_Currency", "[Currency] = 'USD'");
         });
         builder.HasKey(portfolio => portfolio.Id);
-        builder.Property(portfolio => portfolio.PortfolioKey).HasColumnType("nvarchar(32)").IsRequired();
+        builder.Property(portfolio => portfolio.PortfolioKey).HasColumnName("Name").HasColumnType("nvarchar(100)").IsRequired();
         builder.HasIndex(portfolio => portfolio.PortfolioKey).IsUnique();
         builder.Property(portfolio => portfolio.Currency).HasColumnType("char(3)").IsRequired();
         builder.Property(portfolio => portfolio.InitialCapital).HasColumnType("decimal(19,4)");

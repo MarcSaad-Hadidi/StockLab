@@ -43,7 +43,8 @@ namespace StockLab.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("PortfolioKey")
                         .IsRequired()
-                        .HasColumnType("nvarchar(32)");
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("Name");
 
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2(7)");
@@ -59,13 +60,15 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                     b.HasIndex("PortfolioKey")
                         .IsUnique();
 
-                    b.ToTable("AiTraderPortfolios", null, t =>
+                    b.ToTable("AiPortfolios", null, t =>
                         {
-                            t.HasCheckConstraint("CK_AiTraderPortfolios_CashBalance", "[CashBalance] >= 0");
+                            t.HasCheckConstraint("CK_AiPortfolios_CashBalance", "[CashBalance] >= 0");
 
-                            t.HasCheckConstraint("CK_AiTraderPortfolios_Currency", "[Currency] = 'USD'");
+                            t.HasCheckConstraint("CK_AiPortfolios_Currency", "[Currency] = 'USD'");
 
-                            t.HasCheckConstraint("CK_AiTraderPortfolios_InitialCapital", "[InitialCapital] = 100000");
+                            t.HasCheckConstraint("CK_AiPortfolios_InitialCapital", "[InitialCapital] = 100000");
+
+                            t.HasCheckConstraint("CK_AiPortfolios_Name_NotBlank", "LTRIM(RTRIM([Name])) <> ''");
                         });
                 });
 
@@ -76,7 +79,8 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("AiTraderPortfolioId")
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("AiPortfolioId");
 
                     b.Property<decimal>("AverageCost")
                         .HasColumnType("decimal(19,4)");
@@ -99,11 +103,11 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                     b.HasIndex("AiTraderPortfolioId", "Symbol")
                         .IsUnique();
 
-                    b.ToTable("AiTraderPositions", null, t =>
+                    b.ToTable("AiPositions", null, t =>
                         {
-                            t.HasCheckConstraint("CK_AiTraderPositions_AverageCost", "[AverageCost] > 0");
+                            t.HasCheckConstraint("CK_AiPositions_AverageCost", "[AverageCost] > 0");
 
-                            t.HasCheckConstraint("CK_AiTraderPositions_Quantity", "[Quantity] > 0");
+                            t.HasCheckConstraint("CK_AiPositions_Quantity", "[Quantity] > 0");
                         });
                 });
 

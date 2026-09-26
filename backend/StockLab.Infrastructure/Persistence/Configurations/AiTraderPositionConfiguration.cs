@@ -8,12 +8,13 @@ public sealed class AiTraderPositionConfiguration : IEntityTypeConfiguration<AiT
 {
     public void Configure(EntityTypeBuilder<AiTraderPosition> builder)
     {
-        builder.ToTable("AiTraderPositions", table =>
+        builder.ToTable("AiPositions", table =>
         {
-            table.HasCheckConstraint("CK_AiTraderPositions_Quantity", "[Quantity] > 0");
-            table.HasCheckConstraint("CK_AiTraderPositions_AverageCost", "[AverageCost] > 0");
+            table.HasCheckConstraint("CK_AiPositions_Quantity", "[Quantity] > 0");
+            table.HasCheckConstraint("CK_AiPositions_AverageCost", "[AverageCost] > 0");
         });
         builder.HasKey(position => position.Id);
+        builder.Property(position => position.AiTraderPortfolioId).HasColumnName("AiPortfolioId");
         builder.Property(position => position.Symbol).HasColumnType("nvarchar(32)").IsRequired();
         builder.Property(position => position.Quantity).HasColumnType("decimal(19,8)");
         builder.Property(position => position.AverageCost).HasColumnType("decimal(19,4)");
