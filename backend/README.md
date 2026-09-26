@@ -47,7 +47,7 @@ concrete provider implementations.
 `Program.cs` is the composition root and registers the available ASP.NET Core
 services. Register future application interfaces and implementations here as their
 issues introduce them. Application defines the market-data, registration, login
-and profile contracts;
+and profile contracts, plus the portfolio read contract;
 Infrastructure implements these services and the EF Core SQL Server mapping. Registration atomically creates an account and its default
 USD
 paper-trading portfolio. Login verifies the stored password hash and returns a
@@ -293,7 +293,7 @@ Send the token to endpoints marked `[Authorize]` as
 `Authorization: Bearer <token>`. Missing, malformed, expired, incorrectly signed,
 or otherwise invalid tokens return the safe `unauthorized` response.
 Current market-data routes, health checks, registration and login remain public.
-The profile routes require a valid access token. Access tokens expire after `Jwt:AccessTokenMinutes` (60 minutes by default); there is no
+The profile and portfolio routes require a valid access token. Access tokens expire after `Jwt:AccessTokenMinutes` (60 minutes by default); there is no
 refresh-token flow yet. Frontend session storage and login-page integration are
 separate work.
 
@@ -329,6 +329,51 @@ send a user ID to select a profile. Email trimming and normalization match
 registration. A duplicate email returns <code>409 Conflict</code> with
 <code>email_already_registered</code>. These routes do not change passwords or
 portfolio data, and they require no database migration.
+
+## Portfolio API
+
+`GET /api/portfolio` returns the authenticated user's stored portfolio. Send
+`Authorization: Bearer <token>`, using the access token from
+`POST /api/auth/login`. The user ID comes exclusively from the JWT `sub` claim;
+the endpoint accepts no user or portfolio selector. Reads use EF Core
+`AsNoTracking()` and load only that portfolio and its holdings.
+
+A newly registered account returns:
+
+```json
+{
+  "cashBalance": 100000,
+  "investedValue": 0,
+  "totalValue": 100000,
+  "currency": "USD",
+  "positions": []
+}
+```
+
+Each position contains only `symbol`, `quantity` and `averageCost`, for example
+`{ "symbol": "AAPL", "quantity": 10, "averageCost": 150 }`.
+Financial values use decimal arithmetic:
+`investedValue = sum(quantity * averageCost)` and
+`totalValue = cashBalance + investedValue`. These are acquisition-cost values,
+not current market valuations. Fractional quantities and stored cost precision are
+preserved without rounding the totals; positions are sorted by symbol.
+
+The service never creates or changes a portfolio. Missing portfolios return
+`404` with `{ "error": "portfolio_not_found", "message": "The portfolio was not found." }`.
+Missing/invalid authentication returns `401 unauthorized`; unexpected failures
+use the shared safe `500 internal_server_error` response. OpenAPI documents
+200/401/404/500 and the Bearer requirement.
+
+User entities, password hashes, normalized emails, concurrency versions and
+transactions are not exposed. No market-data provider is called. Live prices,
+P&L and performance belong to #38; transaction history belongs to #39. This route
+adds no BUY/SELL operation, migration or frontend integration.
+
+`PortfolioApiTests` exercises the actual application, registration/login/JWT
+pipeline and EF Core against an isolated SQLite database. It covers initial
+balances, multiple/fractional positions, user isolation, invalid tokens, missing
+portfolios, safe failures and the OpenAPI contract. SQLite does not replace
+validation against Azure SQL.
 
 ## Global exception handling
 

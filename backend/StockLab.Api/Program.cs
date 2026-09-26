@@ -18,6 +18,7 @@ using StockLab.Infrastructure.MarketEnrichment;
 using StockLab.Infrastructure.Persistence;
 using StockLab.Infrastructure.Identity;
 using StockLab.Infrastructure.Trading;
+using StockLab.Infrastructure.Portfolios;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,6 +62,7 @@ builder.Services.AddHealthChecks();
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddUserRegistration();
 builder.Services.AddPaperTrading();
+builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddAiTraderPortfolio();
 builder.Services.AddOptions<JwtOptions>()
     .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))

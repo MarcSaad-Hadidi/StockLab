@@ -2,7 +2,7 @@
 
 StockLab est une plateforme d’apprentissage des marchés boursiers fondée sur l’investissement simulé. Elle associe une interface React pour explorer les marchés et gérer un portefeuille, une API .NET pour les données de marché et un module Python indépendant pour préparer les données destinées à l’apprentissage automatique.
 
-Le dépôt est encore en développement. Le code actuel fournit un frontend fonctionnel, une API de données de marché avec des adaptateurs simulés et externes, une API backend d’inscription et de connexion avec jeton JWT, ainsi que les premières étapes de préparation des données ML. Le frontend n’est pas encore relié à l’authentification backend; les API de portefeuille, les ordres, les alertes et les services cloud prévus restent à faire. Ces limites sont précisées dans ce document afin qu’un nouveau membre puisse lancer le projet sans confondre les données de démonstration avec de vraies données de compte.
+Le dépôt est encore en développement. Le code actuel fournit un frontend fonctionnel, une API de données de marché avec des adaptateurs simulés et externes, une API backend d’inscription, de connexion avec jeton JWT et de lecture du portefeuille, ainsi que les premières étapes de préparation des données ML. Le frontend n’est pas encore relié à l’authentification backend; les performances du portefeuille, les API d’ordres, les alertes et les services cloud prévus restent à faire. Ces limites sont précisées dans ce document afin qu’un nouveau membre puisse lancer le projet sans confondre les données de démonstration avec de vraies données de compte.
 
 ## Sommaire
 
@@ -26,7 +26,7 @@ Le dépôt est encore en développement. Le code actuel fournit un frontend fonc
 Le produit aide l’utilisateur à explorer les données de marché et à s’exercer à prendre des décisions de portefeuille sans envoyer d’ordres à un courtier.
 
 - **Marché et détails d’une action** proposent la recherche de symboles, les cotations, les graphiques historiques OHLCV, les valeurs en mouvement, les informations sur les sociétés, les actualités et des états responsives.
-- **Dashboard, Portfolio, Transactions, Watchlist, Alerts, Profile et AI Trader** présentent les parcours et les écrans prévus pour les services de compte et de trading. L’API sait inscrire et authentifier un utilisateur, mais les données de ces écrans restent indisponibles tant que les API métier correspondantes ne sont pas créées.
+- **Dashboard, Portfolio, Transactions, Watchlist, Alerts, Profile et AI Trader** présentent les parcours et les écrans prévus pour les services de compte et de trading. L’API sait inscrire et authentifier un utilisateur, mais les données de ces écrans restent indisponibles tant que les API métier correspondantes et leur intégration frontend ne sont pas terminées.
 - **Paper trading** est le parcours de trading simulé prévu : valider les ordres BUY et SELL, mettre à jour la trésorerie et les positions, calculer la performance du portefeuille et conserver l’historique des transactions. Le service complet d’exécution est prévu ; les contrôles du frontend restent des aperçus tant que ce service n’est pas connecté.
 - **AI Trader** sépare les signaux ML, l’approbation du risque et l’exécution simulée. La couche ML produit un signal et un niveau de confiance, le Risk Manager décide s’il peut être accepté, puis le Paper Trading Engine exécute l’ordre simulé approuvé. Le module Python prépare actuellement les données historiques et les variables ; il n’exécute pas de transactions.
 
@@ -35,14 +35,14 @@ Le produit aide l’utilisateur à explorer les données de marché et à s’ex
 Fonctionnalités présentes dans ce dépôt :
 
 - Frontend React/TypeScript/Vite multi-pages avec les routes Login, Register, Dashboard, Market, Stock Details, Portfolio, Transactions, Watchlist, Alerts, AI Trader, Profile et Not Found.
-- API ASP.NET Core avec inscription, login JWT et autorisation Bearer, contrôles de santé, OpenAPI en développement, réponses d’erreur sûres, validation des requêtes, mise en cache, déduplication, limitation du débit, fournisseur local simulé de données de marché et adaptateurs Twelve Data et Alpha Vantage facultatifs.
+- API ASP.NET Core avec inscription, login JWT, autorisation Bearer et lecture privée du portefeuille au coût d’acquisition, contrôles de santé, OpenAPI en développement, réponses d’erreur sûres, validation des requêtes, mise en cache, déduplication, limitation du débit, fournisseur local simulé de données de marché et adaptateurs Twelve Data et Alpha Vantage facultatifs.
 - Module ML Python 3.12 avec ingestion historique Twelve Data, validation stricte, stockage local des données brutes et traitées, nettoyage déterministe et création de variables.
 - Traductions frontend française et anglaise, mises en page responsives et tests frontend, backend et ML.
 
 Fonctionnalités non implémentées ou non connectées :
 
 - Intégration des pages Login/Register au backend, gestion de session frontend et profil utilisateur.
-- Portefeuilles, transactions, watchlists, alertes et exécution persistante des ordres de paper trading.
+- Performances du portefeuille, API de transactions, watchlists, alertes et intégration des ordres de paper trading.
 - Entraînement des modèles AI Trader, prédictions, Risk Manager, backtesting et intégration API.
 - Migrations et services de compte utilisant la couche Entity Framework Core/Azure SQL, événements Azure Service Bus et services AWS S3/SQS/Lambda.
 
@@ -51,7 +51,7 @@ Fonctionnalités non implémentées ou non connectées :
 | Domaine | Technologie | État dans ce dépôt |
 | --- | --- | --- |
 | Frontend | React 19, TypeScript, Vite, i18next, MUI X Charts | Implémenté |
-| API backend | ASP.NET Core sur .NET 10, C#, JWT Bearer, OpenAPI, xUnit | Données de marché, inscription et connexion implémentées |
+| API backend | ASP.NET Core sur .NET 10, C#, JWT Bearer, OpenAPI, xUnit | Données de marché, inscription, connexion et lecture privée du portefeuille implémentées |
 | Données de marché | Twelve Data, Alpha Vantage, fournisseur local simulé | Le mode simulé est utilisé par défaut ; les adaptateurs externes sont facultatifs |
 | Apprentissage automatique | Python 3.12, NumPy, pandas, scikit-learn, pytest, requests | Ingestion, nettoyage et création de variables implémentés |
 | Persistance relationnelle | Azure SQL et Entity Framework Core | Modèle EF Core et fournisseur SQL Server configurés ; migrations et services de compte à venir |
@@ -178,8 +178,30 @@ En environnement Development, OpenAPI est disponible depuis l’endpoint OpenAPI
 | GET | /api/stocks/{symbol}/news | Actualités d’une société |
 | POST | /api/auth/register | Créer un compte et son portefeuille initial |
 | POST | /api/auth/login | Vérifier les identifiants et recevoir un jeton Bearer |
+| GET | /api/portfolio | Lire le cash, les positions et les valeurs au coût d’acquisition du compte authentifié |
 
-Après connexion, les futures routes privées utiliseront `Authorization: Bearer <token>`.
+Après connexion, les routes privées utilisent `Authorization: Bearer <token>`.
+
+#### Portfolio API
+
+`GET /api/portfolio` lit le portefeuille de l’utilisateur connecté. Aucun identifiant
+utilisateur ou portefeuille n’est accepté pour sélectionner un autre compte.
+
+```http
+GET /api/portfolio
+Authorization: Bearer <token>
+```
+
+La réponse contient `cashBalance`, `investedValue`, `totalValue`, `currency` et
+`positions` (`symbol`, `quantity`, `averageCost`). Pour un nouveau compte :
+100 000 USD de cash, aucune position et une valeur totale de 100 000 USD.
+La valeur investie est la somme des quantités multipliées par leurs prix moyens ;
+la valeur totale est le cash plus cette valeur investie, au coût d’acquisition.
+Les prix live et la performance seront ajoutés avec #38.
+
+Les réponses documentées sont 200, 401, 404 (`portfolio_not_found`) et 500.
+Une lecture ne crée jamais de portefeuille manquant. Voir le
+[contrat détaillé et les tests](backend/README.md#portfolio-api).
 
 ### Module ML (facultatif)
 
@@ -231,7 +253,7 @@ Le fournisseur ML Python lit uniquement TWELVE_DATA_ML_API_KEY. Définissez-la d
 
 ### Configuration cloud prévue
 
-La couche Entity Framework Core est configurée pour Azure SQL. L’inscription et la connexion backend sont présentes; les API privées de portefeuille, les migrations additionnelles et les autres services de compte restent à faire. Azure Service Bus, AWS S3, AWS SQS, AWS Lambda et IAM sont des intégrations prévues. Aucun secret cloud ni chaîne de connexion ne doit être placé dans ce dépôt, et les tests hors ligne n’en ont pas besoin.
+La couche Entity Framework Core est configurée pour Azure SQL. L’inscription, la connexion et la lecture privée du portefeuille sont présentes; les performances du portefeuille, les migrations additionnelles et les autres services de compte restent à faire. Azure Service Bus, AWS S3, AWS SQS, AWS Lambda et IAM sont des intégrations prévues. Aucun secret cloud ni chaîne de connexion ne doit être placé dans ce dépôt, et les tests hors ligne n’en ont pas besoin.
 
 ## Commandes utiles
 
