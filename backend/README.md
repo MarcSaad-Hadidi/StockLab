@@ -63,7 +63,7 @@ Each SQL Server mapping is in `StockLab.Infrastructure/Persistence/Configuration
 The context discovers these configurations from the Infrastructure assembly. They
 define table names, keys, indexes, decimal and string types, check constraints,
 `rowversion` concurrency tokens and `NO ACTION` foreign keys according to
-`database-schema.md`. AI/ML and snapshot tables remain outside this first model.
+`database-schema.md`. AI Trader has its own tables described below; valuation snapshots are not stored.
 
 `StockLab.Api/Program.cs` calls `AddPersistence`, which registers the scoped
 `StockLabDbContext` with the SQL Server provider. It reads the named setting
@@ -114,6 +114,48 @@ dotnet ef migrations script `
 `ConnectionStrings__StockLab`. Review generated SQL before applying it, and use the
 StockLab development database for development migration work. No database update
 runs automatically when the API starts.
+
+### AI Trader portfolio (#66)
+
+`IAiTraderPortfolioService` initializes and reads the system-owned `AI_TRADER`
+portfolio in `AiPortfolios` and its positions in `AiPositions`. These
+entities have no user relationship and never reuse user portfolios or holdings.
+The first call creates **100000 USD cash**, with no positions. Subsequent calls,
+including after a restart, preserve cash and positions. A unique portfolio key
+and recovery limited to SQL Server duplicate-key errors protect concurrent creation.
+The mappings follow `database-schema.md`: application `PortfolioKey` maps to the
+unique, nonblank `Name` column (`nvarchar(100)`), and position `AiTraderPortfolioId`
+maps to the `AiPortfolioId` foreign key column.
+Each operation owns its EF context; it cannot save pending edits from other services.
+
+`GetStateAsync` reads persisted cash, quantity and average cost without market data.
+`GetSnapshotAsync` uses the existing `IMarketDataProvider` pipeline to calculate
+position market value (`quantity * current price`), total value (`cash + market
+values`) and P&L (`total value - initial capital`). Position unrealized P&L is
+`quantity * (current price - average cost)`. No price or valuation is persisted.
+Missing/invalid quotes, provider failures and non-USD quotes fail valuation without
+substituting cost or zero; persisted state remains available. Empty portfolios
+require no quote calls. Quote prices are the provider's latest available prices,
+not guaranteed executable prices or observations from the same instant.
+
+The `AddAiTraderPortfolio` migration adds only these two tables. It enforces
+nonnegative cash, fixed V1 capital of 100000 USD, positive quantity/average cost,
+one position per portfolio/symbol and portfolio `rowversion`. Money uses
+`decimal(19,4)` and quantities `decimal(19,8)`. Apply migrations explicitly using
+the commands above. No startup migration, API endpoint, trading or risk manager
+is included. The API only registers the scoped service through Infrastructure DI.
+
+Tests use isolated SQLite databases plus the SQL Server model and migration
+metadata. To also test eight simultaneous creators and real SQL Server rowversion
+on Windows with LocalDB installed:
+
+```powershell
+$env:STOCKLAB_TEST_LOCALDB = "1"
+dotnet test backend/StockLab.sln
+```
+
+That opt-in test creates and removes only its own randomly named LocalDB database;
+it never reads the application's Azure connection. Otherwise it is reported skipped.
 
 ## Market-data contracts
 
