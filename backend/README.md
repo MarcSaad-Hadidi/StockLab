@@ -142,8 +142,76 @@ The `AddAiTraderPortfolio` migration adds only these two tables. It enforces
 nonnegative cash, fixed V1 capital of 100000 USD, positive quantity/average cost,
 one position per portfolio/symbol and portfolio `rowversion`. Money uses
 `decimal(19,4)` and quantities `decimal(19,8)`. Apply migrations explicitly using
-the commands above. No startup migration, API endpoint, trading or risk manager
+the commands above. No startup migration, API endpoint or trading
 is included. The API only registers the scoped service through Infrastructure DI.
+
+### AI Trader risk manager (#67)
+
+`IAiRiskManager.EvaluateAsync(AiRiskRequest, CancellationToken)` evaluates an
+already-produced ML decision; it never generates signals, recalculates confidence,
+executes trades or writes decision history. `AiTradingSignal` is a controlled
+`Buy`/`Sell`/`Hold` enum; unknown enum values are rejected. Future API boundaries
+must explicitly map external BUY/SELL/HOLD strings. Symbols are required, at most
+32 characters, without whitespace/control characters; matching is ordinal and
+case-insensitive, while results preserve the original symbol, signal, confidence
+and price. Confidence is a decimal fraction in [0,1], never a percentage.
+`CurrentPrice` must be positive and resolved **in USD by trusted backend
+orchestration**, never accepted directly from a frontend. No UserId, model name,
+ML probabilities, Python process or HTTP endpoint is needed.
+
+Policy is bound from `AiTrader:Risk` and validated at startup:
+
+| Setting | V1 default |
+| --- | --- |
+| MinimumConfidence | 0.70 (inclusive, BUY and SELL) |
+| MaxPositionExposurePercent | 0.20 of current total portfolio value |
+| MaxOpenPositions | 10 positive-quantity positions |
+| MaxCashAllocationPerTradePercent | 0.10 of current total portfolio value |
+| AllowShortSelling | false (true is rejected as unsupported) |
+
+Exposure/allocation must be in (0,1], allocation cannot exceed exposure, position
+count must be positive, and minimum confidence must be in [0,1].
+
+Checks run in this order: request/symbol/signal/confidence validation, positive
+price, HOLD, minimum confidence, portfolio read and currency, then BUY position
+count, remaining exposure, cash and sizing; SELL checks the actual holding.
+HOLD always returns non-executable `HoldSignal` for valid input, even below the
+confidence threshold. Rejections have zero quantity and a typed reason;
+approvals have positive quantity and no rejection reason.
+
+BUY takes one current snapshot. Target exposure is `held quantity * CurrentPrice`,
+never average cost. If the snapshot's target quote differs, its target market
+value is replaced in TotalValue with that same request-price exposure so both
+sides of the exposure ratio use one price. Remaining exposure is
+`TotalValue * MaxPositionExposurePercent - target exposure`. Maximum notional is
+`min(CashBalance, remaining exposure, TotalValue * MaxCashAllocationPerTradePercent)`.
+Thus an empty 100000 USD portfolio at a 100 USD price approves 100 shares
+(10000 USD), while the symbol ceiling remains 20000 USD. Gains/losses change
+these limits with current account value, not initial capital. At ten positions,
+new symbols are rejected; additions to an existing symbol still undergo sizing.
+Quantity is divided by price, floored to eight decimal places using decimal
+arithmetic, and its final cost checked against all three limits. Zero quantity
+is `TradeTooSmall`; there is no arbitrary minimum notional or cash reserve.
+BUY also caps additions at the remaining `decimal(19,8)` position capacity
+(`99999999999.99999999 - held quantity`) so an approval fits the existing schema.
+
+SELL reads persisted state without quotes and approves the entire held quantity;
+no holding means `NoPositionToSell`. It cannot exceed holdings and ignores BUY
+exposure, cash allocation and position-count limits. HOLD and low confidence need
+no portfolio or market calls. Provider/currency valuation failures propagate
+without fallback; arithmetic overflow raises a controlled evaluation error.
+
+Risk evaluation uses `IAiTraderPortfolioService` with `initializeIfMissing: false`
+for both reads. A missing AI portfolio fails without creating it; initialization
+remains the responsibility of #66's explicit orchestration. Existing callers of
+the portfolio service retain first-use initialization by default. No user
+portfolio is read, no cash/position/transaction/timestamp is changed, and no
+execution service is a dependency.
+
+**Approval is pre-execution only, not a reservation of cash or shares. #68 must
+revalidate critical cash, holdings, exposure and position-count invariants
+atomically against the execution price/state under concurrency control.** #67
+holds no lock or transaction between evaluation and execution.
 
 Tests use isolated SQLite databases plus the SQL Server model and migration
 metadata. To also test eight simultaneous creators and real SQL Server rowversion

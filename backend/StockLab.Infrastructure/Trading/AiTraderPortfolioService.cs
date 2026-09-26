@@ -12,13 +12,19 @@ public sealed class AiTraderPortfolioService(
     IMarketDataProvider marketDataProvider,
     TimeProvider timeProvider) : IAiTraderPortfolioService
 {
-    public async Task<AiTraderPortfolioState> GetOrCreateAsync(CancellationToken cancellationToken = default)
+    public Task<AiTraderPortfolioState> GetOrCreateAsync(CancellationToken cancellationToken = default) =>
+        GetStateAsync(cancellationToken);
+
+    public async Task<AiTraderPortfolioState> GetStateAsync(CancellationToken cancellationToken = default, bool initializeIfMissing = true)
     {
         // Own the unit of work so initialization cannot save another scoped service's pending edits.
         await using var context = await dbContextFactory.CreateDbContextAsync(cancellationToken);
         var portfolio = await LoadAsync(context, cancellationToken);
         if (portfolio is null)
         {
+            if (!initializeIfMissing)
+                throw new InvalidOperationException("The AI Trader portfolio must be initialized before risk evaluation.");
+
             var now = timeProvider.GetUtcNow().UtcDateTime;
             portfolio = new AiTraderPortfolio
             {
@@ -46,12 +52,9 @@ public sealed class AiTraderPortfolioService(
                 .ToArray());
     }
 
-    public Task<AiTraderPortfolioState> GetStateAsync(CancellationToken cancellationToken = default) =>
-        GetOrCreateAsync(cancellationToken);
-
-    public async Task<AiTraderPortfolioSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default)
+    public async Task<AiTraderPortfolioSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default, bool initializeIfMissing = true)
     {
-        var state = await GetStateAsync(cancellationToken);
+        var state = await GetStateAsync(cancellationToken, initializeIfMissing);
         var positions = new List<AiTraderPositionSnapshot>(state.Positions.Count);
         foreach (var position in state.Positions)
         {

@@ -30,6 +30,7 @@ public sealed class PersistenceIntegrationTests
         Assert.Equal("Microsoft.EntityFrameworkCore.SqlServer", context.Database.ProviderName);
         Assert.Equal("StockLabTestOnly", context.Database.GetDbConnection().Database);
         Assert.IsType<AiTraderPortfolioService>(scope.ServiceProvider.GetRequiredService<IAiTraderPortfolioService>());
+        Assert.IsType<AiRiskManager>(scope.ServiceProvider.GetRequiredService<IAiRiskManager>());
     }
 
     [Fact]

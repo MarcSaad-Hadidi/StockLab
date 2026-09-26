@@ -8,8 +8,10 @@ public interface IAiTraderPortfolioService
     Task<AiTraderPortfolioState> GetOrCreateAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Returns persisted state, initializing on first use; requires no market data.</summary>
-    Task<AiTraderPortfolioState> GetStateAsync(CancellationToken cancellationToken = default);
+    /// <param name="initializeIfMissing">Set false for strictly read-only callers; a missing portfolio then fails.</param>
+    Task<AiTraderPortfolioState> GetStateAsync(CancellationToken cancellationToken = default, bool initializeIfMissing = true);
 
     /// <summary>Values all positions using market quotes. Missing/invalid quotes or currency mismatches fail the entire snapshot.</summary>
-    Task<AiTraderPortfolioSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default);
+    /// <param name="initializeIfMissing">Set false to prevent first-use initialization.</param>
+    Task<AiTraderPortfolioSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default, bool initializeIfMissing = true);
 }

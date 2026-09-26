@@ -1,6 +1,8 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Options;
+using StockLab.Application.DTOs.AiTrader;
 using StockLab.Application.DTOs.MarketData;
 using StockLab.Application.Interfaces;
 using StockLab.Domain.Entities;
@@ -11,6 +13,66 @@ namespace StockLab.UnitTests.Trading;
 
 public sealed class AiTraderPortfolioServiceTests
 {
+    [Theory]
+    [InlineData(AiTradingSignal.Buy)]
+    [InlineData(AiTradingSignal.Sell)]
+    public async Task Risk_evaluation_never_initializes_a_missing_portfolio(AiTradingSignal signal)
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var manager = new AiRiskManager(fixture.Service(), Options.Create(new AiRiskOptions()));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            manager.EvaluateAsync(new AiRiskRequest("AAPL", signal, 0.8m, 100m)));
+        Assert.Contains("initialized", error.Message);
+        await using var reader = fixture.CreateDbContext();
+        Assert.Empty(await reader.AiTraderPortfolios.ToListAsync());
+        Assert.Empty(await reader.AiTraderPositions.ToListAsync());
+        Assert.Empty(await reader.Transactions.ToListAsync());
+        Assert.Empty(fixture.Market.Calls);
+    }
+
+    [Fact]
+    public async Task Risk_uses_only_ai_cash_and_leaves_all_database_state_unchanged()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await fixture.SeedAsync(2500m, ("AAPL", 12.5m, 50m), ("OTHER", 962.5m, 20m));
+        fixture.Market.Quote = symbol => Quote(symbol, 100m);
+        await using var context = fixture.CreateDbContext();
+        var userPortfolio = new Portfolio
+        {
+            Id = Guid.NewGuid(), CashBalance = 1000000m,
+            User = new User { Id = Guid.NewGuid(), DisplayName = "Test", Email = "risk@example.com",
+                NormalizedEmail = "RISK@EXAMPLE.COM", PasswordHash = "test-hash" }
+        };
+        context.Portfolios.Add(userPortfolio);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var before = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            Portfolio = await context.AiTraderPortfolios.AsNoTracking().SingleAsync(),
+            Positions = await context.AiTraderPositions.AsNoTracking().OrderBy(p => p.Symbol).ToArrayAsync()
+        });
+        var manager = new AiRiskManager(fixture.Service(), Options.Create(new AiRiskOptions()));
+        var buy = await manager.EvaluateAsync(new("AAPL", AiTradingSignal.Buy, 0.8m, 100m));
+        Assert.True(buy.Approved);
+        Assert.Equal(25m, buy.ApprovedQuantity);
+        var sell = await manager.EvaluateAsync(new("AAPL", AiTradingSignal.Sell, 0.8m, 100m));
+        Assert.True(sell.Approved);
+        Assert.Equal(12.5m, sell.ApprovedQuantity);
+        Assert.False((await manager.EvaluateAsync(new("AAPL", AiTradingSignal.Buy, 0.6m, 100m))).Approved);
+        Assert.False((await manager.EvaluateAsync(new("MISSING", AiTradingSignal.Sell, 0.8m, 100m))).Approved);
+        Assert.False((await manager.EvaluateAsync(new("AAPL", AiTradingSignal.Hold, 0.8m, 100m))).Approved);
+        var after = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            Portfolio = await context.AiTraderPortfolios.AsNoTracking().SingleAsync(),
+            Positions = await context.AiTraderPositions.AsNoTracking().OrderBy(p => p.Symbol).ToArrayAsync()
+        });
+        Assert.Equal(before, after); // Includes cash, quantity, cost, timestamps and rowversion.
+        Assert.Equal(1000000m, (await context.Portfolios.AsNoTracking().SingleAsync()).CashBalance);
+        Assert.Empty(await context.Transactions.ToListAsync());
+        Assert.Empty(await context.Holdings.ToListAsync());
+        Assert.Equal(["AAPL", "OTHER"], fixture.Market.Calls);
+    }
+
     [Fact]
     public async Task Initialization_is_idempotent_and_a_new_service_preserves_cash_and_positions()
     {

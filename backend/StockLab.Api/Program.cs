@@ -62,6 +62,7 @@ builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddUserRegistration();
 builder.Services.AddPaperTrading();
 builder.Services.AddAiTraderPortfolio();
+builder.Services.AddAiRiskManager(builder.Configuration);
 builder.Services.AddOptions<JwtOptions>()
     .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
     .Validate(options => options.IsValid(), JwtOptions.ValidationMessage)
