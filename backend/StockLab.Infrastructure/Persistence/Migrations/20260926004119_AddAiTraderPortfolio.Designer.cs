@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using StockLab.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using StockLab.Infrastructure.Persistence;
 namespace StockLab.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(StockLabDbContext))]
-    partial class StockLabDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260926004119_AddAiTraderPortfolio")]
+    partial class AddAiTraderPortfolio
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
