@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using StockLab.Domain.Entities;
+using StockLab.Application.Interfaces;
+using StockLab.Infrastructure.Trading;
 using StockLab.Infrastructure.Persistence;
 
 namespace StockLab.UnitTests.Persistence;
@@ -27,6 +29,7 @@ public sealed class PersistenceIntegrationTests
         var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
         Assert.Equal("Microsoft.EntityFrameworkCore.SqlServer", context.Database.ProviderName);
         Assert.Equal("StockLabTestOnly", context.Database.GetDbConnection().Database);
+        Assert.IsType<AiTraderPortfolioService>(scope.ServiceProvider.GetRequiredService<IAiTraderPortfolioService>());
     }
 
     [Fact]
