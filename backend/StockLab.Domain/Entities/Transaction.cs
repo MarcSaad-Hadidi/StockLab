@@ -8,7 +8,11 @@ public sealed class Transaction
     public Guid OrderId { get; set; }
     public string Side { get; set; } = string.Empty;
     public string Symbol { get; set; } = string.Empty;
+    // Original client alias, retained for replay without consulting the quote provider.
+    public string? RequestedSymbol { get; set; }
     public decimal Quantity { get; set; }
+    public string OrderType { get; set; } = "market";
+    public decimal? LimitPrice { get; set; }
     public decimal ExecutionPrice { get; set; }
     public decimal TotalAmount { get; set; }
     public DateTime ExecutedAtUtc { get; set; }

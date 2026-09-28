@@ -3,7 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using StockLab.Api.Authentication;
 using StockLab.Api.DTOs;
 using StockLab.Api.DTOs.Portfolio;
+using StockLab.Application.DTOs.Trading;
+using StockLab.Application.Exceptions;
 using StockLab.Application.Interfaces;
+using StockLab.Application.Trading;
 
 namespace StockLab.Api.Controllers;
 
@@ -11,8 +14,13 @@ namespace StockLab.Api.Controllers;
 [Route("api/portfolio")]
 [Produces("application/json")]
 [Authorize]
-public sealed class PortfolioController(IPortfolioService portfolioService) : ControllerBase
+public sealed class PortfolioController(
+    IPortfolioService portfolioService,
+    IPaperTradingEngine paperTradingEngine,
+    IMarketDataProvider marketDataProvider) : ControllerBase
 {
+    private const decimal MaxMoney = 999_999_999_999_999.9999m;
+
     /// <summary>Gets the authenticated user's portfolio valued at acquisition cost.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(PortfolioResponse), StatusCodes.Status200OK)]
@@ -37,4 +45,157 @@ public sealed class PortfolioController(IPortfolioService portfolioService) : Co
                 portfolio.Positions.Select(position => new PortfolioPositionResponse(
                     position.Symbol, position.Quantity, position.AverageCost)).ToArray()));
     }
+
+    /// <summary>Executes a simulated BUY or SELL order in the authenticated user's portfolio.</summary>
+    [HttpPost("trades")]
+    [Consumes("application/json")]
+    [ProducesResponseType(typeof(PaperTradeResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiValidationErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status422UnprocessableEntity)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<PaperTradeResponse>> ExecuteTradeAsync(
+        [FromBody] PlacePaperTradeRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized(new ApiErrorResponse("unauthorized", "Authentication is required."));
+        }
+
+        var portfolioId = await portfolioService.GetPortfolioIdAsync(userId, cancellationToken);
+        if (portfolioId is null)
+        {
+            return NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."));
+        }
+
+        var existingResult = await paperTradingEngine.GetExistingAsync(
+            userId, portfolioId.Value, request.OrderId, cancellationToken);
+        if (existingResult is not null)
+        {
+            if (!MatchesExistingOrderTerms(existingResult, request))
+            {
+                return Conflict(new ApiErrorResponse(
+                    "duplicate_order", "This order conflicts with an existing order."));
+            }
+
+            // The original request can be replayed even when market data is unavailable.
+            if (request.Symbol == (existingResult.RequestedSymbol ?? existingResult.Symbol)
+                || request.Symbol == existingResult.Symbol)
+            {
+                return Ok(PaperTradeResponse.From(existingResult));
+            }
+        }
+
+        var quote = await marketDataProvider.GetQuoteAsync(request.Symbol, cancellationToken);
+        if (quote is null)
+        {
+            return NotFound(new ApiErrorResponse(
+                "stock_not_found", $"Stock symbol '{request.Symbol}' was not found."));
+        }
+
+        var tradingSymbol = TradingSymbol.FromQuote(quote);
+        if (tradingSymbol is null)
+        {
+            return UnprocessableEntity(new ApiErrorResponse(
+                "invalid_order", "The stock listing could not be identified."));
+        }
+
+        if (existingResult is not null)
+        {
+            // A different alias is equivalent only if the provider resolves the same listing.
+            var existingSymbol = existingResult.Symbol;
+            if (!existingSymbol.Contains(':'))
+            {
+                var legacyQuote = await marketDataProvider.GetQuoteAsync(existingSymbol, cancellationToken);
+                existingSymbol = legacyQuote is null ? null : TradingSymbol.FromQuote(legacyQuote);
+            }
+            return existingSymbol == tradingSymbol
+                ? Ok(PaperTradeResponse.From(existingResult))
+                : Conflict(new ApiErrorResponse("duplicate_order", "This order conflicts with an existing order."));
+        }
+
+        var portfolioCurrency = await portfolioService.GetPortfolioCurrencyAsync(userId, cancellationToken);
+        if (portfolioCurrency is null)
+        {
+            return NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."));
+        }
+
+        if (!string.Equals(quote.Currency.Trim(), portfolioCurrency.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            return UnprocessableEntity(new ApiErrorResponse(
+                "currency_mismatch", "The stock quote currency does not match your portfolio currency."));
+        }
+
+        var executionPrice = decimal.Round(quote.Price, 4, MidpointRounding.AwayFromZero);
+        if (executionPrice <= 0m || executionPrice > MaxMoney
+            || request.Quantity > MaxMoney / executionPrice)
+        {
+            return UnprocessableEntity(new ApiErrorResponse(
+                "invalid_order", "The order amount is outside the supported range."));
+        }
+
+        if (request.OrderType == "limit")
+        {
+            var limitPrice = decimal.Round(request.LimitPrice!.Value, 4, MidpointRounding.AwayFromZero);
+            var limitReached = request.Side == "BUY"
+                ? executionPrice <= limitPrice
+                : executionPrice >= limitPrice;
+            if (!limitReached)
+            {
+                return UnprocessableEntity(new ApiErrorResponse(
+                    "limit_not_reached", "The current market price does not meet the limit price."));
+            }
+        }
+
+        try
+        {
+            var result = await paperTradingEngine.ExecuteAsync(
+                userId,
+                portfolioId.Value,
+                new Application.DTOs.Trading.PaperTradeRequest(
+                    request.OrderId, request.Side, tradingSymbol, request.Quantity, executionPrice)
+                {
+                    RequestedSymbol = request.Symbol,
+                    OrderType = request.OrderType,
+                    LimitPrice = request.OrderType == "limit"
+                        ? decimal.Round(request.LimitPrice!.Value, 4, MidpointRounding.AwayFromZero)
+                        : null
+                },
+                cancellationToken);
+            return Ok(PaperTradeResponse.From(result));
+        }
+        catch (PaperTradingException exception)
+        {
+            return exception.Category switch
+            {
+                PaperTradingFailure.PortfolioNotFound => NotFound(
+                    new ApiErrorResponse("portfolio_not_found", "The portfolio was not found.")),
+                PaperTradingFailure.InsufficientCash => UnprocessableEntity(
+                    new ApiErrorResponse("insufficient_cash", "There is not enough cash for this order.")),
+                PaperTradingFailure.InsufficientHoldings => UnprocessableEntity(
+                    new ApiErrorResponse("insufficient_holdings", "There are not enough shares for this order.")),
+                PaperTradingFailure.DuplicateOrder => Conflict(
+                    new ApiErrorResponse("duplicate_order", "This order conflicts with an existing order.")),
+                PaperTradingFailure.ConcurrencyConflict => Conflict(
+                    new ApiErrorResponse("concurrency_conflict", "The portfolio changed while this order was executing.")),
+                PaperTradingFailure.LimitPriceNotReached => UnprocessableEntity(
+                    new ApiErrorResponse("limit_not_reached", "The current market price does not meet the limit price.")),
+                _ => BadRequest(new ApiErrorResponse("invalid_order", "The order could not be executed."))
+            };
+        }
+    }
+
+    private static bool MatchesExistingOrderTerms(
+        PaperTradeResult existing,
+        PlacePaperTradeRequest request) =>
+        existing.Side == request.Side
+        && existing.Quantity == decimal.Round(request.Quantity, 8, MidpointRounding.AwayFromZero)
+        && existing.OrderType == request.OrderType
+        && existing.LimitPrice == (request.OrderType == "limit"
+            ? decimal.Round(request.LimitPrice!.Value, 4, MidpointRounding.AwayFromZero)
+            : null);
 }

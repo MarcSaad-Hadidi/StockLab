@@ -72,6 +72,7 @@ export function money(
   value: number | null | undefined,
   currency: string | null,
   locale: string,
+  maximumFractionDigits = 2,
 ) {
   if (value == null || !Number.isFinite(value)) return "—";
   return new Intl.NumberFormat(locale, {
@@ -79,7 +80,7 @@ export function money(
       ? { style: "currency", currency }
       : {}),
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    maximumFractionDigits,
   }).format(value);
 }
 export function calculateTradeTotal(price: number, quantity: number) {
@@ -90,7 +91,7 @@ export function calculateTradeTotal(price: number, quantity: number) {
     quantity <= 0
   )
     return 0;
-  return Math.round(price * quantity * 100) / 100;
+  return Math.round(price * quantity * 10_000) / 10_000;
 }
 export function getTradeExecutionPrice(
   orderType: TradeOrderType,

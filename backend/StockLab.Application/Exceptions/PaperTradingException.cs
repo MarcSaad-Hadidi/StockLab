@@ -7,7 +7,8 @@ public enum PaperTradingFailure
     InsufficientCash,
     InsufficientHoldings,
     DuplicateOrder,
-    ConcurrencyConflict
+    ConcurrencyConflict,
+    LimitPriceNotReached
 }
 
 /// <summary>Controlled failure raised when a paper-trading order cannot execute.</summary>
