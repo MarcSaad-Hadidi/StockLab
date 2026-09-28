@@ -1,11 +1,35 @@
 import { routeFor } from '../navigation/routes'
 import { LanguageSelector } from '../components/LanguageSelector'
+import { AuthApiError, authApi } from '../api/authApi'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import './register.css'
 
 type FieldErrors = Partial<Record<'name' | 'email' | 'password' | 'confirmPassword', string>>
+
+function registerErrorKey(code: AuthApiError['code']): string {
+  return ({
+    validation_error: 'register.errors.invalidRequest',
+    email_already_registered: 'register.errors.emailTaken',
+    invalid_credentials: 'register.errors.server',
+    rate_limited: 'register.errors.rateLimited',
+    offline: 'register.errors.offline',
+    invalid_response: 'register.errors.server',
+    server_error: 'register.errors.server',
+  } satisfies Record<AuthApiError['code'], string>)[code]
+}
+
+function serverFieldErrors(fieldErrors: Record<string, string[]>): FieldErrors {
+  const mapped: FieldErrors = {}
+  for (const field of Object.keys(fieldErrors)) {
+    const normalized = field.toLowerCase()
+    if (normalized === 'displayname' || normalized === 'name') mapped.name = 'register.errors.name'
+    if (normalized === 'email') mapped.email = 'register.errors.email'
+    if (normalized === 'password') mapped.password = 'register.errors.password'
+  }
+  return mapped
+}
 
 function Icon({ name }: { name: 'user' | 'mail' | 'lock' | 'eye' | 'eyeOff' | 'gift' | 'google' }) {
   if (name === 'google') {
@@ -43,9 +67,10 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [errors, setErrors] = useState<FieldErrors>({})
-  const [submitted, setSubmitted] = useState(false)
+  const [serverError, setServerError] = useState<string>()
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     const name = String(form.get('name') ?? '').trim()
@@ -54,6 +79,7 @@ export default function RegisterPage() {
     const confirmPassword = String(form.get('confirmPassword') ?? '')
     const nextErrors: FieldErrors = {}
 
+    setServerError(undefined)
     if (!name) nextErrors.name = 'register.errors.name'
     if (!email) nextErrors.email = 'register.errors.email'
     else if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = 'register.errors.emailInvalid'
@@ -63,7 +89,22 @@ export default function RegisterPage() {
     else if (confirmPassword !== password) nextErrors.confirmPassword = 'register.errors.mismatch'
 
     setErrors(nextErrors)
-    setSubmitted(Object.keys(nextErrors).length === 0)
+    if (Object.keys(nextErrors).length > 0) return
+
+    setIsSubmitting(true)
+    try {
+      await authApi.register({ displayName: name, email, password })
+      window.location.assign(`${routeFor('login')}?registered=1`)
+    } catch (error) {
+      if (error instanceof AuthApiError) {
+        setServerError(registerErrorKey(error.code))
+        setErrors(serverFieldErrors(error.fieldErrors))
+      } else {
+        setServerError('register.errors.server')
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -85,14 +126,14 @@ export default function RegisterPage() {
         <section className="register-card" aria-labelledby="register-heading">
           <div className="card-topline"><Brand /><LanguageSelector /></div>
           <header className="card-heading"><h1 id="register-heading">{t('register.title')}</h1><p>{t('register.subtitle')}</p></header>
-          <form className="register-form" onSubmit={handleSubmit} noValidate>
+          <form aria-busy={isSubmitting} className="register-form" onSubmit={handleSubmit} noValidate>
+            {serverError && <p className="form-error" role="alert">{t(serverError)}</p>}
             <div className="field-group"><label htmlFor="name">{t('register.nameLabel')}</label><div className={`input-wrap ${errors.name ? 'has-error' : ''}`}><Icon name="user" /><input id="name" name="name" type="text" placeholder={t('register.namePlaceholder')} autoComplete="name" aria-invalid={Boolean(errors.name)} /></div>{errors.name && <p className="field-error">{t(errors.name)}</p>}</div>
             <div className="field-group"><label htmlFor="email">{t('register.emailLabel')}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={t('register.emailPlaceholder')} autoComplete="email" aria-invalid={Boolean(errors.email)} /></div>{errors.email && <p className="field-error">{t(errors.email)}</p>}</div>
             <div className="field-group"><label htmlFor="password">{t('register.passwordLabel')}</label><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={t('register.passwordPlaceholder')} autoComplete="new-password" aria-invalid={Boolean(errors.password)} /><button className="visibility-button" type="button" aria-label={showPassword ? t('register.hidePassword') : t('register.showPassword')} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{t(errors.password)}</p>}</div>
             <div className="field-group"><label htmlFor="confirmPassword">{t('register.confirmLabel')}</label><div className={`input-wrap ${errors.confirmPassword ? 'has-error' : ''}`}><Icon name="lock" /><input id="confirmPassword" name="confirmPassword" type={showConfirmation ? 'text' : 'password'} placeholder={t('register.confirmPlaceholder')} autoComplete="new-password" aria-invalid={Boolean(errors.confirmPassword)} /><button className="visibility-button" type="button" aria-label={showConfirmation ? t('register.hideConfirmation') : t('register.showConfirmation')} onClick={() => setShowConfirmation((visible) => !visible)}><Icon name={showConfirmation ? 'eyeOff' : 'eye'} /></button></div>{errors.confirmPassword && <p className="field-error">{t(errors.confirmPassword)}</p>}</div>
             <div className="capital-note"><span className="capital-icon"><Icon name="gift" /></span><div className="capital-copy"><strong>{t('register.capitalTitle')}</strong><p>{t('register.capitalLine')}</p></div></div>
-            <button className="primary-button" type="submit">{t('register.create')}</button>
-            {submitted && <p className="form-success" role="status">{t('register.success')}</p>}
+            <button className="primary-button" disabled={isSubmitting} type="submit">{t('register.create')}</button>
           </form>
           <div className="form-divider"><span>{t('register.divider')}</span></div>
           <button className="google-button" type="button"><Icon name="google" /><span>{t('register.google')}</span></button>

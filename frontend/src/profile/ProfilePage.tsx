@@ -2,6 +2,7 @@ import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
 import { formatCurrency, formatDate } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
+import { clearAuthSession } from '../auth/authStorage'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { initialProfile, type ProfileData } from './profileData'
@@ -124,6 +125,10 @@ export default function ProfilePage() {
     showToast('profile.profileSavedToast')
   }
   const updatePreference = (key: 'email' | 'alerts' | 'marketing' | 'darkMode') => setPreferences((current) => ({ ...current, [key]: !current[key] }))
+  const logout = () => {
+    clearAuthSession()
+    window.location.assign(routeFor('logout'))
+  }
 
   const updateDraftField = (key: 'name' | 'email' | 'phone' | 'country' | 'timezone', value: string, commitImmediately = false) => {
     setDraft((current) => ({ ...current, [key]: value }))
@@ -146,7 +151,7 @@ export default function ProfilePage() {
           <div className="summary-actions">
             <button className="summary-primary" onClick={() => editing ? saveProfile() : beginEditing()} type="button"><Icon name="edit" size={14} /> {editing ? t('profile.saveProfile') : t('profile.editProfile')}</button>
             <button className="summary-secondary" onClick={() => setPasswordModalOpen(true)} type="button"><Icon name="lock" size={14} /> {t('profile.changePassword')}</button>
-            <button className="summary-logout" onClick={() => window.location.assign(routeFor('logout'))} type="button"><Icon name="logout" size={14} /> {t('profile.logOut')}</button>
+            <button className="summary-logout" onClick={logout} type="button"><Icon name="logout" size={14} /> {t('profile.logOut')}</button>
           </div>
         </section>
         <div className="profile-grid">

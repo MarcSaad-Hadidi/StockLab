@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { LanguageSelector } from '../LanguageSelector'
 import { isCurrentPage, routeFor } from '../../navigation/routes'
 import { SidebarIcon } from './SidebarIcon'
+import { clearAuthSession } from '../../auth/authStorage'
 import styles from './Sidebar.module.css'
 import './layout.css'
 
@@ -21,6 +22,10 @@ type SidebarProps = { open: boolean; onClose: () => void }
 /** The corrected Alerts sidebar is the shared navigation reference. */
 export function Sidebar({ open, onClose }: SidebarProps) {
   const { t } = useTranslation()
+  const logout = () => {
+    clearAuthSession()
+    window.location.assign(routeFor('logout'))
+  }
 
   return <>
     <button aria-label={t('common.closeNavigation')} className={`${styles.backdrop} ${open ? styles.backdropOpen : ''}`} onClick={onClose} type="button" />
@@ -39,7 +44,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             </a>
           })}
         </Fragment>)}
-        <button className={`${styles.item} ${styles.button}`} onClick={() => window.location.assign(routeFor('logout'))} type="button"><SidebarIcon name="logout" size={16} /><span>{t('common.navigation.logout')}</span></button>
+        <button className={`${styles.item} ${styles.button}`} onClick={logout} type="button"><SidebarIcon name="logout" size={16} /><span>{t('common.navigation.logout')}</span></button>
       </nav>
       <div className={styles.footer}><LanguageSelector className="language-switch-sidebar" /><p>{t('common.preview')}</p></div>
     </aside>
