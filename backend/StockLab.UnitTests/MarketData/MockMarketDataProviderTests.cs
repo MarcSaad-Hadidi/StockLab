@@ -32,6 +32,21 @@ public sealed class MockMarketDataProviderTests
         Assert.Null(await provider.GetHistoryAsync(Request("UNKNOWN")));
     }
 
+    [Fact]
+    public async Task Qualified_symbols_resolve_only_the_simulated_listing()
+    {
+        var quote = await provider.GetQuoteAsync("AAPL");
+        Assert.NotNull(quote);
+        Assert.Equal(quote, await provider.GetQuoteAsync(" aapl:nasdaq "));
+        var history = await provider.GetHistoryAsync(Request("AAPL"));
+        var qualifiedHistory = await provider.GetHistoryAsync(Request("AAPL:NASDAQ"));
+        Assert.NotNull(history);
+        Assert.NotNull(qualifiedHistory);
+        Assert.Equal(history.Bars.ToArray(), qualifiedHistory.Bars.ToArray());
+        Assert.Null(await provider.GetQuoteAsync("AAPL:NYSE"));
+        Assert.Null(await provider.GetHistoryAsync(Request("AAPL:NYSE")));
+    }
+
     [Theory]
     [InlineData(" aap ", "AAPL")]
     [InlineData("microsoft", "MSFT")]

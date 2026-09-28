@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -11,11 +12,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using StockLab.Api.DTOs.Portfolio;
 using StockLab.Application.DTOs.MarketData;
 using StockLab.Application.Interfaces;
 using StockLab.Domain.Entities;
 using StockLab.Infrastructure.MarketData;
 using StockLab.Infrastructure.Persistence;
+using StockLab.UnitTests.MarketData;
 
 namespace StockLab.UnitTests.Api;
 
@@ -24,6 +27,140 @@ public sealed class PaperTradingApiTests
     private const string TestIssuer = "StockLab.Api.Tests";
     private const string TestAudience = "StockLab.Tests";
     private const string TestSigningKey = "test-only-signing-key-at-least-32-bytes-long";
+
+    private static string ListingQuote(string exchange) =>
+        TwelveDataProviderTests.QuoteJson.Replace("\"currency\":\"USD\"", $"\"currency\":\"USD\",\"exchange\":\"{exchange}\"");
+
+    [Theory]
+    [InlineData("AAPL", "AAPL:NASDAQ", true)]
+    [InlineData("AAPL:NASDAQ", "AAPL", true)]
+    [InlineData("AAPL", "AAPL:NASDAQ", false)]
+    [InlineData("AAPL:NASDAQ", "AAPL", false)]
+    public async Task Security_aliases_share_one_position_for_buys_and_sells(
+        string firstSymbol, string alias, bool useTwelveData)
+    {
+        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote("NASDAQ"));
+        await using var fixture = await TradingApiFixture.CreateAsync(useTwelveData ? provider.Provider : null);
+        var account = await CreateSignedInAccountAsync(fixture, "aliases@example.com");
+
+        using var buy = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side = "BUY", symbol = firstSymbol, quantity = 2m, orderType = "market"
+        });
+        Assert.Equal(HttpStatusCode.OK, buy.StatusCode);
+        using var sell = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side = "SELL", symbol = alias, quantity = 1m, orderType = "market"
+        });
+        Assert.Equal(HttpStatusCode.OK, sell.StatusCode);
+        using var secondBuy = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side = "BUY", symbol = alias, quantity = 1m, orderType = "market"
+        });
+        Assert.Equal(HttpStatusCode.OK, secondBuy.StatusCode);
+
+        using var scope = fixture.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        var holding = Assert.Single(await context.Holdings.ToListAsync());
+        Assert.Equal("AAPL:NASDAQ", holding.Symbol);
+        Assert.Equal(2m, holding.Quantity);
+        Assert.Equal(204.5m, holding.AverageCost);
+        Assert.Equal(99_591m, await context.Portfolios.Select(row => row.CashBalance).SingleAsync());
+        var transactions = await context.Transactions.ToListAsync();
+        Assert.Equal(3, transactions.Count);
+        Assert.All(transactions, transaction => Assert.Equal("AAPL:NASDAQ", transaction.Symbol));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("EXCHANGE-NAME-LONGER-THAN-27-CHARACTERS")]
+    public async Task Unidentifiable_or_oversized_listings_are_rejected_without_changes(string exchange)
+    {
+        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote(exchange));
+        await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
+        var account = await CreateSignedInAccountAsync(fixture, "invalid-listing@example.com");
+
+        using var response = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side = "BUY", symbol = "AAPL", quantity = 1m, orderType = "market"
+        });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        Assert.Equal("invalid_order", await ErrorCodeAsync(response));
+        using var scope = fixture.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        Assert.Equal(100_000m, await context.Portfolios.Select(row => row.CashBalance).SingleAsync());
+        Assert.Empty(await context.Holdings.ToListAsync());
+        Assert.Empty(await context.Transactions.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData("AAPL", "AAPL:NASDAQ")]
+    [InlineData("AAPL:NASDAQ", "AAPL")]
+    public async Task Canonical_trade_retries_replay_aliases_and_original_requests_during_provider_failure(
+        string originalSymbol, string alias)
+    {
+        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote("NASDAQ"));
+        await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
+        var account = await CreateSignedInAccountAsync(fixture, "alias-retry@example.com");
+        var orderId = Guid.NewGuid();
+        object Order(string symbol) => new { orderId, side = "BUY", symbol, quantity = 2m, orderType = "market" };
+        using var buy = await PostTradeAsync(fixture.Client, account.Token, Order(originalSymbol));
+        Assert.Equal(HttpStatusCode.OK, buy.StatusCode);
+        var committedResult = await buy.Content.ReadFromJsonAsync<PaperTradeResponse>();
+        Assert.NotNull(committedResult);
+        using var aliasRetry = await PostTradeAsync(fixture.Client, account.Token, Order(alias));
+        Assert.Equal(HttpStatusCode.OK, aliasRetry.StatusCode);
+        Assert.Equal(committedResult, await aliasRetry.Content.ReadFromJsonAsync<PaperTradeResponse>());
+
+        var callsBeforeFailure = provider.Handler.Requests.Count;
+        provider.Handler.Respond = (_, _) => Task.FromResult(TwelveDataProviderTests.Response("{}", HttpStatusCode.ServiceUnavailable));
+        using var originalRetry = await PostTradeAsync(fixture.Client, account.Token, Order(originalSymbol));
+        Assert.Equal(HttpStatusCode.OK, originalRetry.StatusCode);
+        Assert.Equal(committedResult, await originalRetry.Content.ReadFromJsonAsync<PaperTradeResponse>());
+        Assert.Equal(callsBeforeFailure, provider.Handler.Requests.Count);
+        using var scope = fixture.CreateScope();
+        var transaction = Assert.Single(await scope.ServiceProvider.GetRequiredService<StockLabDbContext>().Transactions.ToListAsync());
+        Assert.Equal(originalSymbol, transaction.RequestedSymbol);
+    }
+
+    [Fact]
+    public async Task Same_ticker_on_different_exchanges_keeps_separate_positions_and_rejects_changed_retries()
+    {
+        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote("NASDAQ"));
+        provider.Handler.Respond = (request, _) => Task.FromResult(TwelveDataProviderTests.Response(
+            ListingQuote(Uri.UnescapeDataString(request.RequestUri!.Query).Contains(":NYSE") ? "NYSE" : "NASDAQ")));
+        await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
+        var account = await CreateSignedInAccountAsync(fixture, "listings@example.com");
+        var orderId = Guid.NewGuid();
+        using var buy = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId, side = "BUY", symbol = "AAPL:NYSE", quantity = 1m, orderType = "market"
+        });
+        Assert.Equal(HttpStatusCode.OK, buy.StatusCode);
+        using var changedRetry = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId, side = "BUY", symbol = "AAPL", quantity = 1m, orderType = "market"
+        });
+        Assert.Equal(HttpStatusCode.Conflict, changedRetry.StatusCode);
+        Assert.Equal("duplicate_order", await ErrorCodeAsync(changedRetry));
+        using var otherBuy = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side = "BUY", symbol = "AAPL", quantity = 2m, orderType = "market"
+        });
+        Assert.Equal(HttpStatusCode.OK, otherBuy.StatusCode);
+        using var sell = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side = "SELL", symbol = "AAPL:NYSE", quantity = 2m, orderType = "market"
+        });
+        Assert.Equal((HttpStatusCode)422, sell.StatusCode);
+        Assert.Equal("insufficient_holdings", await ErrorCodeAsync(sell));
+        using var scope = fixture.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        var holdings = await context.Holdings.OrderBy(row => row.Symbol).ToListAsync();
+        Assert.Equal(new[] { "AAPL:NASDAQ", "AAPL:NYSE" }, holdings.Select(row => row.Symbol));
+        Assert.Equal(new[] { 2m, 1m }, holdings.Select(row => row.Quantity));
+        Assert.Equal(2, await context.Transactions.CountAsync());
+    }
 
     [Fact]
     public async Task Authenticated_buy_returns_execution_and_updated_cash()
@@ -45,7 +182,7 @@ public sealed class PaperTradingApiTests
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal(orderId, body.RootElement.GetProperty("orderId").GetGuid());
         Assert.Equal("BUY", body.RootElement.GetProperty("side").GetString());
-        Assert.Equal("AAPL", body.RootElement.GetProperty("symbol").GetString());
+        Assert.Equal("AAPL:NASDAQ", body.RootElement.GetProperty("symbol").GetString());
         Assert.Equal(2m, body.RootElement.GetProperty("quantity").GetDecimal());
         var executionPrice = body.RootElement.GetProperty("executionPrice").GetDecimal();
         Assert.True(executionPrice > 0m);
@@ -59,7 +196,7 @@ public sealed class PaperTradingApiTests
     {
         await using var fixture = await TradingApiFixture.CreateAsync();
         var account = await CreateSignedInAccountAsync(fixture, "sell-api@example.com");
-        await SeedHoldingAsync(fixture, account.Id, "AAPL", 3m, 150m);
+        await SeedHoldingAsync(fixture, account.Id, "AAPL:NASDAQ", 3m, 150m);
 
         using var response = await PostTradeAsync(fixture.Client, account.Token, new
         {
@@ -149,7 +286,7 @@ public sealed class PaperTradingApiTests
     {
         await using var fixture = await TradingApiFixture.CreateAsync();
         var account = await CreateSignedInAccountAsync(fixture, "limit-sell-api@example.com");
-        await SeedHoldingAsync(fixture, account.Id, "AAPL", 1m, 150m);
+        await SeedHoldingAsync(fixture, account.Id, "AAPL:NASDAQ", 1m, 150m);
 
         using var response = await PostTradeAsync(fixture.Client, account.Token, new
         {
@@ -232,7 +369,7 @@ public sealed class PaperTradingApiTests
         var cash = side == "SELL" ? 999_999_999_999_998.9999m : 100_000m;
         var heldQuantity = side == "BUY" ? 99_999_999_998.99999999m : 1m;
         await SetCashAsync(fixture, account.Id, cash);
-        await SeedHoldingAsync(fixture, account.Id, "AAPL", heldQuantity, 150m);
+        await SeedHoldingAsync(fixture, account.Id, "AAPL:NASDAQ", heldQuantity, 150m);
 
         using var response = await PostTradeAsync(fixture.Client, account.Token, new
         {

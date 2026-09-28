@@ -15,4 +15,5 @@ public sealed record PaperTradeResult(
     decimal? AverageCost,
     DateTime ExecutedAtUtc,
     string OrderType = "market",
-    decimal? LimitPrice = null);
+    decimal? LimitPrice = null,
+    string? RequestedSymbol = null);

@@ -159,6 +159,7 @@ public sealed class PaperTradingEngine(
                     OrderId = order.OrderId,
                     Side = order.Side,
                     Symbol = order.Symbol,
+                    RequestedSymbol = order.RequestedSymbol,
                     Quantity = order.Quantity,
                     OrderType = order.OrderType,
                     LimitPrice = order.LimitPrice,
@@ -232,6 +233,7 @@ public sealed class PaperTradingEngine(
 
         var side = request.Side?.Trim().ToUpperInvariant() ?? string.Empty;
         var symbol = request.Symbol?.Trim().ToUpperInvariant() ?? string.Empty;
+        var requestedSymbol = request.RequestedSymbol?.Trim().ToUpperInvariant() ?? symbol;
         var orderType = request.OrderType?.Trim().ToLowerInvariant() ?? string.Empty;
         decimal? limitPrice = request.LimitPrice.HasValue
             ? decimal.Round(request.LimitPrice.Value, 4, MidpointRounding.AwayFromZero)
@@ -239,6 +241,11 @@ public sealed class PaperTradingEngine(
         if (side is not ("BUY" or "SELL") || string.IsNullOrWhiteSpace(symbol) || symbol.Length > 32)
         {
             throw new ArgumentException("A valid BUY or SELL side and symbol are required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(requestedSymbol) || requestedSymbol.Length > 32)
+        {
+            throw new PaperTradingException(PaperTradingFailure.InvalidOrder);
         }
 
         if (orderType is not ("market" or "limit")
@@ -278,7 +285,7 @@ public sealed class PaperTradingEngine(
         }
 
         return new NormalizedOrder(
-            request.OrderId, side, symbol, quantity, orderType, limitPrice, executionPrice, totalAmount);
+            request.OrderId, side, symbol, requestedSymbol, quantity, orderType, limitPrice, executionPrice, totalAmount);
     }
 
     private static void EnsureSameOrder(Transaction transaction, NormalizedOrder order)
@@ -311,13 +318,15 @@ public sealed class PaperTradingEngine(
             holding?.AverageCost,
             transaction.ExecutedAtUtc,
             transaction.OrderType,
-            transaction.LimitPrice);
+            transaction.LimitPrice,
+            transaction.RequestedSymbol);
     }
 
     private sealed record NormalizedOrder(
         Guid OrderId,
         string Side,
         string Symbol,
+        string RequestedSymbol,
         decimal Quantity,
         string OrderType,
         decimal? LimitPrice,

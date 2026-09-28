@@ -106,8 +106,11 @@ with its concurrency token.
 | PortfolioId | FK Portfolios.Id |
 | OrderId | `uniqueidentifier`, unique within PortfolioId |
 | Side | `varchar(4)`: BUY or SELL |
-| Symbol | Normalized symbol |
+| Symbol | `nvarchar(32)`, canonical `TICKER:EXCHANGE` for orders placed through the trading API |
+| RequestedSymbol | `nvarchar(32)`, original normalized client symbol; NULL for older transactions |
 | Quantity | `decimal(19,8)`, > 0 |
+| OrderType | `varchar(6)`: market or limit |
+| LimitPrice | `decimal(19,4)`, positive for limit orders; NULL for market orders |
 | ExecutionPrice | `decimal(19,4)`, > 0 |
 | TotalAmount | `decimal(19,4)`, > 0 |
 | ExecutedAtUtc | `datetime2(7)` |
@@ -117,6 +120,12 @@ by ExecutionPrice, rounded once to four decimals (midpoints away from zero);
 the exact same amount updates cash. Orders rounding to zero are rejected.
 No fees, deposits, short sales or partial fills are modeled in V1.
 OrderId is a stable operation identifier for retries, not a broker order ID.
+The trading API uses the quote's exchange metadata to resolve unqualified and
+qualified aliases to the same Symbol in both Transactions and Holdings. Distinct
+exchanges keep distinct positions. RequestedSymbol permits replaying the original
+request without fetching another quote; an alternate alias must resolve to the
+same listing. The additive RequestedSymbol migration does not infer exchanges or
+rewrite existing holdings or ledger entries.
 
 ### Watchlists
 

@@ -8,6 +8,7 @@ public sealed record PaperTradeRequest(
     decimal Quantity,
     decimal ExecutionPrice)
 {
+    public string? RequestedSymbol { get; init; }
     public string OrderType { get; init; } = "market";
     public decimal? LimitPrice { get; init; }
 }

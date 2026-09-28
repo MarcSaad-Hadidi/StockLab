@@ -100,7 +100,12 @@ public sealed class MockMarketDataProvider : IMarketDataProvider
     private static string NormalizeSymbol(string symbol)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(symbol);
-        return symbol.Trim().ToUpperInvariant();
+        var normalized = symbol.Trim().ToUpperInvariant();
+        // All local fixtures are NASDAQ listings; other exchanges must remain unknown.
+        const string exchangeSuffix = ":NASDAQ";
+        return normalized.EndsWith(exchangeSuffix, StringComparison.Ordinal)
+            ? normalized[..^exchangeSuffix.Length]
+            : normalized;
     }
 
     private static StockHistoryBar[] CreateDailyBars(SimulatedStock stock, CancellationToken cancellationToken)

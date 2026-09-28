@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using StockLab.Api.Authentication;
 using StockLab.Api.DTOs;
 using StockLab.Api.DTOs.Portfolio;
+using StockLab.Application.DTOs.MarketData;
 using StockLab.Application.DTOs.Trading;
 using StockLab.Application.Exceptions;
 using StockLab.Application.Interfaces;
@@ -75,19 +76,18 @@ public sealed class PortfolioController(
             userId, portfolioId.Value, request.OrderId, cancellationToken);
         if (existingResult is not null)
         {
-            if (!MatchesExistingOrder(existingResult, request))
+            if (!MatchesExistingOrderTerms(existingResult, request))
             {
                 return Conflict(new ApiErrorResponse(
                     "duplicate_order", "This order conflicts with an existing order."));
             }
 
-            return Ok(PaperTradeResponse.From(existingResult));
-        }
-
-        var portfolioCurrency = await portfolioService.GetPortfolioCurrencyAsync(userId, cancellationToken);
-        if (portfolioCurrency is null)
-        {
-            return NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."));
+            // The original request can be replayed even when market data is unavailable.
+            if (request.Symbol == (existingResult.RequestedSymbol ?? existingResult.Symbol)
+                || request.Symbol == existingResult.Symbol)
+            {
+                return Ok(PaperTradeResponse.From(existingResult));
+            }
         }
 
         var quote = await marketDataProvider.GetQuoteAsync(request.Symbol, cancellationToken);
@@ -95,6 +95,27 @@ public sealed class PortfolioController(
         {
             return NotFound(new ApiErrorResponse(
                 "stock_not_found", $"Stock symbol '{request.Symbol}' was not found."));
+        }
+
+        var tradingSymbol = ResolveTradingSymbol(quote);
+        if (tradingSymbol is null)
+        {
+            return UnprocessableEntity(new ApiErrorResponse(
+                "invalid_order", "The stock listing could not be identified."));
+        }
+
+        if (existingResult is not null)
+        {
+            // A different alias is equivalent only if the provider resolves the same listing.
+            return existingResult.Symbol == tradingSymbol
+                ? Ok(PaperTradeResponse.From(existingResult))
+                : Conflict(new ApiErrorResponse("duplicate_order", "This order conflicts with an existing order."));
+        }
+
+        var portfolioCurrency = await portfolioService.GetPortfolioCurrencyAsync(userId, cancellationToken);
+        if (portfolioCurrency is null)
+        {
+            return NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."));
         }
 
         if (!string.Equals(quote.Currency.Trim(), portfolioCurrency.Trim(), StringComparison.OrdinalIgnoreCase))
@@ -130,8 +151,9 @@ public sealed class PortfolioController(
                 userId,
                 portfolioId.Value,
                 new Application.DTOs.Trading.PaperTradeRequest(
-                    request.OrderId, request.Side, quote.Symbol, request.Quantity, executionPrice)
+                    request.OrderId, request.Side, tradingSymbol, request.Quantity, executionPrice)
                 {
+                    RequestedSymbol = request.Symbol,
                     OrderType = request.OrderType,
                     LimitPrice = request.OrderType == "limit"
                         ? decimal.Round(request.LimitPrice!.Value, 4, MidpointRounding.AwayFromZero)
@@ -161,11 +183,25 @@ public sealed class PortfolioController(
         }
     }
 
-    private static bool MatchesExistingOrder(
+    private static string? ResolveTradingSymbol(StockQuote quote)
+    {
+        // Use the provider's exchange metadata, never discard a listing's exchange suffix.
+        var symbol = quote.Symbol.Trim().ToUpperInvariant();
+        var ticker = symbol.Split(':', 2)[0];
+        var exchange = quote.Exchange?.Trim().ToUpperInvariant();
+        if (ticker.Length == 0 || string.IsNullOrWhiteSpace(exchange) || exchange.Contains(':'))
+        {
+            return null;
+        }
+
+        var canonical = $"{ticker}:{exchange}";
+        return canonical.Length <= 32 ? canonical : null;
+    }
+
+    private static bool MatchesExistingOrderTerms(
         PaperTradeResult existing,
         PlacePaperTradeRequest request) =>
         existing.Side == request.Side
-        && existing.Symbol == request.Symbol
         && existing.Quantity == decimal.Round(request.Quantity, 8, MidpointRounding.AwayFromZero)
         && existing.OrderType == request.OrderType
         && existing.LimitPrice == (request.OrderType == "limit"

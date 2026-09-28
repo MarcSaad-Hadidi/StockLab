@@ -58,6 +58,8 @@ public sealed class PersistenceModelTests
         Assert.Equal(1024, Property<User>(context, nameof(User.PasswordHash)).GetMaxLength());
         Assert.Equal("nvarchar(32)", Property<Holding>(context, nameof(Holding.Symbol)).GetColumnType());
         Assert.Equal("nvarchar(32)", Property<Transaction>(context, nameof(Transaction.Symbol)).GetColumnType());
+        Assert.Equal("nvarchar(32)", Property<Transaction>(context, nameof(Transaction.RequestedSymbol)).GetColumnType());
+        Assert.True(Property<Transaction>(context, nameof(Transaction.RequestedSymbol)).IsNullable);
         Assert.Equal("nvarchar(32)", Property<Watchlist>(context, nameof(Watchlist.Symbol)).GetColumnType());
         Assert.Equal("nvarchar(32)", Property<PriceAlert>(context, nameof(PriceAlert.Symbol)).GetColumnType());
         Assert.Equal("datetime2(7)", Property<User>(context, nameof(User.CreatedAtUtc)).GetColumnType());
