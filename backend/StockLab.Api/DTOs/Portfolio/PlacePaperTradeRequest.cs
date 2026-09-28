@@ -27,7 +27,7 @@ public sealed class PlacePaperTradeRequest : IValidatableObject
         init => symbol = value?.Trim().ToUpperInvariant() ?? string.Empty;
     }
 
-    [Range(typeof(decimal), "0.00000001", "79228162514264337593543950335")]
+    [Range(typeof(decimal), "0.00000001", "99999999999.99999999")]
     public decimal Quantity { get; init; }
 
     [Required]
@@ -37,6 +37,7 @@ public sealed class PlacePaperTradeRequest : IValidatableObject
         init => orderType = value?.Trim().ToLowerInvariant() ?? string.Empty;
     }
 
+    [Range(typeof(decimal), "0.0001", "999999999999999.9999")]
     public decimal? LimitPrice { get; init; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -53,7 +54,11 @@ public sealed class PlacePaperTradeRequest : IValidatableObject
         if (OrderType is not ("market" or "limit"))
             yield return new ValidationResult("OrderType must be market or limit.", [nameof(OrderType)]);
 
-        if (OrderType == "limit" && (!LimitPrice.HasValue || LimitPrice.Value <= 0m))
+        if (decimal.Round(Quantity, 8, MidpointRounding.AwayFromZero) <= 0m)
+            yield return new ValidationResult("Quantity must remain positive after rounding.", [nameof(Quantity)]);
+
+        if (OrderType == "limit" && (!LimitPrice.HasValue
+            || decimal.Round(LimitPrice.Value, 4, MidpointRounding.AwayFromZero) <= 0m))
             yield return new ValidationResult("LimitPrice must be greater than zero for a limit order.", [nameof(LimitPrice)]);
 
         if (OrderType == "market" && LimitPrice.HasValue)

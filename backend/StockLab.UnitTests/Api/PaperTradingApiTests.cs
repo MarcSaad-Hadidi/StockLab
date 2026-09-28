@@ -108,6 +108,94 @@ public sealed class PaperTradingApiTests
         Assert.Equal("unauthorized", await ErrorCodeAsync(response));
     }
 
+    [Fact]
+    public async Task Limit_buy_is_rejected_until_the_quote_reaches_the_limit()
+    {
+        await using var fixture = await TradingApiFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "limit-api@example.com");
+
+        using var response = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side = "BUY", symbol = "AAPL", quantity = 1m,
+            orderType = "limit", limitPrice = 200m
+        });
+
+        Assert.Equal((HttpStatusCode)422, response.StatusCode);
+        Assert.Equal("limit_not_reached", await ErrorCodeAsync(response));
+    }
+
+    [Fact]
+    public async Task Limit_buy_executes_at_the_current_quote_when_the_limit_is_reached()
+    {
+        await using var fixture = await TradingApiFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "limit-execution-api@example.com");
+
+        using var response = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side = "BUY", symbol = "AAPL", quantity = 1m,
+            orderType = "limit", limitPrice = 210m
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(204.5m, body.RootElement.GetProperty("executionPrice").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Limit_sell_is_rejected_when_the_quote_is_below_the_limit()
+    {
+        await using var fixture = await TradingApiFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "limit-sell-api@example.com");
+        await SeedHoldingAsync(fixture, account.Id, "AAPL", 1m, 150m);
+
+        using var response = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side = "SELL", symbol = "AAPL", quantity = 1m,
+            orderType = "limit", limitPrice = 210m
+        });
+
+        Assert.Equal((HttpStatusCode)422, response.StatusCode);
+        Assert.Equal("limit_not_reached", await ErrorCodeAsync(response));
+    }
+
+    [Fact]
+    public async Task Repeating_an_order_returns_the_committed_result_without_a_second_execution()
+    {
+        await using var fixture = await TradingApiFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "retry-api@example.com");
+        var orderId = Guid.NewGuid();
+        var payload = new
+        {
+            orderId, side = "BUY", symbol = "AAPL", quantity = 1m, orderType = "market"
+        };
+
+        using var firstResponse = await PostTradeAsync(fixture.Client, account.Token, payload);
+        using var firstBody = JsonDocument.Parse(await firstResponse.Content.ReadAsStringAsync());
+        using var retryResponse = await PostTradeAsync(fixture.Client, account.Token, payload);
+        using var retryBody = JsonDocument.Parse(await retryResponse.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, retryResponse.StatusCode);
+        Assert.Equal(firstBody.RootElement.GetProperty("transactionId").GetGuid(),
+            retryBody.RootElement.GetProperty("transactionId").GetGuid());
+        Assert.Equal(firstBody.RootElement.GetProperty("cashBalance").GetDecimal(),
+            retryBody.RootElement.GetProperty("cashBalance").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Oversized_quantity_is_rejected_before_execution()
+    {
+        await using var fixture = await TradingApiFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "bounds-api@example.com");
+
+        using var response = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side = "BUY", symbol = "AAPL",
+            quantity = 100_000_000_000m, orderType = "market"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     private static async Task<(Guid Id, string Token)> CreateSignedInAccountAsync(
         TradingApiFixture fixture, string email)
     {

@@ -118,9 +118,13 @@ public sealed class PaperTradingEngineTests
 
         var first = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request);
         var retry = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request);
+        var priceChangedRetry = await engine.ExecuteAsync(
+            fixture.UserId, fixture.PortfolioId, request with { ExecutionPrice = 110m });
 
         Assert.Equal(first.TransactionId, retry.TransactionId);
+        Assert.Equal(first.TransactionId, priceChangedRetry.TransactionId);
         Assert.Equal(99_800m, retry.CashBalance);
+        Assert.Equal(first.ExecutionPrice, priceChangedRetry.ExecutionPrice);
         Assert.Equal(1, await fixture.Context.Transactions.CountAsync());
 
         var error = await Assert.ThrowsAsync<PaperTradingException>(() => engine.ExecuteAsync(

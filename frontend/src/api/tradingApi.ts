@@ -36,6 +36,7 @@ export type TradingApiErrorCode =
   | 'duplicate_order'
   | 'concurrency_conflict'
   | 'invalid_order'
+  | 'limit_not_reached'
   | 'rate_limited'
   | 'offline'
   | 'invalid_response'
@@ -44,7 +45,7 @@ export type TradingApiErrorCode =
 const knownCodes = new Set<TradingApiErrorCode>([
   'validation_error', 'unauthorized', 'portfolio_not_found', 'stock_not_found',
   'insufficient_cash', 'insufficient_holdings', 'duplicate_order',
-  'concurrency_conflict', 'invalid_order', 'rate_limited', 'offline',
+  'concurrency_conflict', 'invalid_order', 'limit_not_reached', 'rate_limited', 'offline',
   'invalid_response', 'server_error',
 ])
 
@@ -109,6 +110,7 @@ function messageFor(code: TradingApiErrorCode): string {
     duplicate_order: 'This order has already been submitted with different details.',
     concurrency_conflict: 'The portfolio changed while the order was executing.',
     invalid_order: 'The order could not be executed.',
+    limit_not_reached: 'The current market price does not meet your limit price.',
     rate_limited: 'Too many requests. Please try again shortly.',
     offline: 'StockLab is unreachable. Check that the backend is running.',
     invalid_response: 'The trading service returned an invalid response.',

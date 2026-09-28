@@ -335,6 +335,7 @@
       "duplicate_order": "Cet ordre entre en conflit avec une soumission précédente.",
       "concurrency_conflict": "Le portefeuille a changé pendant l’exécution de l’ordre.",
       "invalid_order": "L’ordre n’a pas pu être exécuté.",
+      "limit_not_reached": "Le prix actuel n’atteint pas votre prix limite.",
       "rate_limited": "Trop de demandes. Réessayez dans quelques instants.",
       "offline": "StockLab est inaccessible. Vérifiez que le backend est lancé.",
       "invalid_response": "Le service de trading a renvoyé une réponse invalide.",

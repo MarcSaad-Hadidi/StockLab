@@ -17,4 +17,11 @@ public interface IPaperTradingEngine
         Guid portfolioId,
         PaperTradeRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Returns a committed order for the authenticated portfolio, if one exists.</summary>
+    Task<PaperTradeResult?> GetExistingAsync(
+        Guid authenticatedUserId,
+        Guid portfolioId,
+        Guid orderId,
+        CancellationToken cancellationToken = default);
 }

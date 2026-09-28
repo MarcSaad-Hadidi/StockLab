@@ -12,6 +12,30 @@ public sealed class PaperTradingEngine(
     IDbContextFactory<StockLabDbContext> dbContextFactory,
     TimeProvider timeProvider) : IPaperTradingEngine
 {
+    private const decimal MaxQuantity = 99_999_999_999.99999999m;
+    private const decimal MaxMoney = 999_999_999_999_999.9999m;
+
+    public async Task<PaperTradeResult?> GetExistingAsync(
+        Guid authenticatedUserId,
+        Guid portfolioId,
+        Guid orderId,
+        CancellationToken cancellationToken = default)
+    {
+        if (authenticatedUserId == Guid.Empty || portfolioId == Guid.Empty || orderId == Guid.Empty)
+        {
+            throw new ArgumentException("Authenticated user, portfolio, and order identifiers are required.");
+        }
+
+        await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var transaction = await dbContext.Transactions
+            .AsNoTracking()
+            .SingleOrDefaultAsync(row => row.PortfolioId == portfolioId && row.OrderId == orderId
+                && row.Portfolio.UserId == authenticatedUserId, cancellationToken);
+        return transaction is null
+            ? null
+            : await LoadCommittedResultAsync(dbContext, authenticatedUserId, transaction, cancellationToken);
+    }
+
     public async Task<PaperTradeResult> ExecuteAsync(
         Guid authenticatedUserId,
         Guid portfolioId,
@@ -206,6 +230,11 @@ public sealed class PaperTradingEngine(
             throw new ArgumentException("Quantity and execution price must be positive.");
         }
 
+        if (quantity > MaxQuantity || executionPrice > MaxMoney || quantity > MaxMoney / executionPrice)
+        {
+            throw new PaperTradingException(PaperTradingFailure.InvalidOrder);
+        }
+
         var totalAmount = decimal.Round(quantity * executionPrice, 4, MidpointRounding.AwayFromZero);
         if (totalAmount <= 0m)
         {
@@ -218,8 +247,7 @@ public sealed class PaperTradingEngine(
     private static void EnsureSameOrder(Transaction transaction, NormalizedOrder order)
     {
         if (transaction.Side != order.Side || transaction.Symbol != order.Symbol
-            || transaction.Quantity != order.Quantity || transaction.ExecutionPrice != order.ExecutionPrice
-            || transaction.TotalAmount != order.TotalAmount)
+            || transaction.Quantity != order.Quantity)
         {
             throw new PaperTradingException(PaperTradingFailure.DuplicateOrder);
         }

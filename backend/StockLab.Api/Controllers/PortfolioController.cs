@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using StockLab.Api.Authentication;
 using StockLab.Api.DTOs;
 using StockLab.Api.DTOs.Portfolio;
+using StockLab.Application.DTOs.Trading;
 using StockLab.Application.Exceptions;
 using StockLab.Application.Interfaces;
 
@@ -17,6 +18,8 @@ public sealed class PortfolioController(
     IPaperTradingEngine paperTradingEngine,
     IMarketDataProvider marketDataProvider) : ControllerBase
 {
+    private const decimal MaxMoney = 999_999_999_999_999.9999m;
+
     /// <summary>Gets the authenticated user's portfolio valued at acquisition cost.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(PortfolioResponse), StatusCodes.Status200OK)]
@@ -68,6 +71,19 @@ public sealed class PortfolioController(
             return NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."));
         }
 
+        var existingResult = await paperTradingEngine.GetExistingAsync(
+            userId, portfolioId.Value, request.OrderId, cancellationToken);
+        if (existingResult is not null)
+        {
+            if (!MatchesExistingOrder(existingResult, request))
+            {
+                return Conflict(new ApiErrorResponse(
+                    "duplicate_order", "This order conflicts with an existing order."));
+            }
+
+            return Ok(PaperTradeResponse.From(existingResult));
+        }
+
         var quote = await marketDataProvider.GetQuoteAsync(request.Symbol, cancellationToken);
         if (quote is null)
         {
@@ -75,7 +91,27 @@ public sealed class PortfolioController(
                 "stock_not_found", $"Stock symbol '{request.Symbol}' was not found."));
         }
 
-        var executionPrice = request.OrderType == "limit" ? request.LimitPrice!.Value : quote.Price;
+        var executionPrice = decimal.Round(quote.Price, 4, MidpointRounding.AwayFromZero);
+        if (executionPrice <= 0m || executionPrice > MaxMoney
+            || request.Quantity > MaxMoney / executionPrice)
+        {
+            return UnprocessableEntity(new ApiErrorResponse(
+                "invalid_order", "The order amount is outside the supported range."));
+        }
+
+        if (request.OrderType == "limit")
+        {
+            var limitPrice = decimal.Round(request.LimitPrice!.Value, 4, MidpointRounding.AwayFromZero);
+            var limitReached = request.Side == "BUY"
+                ? executionPrice <= limitPrice
+                : executionPrice >= limitPrice;
+            if (!limitReached)
+            {
+                return UnprocessableEntity(new ApiErrorResponse(
+                    "limit_not_reached", "The current market price does not meet the limit price."));
+            }
+        }
+
         try
         {
             var result = await paperTradingEngine.ExecuteAsync(
@@ -100,8 +136,17 @@ public sealed class PortfolioController(
                     new ApiErrorResponse("duplicate_order", "This order conflicts with an existing order.")),
                 PaperTradingFailure.ConcurrencyConflict => Conflict(
                     new ApiErrorResponse("concurrency_conflict", "The portfolio changed while this order was executing.")),
+                PaperTradingFailure.LimitPriceNotReached => UnprocessableEntity(
+                    new ApiErrorResponse("limit_not_reached", "The current market price does not meet the limit price.")),
                 _ => BadRequest(new ApiErrorResponse("invalid_order", "The order could not be executed."))
             };
         }
     }
+
+    private static bool MatchesExistingOrder(
+        PaperTradeResult existing,
+        PlacePaperTradeRequest request) =>
+        existing.Side == request.Side
+        && existing.Symbol == request.Symbol
+        && existing.Quantity == decimal.Round(request.Quantity, 8, MidpointRounding.AwayFromZero);
 }
