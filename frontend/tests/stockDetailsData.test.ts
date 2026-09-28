@@ -124,6 +124,17 @@ test("local trade estimates use supplied market or limit price", () => {
   assert.equal(getTradeExecutionPrice("limit", 204.5, 200), 200);
 });
 
+test("trade estimates and currency formatting preserve four-decimal prices and totals", () => {
+  assert.equal(calculateTradeTotal(0.0001, 1), 0.0001);
+  assert.equal(calculateTradeTotal(1.2345, 1.5), 1.8518);
+  assert.equal(calculateTradeTotal(0.0001, 0.5), 0.0001);
+  assert.equal(money(0.0001, "USD", "en-US", 4), "$0.0001");
+  assert.equal(money(1.2345, "USD", "en-US", 4), "$1.2345");
+  assert.match(money(1.2345, "USD", "fr-CA", 4), /1,2345/);
+  assert.equal(money(150.25, "USD", "en-US", 4), "$150.25");
+  assert.equal(money(1.2345, "USD", "en-US"), "$1.23");
+});
+
 test("calendar month windows clamp month ends without rolling into the next month", () => {
   assert.equal(
     historyQuery("1M", new Date("2026-03-31T12:00:00Z"))?.from,

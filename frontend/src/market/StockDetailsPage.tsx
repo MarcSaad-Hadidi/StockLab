@@ -102,7 +102,7 @@ function TradeTicket({
 }) {
   const { t, i18n } = useTranslation();
   const formatCurrency = (value: number) =>
-    money(value, details.currency, localeForLanguage(i18n.language));
+    money(value, details.currency, localeForLanguage(i18n.language), 4);
   const parsedQuantity = Number(quantity);
   const estimatedPrice = getTradeExecutionPrice(
     orderType,
@@ -170,9 +170,10 @@ function TradeTicket({
               }
               id="stock-limit-price"
               inputMode="decimal"
-              min="0.01"
+              min="0.0001"
               onChange={(event) => onLimitPriceChange(event.target.value)}
-              step="0.01"
+              required
+              step="0.0001"
               type="number"
               value={limitPrice}
             />
@@ -188,6 +189,7 @@ function TradeTicket({
             inputMode="decimal"
             min="0.00000001"
             onChange={(event) => onQuantityChange(event.target.value)}
+            required
             step="0.00000001"
             type="number"
             value={quantity}
@@ -774,8 +776,8 @@ export function StockDetailsPage({
             <div className="stock-trade-confirmation-grid">
               <div><span>{t("common.asset")}</span><strong>{symbol}</strong></div>
               <div><span>{t("common.quantity")}</span><strong>{pendingTrade.quantity}</strong></div>
-              <div><span>{t("stockDetails.estimatedPrice")}</span><strong>{money(pendingTrade.estimatedPrice, currency, locale)}</strong></div>
-              <div><span>{t("stockDetails.estimatedTotal")}</span><strong>{money(pendingTrade.estimatedTotal, currency, locale)}</strong></div>
+              <div><span>{t("stockDetails.estimatedPrice")}</span><strong>{money(pendingTrade.estimatedPrice, currency, locale, 4)}</strong></div>
+              <div><span>{t("stockDetails.estimatedTotal")}</span><strong>{money(pendingTrade.estimatedTotal, currency, locale, 4)}</strong></div>
             </div>
             {tradeError && <p className="stock-form-error" role="alert">{t(tradeError)}</p>}
             <div className="stock-modal-actions">

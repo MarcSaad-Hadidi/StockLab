@@ -85,3 +85,18 @@ test('maps controlled backend errors and malformed success responses', async () 
     (error: unknown) => error instanceof TradingApiError && error.code === 'invalid_response',
   )
 })
+
+test('buy and sell requests preserve fractional quantities and four-decimal limits', async () => {
+  for (const side of ['BUY', 'SELL'] as const) {
+    for (const limitPrice of [0.0001, 1.2345]) {
+      const order = { orderId: result.orderId, side, symbol: 'AAPL', quantity: 1.12345678, orderType: 'limit' as const, limitPrice }
+      let body: unknown
+      const api = createTradingApi('', async (_, init) => {
+        body = JSON.parse(String(init.body))
+        return jsonResponse(result)
+      }, () => ({ Authorization: 'Bearer test-token' }))
+      await api.executeTrade(order)
+      assert.deepEqual(body, order)
+    }
+  }
+})

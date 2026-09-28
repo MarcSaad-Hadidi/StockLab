@@ -402,7 +402,7 @@ test("Market ranks actual market movers by direction without substituting popula
   }
 });
 
-test("trade quantity accepts supported fractions and rejects values below the API precision", async () => {
+test("trade inputs accept supported fractions and enforce the API precision", async () => {
   Object.assign(globalThis, { React: await import("react") });
   const { StockDetailsPage } = await import("../src/market/StockDetailsPage.tsx");
   const { marketDataApi } = await import("../src/api/marketDataClient.ts");
@@ -422,10 +422,30 @@ test("trade quantity accepts supported fractions and rejects values below the AP
       });
       assert.equal(input.checkValidity(), true, `${value} should be accepted`);
     }
-    for (const value of ["0", "-1", "0.000000001", "1.123456789"]) {
+    for (const value of ["", "0", "-1", "0.000000001", "1.123456789"]) {
       input.value = value;
       assert.equal(input.checkValidity(), false, `${value} should be rejected`);
     }
+    const orderType = document.querySelector<HTMLSelectElement>("#stock-order-type")!;
+    await act(async () => {
+      orderType.value = "limit";
+      orderType.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    });
+    const limit = document.querySelector<HTMLInputElement>("#stock-limit-price");
+    assert.ok(limit);
+    for (const value of ["0.0001", "0.001", "1.2345", "150.25", "2"]) {
+      limit.value = value;
+      assert.equal(limit.checkValidity(), true, `${value} limit should be accepted`);
+    }
+    for (const value of ["", "0", "-1", "0.00001", "1.23456"]) {
+      limit.value = value;
+      assert.equal(limit.checkValidity(), false, `${value} limit should be rejected`);
+    }
+    await act(async () => {
+      orderType.value = "market";
+      orderType.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    });
+    assert.equal(document.querySelector("#stock-limit-price"), null);
   } finally {
     await act(async () => root.unmount());
     Object.assign(marketDataApi, original);
