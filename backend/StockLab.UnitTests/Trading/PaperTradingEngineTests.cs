@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using StockLab.Application.DTOs.Trading;
 using StockLab.Application.Exceptions;
 using StockLab.Domain.Entities;
+using StockLab.Infrastructure.MarketData;
 using StockLab.Infrastructure.Persistence;
 using StockLab.Infrastructure.Trading;
 
@@ -13,6 +14,126 @@ namespace StockLab.UnitTests.Trading;
 
 public sealed class PaperTradingEngineTests
 {
+    [Fact]
+    public async Task Retry_reads_matching_transaction_and_position_after_concurrent_reconciliation()
+    {
+        var interceptor = new ConcurrentOrderLookupInterceptor
+        {
+            MatchesCommand = sql => sql.Contains("\"Holdings\"", StringComparison.Ordinal)
+        };
+        await using var fixture = await TradingFixture.CreateAsync(lookupInterceptor: interceptor);
+        await fixture.AddHoldingAsync("AAPL", 3m, 150m);
+        var orderId = await fixture.AddLegacyTransactionAsync();
+        // The committed order was read using its old symbol just before another order
+        // reconciled the position. The response must not pair that stale key with new holdings.
+        interceptor.BeforeLookup = async (context, cancellationToken) =>
+        {
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE Holdings SET Symbol = {"AAPL:NASDAQ"} WHERE PortfolioId = {fixture.PortfolioId}
+                """, cancellationToken);
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE Transactions SET Symbol = {"AAPL:NASDAQ"}, RequestedSymbol = {"AAPL"}
+                WHERE PortfolioId = {fixture.PortfolioId}
+                """, cancellationToken);
+        };
+        var result = await fixture.CreateEngine().GetExistingAsync(fixture.UserId, fixture.PortfolioId, orderId);
+        Assert.NotNull(result);
+        Assert.Equal("AAPL:NASDAQ", result.Symbol);
+        Assert.Equal("AAPL", result.RequestedSymbol);
+        Assert.Equal(3m, result.HoldingQuantity);
+        Assert.Equal(150m, result.AverageCost);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Legacy_reconciliation_rolls_back_when_commit_fails(bool hasCanonicalPosition, bool cancelled)
+    {
+        var commitInterceptor = new CommitFailureInterceptor();
+        await using var fixture = await TradingFixture.CreateAsync(commitInterceptor: commitInterceptor);
+        await fixture.AddHoldingAsync("AAPL", 3m, 150m);
+        if (hasCanonicalPosition)
+            await fixture.AddHoldingAsync("AAPL:NASDAQ", 2m, 250m);
+        var oldOrderId = await fixture.AddLegacyTransactionAsync();
+        using var cancellation = new CancellationTokenSource();
+        Exception failure = cancelled
+            ? new OperationCanceledException(cancellation.Token)
+            : new InvalidOperationException("Simulated commit failure after legacy reconciliation.");
+        commitInterceptor.BeforeCommit = () =>
+        {
+            if (cancelled) cancellation.Cancel();
+            throw failure;
+        };
+        var engine = fixture.CreateEngine();
+        var request = new PaperTradeRequest(Guid.NewGuid(), "SELL", "AAPL:NASDAQ", 1m, 200m);
+        var error = await Record.ExceptionAsync(() => engine.ExecuteAsync(
+            fixture.UserId, fixture.PortfolioId, request, cancellation.Token));
+        Assert.Same(failure, error);
+
+        var holdings = await fixture.Context.Holdings.AsNoTracking().OrderBy(row => row.Symbol).ToListAsync();
+        Assert.Equal(hasCanonicalPosition ? 2 : 1, holdings.Count);
+        Assert.Equal("AAPL", holdings[0].Symbol);
+        Assert.Equal(3m, holdings[0].Quantity);
+        Assert.Equal(150m, holdings[0].AverageCost);
+        if (hasCanonicalPosition)
+        {
+            Assert.Equal("AAPL:NASDAQ", holdings[1].Symbol);
+            Assert.Equal(2m, holdings[1].Quantity);
+            Assert.Equal(250m, holdings[1].AverageCost);
+        }
+        var previous = Assert.Single(await fixture.Context.Transactions.AsNoTracking().ToListAsync());
+        Assert.Equal(oldOrderId, previous.OrderId);
+        Assert.Equal("AAPL", previous.Symbol);
+        Assert.Null(previous.RequestedSymbol);
+        Assert.Equal(100_000m, await fixture.Context.Portfolios.Select(row => row.CashBalance).SingleAsync());
+
+        var result = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request);
+        Assert.Equal(hasCanonicalPosition ? 4m : 2m, result.HoldingQuantity);
+        Assert.Equal(hasCanonicalPosition ? 190m : 150m, result.AverageCost);
+        Assert.Equal(100_200m, result.CashBalance);
+        Assert.Single(await fixture.Context.Holdings.AsNoTracking().ToListAsync());
+        var oldReplay = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId,
+            new PaperTradeRequest(oldOrderId, "BUY", "AAPL", 3m, 150m));
+        Assert.Equal(result.HoldingQuantity, oldReplay.HoldingQuantity);
+        Assert.Equal(result.CashBalance, oldReplay.CashBalance);
+        Assert.Equal(2, await fixture.Context.Transactions.CountAsync());
+    }
+
+    [Theory]
+    [InlineData("insufficient_cash")]
+    [InlineData("insufficient_holdings")]
+    [InlineData("merged_quantity_overflow")]
+    public async Task Legacy_reconciliation_rejections_preserve_positions_and_history(string scenario)
+    {
+        await using var fixture = await TradingFixture.CreateAsync(initialCapital: 100m);
+        var legacyQuantity = scenario == "merged_quantity_overflow" ? 99_999_999_999m : 3m;
+        await fixture.AddHoldingAsync("AAPL", legacyQuantity, 150m);
+        await fixture.AddHoldingAsync("AAPL:NASDAQ", 2m, 250m);
+        var oldOrderId = await fixture.AddLegacyTransactionAsync();
+        var request = new PaperTradeRequest(Guid.NewGuid(),
+            scenario == "insufficient_holdings" ? "SELL" : "BUY", "AAPL:NASDAQ",
+            scenario == "insufficient_holdings" ? 6m : 1m, 200m);
+        var error = await Assert.ThrowsAsync<PaperTradingException>(() => fixture.CreateEngine()
+            .ExecuteAsync(fixture.UserId, fixture.PortfolioId, request));
+        Assert.Equal(scenario switch
+        {
+            "insufficient_cash" => PaperTradingFailure.InsufficientCash,
+            "insufficient_holdings" => PaperTradingFailure.InsufficientHoldings,
+            _ => PaperTradingFailure.InvalidOrder
+        }, error.Category);
+        var holdings = await fixture.Context.Holdings.AsNoTracking().OrderBy(row => row.Symbol).ToListAsync();
+        Assert.Equal(new[] { "AAPL", "AAPL:NASDAQ" }, holdings.Select(row => row.Symbol));
+        Assert.Equal(new[] { legacyQuantity, 2m }, holdings.Select(row => row.Quantity));
+        Assert.Equal(new[] { 150m, 250m }, holdings.Select(row => row.AverageCost));
+        Assert.Equal(100m, await fixture.Context.Portfolios.Select(row => row.CashBalance).SingleAsync());
+        var previous = Assert.Single(await fixture.Context.Transactions.AsNoTracking().ToListAsync());
+        Assert.Equal(oldOrderId, previous.OrderId);
+        Assert.Equal("AAPL", previous.Symbol);
+        Assert.Null(previous.RequestedSymbol);
+    }
+
     [Theory]
     [InlineData("0.99999999", false)]
     [InlineData("1", false)]
@@ -715,7 +836,21 @@ public sealed class PaperTradingEngineTests
                 new SqliteTradingContextFactory(optionsBuilder.Options), userId, portfolioId);
         }
 
-        public PaperTradingEngine CreateEngine() => new(ContextFactory, new FixedTimeProvider(FixedUtcNow));
+        public PaperTradingEngine CreateEngine() => new(
+            ContextFactory, new FixedTimeProvider(FixedUtcNow), new MockMarketDataProvider());
+
+        public async Task<Guid> AddLegacyTransactionAsync()
+        {
+            var orderId = Guid.NewGuid();
+            Context.Transactions.Add(new Transaction
+            {
+                Id = Guid.NewGuid(), PortfolioId = PortfolioId, OrderId = orderId,
+                Side = "BUY", Symbol = "AAPL", Quantity = 3m, ExecutionPrice = 150m,
+                TotalAmount = 450m, ExecutedAtUtc = FixedUtcNow
+            });
+            await Context.SaveChangesAsync();
+            return orderId;
+        }
 
         public async Task AddHoldingAsync(string symbol, decimal quantity, decimal averageCost)
         {
@@ -828,6 +963,7 @@ public sealed class PaperTradingEngineTests
     private sealed class ConcurrentOrderLookupInterceptor : DbCommandInterceptor
     {
         public Func<StockLabDbContext, CancellationToken, Task>? BeforeLookup { get; set; }
+        public Func<string, bool>? MatchesCommand { get; init; }
 
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
             DbCommand command,
@@ -836,7 +972,8 @@ public sealed class PaperTradingEngineTests
             CancellationToken cancellationToken = default)
         {
             if (BeforeLookup is { } beforeLookup
-                && command.CommandText.Contains("FROM \"Transactions\"", StringComparison.Ordinal))
+                && (MatchesCommand?.Invoke(command.CommandText)
+                    ?? command.CommandText.Contains("FROM \"Transactions\"", StringComparison.Ordinal)))
             {
                 BeforeLookup = null;
                 await beforeLookup((StockLabDbContext)eventData.Context!, cancellationToken);

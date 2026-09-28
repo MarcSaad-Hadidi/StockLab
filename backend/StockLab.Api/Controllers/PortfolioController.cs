@@ -3,10 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using StockLab.Api.Authentication;
 using StockLab.Api.DTOs;
 using StockLab.Api.DTOs.Portfolio;
-using StockLab.Application.DTOs.MarketData;
 using StockLab.Application.DTOs.Trading;
 using StockLab.Application.Exceptions;
 using StockLab.Application.Interfaces;
+using StockLab.Application.Trading;
 
 namespace StockLab.Api.Controllers;
 
@@ -97,7 +97,7 @@ public sealed class PortfolioController(
                 "stock_not_found", $"Stock symbol '{request.Symbol}' was not found."));
         }
 
-        var tradingSymbol = ResolveTradingSymbol(quote);
+        var tradingSymbol = TradingSymbol.FromQuote(quote);
         if (tradingSymbol is null)
         {
             return UnprocessableEntity(new ApiErrorResponse(
@@ -107,7 +107,13 @@ public sealed class PortfolioController(
         if (existingResult is not null)
         {
             // A different alias is equivalent only if the provider resolves the same listing.
-            return existingResult.Symbol == tradingSymbol
+            var existingSymbol = existingResult.Symbol;
+            if (!existingSymbol.Contains(':'))
+            {
+                var legacyQuote = await marketDataProvider.GetQuoteAsync(existingSymbol, cancellationToken);
+                existingSymbol = legacyQuote is null ? null : TradingSymbol.FromQuote(legacyQuote);
+            }
+            return existingSymbol == tradingSymbol
                 ? Ok(PaperTradeResponse.From(existingResult))
                 : Conflict(new ApiErrorResponse("duplicate_order", "This order conflicts with an existing order."));
         }
@@ -181,21 +187,6 @@ public sealed class PortfolioController(
                 _ => BadRequest(new ApiErrorResponse("invalid_order", "The order could not be executed."))
             };
         }
-    }
-
-    private static string? ResolveTradingSymbol(StockQuote quote)
-    {
-        // Use the provider's exchange metadata, never discard a listing's exchange suffix.
-        var symbol = quote.Symbol.Trim().ToUpperInvariant();
-        var ticker = symbol.Split(':', 2)[0];
-        var exchange = quote.Exchange?.Trim().ToUpperInvariant();
-        if (ticker.Length == 0 || string.IsNullOrWhiteSpace(exchange) || exchange.Contains(':'))
-        {
-            return null;
-        }
-
-        var canonical = $"{ticker}:{exchange}";
-        return canonical.Length <= 32 ? canonical : null;
     }
 
     private static bool MatchesExistingOrderTerms(

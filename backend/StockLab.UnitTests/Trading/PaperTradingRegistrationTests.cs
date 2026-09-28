@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using StockLab.Application.Interfaces;
+using StockLab.Infrastructure.MarketData;
 using StockLab.Infrastructure.Persistence;
 using StockLab.Infrastructure.Trading;
 
@@ -21,6 +22,7 @@ public sealed class PaperTradingRegistrationTests
         var services = new ServiceCollection();
         services.AddPersistence(configuration);
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IMarketDataProvider, MockMarketDataProvider>();
         services.AddPaperTrading();
         await using var provider = services.BuildServiceProvider(
             new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });

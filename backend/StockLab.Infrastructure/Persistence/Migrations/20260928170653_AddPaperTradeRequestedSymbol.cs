@@ -10,6 +10,8 @@ namespace StockLab.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            // Legacy symbols need provider-verified exchange metadata. PaperTradingEngine
+            // reconciles their positions and order identifiers atomically on the next trade.
             migrationBuilder.AddColumn<string>(
                 name: "RequestedSymbol",
                 table: "Transactions",

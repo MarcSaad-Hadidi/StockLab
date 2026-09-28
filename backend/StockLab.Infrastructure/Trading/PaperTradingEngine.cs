@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using StockLab.Application.DTOs.Trading;
 using StockLab.Application.Exceptions;
 using StockLab.Application.Interfaces;
+using StockLab.Application.Trading;
 using StockLab.Domain.Entities;
 using StockLab.Infrastructure.Persistence;
 
@@ -10,7 +11,8 @@ namespace StockLab.Infrastructure.Trading;
 
 public sealed class PaperTradingEngine(
     IDbContextFactory<StockLabDbContext> dbContextFactory,
-    TimeProvider timeProvider) : IPaperTradingEngine
+    TimeProvider timeProvider,
+    IMarketDataProvider marketDataProvider) : IPaperTradingEngine
 {
     private const decimal MaxQuantity = 99_999_999_999.99999999m;
     private const decimal MaxMoney = 999_999_999_999_999.9999m;
@@ -80,7 +82,8 @@ public sealed class PaperTradingEngine(
                 }
 
                 var now = timeProvider.GetUtcNow().UtcDateTime;
-                var holding = portfolio.Holdings.SingleOrDefault(row => row.Symbol == order.Symbol);
+                var holding = await ReconcileLegacyHoldingAsync(
+                    dbContext, portfolio, order.Symbol, now, cancellationToken);
 
                 if (order.Side == "BUY")
                 {
@@ -205,22 +208,83 @@ public sealed class PaperTradingEngine(
         throw new InvalidOperationException("Unreachable paper-trading recovery path.");
     }
 
+    private async Task<Holding?> ReconcileLegacyHoldingAsync(
+        StockLabDbContext dbContext, Portfolio portfolio, string symbol, DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var holding = portfolio.Holdings.SingleOrDefault(row => row.Symbol == symbol);
+        var separator = symbol.IndexOf(':');
+        if (separator < 1)
+            return holding;
+
+        var legacySymbol = symbol[..separator];
+        var legacyHolding = portfolio.Holdings.SingleOrDefault(row => row.Symbol == legacySymbol);
+        var legacyTransactions = dbContext.Transactions.Where(row => row.PortfolioId == portfolio.Id
+            && row.Portfolio.UserId == portfolio.UserId && row.Symbol == legacySymbol);
+        if (legacyHolding is null && !await legacyTransactions.AnyAsync(cancellationToken))
+            return holding;
+
+        // Resolve the old unqualified identifier independently: a requested exchange is not proof
+        // that its listing owns the legacy position. Unknown mappings must not split a position.
+        var quote = await marketDataProvider.GetQuoteAsync(legacySymbol, cancellationToken);
+        var resolved = quote is null ? null : TradingSymbol.FromQuote(quote);
+        if (resolved is null)
+            throw new PaperTradingException(PaperTradingFailure.InvalidOrder);
+        if (resolved != symbol)
+            return holding;
+        if (!string.Equals(quote!.Currency.Trim(), portfolio.Currency.Trim(), StringComparison.OrdinalIgnoreCase))
+            throw new PaperTradingException(PaperTradingFailure.InvalidOrder);
+
+        if (legacyHolding is not null)
+        {
+            if (holding is null)
+            {
+                legacyHolding.Symbol = symbol;
+                holding = legacyHolding;
+            }
+            else
+            {
+                if (holding.Quantity > MaxQuantity - legacyHolding.Quantity)
+                    throw new PaperTradingException(PaperTradingFailure.InvalidOrder);
+
+                var quantity = holding.Quantity + legacyHolding.Quantity;
+                holding.AverageCost = decimal.Round(
+                    (holding.Quantity * holding.AverageCost + legacyHolding.Quantity * legacyHolding.AverageCost)
+                    / quantity, 4, MidpointRounding.AwayFromZero);
+                holding.Quantity = quantity;
+                dbContext.Holdings.Remove(legacyHolding);
+                portfolio.Holdings.Remove(legacyHolding);
+            }
+            holding.UpdatedAtUtc = now;
+        }
+
+        // Keep old order IDs replayable after renaming/merging their position. Only identifiers
+        // change; amounts, prices, dates and order terms are preserved. The enclosing trade
+        // transaction also rolls this update back on rejection, cancellation or concurrency loss.
+        await legacyTransactions.ExecuteUpdateAsync(setters => setters
+            .SetProperty(row => row.RequestedSymbol, row => row.RequestedSymbol ?? legacySymbol)
+            .SetProperty(row => row.Symbol, symbol), cancellationToken);
+        return holding;
+    }
+
     private static async Task<PaperTradeResult> LoadCommittedResultAsync(
         StockLabDbContext dbContext, Guid authenticatedUserId, Transaction transaction,
         CancellationToken cancellationToken)
     {
-        // A concurrent order may have changed cash and holdings since the tracked portfolio was loaded.
-        var portfolio = await dbContext.Portfolios
+        // Read the current transaction identifier and balances together: a concurrent order may
+        // have reconciled its legacy symbol as well as changed the portfolio's cash and holdings.
+        var committed = await dbContext.Transactions
             .AsNoTracking()
-            .Include(row => row.Holdings)
-            .SingleOrDefaultAsync(row => row.Id == transaction.PortfolioId && row.UserId == authenticatedUserId,
+            .Include(row => row.Portfolio).ThenInclude(portfolio => portfolio.Holdings)
+            .AsSingleQuery()
+            .SingleOrDefaultAsync(row => row.Id == transaction.Id && row.Portfolio.UserId == authenticatedUserId,
                 cancellationToken);
-        if (portfolio is null)
+        if (committed is null)
         {
             throw new PaperTradingException(PaperTradingFailure.PortfolioNotFound);
         }
 
-        return CreateResult(transaction, portfolio);
+        return CreateResult(committed, committed.Portfolio);
     }
 
     private static NormalizedOrder Normalize(Guid portfolioId, PaperTradeRequest request)
@@ -290,7 +354,8 @@ public sealed class PaperTradingEngine(
 
     private static void EnsureSameOrder(Transaction transaction, NormalizedOrder order)
     {
-        if (transaction.Side != order.Side || transaction.Symbol != order.Symbol
+        if (transaction.Side != order.Side
+            || (transaction.Symbol != order.Symbol && transaction.RequestedSymbol != order.Symbol)
             || transaction.Quantity != order.Quantity || transaction.OrderType != order.OrderType
             || transaction.LimitPrice != order.LimitPrice)
         {

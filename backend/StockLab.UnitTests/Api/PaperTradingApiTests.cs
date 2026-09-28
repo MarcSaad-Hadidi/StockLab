@@ -32,6 +32,170 @@ public sealed class PaperTradingApiTests
         TwelveDataProviderTests.QuoteJson.Replace("\"currency\":\"USD\"", $"\"currency\":\"USD\",\"exchange\":\"{exchange}\"");
 
     [Theory]
+    [InlineData("BUY", "AAPL", false, 1)]
+    [InlineData("BUY", "AAPL:NASDAQ", true, 1)]
+    [InlineData("SELL", "AAPL", false, 1)]
+    [InlineData("SELL", "AAPL:NASDAQ", false, 3)]
+    [InlineData("SELL", "AAPL:NASDAQ", true, 4)]
+    public async Task Legacy_positions_are_reconciled_atomically_and_old_orders_remain_replayable(
+        string side, string symbol, bool hasCanonicalPosition, int quantity)
+    {
+        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote("NASDAQ"));
+        await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
+        var account = await CreateSignedInAccountAsync(fixture, "legacy-owner@example.com");
+        var otherAccount = await CreateSignedInAccountAsync(fixture, "legacy-other@example.com");
+        await SeedHoldingAsync(fixture, account.Id, "AAPL", 3m, 150m);
+        await SeedHoldingAsync(fixture, otherAccount.Id, "AAPL", 7m, 100m);
+        if (hasCanonicalPosition)
+            await SeedHoldingAsync(fixture, account.Id, "AAPL:NASDAQ", 2m, 250m);
+        var oldOrderId = await SeedLegacyTransactionAsync(fixture, account.Id);
+        await SeedLegacyTransactionAsync(fixture, otherAccount.Id);
+
+        using var response = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side, symbol, quantity, orderType = "market"
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await response.Content.ReadFromJsonAsync<PaperTradeResponse>();
+        Assert.NotNull(result);
+        var initialQuantity = hasCanonicalPosition ? 5m : 3m;
+        var initialCost = hasCanonicalPosition ? 950m : 450m;
+        var expectedQuantity = initialQuantity + (side == "BUY" ? quantity : -quantity);
+        var expectedAverage = decimal.Round(side == "BUY"
+            ? (initialCost + quantity * 204.5m) / expectedQuantity
+            : initialCost / initialQuantity, 4, MidpointRounding.AwayFromZero);
+        Assert.Equal("AAPL:NASDAQ", result.Symbol);
+        Assert.Equal(expectedQuantity, result.HoldingQuantity);
+        Assert.Equal(100_000m + (side == "BUY" ? -1m : 1m) * quantity * 204.5m, result.CashBalance);
+        Assert.Equal(expectedQuantity == 0m ? (decimal?)null : expectedAverage, result.AverageCost);
+
+        using (var scope = fixture.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+            var holdings = await context.Holdings.Where(row => row.Portfolio.UserId == account.Id).ToListAsync();
+            if (expectedQuantity == 0m)
+                Assert.Empty(holdings);
+            else
+            {
+                var holding = Assert.Single(holdings);
+                Assert.Equal("AAPL:NASDAQ", holding.Symbol);
+                Assert.Equal(expectedQuantity, holding.Quantity);
+                Assert.Equal(expectedAverage, holding.AverageCost);
+            }
+            var previous = await context.Transactions.SingleAsync(row => row.OrderId == oldOrderId);
+            Assert.Equal("AAPL:NASDAQ", previous.Symbol);
+            Assert.Equal("AAPL", previous.RequestedSymbol);
+            Assert.Equal(3m, previous.Quantity);
+            Assert.Equal(150m, previous.ExecutionPrice);
+            Assert.Equal(450m, previous.TotalAmount);
+            Assert.Equal("AAPL", (await context.Holdings.SingleAsync(row => row.Portfolio.UserId == otherAccount.Id)).Symbol);
+            var otherTransaction = await context.Transactions.SingleAsync(row => row.Portfolio.UserId == otherAccount.Id);
+            Assert.Equal("AAPL", otherTransaction.Symbol);
+            Assert.Null(otherTransaction.RequestedSymbol);
+        }
+
+        var callsBeforeFailure = provider.Handler.Requests.Count;
+        provider.Handler.Respond = (_, _) => Task.FromResult(TwelveDataProviderTests.Response("{}", HttpStatusCode.ServiceUnavailable));
+        foreach (var retrySymbol in new[] { "AAPL", "AAPL:NASDAQ" })
+        {
+            using var retry = await PostTradeAsync(fixture.Client, account.Token, new
+            {
+                orderId = oldOrderId, side = "BUY", symbol = retrySymbol, quantity = 3m, orderType = "market"
+            });
+            Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+            var replay = await retry.Content.ReadFromJsonAsync<PaperTradeResponse>();
+            Assert.NotNull(replay);
+            Assert.Equal(result.CashBalance, replay.CashBalance);
+            Assert.Equal(expectedQuantity, replay.HoldingQuantity);
+            Assert.Equal(150m, replay.ExecutionPrice);
+        }
+        Assert.Equal(callsBeforeFailure, provider.Handler.Requests.Count);
+    }
+
+    [Theory]
+    [InlineData("BUY")]
+    [InlineData("SELL")]
+    public async Task Legacy_positions_are_not_assigned_to_a_different_exchange(string side)
+    {
+        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote("NASDAQ"));
+        provider.Handler.Respond = (request, _) => Task.FromResult(TwelveDataProviderTests.Response(
+            ListingQuote(Uri.UnescapeDataString(request.RequestUri!.Query).Contains(":NYSE") ? "NYSE" : "NASDAQ")));
+        await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
+        var account = await CreateSignedInAccountAsync(fixture, "legacy-exchange@example.com");
+        await SeedHoldingAsync(fixture, account.Id, "AAPL", 3m, 150m);
+        var oldOrderId = await SeedLegacyTransactionAsync(fixture, account.Id);
+
+        using var response = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side, symbol = "AAPL:NYSE", quantity = 1m, orderType = "market"
+        });
+        Assert.Equal(side == "BUY" ? HttpStatusCode.OK : HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        using var scope = fixture.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        var legacy = await context.Holdings.SingleAsync(row => row.Symbol == "AAPL");
+        Assert.Equal(3m, legacy.Quantity);
+        Assert.Equal(150m, legacy.AverageCost);
+        Assert.Equal("AAPL", (await context.Transactions.SingleAsync(row => row.OrderId == oldOrderId)).Symbol);
+        Assert.Equal(side == "BUY" ? 2 : 1, await context.Holdings.CountAsync());
+    }
+
+    [Theory]
+    [InlineData("AAPL:NASDAQ", true)]
+    [InlineData("AAPL:NYSE", false)]
+    public async Task Legacy_order_alias_retries_resolve_the_original_listing(string symbol, bool matches)
+    {
+        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote("NASDAQ"));
+        provider.Handler.Respond = (request, _) => Task.FromResult(TwelveDataProviderTests.Response(
+            ListingQuote(Uri.UnescapeDataString(request.RequestUri!.Query).Contains(":NYSE") ? "NYSE" : "NASDAQ")));
+        await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
+        var account = await CreateSignedInAccountAsync(fixture, "legacy-replay@example.com");
+        await SeedHoldingAsync(fixture, account.Id, "AAPL", 3m, 150m);
+        var orderId = await SeedLegacyTransactionAsync(fixture, account.Id);
+        using var response = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId, side = "BUY", symbol, quantity = 3m, orderType = "market"
+        });
+        Assert.Equal(matches ? HttpStatusCode.OK : HttpStatusCode.Conflict, response.StatusCode);
+        using var scope = fixture.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        Assert.Single(await context.Transactions.ToListAsync());
+        Assert.Equal(3m, (await context.Holdings.SingleAsync()).Quantity);
+        Assert.Equal(100_000m, await context.Portfolios.Select(row => row.CashBalance).SingleAsync());
+    }
+
+    [Theory]
+    [InlineData("missing_exchange")]
+    [InlineData("different_currency")]
+    public async Task Legacy_mapping_must_be_verified_before_any_position_is_changed(string scenario)
+    {
+        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote("NASDAQ"));
+        provider.Handler.Respond = (request, _) => Task.FromResult(TwelveDataProviderTests.Response(
+            Uri.UnescapeDataString(request.RequestUri!.Query).Contains(":NASDAQ") ? ListingQuote("NASDAQ")
+            : scenario == "missing_exchange" ? TwelveDataProviderTests.QuoteJson
+            : ListingQuote("NASDAQ").Replace("\"currency\":\"USD\"", "\"currency\":\"CAD\"")));
+        await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
+        var account = await CreateSignedInAccountAsync(fixture, "legacy-unverified@example.com");
+        await SeedHoldingAsync(fixture, account.Id, "AAPL", 3m, 150m);
+        var oldOrderId = await SeedLegacyTransactionAsync(fixture, account.Id);
+        using var response = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side = "BUY", symbol = "AAPL:NASDAQ", quantity = 1m, orderType = "market"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("invalid_order", await ErrorCodeAsync(response));
+        using var scope = fixture.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        var position = await context.Holdings.SingleAsync();
+        Assert.Equal("AAPL", position.Symbol);
+        Assert.Equal(3m, position.Quantity);
+        var previous = await context.Transactions.SingleAsync();
+        Assert.Equal(oldOrderId, previous.OrderId);
+        Assert.Equal("AAPL", previous.Symbol);
+        Assert.Null(previous.RequestedSymbol);
+        Assert.Equal(100_000m, await context.Portfolios.Select(row => row.CashBalance).SingleAsync());
+    }
+
+    [Theory]
     [InlineData("AAPL", "AAPL:NASDAQ", true)]
     [InlineData("AAPL:NASDAQ", "AAPL", true)]
     [InlineData("AAPL", "AAPL:NASDAQ", false)]
@@ -420,6 +584,22 @@ public sealed class PaperTradingApiTests
             Quantity = quantity, AverageCost = averageCost, UpdatedAtUtc = DateTime.UtcNow
         });
         await context.SaveChangesAsync();
+    }
+
+    private static async Task<Guid> SeedLegacyTransactionAsync(TradingApiFixture fixture, Guid userId)
+    {
+        using var scope = fixture.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        var portfolioId = await context.Portfolios.Where(row => row.UserId == userId).Select(row => row.Id).SingleAsync();
+        var orderId = Guid.NewGuid();
+        context.Transactions.Add(new Transaction
+        {
+            Id = Guid.NewGuid(), PortfolioId = portfolioId, OrderId = orderId,
+            Side = "BUY", Symbol = "AAPL", Quantity = 3m, ExecutionPrice = 150m,
+            TotalAmount = 450m, ExecutedAtUtc = DateTime.UtcNow
+        });
+        await context.SaveChangesAsync();
+        return orderId;
     }
 
     private static async Task SetCashAsync(TradingApiFixture fixture, Guid userId, decimal cash)

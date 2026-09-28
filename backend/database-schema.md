@@ -124,8 +124,17 @@ The trading API uses the quote's exchange metadata to resolve unqualified and
 qualified aliases to the same Symbol in both Transactions and Holdings. Distinct
 exchanges keep distinct positions. RequestedSymbol permits replaying the original
 request without fetching another quote; an alternate alias must resolve to the
-same listing. The additive RequestedSymbol migration does not infer exchanges or
-rewrite existing holdings or ledger entries.
+same listing. The additive RequestedSymbol migration does not guess exchanges.
+When an order touches a legacy unqualified position, the engine resolves its
+unqualified symbol independently through the market data provider. Only a matching
+listing and portfolio currency allow renaming the position or merging it with an
+existing canonical position, summing quantities and weighting acquisition costs.
+The same operation normalizes legacy transaction symbols and retains their original
+RequestedSymbol, so old order IDs remain replayable. No historical amount, price,
+date or order term is changed. Reconciliation is scoped to the portfolio owner and
+shares the order's transaction and portfolio concurrency check; rejected or failed
+orders roll back all reconciliation changes. Unknown listings are rejected, and
+positions on different exchanges remain separate.
 
 ### Watchlists
 
