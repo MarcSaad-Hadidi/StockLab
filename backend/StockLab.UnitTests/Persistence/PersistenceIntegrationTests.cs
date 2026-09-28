@@ -31,6 +31,9 @@ public sealed class PersistenceIntegrationTests
         Assert.Equal("StockLabTestOnly", context.Database.GetDbConnection().Database);
         Assert.IsType<AiTraderPortfolioService>(scope.ServiceProvider.GetRequiredService<IAiTraderPortfolioService>());
         Assert.IsType<AiRiskManager>(scope.ServiceProvider.GetRequiredService<IAiRiskManager>());
+        Assert.IsType<AiPaperTradingEngine>(scope.ServiceProvider.GetRequiredService<IAiTradeExecutionService>());
+        Assert.Same(scope.ServiceProvider.GetRequiredService<StockLab.Infrastructure.MarketData.DeduplicatingMarketDataProvider>(),
+            scope.ServiceProvider.GetRequiredKeyedService<IMarketDataProvider>("Execution"));
     }
 
     [Fact]
