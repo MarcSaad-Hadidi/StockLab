@@ -12,8 +12,7 @@ export type PortfolioApiResponse = {
   totalValue: number
   currency: string
   positions: PortfolioApiPosition[]
-  /** Available when the API exposes the portfolio's configured starting capital. */
-  initialCapital: number | null
+  initialCapital: number
 }
 
 export type PortfolioApiTransaction = {
@@ -72,8 +71,7 @@ function validResponse(value: unknown): value is PortfolioApiResponse {
     return false
   }
 
-  return value.initialCapital === undefined
-    || (finiteNumber(value.initialCapital) && value.initialCapital > 0)
+  return finiteNumber(value.initialCapital) && value.initialCapital > 0
 }
 
 function validTransaction(value: unknown): value is PortfolioApiTransaction {
@@ -148,7 +146,7 @@ export function createPortfolioApi(
       if (!validResponse(body))
         throw new PortfolioApiError(502, 'invalid_response', messageFor('invalid_response'))
 
-      return { ...body, initialCapital: body.initialCapital ?? null }
+      return body
     },
     async getRecentTransactions(limit = 5, signal?: AbortSignal): Promise<PortfolioApiTransaction[]> {
       const body = await getJson(`/api/portfolio/transactions?limit=${encodeURIComponent(String(limit))}`, signal)

@@ -38,7 +38,7 @@ public sealed class PortfolioService(StockLabDbContext dbContext) : IPortfolioSe
             .ToArray();
         var investedValue = positions.Sum(position => position.Quantity * position.AverageCost);
 
-        return new PortfolioSummary(portfolio.CashBalance, investedValue,
+        return new PortfolioSummary(portfolio.CashBalance, portfolio.InitialCapital, investedValue,
             portfolio.CashBalance + investedValue, portfolio.Currency, positions);
     }
 

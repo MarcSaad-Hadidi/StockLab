@@ -40,6 +40,7 @@ public sealed class PortfolioController(
             ? NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."))
             : Ok(new PortfolioResponse(
                 portfolio.CashBalance,
+                portfolio.InitialCapital,
                 portfolio.InvestedValue,
                 portfolio.TotalValue,
                 portfolio.Currency,
@@ -72,7 +73,7 @@ public sealed class PortfolioController(
                 transaction.Quantity,
                 transaction.ExecutionPrice,
                 transaction.TotalAmount,
-                transaction.ExecutedAtUtc)).ToArray());
+                DateTime.SpecifyKind(transaction.ExecutedAtUtc, DateTimeKind.Utc))).ToArray());
     }
 
     /// <summary>Executes a simulated BUY or SELL order in the authenticated user's portfolio.</summary>

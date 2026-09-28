@@ -69,7 +69,7 @@ public sealed class PortfolioApiTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        AssertBalances(body.RootElement, 100_000m, 0m, 100_000m, "USD");
+        AssertBalances(body.RootElement, 100_000m, 100_000m, 0m, 100_000m, "USD");
         Assert.Empty(body.RootElement.GetProperty("positions").EnumerateArray());
         AssertPublicFields(body.RootElement);
     }
@@ -86,7 +86,7 @@ public sealed class PortfolioApiTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        AssertBalances(body.RootElement, 97_000m, 3_000m, 100_000m, "USD");
+        AssertBalances(body.RootElement, 97_000m, 100_000m, 3_000m, 100_000m, "USD");
         var positions = body.RootElement.GetProperty("positions").EnumerateArray().ToArray();
         Assert.Equal(2, positions.Length);
         AssertPosition(positions.Single(p => p.GetProperty("symbol").GetString() == "AAPL"), "AAPL", 10m, 150m);
@@ -114,6 +114,7 @@ public sealed class PortfolioApiTests
         var transaction = Assert.Single(body.RootElement.EnumerateArray());
         Assert.Equal("MSFT", transaction.GetProperty("symbol").GetString());
         Assert.Equal("BUY", transaction.GetProperty("side").GetString());
+        Assert.EndsWith("Z", transaction.GetProperty("executedAtUtc").GetString());
     }
 
     [Fact]
@@ -128,7 +129,7 @@ public sealed class PortfolioApiTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        AssertBalances(body.RootElement, 9_876.5432m, 268.834678m, 10_145.377878m, "CAD");
+        AssertBalances(body.RootElement, 9_876.5432m, 100_000m, 268.834678m, 10_145.377878m, "CAD");
         var positions = body.RootElement.GetProperty("positions").EnumerateArray().ToArray();
         Assert.Equal(3, positions.Length);
         AssertPosition(positions.Single(p => p.GetProperty("symbol").GetString() == "NVDA"), "NVDA", 0.12345678m, 100m);
@@ -153,8 +154,8 @@ public sealed class PortfolioApiTests
         Assert.Equal(HttpStatusCode.OK, responseB.StatusCode);
         using var bodyA = JsonDocument.Parse(await responseA.Content.ReadAsStringAsync());
         using var bodyB = JsonDocument.Parse(await responseB.Content.ReadAsStringAsync());
-        AssertBalances(bodyA.RootElement, 800m, 200m, 1_000m, "USD");
-        AssertBalances(bodyB.RootElement, 500m, 1_500m, 2_000m, "CAD");
+        AssertBalances(bodyA.RootElement, 800m, 100_000m, 200m, 1_000m, "USD");
+        AssertBalances(bodyB.RootElement, 500m, 100_000m, 1_500m, 2_000m, "CAD");
         AssertPosition(Assert.Single(bodyA.RootElement.GetProperty("positions").EnumerateArray()), "AAPL", 1m, 200m);
         AssertPosition(Assert.Single(bodyB.RootElement.GetProperty("positions").EnumerateArray()), "MSFT", 5m, 300m);
 
@@ -236,7 +237,7 @@ public sealed class PortfolioApiTests
             requirement.EnumerateObject().Any(scheme => scheme.Name == "Bearer"));
         var schema = ResolveSchema(root, operation.GetProperty("responses").GetProperty("200")
             .GetProperty("content").GetProperty("application/json").GetProperty("schema"));
-        Assert.Equal(new[] { "cashBalance", "currency", "investedValue", "positions", "totalValue" },
+        Assert.Equal(new[] { "cashBalance", "currency", "initialCapital", "investedValue", "positions", "totalValue" },
             schema.GetProperty("properties").EnumerateObject().Select(p => p.Name).OrderBy(name => name).ToArray());
         var position = ResolveSchema(root, schema.GetProperty("properties").GetProperty("positions").GetProperty("items"));
         Assert.Equal(new[] { "averageCost", "quantity", "symbol" },
@@ -248,9 +249,10 @@ public sealed class PortfolioApiTests
             ? root.GetProperty("components").GetProperty("schemas").GetProperty(reference.GetString()!.Split('/').Last())
             : schema;
 
-    private static void AssertBalances(JsonElement body, decimal cash, decimal invested, decimal total, string currency)
+    private static void AssertBalances(JsonElement body, decimal cash, decimal initialCapital, decimal invested, decimal total, string currency)
     {
         Assert.Equal(cash, body.GetProperty("cashBalance").GetDecimal());
+        Assert.Equal(initialCapital, body.GetProperty("initialCapital").GetDecimal());
         Assert.Equal(invested, body.GetProperty("investedValue").GetDecimal());
         Assert.Equal(total, body.GetProperty("totalValue").GetDecimal());
         Assert.Equal(currency, body.GetProperty("currency").GetString());
@@ -258,7 +260,7 @@ public sealed class PortfolioApiTests
 
     private static void AssertPublicFields(JsonElement body)
     {
-        Assert.Equal(new[] { "cashBalance", "currency", "investedValue", "positions", "totalValue" },
+        Assert.Equal(new[] { "cashBalance", "currency", "initialCapital", "investedValue", "positions", "totalValue" },
             body.EnumerateObject().Select(p => p.Name).OrderBy(name => name).ToArray());
         foreach (var position in body.GetProperty("positions").EnumerateArray())
             Assert.Equal(new[] { "averageCost", "quantity", "symbol" },

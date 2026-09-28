@@ -6,6 +6,7 @@ const validPortfolio = {
   cashBalance: 98_000,
   investedValue: 2_000,
   totalValue: 100_000,
+  initialCapital: 100_000,
   currency: 'USD',
   positions: [{ symbol: 'AAPL:NASDAQ', quantity: 10, averageCost: 200 }],
 }
@@ -23,7 +24,7 @@ test('portfolio api sends the bearer token and validates the portfolio contract'
 
   const portfolio = await api.getPortfolio()
 
-  assert.deepEqual(portfolio, { ...validPortfolio, initialCapital: null })
+  assert.deepEqual(portfolio, validPortfolio)
   assert.deepEqual(requests[0]?.headers, {
     Accept: 'application/json',
     Authorization: 'Bearer test-token',

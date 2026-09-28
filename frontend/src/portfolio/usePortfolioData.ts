@@ -18,7 +18,7 @@ export type PortfolioData = {
   cashBalance: number
   investedValue: number
   totalValue: number
-  initialCapital: number | null
+  initialCapital: number
   pnl: number | null
   returnPercent: number | null
   currency: string
@@ -63,26 +63,30 @@ export function usePortfolioData(): PortfolioDataState {
         }))
 
         const hasCompleteMarketData = enriched.every(({ quote }) => quote !== null)
-        const pricedInvestedValue = enriched.reduce((total, { position, quote }) =>
-          total + (quote ? position.quantity * quote.price : costValue(position)), 0)
-        const investedValue = hasCompleteMarketData ? pricedInvestedValue : portfolio.investedValue
-        const totalValue = hasCompleteMarketData ? portfolio.cashBalance + pricedInvestedValue : portfolio.totalValue
-        // The portfolio API reports acquisition cost. Once every current quote is
-        // available, compare market value with that cost basis for an honest
-        // unrealized P&L; partial quote results remain unavailable.
-        const pnl = hasCompleteMarketData ? pricedInvestedValue - portfolio.investedValue : null
-        const returnPercent = pnl === null || portfolio.investedValue === 0
+        const marketInvestedValue = enriched.reduce((total, { position, quote }) =>
+          total + (quote ? position.quantity * quote.price : 0), 0)
+        const investedValue = portfolio.investedValue
+        const totalValue = hasCompleteMarketData
+          ? portfolio.cashBalance + marketInvestedValue
+          : portfolio.totalValue
+        // Total return is measured against starting capital so realized gains
+        // remain visible after a position has been fully sold. If any quote is
+        // unavailable, suppress live valuation details to keep every displayed
+        // position consistent with the cost-based API total.
+        const pnl = hasCompleteMarketData ? totalValue - portfolio.initialCapital : null
+        const returnPercent = pnl === null || portfolio.initialCapital === 0
           ? null
-          : (pnl / portfolio.investedValue) * 100
+          : (pnl / portfolio.initialCapital) * 100
         const positions = enriched.map(({ position, quote }) => {
-          const marketValue = quote ? position.quantity * quote.price : null
+          const effectiveQuote = hasCompleteMarketData ? quote : null
+          const marketValue = effectiveQuote ? position.quantity * effectiveQuote.price : null
           const pnl = marketValue === null ? null : marketValue - costValue(position)
           return {
             symbol: position.symbol,
-            name: quote?.name?.trim() || position.symbol,
+            name: effectiveQuote?.name?.trim() || position.symbol,
             quantity: position.quantity,
             averagePrice: position.averageCost,
-            currentPrice: quote?.price ?? null,
+            currentPrice: effectiveQuote?.price ?? null,
             marketValue,
             pnl,
             pnlPercent: pnl === null || costValue(position) === 0 ? null : (pnl / costValue(position)) * 100,
