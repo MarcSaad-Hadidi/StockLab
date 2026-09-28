@@ -7,6 +7,8 @@ import {
   localeForLanguage,
 } from "../i18n/formatters";
 import { marketDataApi } from "../api/marketDataClient";
+import { TradingApiError, tradingApi } from "../api/tradingApi";
+import { getAuthSession } from "../auth/authStorage";
 import { MarketShell } from "./MarketShell";
 import { MarketIcon } from "./marketIcons";
 import { StockLogo } from "./StockLogo";
@@ -31,6 +33,15 @@ type ToastState = {
   tabKey?: string;
   side?: TradeSide;
   orderType?: TradeOrderType;
+};
+type PendingTrade = {
+  orderId: string;
+  side: TradeSide;
+  orderType: TradeOrderType;
+  quantity: number;
+  limitPrice?: number;
+  estimatedPrice: number;
+  estimatedTotal: number;
 };
 const detailTabs = [
   "overview",
@@ -64,6 +75,9 @@ function TradeTicket({
   orderType,
   limitPrice,
   limitPriceError,
+  availableCash,
+  isSubmitting,
+  isAuthenticated,
   onSideChange,
   onQuantityChange,
   onOrderTypeChange,
@@ -77,6 +91,9 @@ function TradeTicket({
   orderType: TradeOrderType;
   limitPrice: string;
   limitPriceError: string;
+  availableCash: number | null;
+  isSubmitting: boolean;
+  isAuthenticated: boolean;
   onSideChange: (side: TradeSide) => void;
   onQuantityChange: (quantity: string) => void;
   onOrderTypeChange: (orderType: TradeOrderType) => void;
@@ -208,17 +225,17 @@ function TradeTicket({
       <button
         className={`stock-trade-submit ${isBuy ? "stock-trade-submit-buy" : "stock-trade-submit-sell"}`}
         type="submit"
-        disabled
-        title={t("businessData.unavailable")}
+        disabled={isSubmitting || !isAuthenticated}
+        title={!isAuthenticated ? t("stockDetails.signInToTrade") : undefined}
       >
         {t(
           isBuy ? "stockDetails.placeBuyOrder" : "stockDetails.placeSellOrder",
         )}
       </button>
-      <p role="status">{t("businessData.backendPending")}</p>
+      {isSubmitting && <p role="status">{t("stockDetails.submittingOrder")}</p>}
       <div className="stock-cash-row">
         <span>{t("stockDetails.availableCashPaper")}</span>
-        <strong>{"—"}</strong>
+        <strong>{availableCash == null ? "—" : formatCurrency(availableCash)}</strong>
       </div>
     </form>
   );
@@ -244,6 +261,11 @@ export function StockDetailsPage({
   const [activeRange, setActiveRange] = useState<ChartRange>("3M");
   const [activeTab, setActiveTab] = useState<string>("overview");
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [pendingTrade, setPendingTrade] = useState<PendingTrade | null>(null);
+  const [tradeError, setTradeError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [availableCash, setAvailableCash] = useState<number | null>(null);
+  const isAuthenticated = getAuthSession() !== null;
 
   const showToast = (message: ToastState) => {
     setToast(message);
@@ -312,6 +334,74 @@ export function StockDetailsPage({
         currency,
       }
     : null;
+  const submitTrade = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!details || isSubmitting) return;
+
+    const parsedQuantity = Number(quantity);
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      setQuantityError("stockDetails.errors.quantity");
+      return;
+    }
+
+    const parsedLimitPrice = Number(limitPrice);
+    if (orderType === "limit" && (!Number.isFinite(parsedLimitPrice) || parsedLimitPrice <= 0)) {
+      setLimitPriceError("stockDetails.errors.limitPrice");
+      return;
+    }
+
+    const estimatedPrice = getTradeExecutionPrice(
+      orderType,
+      details.price,
+      parsedLimitPrice,
+    );
+    if (estimatedPrice <= 0) {
+      setLimitPriceError("stockDetails.errors.limitPrice");
+      return;
+    }
+
+    setQuantityError("");
+    setLimitPriceError("");
+    setTradeError(null);
+    setPendingTrade({
+      orderId: crypto.randomUUID(),
+      side: tradeSide,
+      orderType,
+      quantity: parsedQuantity,
+      ...(orderType === "limit" ? { limitPrice: parsedLimitPrice } : {}),
+      estimatedPrice,
+      estimatedTotal: calculateTradeTotal(estimatedPrice, parsedQuantity),
+    });
+  };
+
+  const confirmTrade = async () => {
+    if (!pendingTrade || isSubmitting) return;
+    setIsSubmitting(true);
+    setTradeError(null);
+    try {
+      const result = await tradingApi.executeTrade({
+        orderId: pendingTrade.orderId,
+        side: pendingTrade.side,
+        symbol,
+        quantity: pendingTrade.quantity,
+        orderType: pendingTrade.orderType,
+        ...(pendingTrade.orderType === "limit" ? { limitPrice: pendingTrade.limitPrice } : {}),
+      });
+      setAvailableCash(result.cashBalance);
+      setPendingTrade(null);
+      showToast({
+        key: "stockDetails.tradeSuccess",
+        values: { quantity: result.quantity, symbol: result.symbol },
+        side: result.side,
+        orderType: pendingTrade.orderType,
+      });
+    } catch (error) {
+      const code = error instanceof TradingApiError ? error.code : "server_error";
+      setTradeError(`stockDetails.tradeErrors.${code}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
   const points = history.data ? historyPoints(history.data, locale) : [];
   const change = quote.data?.changePercent;
   const tone =
@@ -320,10 +410,6 @@ export function StockDetailsPage({
       : change > 0
         ? "stock-positive"
         : "stock-negative";
-  const submitTrade = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    showToast({ key: "businessData.unavailable" });
-  };
 
   return (
     <MarketShell breadcrumb={<strong>{t('stockDetails.title')}</strong>}>
@@ -626,6 +712,9 @@ export function StockDetailsPage({
                   quantity={quantity}
                   quantityError={quantityError}
                   side={tradeSide}
+                  availableCash={availableCash}
+                  isSubmitting={isSubmitting}
+                  isAuthenticated={isAuthenticated}
                 />
               )}
             </aside>
@@ -650,6 +739,66 @@ export function StockDetailsPage({
                 }
               : {}),
           })}
+        </div>
+      )}
+      {pendingTrade && (
+        <div
+          aria-labelledby="trade-confirmation-title"
+          aria-modal="true"
+          className="stock-modal-backdrop"
+          role="dialog"
+        >
+          <section className="stock-modal">
+            <button
+              aria-label={t("stockDetails.closeTradeConfirmation")}
+              className="stock-modal-close"
+              disabled={isSubmitting}
+              onClick={() => {
+                setPendingTrade(null);
+                setTradeError(null);
+              }}
+              type="button"
+            >
+              <MarketIcon name="close" size={14} />
+            </button>
+            <span className={`stock-modal-icon stock-modal-icon-${pendingTrade.side === "BUY" ? "buy" : "sell"}`}>
+              <MarketIcon name="wallet" size={17} />
+            </span>
+            <h2 id="trade-confirmation-title">
+              {t("stockDetails.confirmOrder", {
+                side: t(pendingTrade.side === "BUY" ? "common.buy" : "common.sell"),
+              })}
+            </h2>
+            <p>{t("stockDetails.reviewOrder")}</p>
+            <div className="stock-trade-confirmation-grid">
+              <div><span>{t("common.asset")}</span><strong>{symbol}</strong></div>
+              <div><span>{t("common.quantity")}</span><strong>{pendingTrade.quantity}</strong></div>
+              <div><span>{t("stockDetails.estimatedPrice")}</span><strong>{money(pendingTrade.estimatedPrice, currency, locale)}</strong></div>
+              <div><span>{t("stockDetails.estimatedTotal")}</span><strong>{money(pendingTrade.estimatedTotal, currency, locale)}</strong></div>
+            </div>
+            {tradeError && <p className="stock-form-error" role="alert">{t(tradeError)}</p>}
+            <div className="stock-modal-actions">
+              <button
+                className="stock-secondary-button"
+                disabled={isSubmitting}
+                onClick={() => {
+                  setPendingTrade(null);
+                  setTradeError(null);
+                }}
+                type="button"
+              >
+                {t("common.cancel")}
+              </button>
+              <button
+                className={`stock-primary-button ${pendingTrade.side === "SELL" ? "stock-primary-button-sell" : ""}`}
+                disabled={isSubmitting}
+                onClick={confirmTrade}
+                type="button"
+              >
+                {isSubmitting ? t("stockDetails.submittingOrder") : t("stockDetails.confirmOrderButton")}
+              </button>
+            </div>
+          </section>
         </div>
       )}
     </MarketShell>

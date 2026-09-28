@@ -7,6 +7,13 @@ namespace StockLab.Infrastructure.Portfolios;
 
 public sealed class PortfolioService(StockLabDbContext dbContext) : IPortfolioService
 {
+    public Task<Guid?> GetPortfolioIdAsync(Guid userId, CancellationToken cancellationToken) =>
+        dbContext.Portfolios
+            .AsNoTracking()
+            .Where(portfolio => portfolio.UserId == userId)
+            .Select(portfolio => (Guid?)portfolio.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+
     public async Task<PortfolioSummary?> GetPortfolioAsync(Guid userId, CancellationToken cancellationToken)
     {
         var portfolio = await dbContext.Portfolios

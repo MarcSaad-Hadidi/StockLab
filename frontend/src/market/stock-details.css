@@ -963,6 +963,33 @@
   margin-top: 14px;
 }
 
+.stock-trade-confirmation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 4px;
+  padding: 13px 0;
+  border-top: 1px solid #edf0f5;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.stock-trade-confirmation-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stock-trade-confirmation-grid span {
+  color: #8b96a7;
+  font-size: 8px;
+}
+
+.stock-trade-confirmation-grid strong {
+  color: #2b3951;
+  font-size: 10px;
+  font-weight: 780;
+}
+
 .stock-primary-button {
   border: 1px solid #5262f6;
   color: #fff;
