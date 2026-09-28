@@ -825,7 +825,8 @@
       "invalidRequest": "Check the highlighted fields and try again.",
       "rateLimited": "Too many attempts. Try again later.",
       "offline": "StockLab is unreachable. Check that the backend is running.",
-      "server": "The authentication service is temporarily unavailable."
+      "server": "The authentication service is temporarily unavailable.",
+      "sessionStorage": "Your browser blocked secure session storage. Enable storage and try again."
     },
     "showPassword": "Show password",
     "hidePassword": "Hide password"

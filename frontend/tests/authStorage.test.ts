@@ -26,7 +26,7 @@ const session = {
 
 test('stores and reads the authenticated session and bearer header', () => {
   const storage = createStorage()
-  saveAuthSession(session, storage)
+  assert.equal(saveAuthSession(session, storage), true)
   assert.equal(authStorageKey, 'stocklab-auth')
   assert.deepEqual(getAuthSession(storage), session)
   assert.deepEqual(getAuthorizationHeader(storage), { Authorization: 'Bearer signed-token' })
@@ -38,14 +38,23 @@ test('clears malformed or expired sessions before they can be used', () => {
   assert.equal(getAuthSession(storage), null)
   assert.equal(storage.getItem(authStorageKey), null)
 
-  saveAuthSession({ ...session, expiresAtUtc: '2000-01-01T00:00:00Z' }, storage)
+  assert.equal(saveAuthSession({ ...session, expiresAtUtc: '2000-01-01T00:00:00Z' }, storage), true)
   assert.equal(getAuthSession(storage), null)
   assert.equal(getAuthorizationHeader(storage), null)
 })
 
 test('clearAuthSession removes an existing session', () => {
   const storage = createStorage()
-  saveAuthSession(session, storage)
+  assert.equal(saveAuthSession(session, storage), true)
   clearAuthSession(storage)
   assert.equal(getAuthSession(storage), null)
+})
+
+test('reports when browser storage is blocked instead of claiming a saved session', () => {
+  const blocked = {
+    getItem: () => null,
+    setItem: () => { throw new Error('storage blocked') },
+    removeItem: () => undefined,
+  }
+  assert.equal(saveAuthSession(session, blocked), false)
 })

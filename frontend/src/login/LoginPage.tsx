@@ -89,7 +89,10 @@ export default function LoginPage() {
     setIsSubmitting(true)
     try {
       const session = await authApi.login({ email, password })
-      saveAuthSession(session)
+      if (!saveAuthSession(session)) {
+        setServerError('login.errors.sessionStorage')
+        return
+      }
       window.location.assign(routeFor('dashboard'))
     } catch (error) {
       if (error instanceof AuthApiError) {

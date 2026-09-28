@@ -39,11 +39,20 @@ function isAuthSession(value: unknown): value is AuthSession {
   return nonEmptyString(value.user.id) && nonEmptyString(value.user.displayName) && nonEmptyString(value.user.email)
 }
 
-export function saveAuthSession(session: AuthSession, storage: AuthStorage | undefined = browserStorage()) {
+export function saveAuthSession(session: AuthSession, storage: AuthStorage | undefined = browserStorage()): boolean {
+  if (!storage) return false
+  const serialized = JSON.stringify(session)
   try {
-    storage?.setItem(authStorageKey, JSON.stringify(session))
+    storage.setItem(authStorageKey, serialized)
+    if (storage.getItem(authStorageKey) !== serialized) {
+      clearAuthSession(storage)
+      return false
+    }
+    return true
   } catch {
-    // Storage can be blocked by browser privacy settings; API calls still remain safe.
+    // Storage can be blocked by browser privacy settings; do not claim an authenticated session.
+    clearAuthSession(storage)
+    return false
   }
 }
 
@@ -56,7 +65,7 @@ export function clearAuthSession(storage: AuthStorage | undefined = browserStora
 }
 
 export function getAuthSession(storage: AuthStorage | undefined = browserStorage()): AuthSession | null {
-  let raw: string | null = null
+  let raw: string | null
   try {
     raw = storage?.getItem(authStorageKey) ?? null
   } catch {

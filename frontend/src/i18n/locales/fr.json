@@ -825,7 +825,8 @@
       "invalidRequest": "Vérifiez les champs signalés, puis réessayez.",
       "rateLimited": "Trop de tentatives. Réessayez plus tard.",
       "offline": "StockLab est inaccessible. Vérifiez que le backend est démarré.",
-      "server": "Le service d’authentification est temporairement indisponible."
+      "server": "Le service d’authentification est temporairement indisponible.",
+      "sessionStorage": "Votre navigateur bloque le stockage sécurisé de la session. Activez-le, puis réessayez."
     },
     "showPassword": "Afficher le mot de passe",
     "hidePassword": "Masquer le mot de passe"
