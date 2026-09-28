@@ -323,6 +323,14 @@ input {
   line-height: 1.2;
 }
 
+.form-error {
+  margin: -2px 0 0;
+  color: #c54d5d;
+  text-align: center;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
 .primary-button,
 .google-button {
   border-radius: 7px;
@@ -345,6 +353,12 @@ input {
   background: linear-gradient(100deg, #3b4ae8, #3e4be9);
   box-shadow: 0 9px 18px rgba(67, 83, 245, 0.25);
   transform: translateY(-1px);
+}
+
+.primary-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+  transform: none;
 }
 
 .form-success {

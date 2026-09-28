@@ -1,12 +1,36 @@
 import { routeFor } from '../navigation/routes'
 import { LanguageSelector } from '../components/LanguageSelector'
 import { formatSignedPercent } from '../i18n/formatters'
+import { AuthApiError, authApi } from '../api/authApi'
+import { saveAuthSession } from '../auth/authStorage'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import './login.css'
 
 type FieldErrors = Partial<Record<'email' | 'password', string>>
+
+function loginErrorKey(code: AuthApiError['code']): string {
+  return ({
+    validation_error: 'login.errors.invalidRequest',
+    email_already_registered: 'login.errors.server',
+    invalid_credentials: 'login.errors.invalidCredentials',
+    rate_limited: 'login.errors.rateLimited',
+    offline: 'login.errors.offline',
+    invalid_response: 'login.errors.server',
+    server_error: 'login.errors.server',
+  } satisfies Record<AuthApiError['code'], string>)[code]
+}
+
+function serverFieldErrors(fieldErrors: Record<string, string[]>): FieldErrors {
+  const mapped: FieldErrors = {}
+  for (const field of Object.keys(fieldErrors)) {
+    const normalized = field.toLowerCase()
+    if (normalized === 'email') mapped.email = 'login.errors.email'
+    if (normalized === 'password') mapped.password = 'login.errors.password'
+  }
+  return mapped
+}
 
 function Icon({ name }: { name: 'mail' | 'lock' | 'eye' | 'eyeOff' | 'google' }) {
   if (name === 'google') {
@@ -41,21 +65,42 @@ export default function LoginPage() {
   }, [i18n.language, t])
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<FieldErrors>({})
-  const [submitted, setSubmitted] = useState(false)
+  const [serverError, setServerError] = useState<string>()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [registrationComplete, setRegistrationComplete] = useState(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('registered') === '1')
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     const email = String(form.get('email') ?? '').trim()
     const password = String(form.get('password') ?? '')
     const nextErrors: FieldErrors = {}
 
+    setRegistrationComplete(false)
+    setServerError(undefined)
     if (!email) nextErrors.email = 'login.errors.email'
     else if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = 'login.errors.emailInvalid'
     if (!password) nextErrors.password = 'login.errors.password'
 
     setErrors(nextErrors)
-    setSubmitted(Object.keys(nextErrors).length === 0)
+    if (Object.keys(nextErrors).length > 0) return
+
+    setIsSubmitting(true)
+    try {
+      const session = await authApi.login({ email, password })
+      saveAuthSession(session)
+      window.location.assign(routeFor('dashboard'))
+    } catch (error) {
+      if (error instanceof AuthApiError) {
+        setServerError(loginErrorKey(error.code))
+        setErrors(serverFieldErrors(error.fieldErrors))
+      } else {
+        setServerError('login.errors.server')
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -86,11 +131,12 @@ export default function LoginPage() {
             <LanguageSelector />
           </div>
           <header className="card-heading"><h1 id="login-heading">{t('login.title')}</h1><p>{t('login.subtitle')}</p></header>
-          <form className="login-form" onSubmit={handleSubmit} noValidate>
+          {registrationComplete && <p className="form-success" role="status">{t('login.registrationSuccess')}</p>}
+          <form aria-busy={isSubmitting} className="login-form" onSubmit={handleSubmit} noValidate>
+            {serverError && <p className="form-error" role="alert">{t(serverError)}</p>}
             <div className="field-group"><label htmlFor="email">{t('login.emailLabel')}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={t('login.emailPlaceholder')} autoComplete="email" aria-invalid={Boolean(errors.email)} /></div>{errors.email && <p className="field-error">{t(errors.email)}</p>}</div>
             <div className="field-group"><div className="label-row"><label htmlFor="password">{t('login.passwordLabel')}</label><a href="#forgot-password">{t('login.forgot')}</a></div><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={t('login.passwordPlaceholder')} autoComplete="current-password" aria-invalid={Boolean(errors.password)} /><button className="visibility-button" type="button" aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{t(errors.password)}</p>}</div>
-            <button className="primary-button" type="submit">{t('login.signIn')}</button>
-            {submitted && <p className="form-success" role="status">{t('login.success')}</p>}
+            <button className="primary-button" disabled={isSubmitting} type="submit">{t('login.signIn')}</button>
           </form>
           <div className="form-divider"><span>{t('login.divider')}</span></div>
           <button className="google-button" type="button"><Icon name="google" /><span>{t('login.google')}</span></button>

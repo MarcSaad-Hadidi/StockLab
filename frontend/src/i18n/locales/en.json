@@ -816,11 +816,16 @@
     "google": "Continue with Google",
     "prompt": "Don’t have an account yet?",
     "register": "Create an account",
-    "success": "Your sign-in details are ready to submit.",
+    "registrationSuccess": "Your account was created. You can now sign in.",
     "errors": {
       "email": "Please enter your email address.",
       "emailInvalid": "Please enter a valid email address.",
-      "password": "Please enter your password."
+      "password": "Please enter your password.",
+      "invalidCredentials": "The email or password is invalid.",
+      "invalidRequest": "Check the highlighted fields and try again.",
+      "rateLimited": "Too many attempts. Try again later.",
+      "offline": "StockLab is unreachable. Check that the backend is running.",
+      "server": "The authentication service is temporarily unavailable."
     },
     "showPassword": "Show password",
     "hidePassword": "Hide password"
@@ -843,7 +848,6 @@
     "google": "Sign up with Google",
     "loginPrompt": "Already have an account?",
     "loginLink": "Sign in",
-    "success": "Your details are ready to submit.",
     "errors": {
       "name": "Please enter your full name.",
       "email": "Please enter your email address.",
@@ -851,7 +855,12 @@
       "password": "Please create a password.",
       "passwordShort": "Use at least 8 characters.",
       "confirm": "Please confirm your password.",
-      "mismatch": "Passwords do not match."
+      "mismatch": "Passwords do not match.",
+      "emailTaken": "An account already exists for this email.",
+      "invalidRequest": "Check the highlighted fields and try again.",
+      "rateLimited": "Too many attempts. Try again later.",
+      "offline": "StockLab is unreachable. Check that the backend is running.",
+      "server": "The authentication service is temporarily unavailable."
     },
     "showPassword": "Show password",
     "hidePassword": "Hide password",

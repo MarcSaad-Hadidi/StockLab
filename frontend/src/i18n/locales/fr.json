@@ -816,11 +816,16 @@
     "google": "Continuer avec Google",
     "prompt": "Vous n’avez pas encore de compte ?",
     "register": "Créer un compte",
-    "success": "Vos identifiants sont prêts à être envoyés.",
+    "registrationSuccess": "Votre compte a été créé. Vous pouvez maintenant vous connecter.",
     "errors": {
       "email": "Saisissez votre adresse e-mail.",
       "emailInvalid": "Saisissez une adresse e-mail valide.",
-      "password": "Saisissez votre mot de passe."
+      "password": "Saisissez votre mot de passe.",
+      "invalidCredentials": "L’adresse e-mail ou le mot de passe est incorrect.",
+      "invalidRequest": "Vérifiez les champs signalés, puis réessayez.",
+      "rateLimited": "Trop de tentatives. Réessayez plus tard.",
+      "offline": "StockLab est inaccessible. Vérifiez que le backend est démarré.",
+      "server": "Le service d’authentification est temporairement indisponible."
     },
     "showPassword": "Afficher le mot de passe",
     "hidePassword": "Masquer le mot de passe"
@@ -843,7 +848,6 @@
     "google": "S’inscrire avec Google",
     "loginPrompt": "Vous avez déjà un compte ?",
     "loginLink": "Se connecter",
-    "success": "Vos informations sont prêtes à être envoyées.",
     "errors": {
       "name": "Saisissez votre nom complet.",
       "email": "Saisissez votre adresse e-mail.",
@@ -851,7 +855,12 @@
       "password": "Créez un mot de passe.",
       "passwordShort": "Utilisez au moins 8 caractères.",
       "confirm": "Confirmez votre mot de passe.",
-      "mismatch": "Les mots de passe ne correspondent pas."
+      "mismatch": "Les mots de passe ne correspondent pas.",
+      "emailTaken": "Un compte existe déjà avec cette adresse e-mail.",
+      "invalidRequest": "Vérifiez les champs signalés, puis réessayez.",
+      "rateLimited": "Trop de tentatives. Réessayez plus tard.",
+      "offline": "StockLab est inaccessible. Vérifiez que le backend est démarré.",
+      "server": "Le service d’authentification est temporairement indisponible."
     },
     "showPassword": "Afficher le mot de passe",
     "hidePassword": "Masquer le mot de passe",
