@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.ComponentModel.DataAnnotations;
 using StockLab.Api.Authentication;
 using StockLab.Api.DTOs;
 using StockLab.Api.DTOs.Portfolio;
@@ -44,6 +45,34 @@ public sealed class PortfolioController(
                 portfolio.Currency,
                 portfolio.Positions.Select(position => new PortfolioPositionResponse(
                     position.Symbol, position.Quantity, position.AverageCost)).ToArray()));
+    }
+
+    /// <summary>Gets recent simulated transactions for the authenticated user's portfolio.</summary>
+    [HttpGet("transactions")]
+    [ProducesResponseType(typeof(PortfolioTransactionResponse[]), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<PortfolioTransactionResponse[]>> GetRecentTransactionsAsync(
+        [FromQuery, Range(1, 50)] int limit = 5,
+        CancellationToken cancellationToken = default)
+    {
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized(new ApiErrorResponse("unauthorized", "Authentication is required."));
+        }
+
+        var transactions = await portfolioService.GetRecentTransactionsAsync(userId, limit, cancellationToken);
+        return transactions is null
+            ? NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."))
+            : Ok(transactions.Select(transaction => new PortfolioTransactionResponse(
+                transaction.Id,
+                transaction.Side,
+                transaction.Symbol,
+                transaction.Quantity,
+                transaction.ExecutionPrice,
+                transaction.TotalAmount,
+                transaction.ExecutedAtUtc)).ToArray());
     }
 
     /// <summary>Executes a simulated BUY or SELL order in the authenticated user's portfolio.</summary>

@@ -4,17 +4,16 @@ import { PerformanceLineChart } from '../components/charts/PerformanceLineChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
 import { getTrendClass, getTrendIcon, getTrendTone } from '../components/trend/trend'
-import { formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
+import { formatDate, formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
+import { usePortfolioData } from '../portfolio/usePortfolioData'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   aiPerformance,
-  metrics,
   performanceSeries,
-  positions,
-  transactions,
   type IconName,
+  type Metric,
   type PerformanceRange,
   type Position,
   type Transaction,
@@ -103,7 +102,7 @@ function PanelHeading({ title, subtitle, action, id, destination }: { title: str
   )
 }
 
-function MetricCard({ metric }: { metric: (typeof metrics)[number] }) {
+function MetricCard({ metric }: { metric: Metric }) {
   const { t } = useTranslation()
   const trendTone = getTrendTone(metric.change)
   const trendIcon = getTrendIcon(trendTone)
@@ -149,14 +148,18 @@ function WatchlistRow({ item }: { item: WatchlistItem }) {
 
 function TransactionRow({ transaction }: { transaction: Transaction }) {
   const { i18n, t } = useTranslation()
-  const localizedTime = transaction.time ? formatTime(transaction.time, i18n.language) : ''
+  const localizedTime = transaction.executedAtUtc
+    ? formatDate(transaction.executedAtUtc, i18n.language)
+    : transaction.time
+      ? formatTime(transaction.time, i18n.language)
+      : ''
   return (
     <li className="transaction-row">
       <StockMark size="small" symbol={transaction.symbol} />
       <div className="transaction-name"><strong>{transaction.symbol}</strong><small>{transaction.company}</small></div>
       <div className={`transaction-type ${transaction.type.toLowerCase()}`}><span className="transaction-dot" />{t(`common.${transaction.type.toLowerCase()}`)}</div>
       <div className="transaction-amount"><strong>{formatCurrency(transaction.amount)}</strong><small>{t('dashboard.shares', { count: transaction.shares })}</small></div>
-      <small className="transaction-time">{t(transaction.timeKey, { time: localizedTime })}</small>
+      <small className="transaction-time">{transaction.executedAtUtc ? localizedTime : transaction.timeKey ? t(transaction.timeKey, { time: localizedTime }) : localizedTime}</small>
     </li>
   )
 }
@@ -172,6 +175,7 @@ export function DashboardPage() {
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [toastKey, setToastKey] = useState('')
+  const { data: portfolio } = usePortfolioData()
   const dashboardUserName = ''
   const [greetingPeriod, setGreetingPeriod] = useState(() => getGreetingPeriod(new Date()))
   const aiReturnTone = getTrendTone(aiPerformance.return)
@@ -188,6 +192,61 @@ export function DashboardPage() {
     if (!normalizedQuery) return watchlist
     return watchlist.filter((item) => `${item.symbol} ${item.company}`.toLowerCase().includes(normalizedQuery))
   }, [query])
+
+  const metrics: Metric[] = useMemo(() => [
+    {
+      label: 'dashboard.metrics.totalPortfolioValue',
+      value: portfolio?.totalValue ?? null,
+      change: portfolio?.returnPercent ?? null,
+      detail: 'dashboard.metrics.vsLastMonth',
+      icon: 'wallet',
+      tone: 'blue',
+    },
+    {
+      label: 'dashboard.metrics.cashAvailable',
+      value: portfolio?.cashBalance ?? null,
+      change: null,
+      detail: 'dashboard.metrics.allTime',
+      icon: 'briefcase',
+      tone: 'green',
+    },
+    {
+      label: 'dashboard.metrics.totalPnl',
+      value: portfolio?.pnl ?? null,
+      change: portfolio?.returnPercent ?? null,
+      detail: 'dashboard.metrics.allTime',
+      icon: 'trending-up',
+      tone: 'purple',
+    },
+    {
+      label: 'dashboard.metrics.return',
+      value: portfolio?.returnPercent ?? null,
+      change: null,
+      detail: 'dashboard.metrics.allTime',
+      icon: 'activity',
+      tone: 'orange',
+    },
+  ], [portfolio])
+
+  const positions: Position[] = useMemo(() => portfolio?.positions.map((position) => ({
+    symbol: position.symbol,
+    company: position.name,
+    shares: position.quantity,
+    value: position.marketValue ?? position.quantity * position.averagePrice,
+    allocation: position.weight ?? 0,
+    price: position.currentPrice ?? position.averagePrice,
+    change: position.pnlPercent,
+    tone: position.pnlPercent !== null && position.pnlPercent < 0 ? 'negative' : 'positive',
+  })) ?? [], [portfolio])
+
+  const transactions: Transaction[] = useMemo(() => portfolio?.transactions.map((transaction) => ({
+    symbol: transaction.symbol,
+    company: transaction.symbol,
+    type: transaction.side === 'BUY' ? 'Buy' : 'Sell',
+    shares: transaction.quantity,
+    amount: transaction.totalAmount,
+    executedAtUtc: transaction.executedAtUtc,
+  })) ?? [], [portfolio])
 
   const showToast = (key: string) => {
     setToastKey(key)

@@ -95,6 +95,28 @@ public sealed class PortfolioApiTests
     }
 
     [Fact]
+    public async Task Recent_transactions_are_limited_sorted_and_scoped_to_the_authenticated_portfolio()
+    {
+        await using var fixture = await PortfolioFixture.CreateAsync();
+        var accountA = await CreateSignedInAccountAsync(fixture, "transactions-a@example.com");
+        var accountB = await CreateSignedInAccountAsync(fixture, "transactions-b@example.com");
+        var portfolioA = await SeedPortfolioAsync(fixture, accountA.Id, 100_000m, "USD");
+        var portfolioB = await SeedPortfolioAsync(fixture, accountB.Id, 100_000m, "USD");
+        await SeedTransactionAsync(fixture, portfolioA, "AAPL", DateTime.UtcNow.AddMinutes(-2));
+        await SeedTransactionAsync(fixture, portfolioA, "MSFT", DateTime.UtcNow.AddMinutes(-1));
+        await SeedTransactionAsync(fixture, portfolioB, "NVDA", DateTime.UtcNow);
+
+        using var response = await GetWithTokenAsync(fixture.Client, accountA.Token,
+            "/api/portfolio/transactions?limit=1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var transaction = Assert.Single(body.RootElement.EnumerateArray());
+        Assert.Equal("MSFT", transaction.GetProperty("symbol").GetString());
+        Assert.Equal("BUY", transaction.GetProperty("side").GetString());
+    }
+
+    [Fact]
     public async Task Fractional_positions_preserve_decimal_precision_without_rounding_totals()
     {
         await using var fixture = await PortfolioFixture.CreateAsync();
@@ -286,6 +308,25 @@ public sealed class PortfolioApiTests
             });
         await context.SaveChangesAsync();
         return portfolio.Id;
+    }
+
+    private static async Task SeedTransactionAsync(PortfolioFixture fixture, Guid portfolioId, string symbol, DateTime executedAtUtc)
+    {
+        using var scope = fixture.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        context.Transactions.Add(new Transaction
+        {
+            Id = Guid.NewGuid(),
+            PortfolioId = portfolioId,
+            OrderId = Guid.NewGuid(),
+            Side = "BUY",
+            Symbol = symbol,
+            Quantity = 2m,
+            ExecutionPrice = 100m,
+            TotalAmount = 200m,
+            ExecutedAtUtc = executedAtUtc,
+        });
+        await context.SaveChangesAsync();
     }
 
     private static async Task<HttpResponseMessage> GetWithTokenAsync(HttpClient client, string token,

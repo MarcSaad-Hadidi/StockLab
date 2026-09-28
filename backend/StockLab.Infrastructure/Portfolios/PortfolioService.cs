@@ -41,4 +41,32 @@ public sealed class PortfolioService(StockLabDbContext dbContext) : IPortfolioSe
         return new PortfolioSummary(portfolio.CashBalance, investedValue,
             portfolio.CashBalance + investedValue, portfolio.Currency, positions);
     }
+
+    public async Task<IReadOnlyList<PortfolioTransaction>?> GetRecentTransactionsAsync(
+        Guid userId, int limit, CancellationToken cancellationToken)
+    {
+        var portfolioId = await dbContext.Portfolios
+            .AsNoTracking()
+            .Where(portfolio => portfolio.UserId == userId)
+            .Select(portfolio => (Guid?)portfolio.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (portfolioId is null)
+            return null;
+
+        return await dbContext.Transactions
+            .AsNoTracking()
+            .Where(transaction => transaction.PortfolioId == portfolioId.Value)
+            .OrderByDescending(transaction => transaction.ExecutedAtUtc)
+            .ThenByDescending(transaction => transaction.Id)
+            .Take(limit)
+            .Select(transaction => new PortfolioTransaction(
+                transaction.Id,
+                transaction.Side,
+                transaction.Symbol,
+                transaction.Quantity,
+                transaction.ExecutionPrice,
+                transaction.TotalAmount,
+                transaction.ExecutedAtUtc))
+            .ToArrayAsync(cancellationToken);
+    }
 }

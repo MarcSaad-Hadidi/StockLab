@@ -64,8 +64,9 @@ export type Transaction = {
   type: 'Buy' | 'Sell'
   shares: number
   amount: number
-  time: string
-  timeKey: string
+  time?: string
+  timeKey?: string
+  executedAtUtc?: string
 }
 
 export const metrics: Metric[] = [

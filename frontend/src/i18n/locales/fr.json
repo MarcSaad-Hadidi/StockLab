@@ -402,6 +402,7 @@
     "availableCash": "Liquidités disponibles",
     "investedCapital": "Capital investi",
     "totalReturnYtd": "Rendement total (depuis le début de l’année)",
+    "sinceInitialCapital": "depuis le capital initial",
     "performanceTitle": "Performance du portefeuille",
     "performanceChart": "Graphique de performance du portefeuille pour {{range}}",
     "chartPoint": "{{label}} : valeur du portefeuille {{value}}",

@@ -9,3 +9,12 @@ public sealed record PortfolioSummary(
     IReadOnlyList<PortfolioPosition> Positions);
 
 public sealed record PortfolioPosition(string Symbol, decimal Quantity, decimal AverageCost);
+
+public sealed record PortfolioTransaction(
+    Guid Id,
+    string Side,
+    string Symbol,
+    decimal Quantity,
+    decimal ExecutionPrice,
+    decimal TotalAmount,
+    DateTime ExecutedAtUtc);
