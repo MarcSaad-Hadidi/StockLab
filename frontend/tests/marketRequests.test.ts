@@ -402,6 +402,36 @@ test("Market ranks actual market movers by direction without substituting popula
   }
 });
 
+test("trade quantity accepts supported fractions and rejects values below the API precision", async () => {
+  Object.assign(globalThis, { React: await import("react") });
+  const { StockDetailsPage } = await import("../src/market/StockDetailsPage.tsx");
+  const { marketDataApi } = await import("../src/api/marketDataClient.ts");
+  const original = { quote: marketDataApi.quote, history: marketDataApi.history };
+  marketDataApi.quote = async symbol => ({ symbol, name: "Quantity Fixture", exchange: "NASDAQ", currency: "USD", price: 100, change: null, changePercent: null, volume: null, asOfUtc: "2026-09-18T20:00:00Z", open: null, high: null, low: null, previousClose: null, averageVolume: null, isMarketOpen: false, fiftyTwoWeek: null });
+  marketDataApi.history = async () => { throw new Error("fixture unavailable history"); };
+  const root = createRoot(document.getElementById("root")!);
+  try {
+    await act(async () => root.render(createElement(StockDetailsPage, { requestedSymbol: "AAPL", onBack() {} })));
+    await pause();
+    const input = document.querySelector<HTMLInputElement>("#stock-quantity");
+    assert.ok(input);
+    for (const value of ["0.5", "1.5", "0.00000001", "1.12345678", "2"]) {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(input, value);
+        input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+      });
+      assert.equal(input.checkValidity(), true, `${value} should be accepted`);
+    }
+    for (const value of ["0", "-1", "0.000000001", "1.123456789"]) {
+      input.value = value;
+      assert.equal(input.checkValidity(), false, `${value} should be rejected`);
+    }
+  } finally {
+    await act(async () => root.unmount());
+    Object.assign(marketDataApi, original);
+  }
+});
+
 test("Stock Details tabs show distinct real data, with no duplicate Chart or pretend AI", async () => {
   Object.assign(globalThis, { React: await import("react") });
   await i18n.changeLanguage("en");

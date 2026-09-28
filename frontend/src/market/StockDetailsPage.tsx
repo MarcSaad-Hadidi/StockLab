@@ -185,9 +185,10 @@ function TradeTicket({
         <div className="stock-trade-input">
           <input
             id="stock-quantity"
-            inputMode="numeric"
-            min="1"
+            inputMode="decimal"
+            min="0.00000001"
             onChange={(event) => onQuantityChange(event.target.value)}
+            step="0.00000001"
             type="number"
             value={quantity}
           />
