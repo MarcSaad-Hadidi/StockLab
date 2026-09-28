@@ -84,11 +84,23 @@ public sealed class PortfolioController(
             return Ok(PaperTradeResponse.From(existingResult));
         }
 
+        var portfolioCurrency = await portfolioService.GetPortfolioCurrencyAsync(userId, cancellationToken);
+        if (portfolioCurrency is null)
+        {
+            return NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."));
+        }
+
         var quote = await marketDataProvider.GetQuoteAsync(request.Symbol, cancellationToken);
         if (quote is null)
         {
             return NotFound(new ApiErrorResponse(
                 "stock_not_found", $"Stock symbol '{request.Symbol}' was not found."));
+        }
+
+        if (!string.Equals(quote.Currency.Trim(), portfolioCurrency.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            return UnprocessableEntity(new ApiErrorResponse(
+                "currency_mismatch", "The stock quote currency does not match your portfolio currency."));
         }
 
         var executionPrice = decimal.Round(quote.Price, 4, MidpointRounding.AwayFromZero);
@@ -118,7 +130,13 @@ public sealed class PortfolioController(
                 userId,
                 portfolioId.Value,
                 new Application.DTOs.Trading.PaperTradeRequest(
-                    request.OrderId, request.Side, quote.Symbol, request.Quantity, executionPrice),
+                    request.OrderId, request.Side, quote.Symbol, request.Quantity, executionPrice)
+                {
+                    OrderType = request.OrderType,
+                    LimitPrice = request.OrderType == "limit"
+                        ? decimal.Round(request.LimitPrice!.Value, 4, MidpointRounding.AwayFromZero)
+                        : null
+                },
                 cancellationToken);
             return Ok(PaperTradeResponse.From(result));
         }
@@ -148,5 +166,9 @@ public sealed class PortfolioController(
         PlacePaperTradeRequest request) =>
         existing.Side == request.Side
         && existing.Symbol == request.Symbol
-        && existing.Quantity == decimal.Round(request.Quantity, 8, MidpointRounding.AwayFromZero);
+        && existing.Quantity == decimal.Round(request.Quantity, 8, MidpointRounding.AwayFromZero)
+        && existing.OrderType == request.OrderType
+        && existing.LimitPrice == (request.OrderType == "limit"
+            ? decimal.Round(request.LimitPrice!.Value, 4, MidpointRounding.AwayFromZero)
+            : null);
 }

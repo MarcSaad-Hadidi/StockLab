@@ -330,6 +330,7 @@
       "unauthorized": "Votre session a expiré. Veuillez vous reconnecter.",
       "portfolio_not_found": "Votre portefeuille simulé est introuvable.",
       "stock_not_found": "Cette action est introuvable.",
+      "currency_mismatch": "Cette action est cotée dans une devise différente de celle de votre portefeuille.",
       "insufficient_cash": "Les liquidités disponibles sont insuffisantes.",
       "insufficient_holdings": "Vous ne détenez pas assez d’actions pour cet ordre.",
       "duplicate_order": "Cet ordre entre en conflit avec une soumission précédente.",

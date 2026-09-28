@@ -6,4 +6,8 @@ public sealed record PaperTradeRequest(
     string Side,
     string Symbol,
     decimal Quantity,
-    decimal ExecutionPrice);
+    decimal ExecutionPrice)
+{
+    public string OrderType { get; init; } = "market";
+    public decimal? LimitPrice { get; init; }
+}

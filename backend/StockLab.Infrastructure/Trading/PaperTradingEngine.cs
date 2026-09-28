@@ -148,6 +148,8 @@ public sealed class PaperTradingEngine(
                     Side = order.Side,
                     Symbol = order.Symbol,
                     Quantity = order.Quantity,
+                    OrderType = order.OrderType,
+                    LimitPrice = order.LimitPrice,
                     ExecutionPrice = order.ExecutionPrice,
                     TotalAmount = order.TotalAmount,
                     ExecutedAtUtc = now
@@ -218,9 +220,20 @@ public sealed class PaperTradingEngine(
 
         var side = request.Side?.Trim().ToUpperInvariant() ?? string.Empty;
         var symbol = request.Symbol?.Trim().ToUpperInvariant() ?? string.Empty;
+        var orderType = request.OrderType?.Trim().ToLowerInvariant() ?? string.Empty;
+        decimal? limitPrice = request.LimitPrice.HasValue
+            ? decimal.Round(request.LimitPrice.Value, 4, MidpointRounding.AwayFromZero)
+            : null;
         if (side is not ("BUY" or "SELL") || string.IsNullOrWhiteSpace(symbol) || symbol.Length > 32)
         {
             throw new ArgumentException("A valid BUY or SELL side and symbol are required.");
+        }
+
+        if (orderType is not ("market" or "limit")
+            || (orderType == "market" && limitPrice.HasValue)
+            || (orderType == "limit" && (!limitPrice.HasValue || limitPrice <= 0m)))
+        {
+            throw new PaperTradingException(PaperTradingFailure.InvalidOrder);
         }
 
         var quantity = decimal.Round(request.Quantity, 8, MidpointRounding.AwayFromZero);
@@ -228,6 +241,17 @@ public sealed class PaperTradingEngine(
         if (quantity <= 0m || executionPrice <= 0m)
         {
             throw new ArgumentException("Quantity and execution price must be positive.");
+        }
+
+        if (orderType == "limit")
+        {
+            var limitReached = side == "BUY"
+                ? executionPrice <= limitPrice!.Value
+                : executionPrice >= limitPrice!.Value;
+            if (!limitReached)
+            {
+                throw new PaperTradingException(PaperTradingFailure.LimitPriceNotReached);
+            }
         }
 
         if (quantity > MaxQuantity || executionPrice > MaxMoney || quantity > MaxMoney / executionPrice)
@@ -241,13 +265,15 @@ public sealed class PaperTradingEngine(
             throw new ArgumentException("The order total must be positive.");
         }
 
-        return new NormalizedOrder(request.OrderId, side, symbol, quantity, executionPrice, totalAmount);
+        return new NormalizedOrder(
+            request.OrderId, side, symbol, quantity, orderType, limitPrice, executionPrice, totalAmount);
     }
 
     private static void EnsureSameOrder(Transaction transaction, NormalizedOrder order)
     {
         if (transaction.Side != order.Side || transaction.Symbol != order.Symbol
-            || transaction.Quantity != order.Quantity)
+            || transaction.Quantity != order.Quantity || transaction.OrderType != order.OrderType
+            || transaction.LimitPrice != order.LimitPrice)
         {
             throw new PaperTradingException(PaperTradingFailure.DuplicateOrder);
         }
@@ -271,7 +297,9 @@ public sealed class PaperTradingEngine(
             portfolio.CashBalance,
             holding?.Quantity ?? 0m,
             holding?.AverageCost,
-            transaction.ExecutedAtUtc);
+            transaction.ExecutedAtUtc,
+            transaction.OrderType,
+            transaction.LimitPrice);
     }
 
     private sealed record NormalizedOrder(
@@ -279,6 +307,8 @@ public sealed class PaperTradingEngine(
         string Side,
         string Symbol,
         decimal Quantity,
+        string OrderType,
+        decimal? LimitPrice,
         decimal ExecutionPrice,
         decimal TotalAmount);
 }

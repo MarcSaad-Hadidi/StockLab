@@ -14,7 +14,9 @@ public sealed record PaperTradeResponse(
     decimal CashBalance,
     decimal HoldingQuantity,
     decimal? AverageCost,
-    DateTime ExecutedAtUtc)
+    DateTime ExecutedAtUtc,
+    string OrderType,
+    decimal? LimitPrice)
 {
     public static PaperTradeResponse From(PaperTradeResult result) => new(
         result.TransactionId,
@@ -27,5 +29,7 @@ public sealed record PaperTradeResponse(
         result.CashBalance,
         result.HoldingQuantity,
         result.AverageCost,
-        DateTime.SpecifyKind(result.ExecutedAtUtc, DateTimeKind.Utc));
+        DateTime.SpecifyKind(result.ExecutedAtUtc, DateTimeKind.Utc),
+        result.OrderType,
+        result.LimitPrice);
 }

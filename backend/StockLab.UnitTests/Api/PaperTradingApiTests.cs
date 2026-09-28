@@ -11,7 +11,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using StockLab.Application.DTOs.MarketData;
+using StockLab.Application.Interfaces;
 using StockLab.Domain.Entities;
+using StockLab.Infrastructure.MarketData;
 using StockLab.Infrastructure.Persistence;
 
 namespace StockLab.UnitTests.Api;
@@ -179,6 +182,14 @@ public sealed class PaperTradingApiTests
             retryBody.RootElement.GetProperty("transactionId").GetGuid());
         Assert.Equal(firstBody.RootElement.GetProperty("cashBalance").GetDecimal(),
             retryBody.RootElement.GetProperty("cashBalance").GetDecimal());
+
+        using var changedTermsResponse = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId, side = "BUY", symbol = "AAPL", quantity = 1m,
+            orderType = "limit", limitPrice = 210m
+        });
+        Assert.Equal(HttpStatusCode.Conflict, changedTermsResponse.StatusCode);
+        Assert.Equal("duplicate_order", await ErrorCodeAsync(changedTermsResponse));
     }
 
     [Fact]
@@ -194,6 +205,21 @@ public sealed class PaperTradingApiTests
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Quote_currency_must_match_the_portfolio_currency()
+    {
+        await using var fixture = await TradingApiFixture.CreateAsync(new CurrencyMarketDataProvider("CAD"));
+        var account = await CreateSignedInAccountAsync(fixture, "currency-api@example.com");
+
+        using var response = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side = "BUY", symbol = "AAPL", quantity = 1m, orderType = "market"
+        });
+
+        Assert.Equal((HttpStatusCode)422, response.StatusCode);
+        Assert.Equal("currency_mismatch", await ErrorCodeAsync(response));
     }
 
     private static async Task<(Guid Id, string Token)> CreateSignedInAccountAsync(
@@ -267,7 +293,7 @@ public sealed class PaperTradingApiTests
         public HttpClient Client { get; } = client;
         public IServiceScope CreateScope() => application.Services.CreateScope();
 
-        public static async Task<TradingApiFixture> CreateAsync()
+        public static async Task<TradingApiFixture> CreateAsync(IMarketDataProvider? marketDataProvider = null)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
@@ -292,10 +318,12 @@ public sealed class PaperTradingApiTests
                     services.RemoveAll<DbContextOptions>();
                     services.RemoveAll<StockLabDbContext>();
                     services.RemoveAll<IDbContextFactory<StockLabDbContext>>();
+                    services.RemoveAll<IMarketDataProvider>();
                     services.AddSingleton(options);
                     services.AddScoped<StockLabDbContext, SqliteTradingDbContext>();
                     services.AddSingleton<IDbContextFactory<StockLabDbContext>>(
                         new SqliteContextFactory(options));
+                    services.AddSingleton<IMarketDataProvider>(marketDataProvider ?? new MockMarketDataProvider());
                 });
             });
             try
@@ -336,5 +364,24 @@ public sealed class PaperTradingApiTests
         : IDbContextFactory<StockLabDbContext>
     {
         public StockLabDbContext CreateDbContext() => new SqliteTradingDbContext(options);
+    }
+
+    private sealed class CurrencyMarketDataProvider(string currency) : IMarketDataProvider
+    {
+        private readonly MockMarketDataProvider inner = new();
+
+        public async Task<StockQuote?> GetQuoteAsync(string symbol, CancellationToken cancellationToken = default)
+        {
+            var quote = await inner.GetQuoteAsync(symbol, cancellationToken);
+            return quote is null ? null : quote with { Currency = currency };
+        }
+
+        public Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(
+            string query, CancellationToken cancellationToken = default) =>
+            inner.SearchStocksAsync(query, cancellationToken);
+
+        public Task<StockHistory?> GetHistoryAsync(
+            StockHistoryRequest request, CancellationToken cancellationToken = default) =>
+            inner.GetHistoryAsync(request, cancellationToken);
     }
 }

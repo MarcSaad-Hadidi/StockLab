@@ -13,4 +13,6 @@ public sealed record PaperTradeResult(
     decimal CashBalance,
     decimal HoldingQuantity,
     decimal? AverageCost,
-    DateTime ExecutedAtUtc);
+    DateTime ExecutedAtUtc,
+    string OrderType = "market",
+    decimal? LimitPrice = null);

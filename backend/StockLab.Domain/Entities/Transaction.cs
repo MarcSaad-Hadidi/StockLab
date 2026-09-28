@@ -9,6 +9,8 @@ public sealed class Transaction
     public string Side { get; set; } = string.Empty;
     public string Symbol { get; set; } = string.Empty;
     public decimal Quantity { get; set; }
+    public string OrderType { get; set; } = "market";
+    public decimal? LimitPrice { get; set; }
     public decimal ExecutionPrice { get; set; }
     public decimal TotalAmount { get; set; }
     public DateTime ExecutedAtUtc { get; set; }

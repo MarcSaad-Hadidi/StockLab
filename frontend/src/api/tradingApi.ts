@@ -31,6 +31,7 @@ export type TradingApiErrorCode =
   | 'unauthorized'
   | 'portfolio_not_found'
   | 'stock_not_found'
+  | 'currency_mismatch'
   | 'insufficient_cash'
   | 'insufficient_holdings'
   | 'duplicate_order'
@@ -43,7 +44,7 @@ export type TradingApiErrorCode =
   | 'server_error'
 
 const knownCodes = new Set<TradingApiErrorCode>([
-  'validation_error', 'unauthorized', 'portfolio_not_found', 'stock_not_found',
+  'validation_error', 'unauthorized', 'portfolio_not_found', 'stock_not_found', 'currency_mismatch',
   'insufficient_cash', 'insufficient_holdings', 'duplicate_order',
   'concurrency_conflict', 'invalid_order', 'limit_not_reached', 'rate_limited', 'offline',
   'invalid_response', 'server_error',
@@ -105,6 +106,7 @@ function messageFor(code: TradingApiErrorCode): string {
     unauthorized: 'Your session has expired. Please sign in again.',
     portfolio_not_found: 'Your paper portfolio could not be found.',
     stock_not_found: 'This stock could not be found.',
+    currency_mismatch: 'This stock is quoted in a different currency than your portfolio.',
     insufficient_cash: 'There is not enough available cash for this order.',
     insufficient_holdings: 'You do not hold enough shares for this order.',
     duplicate_order: 'This order has already been submitted with different details.',
