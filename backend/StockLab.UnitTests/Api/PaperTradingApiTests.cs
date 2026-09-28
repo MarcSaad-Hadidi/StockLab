@@ -222,6 +222,35 @@ public sealed class PaperTradingApiTests
         Assert.Equal("currency_mismatch", await ErrorCodeAsync(response));
     }
 
+    [Theory]
+    [InlineData("BUY")]
+    [InlineData("SELL")]
+    public async Task Post_trade_capacity_overflow_returns_a_controlled_error_without_changes(string side)
+    {
+        await using var fixture = await TradingApiFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "capacity-api@example.com");
+        var cash = side == "SELL" ? 999_999_999_999_998.9999m : 100_000m;
+        var heldQuantity = side == "BUY" ? 99_999_999_998.99999999m : 1m;
+        await SetCashAsync(fixture, account.Id, cash);
+        await SeedHoldingAsync(fixture, account.Id, "AAPL", heldQuantity, 150m);
+
+        using var response = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side, symbol = "AAPL", quantity = side == "BUY" ? 2m : 1m,
+            orderType = "market"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("invalid_order", await ErrorCodeAsync(response));
+        using var scope = fixture.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        Assert.Equal(cash, await context.Portfolios.Select(row => row.CashBalance).SingleAsync());
+        var holding = await context.Holdings.SingleAsync();
+        Assert.Equal(heldQuantity, holding.Quantity);
+        Assert.Equal(150m, holding.AverageCost);
+        Assert.Empty(await context.Transactions.ToListAsync());
+    }
+
     private static async Task<(Guid Id, string Token)> CreateSignedInAccountAsync(
         TradingApiFixture fixture, string email)
     {
@@ -357,6 +386,9 @@ public sealed class PaperTradingApiTests
             base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<User>().Property(user => user.Version).ValueGeneratedNever();
             modelBuilder.Entity<Portfolio>().Property(portfolio => portfolio.Version).ValueGeneratedNever();
+            // Keep the SQL Server decimal boundary values exact in this SQLite fixture.
+            modelBuilder.Entity<Portfolio>().Property(portfolio => portfolio.CashBalance).HasColumnType("TEXT");
+            modelBuilder.Entity<Holding>().Property(holding => holding.Quantity).HasColumnType("TEXT");
         }
     }
 

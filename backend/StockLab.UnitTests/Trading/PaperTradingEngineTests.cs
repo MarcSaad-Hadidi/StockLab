@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -12,6 +13,90 @@ namespace StockLab.UnitTests.Trading;
 
 public sealed class PaperTradingEngineTests
 {
+    [Theory]
+    [InlineData("0.99999999", false)]
+    [InlineData("1", false)]
+    [InlineData("1.00000001", true)]
+    public async Task Buy_checks_resulting_holding_quantity_before_saving(string quantityText, bool exceedsLimit)
+    {
+        const decimal maxQuantity = 99_999_999_999.99999999m;
+        var quantity = decimal.Parse(quantityText, CultureInfo.InvariantCulture);
+        await using var fixture = await TradingFixture.CreateAsync();
+        await fixture.AddHoldingAsync("AAPL", maxQuantity - 1m, 100m);
+        var engine = fixture.CreateEngine();
+        var request = new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL", quantity, 100m);
+        var saveAttempted = false;
+        fixture.ContextFactory.ConfigureNextContext = context => context.BeforeSave = () => saveAttempted = true;
+
+        if (exceedsLimit)
+        {
+            var error = await Assert.ThrowsAsync<PaperTradingException>(() =>
+                engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request));
+            Assert.Equal(PaperTradingFailure.InvalidOrder, error.Category);
+            Assert.False(saveAttempted);
+            Assert.Equal(100_000m, await fixture.Context.Portfolios.Select(row => row.CashBalance).SingleAsync());
+            var unchangedHolding = await fixture.Context.Holdings.AsNoTracking().SingleAsync();
+            Assert.Equal(maxQuantity - 1m, unchangedHolding.Quantity);
+            Assert.Equal(100m, unchangedHolding.AverageCost);
+            Assert.Equal(TradingFixture.FixedUtcNow, unchangedHolding.UpdatedAtUtc);
+            Assert.Empty(await fixture.Context.Transactions.ToListAsync());
+
+            // A rejected order must leave the same engine and order ID usable.
+            request = request with { Quantity = 1m };
+        }
+
+        var result = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request);
+        var retry = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request);
+        Assert.Equal(maxQuantity - 1m + request.Quantity, result.HoldingQuantity);
+        Assert.Equal(100_000m - result.TotalAmount, result.CashBalance);
+        Assert.Equal(result.TransactionId, retry.TransactionId);
+        var persistedHolding = await fixture.Context.Holdings.AsNoTracking().SingleAsync();
+        Assert.Equal(result.HoldingQuantity, persistedHolding.Quantity);
+        Assert.Equal(100m, persistedHolding.AverageCost);
+        Assert.Equal(result.CashBalance, await fixture.Context.Portfolios.Select(row => row.CashBalance).SingleAsync());
+        Assert.Single(await fixture.Context.Transactions.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData("0.9999", false)]
+    [InlineData("1", false)]
+    [InlineData("1.0001", true)]
+    public async Task Sell_checks_resulting_cash_before_saving(string priceText, bool exceedsLimit)
+    {
+        const decimal maxMoney = 999_999_999_999_999.9999m;
+        var price = decimal.Parse(priceText, CultureInfo.InvariantCulture);
+        await using var fixture = await TradingFixture.CreateAsync(initialCapital: maxMoney - 1m);
+        await fixture.AddHoldingAsync("AAPL", 2m, 100m);
+        var engine = fixture.CreateEngine();
+        var request = new PaperTradeRequest(Guid.NewGuid(), "SELL", "AAPL", 1m, price);
+        var saveAttempted = false;
+        fixture.ContextFactory.ConfigureNextContext = context => context.BeforeSave = () => saveAttempted = true;
+
+        if (exceedsLimit)
+        {
+            var error = await Assert.ThrowsAsync<PaperTradingException>(() =>
+                engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request));
+            Assert.Equal(PaperTradingFailure.InvalidOrder, error.Category);
+            Assert.False(saveAttempted);
+            Assert.Equal(maxMoney - 1m, await fixture.Context.Portfolios.Select(row => row.CashBalance).SingleAsync());
+            var unchangedHolding = await fixture.Context.Holdings.AsNoTracking().SingleAsync();
+            Assert.Equal(2m, unchangedHolding.Quantity);
+            Assert.Equal(100m, unchangedHolding.AverageCost);
+            Assert.Equal(TradingFixture.FixedUtcNow, unchangedHolding.UpdatedAtUtc);
+            Assert.Empty(await fixture.Context.Transactions.ToListAsync());
+            request = request with { ExecutionPrice = 1m };
+        }
+
+        var result = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request);
+        var retry = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request);
+        Assert.Equal(maxMoney - 1m + request.ExecutionPrice, result.CashBalance);
+        Assert.Equal(1m, result.HoldingQuantity);
+        Assert.Equal(result.TransactionId, retry.TransactionId);
+        Assert.Equal(result.CashBalance, await fixture.Context.Portfolios.Select(row => row.CashBalance).SingleAsync());
+        Assert.Equal(1m, await fixture.Context.Holdings.Select(row => row.Quantity).SingleAsync());
+        Assert.Single(await fixture.Context.Transactions.ToListAsync());
+    }
+
     [Fact]
     public async Task Buy_decreases_cash_adds_holding_and_records_transaction()
     {
@@ -680,6 +765,9 @@ public sealed class PaperTradingEngineTests
             base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<User>().Property(user => user.Version).ValueGeneratedNever();
             modelBuilder.Entity<Portfolio>().Property(portfolio => portfolio.Version).ValueGeneratedNever();
+            // SQLite NUMERIC affinity rounds these decimal boundaries through floating point.
+            modelBuilder.Entity<Portfolio>().Property(portfolio => portfolio.CashBalance).HasColumnType("TEXT");
+            modelBuilder.Entity<Holding>().Property(holding => holding.Quantity).HasColumnType("TEXT");
             modelBuilder.Entity<Transaction>().HasQueryFilter(transaction => !HideTransactions);
         }
 

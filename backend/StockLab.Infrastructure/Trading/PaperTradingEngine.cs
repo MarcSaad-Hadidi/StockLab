@@ -89,6 +89,12 @@ public sealed class PaperTradingEngine(
                         throw new PaperTradingException(PaperTradingFailure.InsufficientCash);
                     }
 
+                    // Bound the resulting decimal(19,8) holding before changing cash or positions.
+                    if (holding is not null && holding.Quantity > MaxQuantity - order.Quantity)
+                    {
+                        throw new PaperTradingException(PaperTradingFailure.InvalidOrder);
+                    }
+
                     portfolio.CashBalance = decimal.Round(
                         portfolio.CashBalance - order.TotalAmount, 4, MidpointRounding.AwayFromZero);
                     if (holding is null)
@@ -122,6 +128,12 @@ public sealed class PaperTradingEngine(
                     if (holding is null || holding.Quantity < order.Quantity)
                     {
                         throw new PaperTradingException(PaperTradingFailure.InsufficientHoldings);
+                    }
+
+                    // The order total may fit decimal(19,4) while the resulting cash balance does not.
+                    if (portfolio.CashBalance > MaxMoney - order.TotalAmount)
+                    {
+                        throw new PaperTradingException(PaperTradingFailure.InvalidOrder);
                     }
 
                     portfolio.CashBalance = decimal.Round(
