@@ -74,7 +74,7 @@ export const metrics: Metric[] = [
     label: 'dashboard.metrics.totalPortfolioValue',
     value: null,
     change: null,
-    detail: 'dashboard.metrics.vsLastMonth',
+    detail: 'dashboard.metrics.allTime',
     icon: 'wallet',
     tone: 'blue',
   },

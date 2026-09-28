@@ -198,7 +198,7 @@ export function DashboardPage() {
       label: 'dashboard.metrics.totalPortfolioValue',
       value: portfolio?.totalValue ?? null,
       change: portfolio?.returnPercent ?? null,
-      detail: 'dashboard.metrics.vsLastMonth',
+      detail: 'dashboard.metrics.allTime',
       icon: 'wallet',
       tone: 'blue',
     },

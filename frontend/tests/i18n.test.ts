@@ -143,6 +143,7 @@ test('formats the same financial values and dates for each locale', () => {
   assert.equal(formatNumber(1234.5, 'en'), '1,234.50')
   assert.equal(formatNumber(1234.5, 'fr'), '1\u202f234,50')
   assert.equal(formatCurrency(1234.5, 'en'), '$1,234.50')
+  assert.match(formatCurrency(1234.5, 'en', 2, 'CAD'), /CA\$1,234\.50/)
   assert.match(formatCurrency(1234.5, 'fr'), /1\u202f234,50/)
   assert.equal(formatPercent(12.5, 'en', 1), '12.5%')
   assert.equal(formatPercent(12.5, 'fr', 1), '12,5\u00a0%')

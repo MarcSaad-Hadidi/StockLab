@@ -402,6 +402,7 @@
     "availableCash": "Available Cash",
     "investedCapital": "Invested Capital",
     "totalReturnYtd": "Total Return (YTD)",
+    "totalReturnAllTime": "Total Return (All Time)",
     "sinceInitialCapital": "since initial capital",
     "performanceTitle": "Portfolio Performance",
     "performanceChart": "Portfolio performance chart for {{range}}",

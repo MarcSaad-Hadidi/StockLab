@@ -224,13 +224,22 @@ a {
 }
 
 .metric-card span {
-  color: var(--green);
+  color: var(--muted);
   font-size: 9px;
   font-weight: 800;
 }
 
 .metric-card.positive strong {
   color: #20ad7c;
+}
+
+.metric-card.positive span {
+  color: var(--green);
+}
+
+.metric-card.negative strong,
+.metric-card.negative span {
+  color: var(--red);
 }
 
 .overview-grid {

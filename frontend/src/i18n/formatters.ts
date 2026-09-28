@@ -4,20 +4,20 @@ export function localeForLanguage(language = i18n.language) {
   return language === 'fr' ? 'fr-FR' : 'en-US'
 }
 
-export function formatCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2) {
+export function formatCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   return new Intl.NumberFormat(localeForLanguage(language), {
-    currency: 'USD',
+    currency,
     maximumFractionDigits: fractionDigits,
     minimumFractionDigits: fractionDigits,
     style: 'currency',
   }).format(value)
 }
 
-export function formatCompactCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2) {
+export function formatCompactCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   return new Intl.NumberFormat(localeForLanguage(language), {
-    currency: 'USD',
+    currency,
     maximumFractionDigits: fractionDigits,
     minimumFractionDigits: fractionDigits,
     notation: 'compact',
@@ -25,9 +25,9 @@ export function formatCompactCurrency(value: number | null | undefined, language
   }).format(value)
 }
 
-export function formatSignedCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2) {
+export function formatSignedCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—'
-  return `${value >= 0 ? '+' : '-'}${formatCurrency(Math.abs(value), language, fractionDigits)}`
+  return `${value >= 0 ? '+' : '-'}${formatCurrency(Math.abs(value), language, fractionDigits, currency)}`
 }
 
 export function formatNumber(value: number | null | undefined, language = i18n.language, fractionDigits = 2) {
