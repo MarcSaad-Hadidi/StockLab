@@ -37,6 +37,9 @@ function costValue(position: PortfolioApiPosition) {
   return position.quantity * position.averageCost
 }
 
+const portfolioQuoteBudget = 20
+const portfolioQuoteBatchSize = 5
+
 export function usePortfolioData(): PortfolioDataState {
   const [state, setState] = useState<PortfolioDataState>({ data: null, isLoading: true, error: null })
 
@@ -51,16 +54,27 @@ export function usePortfolioData(): PortfolioDataState {
           // is unavailable on an older backend deployment.
           return []
         })
-        const enriched = await Promise.all(portfolio.positions.map(async (position) => {
-          try {
-            const quote = await marketDataApi.quote(position.symbol, controller.signal)
-            if (quote.currency.trim().toUpperCase() !== portfolio.currency.trim().toUpperCase())
+        const quotePositions = portfolio.positions.slice(0, portfolioQuoteBudget)
+        const quotedPositions: Array<{ position: PortfolioApiPosition; quote: Awaited<ReturnType<typeof marketDataApi.quote>> | null }> = []
+        for (let start = 0; start < quotePositions.length; start += portfolioQuoteBatchSize) {
+          const batch = quotePositions.slice(start, start + portfolioQuoteBatchSize)
+          const results = await Promise.all(batch.map(async (position) => {
+            try {
+              const quote = await marketDataApi.quote(position.symbol, controller.signal)
+              if (quote.currency.trim().toUpperCase() !== portfolio.currency.trim().toUpperCase())
+                return { position, quote: null }
+              return { position, quote }
+            } catch (error) {
+              if (controller.signal.aborted) throw error
               return { position, quote: null }
-            return { position, quote }
-          } catch (error) {
-            if (controller.signal.aborted) throw error
-            return { position, quote: null }
-          }
+            }
+          }))
+          quotedPositions.push(...results)
+        }
+        const quotedBySymbol = new Map(quotedPositions.map(({ position, quote }) => [position.symbol, quote]))
+        const enriched = portfolio.positions.map((position) => ({
+          position,
+          quote: quotedBySymbol.get(position.symbol) ?? null,
         }))
 
         const hasCompleteMarketData = enriched.every(({ quote }) => quote !== null)

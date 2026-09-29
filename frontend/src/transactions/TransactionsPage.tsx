@@ -1,13 +1,12 @@
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
-import { formatCurrency, formatNumber, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
+import { portfolioApi, type PortfolioApiTransaction } from '../api/portfolioApi'
+import { formatCurrency, formatNumber, formatSignedCurrency } from '../i18n/formatters'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   filterTransactions,
   paginateTransactions,
-  transactions,
-  transactionSummary,
   type Transaction,
   type TransactionAction,
   type TransactionFilters,
@@ -104,6 +103,20 @@ function formatFilterDate(value: string, language: string, emptyLabel: string) {
   if (!value) return emptyLabel
   const locale = language === 'fr' ? 'fr-FR' : 'en-US'
   return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' }).format(new Date(`${value}T00:00:00.000Z`))
+}
+
+function toTransaction(transaction: PortfolioApiTransaction): Transaction {
+  return {
+    id: transaction.id,
+    symbol: transaction.symbol,
+    company: transaction.symbol,
+    assetType: 'Stock',
+    action: transaction.side,
+    quantity: transaction.quantity,
+    executionPrice: transaction.executionPrice,
+    totalAmount: transaction.totalAmount,
+    date: transaction.executedAtUtc,
+  }
 }
 
 function TransactionRow({ transaction }: { transaction: Transaction }) {
@@ -207,8 +220,31 @@ export function TransactionsPage() {
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [liveTransactions, setLiveTransactions] = useState<Transaction[]>([])
 
-  const filteredTransactions = useMemo(() => filterTransactions(transactions, filters), [filters])
+  useEffect(() => {
+    const controller = new AbortController()
+    void portfolioApi.getRecentTransactions(50, controller.signal)
+      .then((items) => {
+        if (!controller.signal.aborted) setLiveTransactions(items.map(toTransaction))
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setLiveTransactions([])
+      })
+    return () => controller.abort()
+  }, [])
+
+  const liveSummary = useMemo(() => {
+    const totalInvested = liveTransactions
+      .filter(transaction => transaction.action === 'BUY')
+      .reduce((total, transaction) => total + transaction.totalAmount, 0)
+    const totalProceeds = liveTransactions
+      .filter(transaction => transaction.action === 'SELL')
+      .reduce((total, transaction) => total + transaction.totalAmount, 0)
+    return { totalTrades: liveTransactions.length, totalInvested, totalProceeds }
+  }, [liveTransactions])
+
+  const filteredTransactions = useMemo(() => filterTransactions(liveTransactions, filters), [filters, liveTransactions])
   const pageData = useMemo(() => paginateTransactions(filteredTransactions, page), [filteredTransactions, page])
   const activeFilterCount = [
     filters.query.trim().length > 0,
@@ -241,10 +277,10 @@ export function TransactionsPage() {
           <section className="transactions-heading"><div><h1>{t('transactions.title')}</h1><p>{t('transactions.subtitle')}</p></div></section>
 
           <section aria-label={t('transactions.summaryLabel')} className="summary-grid">
-            <SummaryCard detail={'—'} icon="activity" label={t('transactions.totalTrades')} tone="blue" value={formatNumber(transactionSummary.totalTrades, undefined, 0)} />
-            <SummaryCard detail={formatSignedPercent(transactionSummary.investedChange)} icon="wallet" label={t('transactions.totalInvested')} tone="purple" value={formatCurrency(transactionSummary.totalInvested)} />
-            <SummaryCard detail={formatSignedPercent(transactionSummary.proceedsChange)} icon="chart" label={t('transactions.totalProceeds')} tone="orange" value={formatCurrency(transactionSummary.totalProceeds)} />
-            <SummaryCard detail={formatSignedPercent(transactionSummary.pnlChange)} icon="activity" label={t('transactions.netPnl')} tone="green" value={formatSignedCurrency(transactionSummary.netPnl)} />
+            <SummaryCard detail={'—'} icon="activity" label={t('transactions.totalTrades')} tone="blue" value={formatNumber(liveSummary.totalTrades, undefined, 0)} />
+            <SummaryCard detail={'—'} icon="wallet" label={t('transactions.totalInvested')} tone="purple" value={formatCurrency(liveSummary.totalInvested)} />
+            <SummaryCard detail={'—'} icon="chart" label={t('transactions.totalProceeds')} tone="orange" value={formatCurrency(liveSummary.totalProceeds)} />
+            <SummaryCard detail={'—'} icon="activity" label={t('transactions.netPnl')} tone="green" value={formatSignedCurrency(null)} />
           </section>
 
           <section aria-label={t('transactions.filtersLabel')} className="controls-panel panel">
