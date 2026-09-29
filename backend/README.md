@@ -74,6 +74,28 @@ use User Secrets with the API project (substitute your private connection string
 dotnet user-secrets set "ConnectionStrings:StockLab" "<AZURE_SQL_CONNECTION_STRING>" --project backend/StockLab.Api/StockLab.Api.csproj
 ```
 
+The API connects with its own SQL account (`stocklab_api`), not with a person's
+Microsoft account. Do not use `Authentication=Active Directory Interactive`: it
+signs in the developer running the API and opens a Microsoft sign-in window on every
+start. StockLab end users never need a database account; they sign up through
+`POST /api/auth/register`. The connection string has this shape (ask the database
+administrator for the password):
+
+```text
+Server=tcp:stocklab-sql-dev.database.windows.net,1433;Database=StockLab;User ID=stocklab_api;Password=<PASSWORD>;Encrypt=True;TrustServerCertificate=False
+```
+
+The database administrator creates this account once. SQL authentication must be
+allowed on the server (Azure portal → SQL server → **Microsoft Entra ID** → clear
+**Support only Microsoft Entra authentication for this server**). Then, connected to the
+`StockLab` database as the Entra admin:
+
+```sql
+CREATE USER stocklab_api WITH PASSWORD = '<STRONG_PASSWORD>';
+ALTER ROLE db_datareader ADD MEMBER stocklab_api;
+ALTER ROLE db_datawriter ADD MEMBER stocklab_api;
+```
+
 The environment variable `ConnectionStrings__StockLab` is an alternative. Neither
 the connection string nor database credentials belong in tracked appsettings or Git.
 The API's market-data endpoints can still start without a database connection; a
