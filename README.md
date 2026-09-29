@@ -130,6 +130,15 @@ Clonez le dépôt et travaillez depuis sa racine :
     git clone https://github.com/MarcSaad-Hadidi/StockLab.git
     cd StockLab
 
+### Tout lancer en une commande
+
+Depuis la racine, après avoir défini les user-secrets (voir [Configuration et secrets](#configuration-et-secrets)) :
+
+    npm run setup   # une seule fois : dépendances racine, frontend et restauration .NET
+    npm run dev     # lance l’API (http://localhost:5274) et Vite (http://localhost:5173)
+
+Ctrl+C arrête les deux processus. Les sections suivantes décrivent le lancement séparé de chaque partie.
+
 ### Frontend
 
 Installez les dépendances et démarrez le serveur de développement Vite :
