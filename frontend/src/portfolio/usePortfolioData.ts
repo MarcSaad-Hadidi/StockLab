@@ -8,6 +8,7 @@ export type PortfolioPosition = {
   quantity: number
   averagePrice: number
   currentPrice: number | null
+  dailyChangePercent: number | null
   marketValue: number | null
   pnl: number | null
   pnlPercent: number | null
@@ -87,6 +88,7 @@ export function usePortfolioData(): PortfolioDataState {
             quantity: position.quantity,
             averagePrice: position.averageCost,
             currentPrice: effectiveQuote?.price ?? null,
+            dailyChangePercent: effectiveQuote?.changePercent ?? null,
             marketValue,
             pnl,
             pnlPercent: pnl === null || costValue(position) === 0 ? null : (pnl / costValue(position)) * 100,

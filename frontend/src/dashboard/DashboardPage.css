@@ -139,6 +139,7 @@ th:last-child, td:last-child { padding-right: 2px; text-align: right; }
 .allocation-bar i { background: var(--blue); border-radius: inherit; display: block; height: 100%; }
 .change-pill { background: #eaf8f2; border-radius: 4px; display: inline-block; font-size: 9px; font-weight: 700; padding: 4px 6px; }
 .change-pill.negative { background: #fff0f1; }
+.change-pill.neutral { background: #f0f2f6; color: #7a849a; }
 
 .transaction-list { margin-top: 12px; }
 .transaction-row { align-items: center; border-bottom: 1px solid #f0f2f6; display: grid; gap: 8px; grid-template-columns: 28px minmax(80px, 1fr) 48px auto; min-height: 57px; transition: background .18s ease, padding .18s ease; }

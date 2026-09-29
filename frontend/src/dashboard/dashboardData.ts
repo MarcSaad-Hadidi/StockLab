@@ -43,10 +43,10 @@ export type Position = {
   company: string
   shares: number
   value: number | null
-  allocation: number
-  price: number
+  allocation: number | null
+  price: number | null
   change: number | null
-  tone: 'positive' | 'negative'
+  tone: 'positive' | 'negative' | 'neutral'
 }
 
 export type WatchlistItem = {
