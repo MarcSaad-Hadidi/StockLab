@@ -402,6 +402,8 @@
     "availableCash": "Liquidités disponibles",
     "investedCapital": "Capital investi",
     "totalReturnYtd": "Rendement total (depuis le début de l’année)",
+    "totalReturnAllTime": "Rendement total (depuis l’ouverture)",
+    "sinceInitialCapital": "depuis le capital initial",
     "performanceTitle": "Performance du portefeuille",
     "performanceChart": "Graphique de performance du portefeuille pour {{range}}",
     "chartPoint": "{{label}} : valeur du portefeuille {{value}}",
@@ -428,11 +430,17 @@
     "weight": "Poids"
   },
   "transactions": {
+    "loading": "Chargement des transactions…",
+    "loadError": "Impossible de charger les transactions. Vérifiez votre connexion et votre session, puis réessayez.",
+    "invalidDates": "La date de fin doit être égale ou postérieure à la date de début.",
+    "allTime": "Totaux du compte depuis son ouverture",
+    "paperTradingNote": "Historique des transactions fictives. Dates et heures affichées en UTC.",
+    "assetTypeUnavailable": "Les catégories d’actifs ne sont pas encore disponibles pour les transactions enregistrées.",
     "vsLast30Days": "par rapport aux 30 derniers jours",
     "filters": {
       "allTypes": "Tous les types"
     },
-    "searchLabel": "Rechercher des transactions par symbole ou entreprise",
+    "searchLabel": "Rechercher des transactions par symbole",
     "searchPlaceholder": "Rechercher par symbole...",
     "fromDate": "Date de début",
     "toDate": "Date de fin",

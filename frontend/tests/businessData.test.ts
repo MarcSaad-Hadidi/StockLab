@@ -95,7 +95,7 @@ test("unavailable financial values stay unavailable rather than becoming zero or
 for (const [path, label] of [
   ["dashboard/DashboardPage", "No portfolio data yet"],
   ["portfolio/PortfolioPage", "No portfolio data yet"],
-  ["transactions/TransactionsPage", "No transactions"],
+  ["transactions/TransactionsPage", "Loading transactions"],
   ["watchlist/WatchlistPage", "No watchlist items"],
   ["alerts/AlertsPage", "No alerts"],
   ["ai-trader/AITraderPage", "AI Trader is not available yet"],

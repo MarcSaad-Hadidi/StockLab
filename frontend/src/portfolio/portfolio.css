@@ -224,13 +224,22 @@ a {
 }
 
 .metric-card span {
-  color: var(--green);
+  color: var(--muted);
   font-size: 9px;
   font-weight: 800;
 }
 
 .metric-card.positive strong {
   color: #20ad7c;
+}
+
+.metric-card.positive span {
+  color: var(--green);
+}
+
+.metric-card.negative strong,
+.metric-card.negative span {
+  color: var(--red);
 }
 
 .overview-grid {
@@ -444,6 +453,13 @@ a {
 
 .allocation-link:hover {
   text-decoration: underline;
+}
+
+.allocation-caption {
+  margin: 10px 0 0;
+  color: #929bad;
+  font-size: 9px;
+  text-align: center;
 }
 
 .allocation-link .icon {

@@ -43,10 +43,10 @@ export type Position = {
   company: string
   shares: number
   value: number | null
-  allocation: number
-  price: number
+  allocation: number | null
+  price: number | null
   change: number | null
-  tone: 'positive' | 'negative'
+  tone: 'positive' | 'negative' | 'neutral'
 }
 
 export type WatchlistItem = {
@@ -59,13 +59,15 @@ export type WatchlistItem = {
 }
 
 export type Transaction = {
+  id: string
   symbol: string
   company: string
   type: 'Buy' | 'Sell'
   shares: number
   amount: number
-  time: string
-  timeKey: string
+  time?: string
+  timeKey?: string
+  executedAtUtc?: string
 }
 
 export const metrics: Metric[] = [
@@ -73,7 +75,7 @@ export const metrics: Metric[] = [
     label: 'dashboard.metrics.totalPortfolioValue',
     value: null,
     change: null,
-    detail: 'dashboard.metrics.vsLastMonth',
+    detail: 'dashboard.metrics.allTime',
     icon: 'wallet',
     tone: 'blue',
   },

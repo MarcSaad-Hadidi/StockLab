@@ -4,17 +4,16 @@ import { PerformanceLineChart } from '../components/charts/PerformanceLineChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
 import { getTrendClass, getTrendIcon, getTrendTone } from '../components/trend/trend'
-import { formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
+import { formatDate, formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
+import { usePortfolioData } from '../portfolio/usePortfolioData'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   aiPerformance,
-  metrics,
   performanceSeries,
-  positions,
-  transactions,
   type IconName,
+  type Metric,
   type PerformanceRange,
   type Position,
   type Transaction,
@@ -103,32 +102,33 @@ function PanelHeading({ title, subtitle, action, id, destination }: { title: str
   )
 }
 
-function MetricCard({ metric }: { metric: (typeof metrics)[number] }) {
-  const { t } = useTranslation()
+function MetricCard({ metric, currency }: { metric: Metric; currency: string }) {
+  const { i18n, t } = useTranslation()
   const trendTone = getTrendTone(metric.change)
   const trendIcon = getTrendIcon(trendTone)
   return (
     <article className="metric-card">
       <div className={`metric-icon metric-icon-${metric.tone}`}><Icon name={metric.icon} size={20} /></div>
       <p>{t(metric.label)}</p>
-      <strong>{metric.label === 'dashboard.metrics.return' ? formatPercent(metric.value) : formatCurrency(metric.value)}</strong>
+      <strong>{metric.label === 'dashboard.metrics.return' ? formatPercent(metric.value, i18n.language) : formatCurrency(metric.value, i18n.language, 2, currency)}</strong>
       <span className={`metric-change ${getTrendClass(trendTone)}`}>{trendIcon && <Icon name={trendIcon} size={13} />} {formatSignedPercent(metric.change)} <em>{t(metric.detail)}</em></span>
     </article>
   )
 }
 
-function AllocationBar({ allocation }: { allocation: number }) {
+function AllocationBar({ allocation }: { allocation: number | null }) {
   const { t } = useTranslation()
-  return <span aria-label={t('dashboard.allocation', { allocation: formatPercent(allocation, undefined, 1) })} className="allocation-bar"><i style={{ width: `${Math.min(allocation * 3.2, 100)}%` }} /></span>
+  const width = allocation === null ? 0 : Math.min(allocation * 3.2, 100)
+  return <span aria-label={t('dashboard.allocation', { allocation: formatPercent(allocation, undefined, 1) })} className="allocation-bar"><i style={{ width: `${width}%` }} /></span>
 }
 
-function PositionRow({ position }: { position: Position }) {
-  const { t } = useTranslation()
+function PositionRow({ position, currency }: { position: Position; currency: string }) {
+  const { i18n, t } = useTranslation()
   return (
     <tr>
       <td><div className="asset-cell"><StockMark size="small" symbol={position.symbol} /><span><strong>{position.symbol}</strong><small>{position.company}</small></span></div></td>
       <td>{t('dashboard.shares', { count: position.shares })}</td>
-      <td><strong>{formatCurrency(position.value)}</strong><small className="muted-line">{formatCurrency(position.price)}</small></td>
+      <td><strong>{formatCurrency(position.value, i18n.language, 2, currency)}</strong><small className="muted-line">{formatCurrency(position.price, i18n.language, 2, currency)}</small></td>
       <td><div className="allocation-cell"><AllocationBar allocation={position.allocation} /><small>{formatPercent(position.allocation, undefined, 1)}</small></div></td>
       <td><span className={`change-pill ${position.tone}`}>{formatSignedPercent(position.change)}</span></td>
     </tr>
@@ -147,16 +147,20 @@ function WatchlistRow({ item }: { item: WatchlistItem }) {
   )
 }
 
-function TransactionRow({ transaction }: { transaction: Transaction }) {
+function TransactionRow({ transaction, currency }: { transaction: Transaction; currency: string }) {
   const { i18n, t } = useTranslation()
-  const localizedTime = transaction.time ? formatTime(transaction.time, i18n.language) : ''
+  const localizedTime = transaction.executedAtUtc
+    ? formatDate(transaction.executedAtUtc, i18n.language)
+    : transaction.time
+      ? formatTime(transaction.time, i18n.language)
+      : ''
   return (
     <li className="transaction-row">
       <StockMark size="small" symbol={transaction.symbol} />
       <div className="transaction-name"><strong>{transaction.symbol}</strong><small>{transaction.company}</small></div>
       <div className={`transaction-type ${transaction.type.toLowerCase()}`}><span className="transaction-dot" />{t(`common.${transaction.type.toLowerCase()}`)}</div>
-      <div className="transaction-amount"><strong>{formatCurrency(transaction.amount)}</strong><small>{t('dashboard.shares', { count: transaction.shares })}</small></div>
-      <small className="transaction-time">{t(transaction.timeKey, { time: localizedTime })}</small>
+      <div className="transaction-amount"><strong>{formatCurrency(transaction.amount, i18n.language, 2, currency)}</strong><small>{t('dashboard.shares', { count: transaction.shares })}</small></div>
+      <small className="transaction-time">{transaction.executedAtUtc ? localizedTime : transaction.timeKey ? t(transaction.timeKey, { time: localizedTime }) : localizedTime}</small>
     </li>
   )
 }
@@ -172,6 +176,7 @@ export function DashboardPage() {
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [toastKey, setToastKey] = useState('')
+  const { data: portfolio } = usePortfolioData()
   const dashboardUserName = ''
   const [greetingPeriod, setGreetingPeriod] = useState(() => getGreetingPeriod(new Date()))
   const aiReturnTone = getTrendTone(aiPerformance.return)
@@ -189,6 +194,62 @@ export function DashboardPage() {
     return watchlist.filter((item) => `${item.symbol} ${item.company}`.toLowerCase().includes(normalizedQuery))
   }, [query])
 
+  const metrics: Metric[] = useMemo(() => [
+    {
+      label: 'dashboard.metrics.totalPortfolioValue',
+      value: portfolio?.totalValue ?? null,
+      change: portfolio?.returnPercent ?? null,
+      detail: 'dashboard.metrics.allTime',
+      icon: 'wallet',
+      tone: 'blue',
+    },
+    {
+      label: 'dashboard.metrics.cashAvailable',
+      value: portfolio?.cashBalance ?? null,
+      change: null,
+      detail: 'dashboard.metrics.allTime',
+      icon: 'briefcase',
+      tone: 'green',
+    },
+    {
+      label: 'dashboard.metrics.totalPnl',
+      value: portfolio?.pnl ?? null,
+      change: portfolio?.returnPercent ?? null,
+      detail: 'dashboard.metrics.allTime',
+      icon: 'trending-up',
+      tone: 'purple',
+    },
+    {
+      label: 'dashboard.metrics.return',
+      value: portfolio?.returnPercent ?? null,
+      change: null,
+      detail: 'dashboard.metrics.allTime',
+      icon: 'activity',
+      tone: 'orange',
+    },
+  ], [portfolio])
+
+  const positions: Position[] = useMemo(() => portfolio?.positions.map((position) => ({
+    symbol: position.symbol,
+    company: position.name,
+    shares: position.quantity,
+    value: position.marketValue,
+    allocation: position.weight,
+    price: position.currentPrice,
+    change: position.dailyChangePercent,
+    tone: position.dailyChangePercent === null ? 'neutral' : position.dailyChangePercent < 0 ? 'negative' : 'positive',
+  })) ?? [], [portfolio])
+
+  const transactions: Transaction[] = useMemo(() => portfolio?.transactions.map((transaction) => ({
+    id: transaction.id,
+    symbol: transaction.symbol,
+    company: transaction.symbol,
+    type: transaction.side === 'BUY' ? 'Buy' : 'Sell',
+    shares: transaction.quantity,
+    amount: transaction.totalAmount,
+    executedAtUtc: transaction.executedAtUtc,
+  })) ?? [], [portfolio])
+
   const showToast = (key: string) => {
     setToastKey(key)
     window.setTimeout(() => setToastKey(''), 2200)
@@ -204,7 +265,7 @@ export function DashboardPage() {
         <div className="dashboard-content">
           <section className="welcome-row"><div><p className="eyebrow">{new Intl.DateTimeFormat(i18n.language, { dateStyle: 'full' }).format(new Date())}</p><h1>{greeting} <span>👋</span></h1><p className="welcome-copy">{t('dashboard.welcome')}</p></div><button className="primary-button" disabled title={t('businessData.unavailable')} type="button"><span>+</span> {t('common.addInvestment')}</button></section>
 
-          <section aria-label={t('dashboard.portfolioSummary')} className="metrics-grid">{metrics.map((metric) => <MetricCard key={metric.label} metric={metric} />)}</section>
+          <section aria-label={t('dashboard.portfolioSummary')} className="metrics-grid">{metrics.map((metric) => <MetricCard key={metric.label} metric={metric} currency={portfolio?.currency ?? 'USD'} />)}</section>
 
           <div className="dashboard-grid dashboard-grid-top">
             <section aria-labelledby="performance-title" className="panel performance-panel"><PanelHeading id="performance-title" subtitle={t('dashboard.performanceSubtitle')} title={t('dashboard.performanceTitle')} /><div className="range-tabs" role="tablist" aria-label={t('common.performanceTimeRange')}>{ranges.map((item) => <button aria-selected={range === item} className={range === item ? 'selected' : ''} key={item} onClick={() => setRange(item)} role="tab" type="button">{t(`common.timeRanges.${item}`)}</button>)}</div><PerformanceChart key={range} range={range} /></section>
@@ -212,8 +273,8 @@ export function DashboardPage() {
           </div>
 
           <div className="dashboard-grid dashboard-grid-bottom">
-            <section aria-labelledby="positions-title" className="panel positions-panel"><PanelHeading action={t('dashboard.viewPortfolio')} destination="portfolio" id="positions-title" subtitle={t('dashboard.positionsSubtitle')} title={t('dashboard.keyPositions')} /><div className="table-scroll"><table><thead><tr><th>{t('common.asset')}</th><th>{t('dashboard.holdings')}</th><th>{t('common.value')}</th><th>{t('common.allocation')}</th><th>{t('dashboard.today')}</th></tr></thead><tbody>{positions.length === 0 && <tr><td colSpan={5}><UnavailableState message="businessData.portfolio" /></td></tr>}{positions.map((position) => <PositionRow key={position.symbol} position={position} />)}</tbody></table></div></section>
-            <section aria-labelledby="transactions-title" className="panel transactions-panel"><PanelHeading action={t('common.viewAll')} destination="transactions" id="transactions-title" subtitle={t('dashboard.transactionsSubtitle')} title={t('dashboard.recentTransactions')} /><ul className="transaction-list">{transactions.length === 0 && <li><UnavailableState message="businessData.transactions" /></li>}{transactions.map((transaction) => <TransactionRow key={`${transaction.symbol}-${transaction.timeKey}`} transaction={transaction} />)}</ul></section>
+            <section aria-labelledby="positions-title" className="panel positions-panel"><PanelHeading action={t('dashboard.viewPortfolio')} destination="portfolio" id="positions-title" subtitle={t('dashboard.positionsSubtitle')} title={t('dashboard.keyPositions')} /><div className="table-scroll"><table><thead><tr><th>{t('common.asset')}</th><th>{t('dashboard.holdings')}</th><th>{t('common.value')}</th><th>{t('common.allocation')}</th><th>{t('dashboard.today')}</th></tr></thead><tbody>{positions.length === 0 && <tr><td colSpan={5}><UnavailableState message="businessData.portfolio" /></td></tr>}{positions.map((position) => <PositionRow key={position.symbol} position={position} currency={portfolio?.currency ?? 'USD'} />)}</tbody></table></div></section>
+            <section aria-labelledby="transactions-title" className="panel transactions-panel"><PanelHeading action={t('common.viewAll')} destination="transactions" id="transactions-title" subtitle={t('dashboard.transactionsSubtitle')} title={t('dashboard.recentTransactions')} /><ul className="transaction-list">{transactions.length === 0 && <li><UnavailableState message="businessData.transactions" /></li>}{transactions.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} currency={portfolio?.currency ?? 'USD'} />)}</ul></section>
           </div>
 
           <section aria-labelledby="ai-trader-title" className="panel ai-panel"><div className="ai-heading"><div className="ai-title"><span className="ai-badge"><Icon name="sparkles" size={18} /></span><div><h2 id="ai-trader-title">{t('common.navigation.aiTrader')}</h2><p>{t('dashboard.aiSubtitle')}</p></div><span className="status-badge"><i /> {t('businessData.unavailable')}</span></div><button className="text-action" onClick={() => window.location.assign(routeFor('ai-trader'))} type="button">{t('dashboard.openAiTrader')} <Icon name="chevron-right" size={16} /></button></div><div className="ai-content"><div className={`ai-stat ai-stat-primary ${getTrendClass(aiReturnTone)}`}><span>{t('dashboard.aiReturn')}</span><strong>{formatSignedPercent(aiPerformance.return)}</strong><small className={getTrendClass(aiReturnTone)}>{aiReturnIcon && <Icon name={aiReturnIcon} size={13} />} {t('businessData.unavailable')}</small></div><div className="ai-stat"><span>{t('dashboard.netPnl')}</span><strong>{formatSignedCurrency(aiPerformance.pnl)}</strong><small>{t('businessData.unavailable')}</small></div><div className="ai-stat"><span>{t('dashboard.winRate')}</span><strong>{formatPercent(aiPerformance.winRate, undefined, 1)}</strong><small>{t('businessData.ai')}</small></div><div className="ai-chart-wrap"><span>{t('dashboard.sevenDayPerformance')}</span><Sparkline /><div className="ai-chart-labels"><small>{t('common.days.mon')}</small><small>{t('dashboard.today')}</small></div></div></div></section>
