@@ -10,12 +10,15 @@ resources. Those implementations belong to their respective issues.
 - Columns are required unless marked `NULL`. Dates use `datetime2(7)` in UTC.
 - Monetary amounts and prices use `decimal(19,4)`; share quantities use
   `decimal(19,8)` to permit fractional shares. Floating-point types are excluded.
+  ML logical session dates use SQL `date`; technical recorded timestamps remain UTC.
 - Currency is `char(3)`, initially USD. Each portfolio uses one currency; orders
   and valuations in another currency are rejected until FX support is designed.
 - Symbols use `nvarchar(32)`, trimmed and normalized to uppercase. The configured
   market-data provider must resolve them unambiguously; exchange-qualified
   identifiers are required if a ticker is ambiguous. No persistent stock catalog
   or market-data cache is introduced by this schema.
+  Raw ML decision history instead preserves the identifier accepted by AI risk,
+  without introducing additional symbol normalization.
 - Status values below are `varchar` columns with database CHECK constraints.
 - Mutable aggregates use SQL Server `rowversion` for optimistic concurrency;
   `rowversion` is not a date or business sequence number.
@@ -35,12 +38,10 @@ erDiagram
     Portfolios ||--o{ Transactions : records
     Portfolios ||--o{ PortfolioSnapshots : values
     AiPortfolios ||--o{ AiPositions : holds
-    AiPortfolios ||--o{ AiDecisions : receives
     AiPortfolios ||--o{ AiTrades : records
     AiPortfolios ||--o{ AiPortfolioSnapshots : values
-    ModelVersions ||--o{ AiDecisions : produces
     ModelVersions ||--o{ Backtests : evaluates
-    AiDecisions ||--o| AiTrades : authorizes
+    AiDecisions ||..o{ AiTrades : "future #72 association"
 ```
 
 The user-to-portfolio relationship is zero-or-one at the database level. Issue #19
@@ -209,51 +210,50 @@ identity and training metadata remain immutable; promotion changes status in a
 transaction. Store an S3 object key only, never a signed URL, token or model binary.
 JSON metrics contain named values and their evaluation window, not credentials.
 
-### AiDecisions
+### AiDecisions (implemented by #69)
 
 | Column | Type / constraint |
 | --- | --- |
-| Id | Primary key |
-| AiPortfolioId | FK AiPortfolios.Id |
-| ModelVersionId | FK ModelVersions.Id |
+| Id | Caller-generated `uniqueidentifier` primary key; no DB default |
 | Signal | `varchar(4)`: BUY, SELL or HOLD |
-| Symbol | Normalized symbol |
-| Confidence | `decimal(9,8)`, between 0 and 1 inclusive |
-| ApprovedQuantity | `decimal(19,8)`, > 0 only for Approved BUY/SELL; otherwise NULL |
-| RiskStatus | `varchar(13)`: Pending, Approved, Rejected or NotApplicable |
-| RejectionReason | `nvarchar(1000)`, nonblank only when Rejected, otherwise NULL |
-| CreatedAtUtc | `datetime2(7)` |
-| EvaluatedAtUtc | `datetime2(7)`, NULL until evaluated |
-| Version | `rowversion` |
+| Symbol | `nvarchar(32)`, nonblank; accepted AI risk identifier preserved |
+| Confidence | `decimal(29,28)`, between 0 and 1 inclusive; preserves every .NET decimal score |
+| DecisionDate | `date`, logical daily ML session date |
+| ModelName | `nvarchar(128)`, required, trimmed, nonblank |
+| ModelVersion | `nvarchar(128)`, required, trimmed, nonblank; opaque caller-supplied identity |
+| RecordedAtUtc | `datetime2(7)`, backend `TimeProvider` timestamp |
 
-CHECK: HOLD requires NotApplicable and no evaluation timestamp. BUY/SELL require
-Pending, Approved or Rejected. Pending has no evaluation timestamp; Approved and
-Rejected require one >= CreatedAtUtc. Unique (Id, AiPortfolioId) supports the
-composite foreign key from AiTrades. ModelVersionId preserves the exact model
-even after another version becomes active. Signal, model and confidence are
-immutable; only risk evaluation fields transition. Risk approval alone is not
-evidence of execution: execution is represented by an AiTrades row.
+CHECK constraints enforce the signal set, confidence range and nonblank symbol,
+model name and model version. All fields are original ML history and append-only.
+SQL Server uses binary collation and exact byte lengths for the signal check;
+lowercase and padded variants are rejected even under a case-insensitive database.
+Every valid BUY/SELL/HOLD is recorded, including low-confidence outputs and decisions
+that may later be rejected or never executed. No risk or execution result is stored
+here, and recording does not require a portfolio. There are no foreign keys or
+rowversion columns in this initial decision table.
 
-The ML model supplies only BUY/SELL/HOLD and confidence, not a trade quantity.
-The Risk Manager approves or rejects the decision and determines ApprovedQuantity
-for an approved BUY/SELL before forwarding it to the Paper Trading Engine.
-CHECK: Pending, Rejected and HOLD/NotApplicable require ApprovedQuantity = NULL;
-Approved BUY/SELL require ApprovedQuantity > 0. ApprovedQuantity is part of the
-risk evaluation fields, not the immutable ML output.
+The history service rejects an empty ID, invalid symbol/signal, confidence outside
+the range, a default/future
+UTC decision date, and missing/overlong model identity. Model name/version casing
+and accepted symbol casing are preserved. Same ID + identical canonical payload
+replays the original timestamp; a changed payload conflicts, including changed
+model version. The PK enforces concurrent idempotency. No default version is used.
+Reads order by DecisionDate, RecordedAtUtc, Id descending with a limit of 1..200.
+Rejection records (#70), trade associations (#72) and actual model version lifecycle
+(#75) remain future work. This implementation supersedes the original #20 target
+that combined risk outcome fields and portfolio/model references with ML history.
 
 ### AiTrades
 
 Id, AiPortfolioId (FK AiPortfolios.Id), Side, Symbol, Quantity, ExecutionPrice,
 TotalAmount and ExecutedAtUtc follow Transactions types and accounting rules.
-DecisionId is required and unique, permitting at most one full execution per
-decision. FK (DecisionId, AiPortfolioId) references AiDecisions (Id, AiPortfolioId)
-to prevent attaching a decision from another AI portfolio. It also serves as the
-retry key for execution.
+The decision association remains planned for #72: a DecisionId FK can reference
+AiDecisions.Id. No such FK is introduced by #69; AiTrades continues to use the
+existing portfolio-scoped OrderId for execution retries.
 
-The application must check that the decision is Approved, is BUY/SELL, and matches
-the trade's side and symbol. AiTrades.Quantity must equal the decision's
-ApprovedQuantity determined by the Risk Manager. A foreign key alone cannot enforce
-these cross-table rules. Execution checks current cash and positions again, even
+The application receives a separate risk approval for BUY/SELL and checks the
+trade's side and symbol against that approval. The raw AiDecision carries no
+approved quantity or risk status. Execution checks current cash and positions again, even
 after risk approval; failure leaves no trade row and no financial updates.
 
 ### Backtests
@@ -309,7 +309,7 @@ Besides primary keys and the unique indexes specified above:
 | --- | --- |
 | Transactions | (PortfolioId, ExecutedAtUtc, Id), (PortfolioId, Symbol, ExecutedAtUtc), (PortfolioId, Side, ExecutedAtUtc): scoped history and filters |
 | PriceAlerts | (UserId, Status), filtered (Symbol, Currency) where Status = 'Active': user lists and grouped monitoring |
-| AiDecisions | (AiPortfolioId, CreatedAtUtc, Id), (ModelVersionId): history and model references |
+| AiDecisions | (DecisionDate, RecordedAtUtc, Id): bounded newest-first ML history |
 | AiTrades | (AiPortfolioId, ExecutedAtUtc, Id): trade history |
 | Backtests | (ModelVersionId, CreatedAtUtc): model evaluations |
 

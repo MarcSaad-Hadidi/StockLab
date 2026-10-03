@@ -279,11 +279,56 @@ The stored execution quantity/price may differ from the original approval.
 
 No user portfolio/holding/transaction is reused, and the user paper engine is
 unchanged. There is no real broker, controller, scheduler, ML change or frontend.
-Decision/rejection history (#69/#70), trade history and decision links (#72),
+Rejection history (#70), trade history and decision links (#72),
 positions endpoints (#71) and AI API (#80) remain separate work.
 Tests use fake quotes and isolated SQLite/LocalDB databases. The same
 `STOCKLAB_TEST_LOCALDB=1` switch runs real simultaneous orders and rollback tests;
 they never use Azure credentials or external market APIs.
+
+## AI decision history
+
+`IAiDecisionHistoryService` records the raw ML output in append-only `AiDecisions`,
+including every valid BUY, SELL and HOLD, independently of confidence thresholds,
+risk approval, portfolio existence and execution. It has no market, ML, risk or
+execution dependency. Recording changes only this table; no controller or scheduler
+is introduced. A future orchestrator must call it before risk evaluation.
+
+The caller supplies a nonempty stable `DecisionId`, symbol, existing `AiTradingSignal`,
+confidence, logical daily `DateOnly`, model name and explicit opaque model version.
+Symbol validation matches AI risk: one nonblank identifier, at most 32 characters,
+without whitespace, control characters or commas; the accepted symbol is preserved.
+Model name and version are trimmed, nonblank and at most 128 characters, with their
+casing preserved. No version is generated or substituted. Confidence is in `[0,1]`
+and uses `decimal(29,28)` to preserve every .NET decimal exactly, including the
+current ML pipeline's unrounded scores. The default date and dates after today's UTC date
+are rejected. `RecordedAtUtc` comes from backend `TimeProvider`, retains UTC kind on
+reads and is distinct from the logical SQL `date`.
+
+An identical canonical payload with the same ID returns the original DTO and
+timestamp. Any changed field, including model/version casing, returns the typed
+`AiDecisionHistoryFailure.DecisionConflict`; history is never overwritten.
+The caller-generated primary key arbitrates concurrent inserts. Only SQL Server
+duplicate-key errors 2601/2627 trigger a reload and exact payload comparison; other
+database failures return `PersistenceFailure` without SQL details. Each operation
+owns its EF context, so recording cannot save unrelated scoped edits.
+
+`GetByIdAsync` returns a detached record or null. `GetRecentAsync` accepts limits
+1..200 and orders in the database by `DecisionDate DESC, RecordedAtUtc DESC, Id DESC`
+before applying `Take`; both reads use `AsNoTracking`. The single composite history
+index follows that ordering. `AddAiDecisions` creates only this table, its required
+identity/signal/confidence checks and history index; Down drops only `AiDecisions`.
+The SQL Server signal check uses binary collation and exact byte lengths so lowercase
+or padded values cannot pass the constraint and later break the canonical reader.
+The history service is registered scoped in the API composition root.
+
+Risk rejection records (#70) and trade associations (#72) can reference the stable
+decision ID later. Actual model version lifecycle belongs to #75; this issue stores
+only the explicit version supplied by the caller. There is no portfolio/model FK,
+rejection reason, execution data, probability field or public update/delete API.
+SQLite tests cover validation, all signals, retries, conflicts, UTC timestamps,
+safe errors and isolation. With `STOCKLAB_TEST_LOCALDB=1`, SQL Server tests additionally
+force concurrent PK races and verify exact precision, bounded SQL queries, ordering
+ties and database constraints in isolated randomly named LocalDB databases.
 
 ## Market-data contracts
 
