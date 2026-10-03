@@ -190,7 +190,8 @@ public sealed class AiPaperTradingEngine(
         if (decision.RejectionReason is not null || decision.RequestedPrice <= 0m
             || decision.Signal is not (AiTradingSignal.Buy or AiTradingSignal.Sell)
             || decision.Confidence is < 0m or > 1m || string.IsNullOrWhiteSpace(decision.Symbol)
-            || decision.Symbol.Length > 32 || decision.Symbol.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)))
+            || decision.Symbol.Length > 32 || decision.Symbol.Contains(',')
+            || decision.Symbol.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)))
             throw new AiTradeExecutionException(AiTradeExecutionFailure.InvalidDecision);
     }
 

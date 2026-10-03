@@ -9,7 +9,7 @@ internal static class AiRiskPolicyEvaluator
 
     internal static AiRiskRejectionReason? Validate(AiRiskRequest request, AiRiskOptions policy)
     {
-        if (string.IsNullOrWhiteSpace(request.Symbol) || request.Symbol.Length > 32
+        if (string.IsNullOrWhiteSpace(request.Symbol) || request.Symbol.Length > 32 || request.Symbol.Contains(',')
             || request.Symbol.Any(c => char.IsWhiteSpace(c) || char.IsControl(c))
             || !Enum.IsDefined(request.Signal) || request.Confidence is < 0m or > 1m)
             return AiRiskRejectionReason.InvalidDecision;

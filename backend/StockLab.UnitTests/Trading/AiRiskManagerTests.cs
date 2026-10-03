@@ -84,6 +84,17 @@ public sealed class AiRiskManagerTests
     }
 
     [Theory]
+    [InlineData(AiTradingSignal.Buy)]
+    [InlineData(AiTradingSignal.Sell)]
+    public async Task Batch_symbols_are_rejected_before_reading_portfolio(AiTradingSignal signal)
+    {
+        var portfolio = new FakePortfolio();
+        Rejected(await Manager(portfolio).EvaluateAsync(Request(signal) with { Symbol = "AAPL,MSFT" }),
+            AiRiskRejectionReason.InvalidDecision);
+        Assert.Equal(0, portfolio.StateCalls + portfolio.SnapshotCalls);
+    }
+
+    [Theory]
     [InlineData(0)]
     [InlineData(-1)]
     public async Task Invalid_price_is_rejected_before_math(int price)

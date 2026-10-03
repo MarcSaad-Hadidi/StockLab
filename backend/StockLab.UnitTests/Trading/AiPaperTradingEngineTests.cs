@@ -140,6 +140,20 @@ public sealed class AiPaperTradingEngineTests
     }
 
     [Theory]
+    [InlineData(AiTradingSignal.Buy)]
+    [InlineData(AiTradingSignal.Sell)]
+    public async Task Batch_symbols_fail_before_market_access_without_database_mutation(AiTradingSignal signal)
+    {
+        await using var f = await Fixture.CreateAsync();
+        await f.SeedAsync();
+        var request = Request(signal);
+        request = request with { RiskDecision = request.RiskDecision with { Symbol = "AAPL,MSFT" } };
+        await Failure(f.Engine(), request, AiTradeExecutionFailure.InvalidDecision);
+        Assert.Empty(f.Market.Calls);
+        await f.AssertUnchangedAsync();
+    }
+
+    [Theory]
     [InlineData("missing", AiTradeExecutionFailure.QuoteUnavailable)]
     [InlineData("throw", AiTradeExecutionFailure.QuoteUnavailable)]
     [InlineData("zero", AiTradeExecutionFailure.InvalidExecutionPrice)]
