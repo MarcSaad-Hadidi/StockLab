@@ -321,14 +321,58 @@ The SQL Server signal check uses binary collation and exact byte lengths so lowe
 or padded values cannot pass the constraint and later break the canonical reader.
 The history service is registered scoped in the API composition root.
 
-Risk rejection records (#70) and trade associations (#72) can reference the stable
-decision ID later. Actual model version lifecycle belongs to #75; this issue stores
+Risk rejection records (#70) now reference the stable decision ID; trade associations
+remain planned for #72. Actual model version lifecycle belongs to #75; this issue stores
 only the explicit version supplied by the caller. There is no portfolio/model FK,
 rejection reason, execution data, probability field or public update/delete API.
 SQLite tests cover validation, all signals, retries, conflicts, UTC timestamps,
 safe errors and isolation. With `STOCKLAB_TEST_LOCALDB=1`, SQL Server tests additionally
 force concurrent PK races and verify exact precision, bounded SQL queries, ordering
 ties and database constraints in isolated randomly named LocalDB databases.
+
+## AI rejected decision history
+
+`IAiRejectedDecisionHistoryService` records an already evaluated risk rejection for
+one existing `AiDecisions.Id`. The append-only `AiRejectedDecisions` table contains
+only `AiDecisionId` (PK and FK), `RejectionReason` and backend `RejectedAtUtc`.
+The FK uses NO ACTION; an original decision with a rejection cannot be deleted.
+`AddAiRejectedDecisions` creates only this table, its constraints and one history
+index; Down drops only the rejection table. The reason is a required `varchar(64)`
+code from the existing `AiRiskRejectionReason` enum. SQL Server binary collation
+and exact byte length reject lowercase, padded and unknown codes. The timestamp
+uses `datetime2(7)` and retains UTC kind on reads.
+
+The request contains `DecisionId` and the existing `AiRiskDecision`: `Approved`
+must be false, `ApprovedQuantity` exactly zero, and the reason defined and nonnull.
+All ten existing reasons are supported, including `HoldSignal`; HOLD decisions
+are valid history. Symbol, signal and confidence must exactly match the original
+decision, including symbol casing and all decimal digits. The supplied outcome
+is stored without reevaluating risk. `RequestedPrice` is not stored or compared
+on replay, so even an `InvalidPrice` rejection needs no usable quote. A missing
+original returns typed `DecisionNotFound` and never creates a raw decision.
+
+Same ID and reason returns the original DTO and timestamp; a changed reason
+returns `RejectionConflict`. Both paths first validate the risk payload against
+the raw decision. The PK resolves concurrent inserts: only SQL Server errors
+2601/2627 reload the winner and compare its reason. Other database errors return
+safe `PersistenceFailure` without SQL or connection details. Each call owns its
+EF context and cannot save unrelated scoped changes. There are no update/delete
+methods, risk/execution calls, portfolio initialization or financial side effects.
+
+`GetByDecisionIdAsync` returns null when no rejection exists. Both reads enrich
+detached DTOs from the raw decision with one SQL join and `AsNoTracking`, without
+duplicating symbol, signal, confidence, logical date or model identity in storage.
+`GetRecentAsync` accepts limits 1..200 and applies `RejectedAtUtc DESC,
+DecisionDate DESC, AiDecisionId DESC` and `Take` in SQL. The API registers the
+service scoped; this issue adds no controller or scheduler. A future orchestrator
+must record the raw decision first, evaluate risk, then record a rejection.
+
+SQLite tests cover all reasons, required examples, validation, exact linkage,
+replay/conflict, safe errors, detached DTOs and isolation of every existing user
+and AI table. With `STOCKLAB_TEST_LOCALDB=1`, isolated SQL Server tests exercise
+four concurrent same-reason inserts, different-reason races, full decimal
+precision, one bounded joined query, all ordering keys, strict reason codes,
+required columns, FK/PK enforcement and prevention of cascading deletion.
 
 ## Market-data contracts
 
