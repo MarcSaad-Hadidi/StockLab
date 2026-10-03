@@ -137,6 +137,110 @@ public sealed class PortfolioApiTests
     }
 
     [Fact]
+    public async Task Full_history_pages_old_trades_and_keeps_account_totals_currency_and_ownership()
+    {
+        await using var fixture = await PortfolioFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "history@example.com");
+        var other = await CreateSignedInAccountAsync(fixture, "history-other@example.com");
+        var portfolioId = await SeedPortfolioAsync(fixture, account.Id, 100_000m, "CAD");
+        var otherId = await SeedPortfolioAsync(fixture, other.Id, 100_000m, "USD");
+        using (var scope = fixture.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+            for (var i = 0; i < 65; i++)
+                context.Transactions.Add(new Transaction
+                {
+                    Id = Guid.NewGuid(), OrderId = Guid.NewGuid(), PortfolioId = portfolioId,
+                    Side = "BUY", Symbol = "AAPL:NASDAQ", Quantity = 2m,
+                    ExecutionPrice = 100m, TotalAmount = 200m,
+                    ExecutedAtUtc = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc).AddDays(i)
+                });
+            context.Transactions.Add(new Transaction
+            {
+                Id = Guid.NewGuid(), OrderId = Guid.NewGuid(), PortfolioId = portfolioId,
+                Side = "SELL", Symbol = "MSFT:NASDAQ", Quantity = 0.25m,
+                ExecutionPrice = 12.3456m, TotalAmount = 3.0864m,
+                ExecutedAtUtc = new DateTime(2026, 1, 1, 23, 59, 59, DateTimeKind.Utc)
+            });
+            await context.SaveChangesAsync();
+        }
+        await SeedTransactionAsync(fixture, otherId, "PRIVATE", DateTime.UtcNow);
+
+        var ids = new HashSet<Guid>();
+        for (var page = 1; page <= 7; page++)
+        {
+            using var response = await GetWithTokenAsync(fixture.Client, account.Token,
+                $"/api/portfolio/transactions/history?page={page}&pageSize=10&userId={other.Id}&portfolioId={otherId}");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var root = body.RootElement;
+            Assert.Equal(page, root.GetProperty("page").GetInt32());
+            Assert.Equal(66, root.GetProperty("totalCount").GetInt32());
+            Assert.Equal("CAD", root.GetProperty("currency").GetString());
+            Assert.Equal(66, root.GetProperty("summary").GetProperty("totalTrades").GetInt32());
+            Assert.Equal(13_000m, root.GetProperty("summary").GetProperty("totalInvested").GetDecimal());
+            Assert.Equal(3.0864m, root.GetProperty("summary").GetProperty("totalProceeds").GetDecimal());
+            var rows = root.GetProperty("items").EnumerateArray().ToArray();
+            Assert.Equal(page == 7 ? 6 : 10, rows.Length);
+            foreach (var row in rows)
+            {
+                Assert.True(ids.Add(row.GetProperty("id").GetGuid()));
+                Assert.NotEqual("PRIVATE", row.GetProperty("symbol").GetString());
+                Assert.EndsWith("Z", row.GetProperty("executedAtUtc").GetString());
+            }
+        }
+        Assert.Equal(66, ids.Count);
+
+        using var filtered = await GetWithTokenAsync(fixture.Client, account.Token,
+            "/api/portfolio/transactions/history?search=msft&side=SELL&from=2026-01-01&to=2026-01-01&page=2147483647&pageSize=50");
+        Assert.Equal(HttpStatusCode.OK, filtered.StatusCode);
+        using var filteredBody = JsonDocument.Parse(await filtered.Content.ReadAsStringAsync());
+        var result = filteredBody.RootElement;
+        Assert.Equal(1, result.GetProperty("totalCount").GetInt32());
+        Assert.Equal(1, result.GetProperty("page").GetInt32());
+        Assert.Equal(66, result.GetProperty("summary").GetProperty("totalTrades").GetInt32());
+        var oldTrade = Assert.Single(result.GetProperty("items").EnumerateArray());
+        Assert.Equal(0.25m, oldTrade.GetProperty("quantity").GetDecimal());
+        Assert.Equal(12.3456m, oldTrade.GetProperty("executionPrice").GetDecimal());
+    }
+
+    [Theory]
+    [InlineData("page=0")]
+    [InlineData("pageSize=0")]
+    [InlineData("pageSize=51")]
+    [InlineData("side=HOLD")]
+    [InlineData("from=2026-02-31")]
+    [InlineData("from=2026-02-02&to=2026-02-01")]
+    public async Task History_rejects_invalid_filters(string query)
+    {
+        await using var fixture = await PortfolioFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "invalid-history@example.com");
+        using var response = await GetWithTokenAsync(fixture.Client, account.Token,
+            $"/api/portfolio/transactions/history?{query}");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task History_distinguishes_empty_portfolio_missing_portfolio_and_unauthorized()
+    {
+        await using var fixture = await PortfolioFixture.CreateAsync();
+        using var anonymous = await fixture.Client.GetAsync("/api/portfolio/transactions/history");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        using var unknown = await GetWithTokenAsync(fixture.Client, CreateSignedToken(Guid.NewGuid().ToString()),
+            "/api/portfolio/transactions/history");
+        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+        var account = await CreateSignedInAccountAsync(fixture, "empty-history@example.com");
+        using var empty = await GetWithTokenAsync(fixture.Client, account.Token,
+            "/api/portfolio/transactions/history?to=9999-12-31&page=50");
+        Assert.Equal(HttpStatusCode.OK, empty.StatusCode);
+        using var body = JsonDocument.Parse(await empty.Content.ReadAsStringAsync());
+        Assert.Empty(body.RootElement.GetProperty("items").EnumerateArray());
+        Assert.Equal(1, body.RootElement.GetProperty("page").GetInt32());
+        Assert.Equal(0, body.RootElement.GetProperty("totalCount").GetInt32());
+        Assert.Equal(0m, body.RootElement.GetProperty("summary").GetProperty("totalInvested").GetDecimal());
+    }
+
+    [Fact]
     public async Task Jwt_subject_isolates_cash_and_holdings_even_when_another_users_ids_are_supplied()
     {
         await using var fixture = await PortfolioFixture.CreateAsync();

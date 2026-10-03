@@ -430,11 +430,17 @@
     "weight": "Weight"
   },
   "transactions": {
+    "loading": "Loading transactions…",
+    "loadError": "Unable to load transactions. Check your connection and sign-in, then try again.",
+    "invalidDates": "The end date must be on or after the start date.",
+    "allTime": "All-time account totals",
+    "paperTradingNote": "Paper-trading history. Dates and times are shown in UTC.",
+    "assetTypeUnavailable": "Asset categories are not available for recorded trades yet.",
     "vsLast30Days": "vs last 30 days",
     "filters": {
       "allTypes": "All Types"
     },
-    "searchLabel": "Search transactions by symbol or company",
+    "searchLabel": "Search transactions by symbol",
     "searchPlaceholder": "Search by symbol...",
     "fromDate": "From date",
     "toDate": "To date",

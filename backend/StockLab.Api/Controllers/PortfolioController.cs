@@ -76,6 +76,27 @@ public sealed class PortfolioController(
                 DateTime.SpecifyKind(transaction.ExecutedAtUtc, DateTimeKind.Utc))).ToArray());
     }
 
+    /// <summary>Gets a filtered page of the full history with all-time aggregates and portfolio currency.</summary>
+    [HttpGet("transactions/history")]
+    [ProducesResponseType(typeof(TransactionHistoryResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiValidationErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<TransactionHistoryResponse>> GetTransactionHistoryAsync(
+        [FromQuery] TransactionHistoryRequest request, CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+            return Unauthorized(new ApiErrorResponse("unauthorized", "Authentication is required."));
+
+        var history = await portfolioService.GetTransactionHistoryAsync(userId, request.ToQuery(), cancellationToken);
+        return history is null
+            ? NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."))
+            : Ok(new TransactionHistoryResponse(history.Items.Select(row => new PortfolioTransactionResponse(
+                row.Id, row.Side, row.Symbol, row.Quantity, row.ExecutionPrice, row.TotalAmount,
+                DateTime.SpecifyKind(row.ExecutedAtUtc, DateTimeKind.Utc))).ToArray(),
+                history.Page, history.PageSize, history.TotalCount, history.Currency, history.Summary));
+    }
+
     /// <summary>Executes a simulated BUY or SELL order in the authenticated user's portfolio.</summary>
     [HttpPost("trades")]
     [Consumes("application/json")]

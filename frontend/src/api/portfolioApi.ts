@@ -25,6 +25,24 @@ export type PortfolioApiTransaction = {
   executedAtUtc: string
 }
 
+export type TransactionHistoryQuery = {
+  page: number
+  pageSize: number
+  search?: string
+  side?: 'BUY' | 'SELL'
+  from?: string
+  to?: string
+}
+
+export type TransactionHistoryResponse = {
+  items: PortfolioApiTransaction[]
+  page: number
+  pageSize: number
+  totalCount: number
+  currency: string
+  summary: { totalTrades: number; totalInvested: number; totalProceeds: number }
+}
+
 export type PortfolioApiErrorCode =
   | 'unauthorized'
   | 'portfolio_not_found'
@@ -86,6 +104,22 @@ function validTransaction(value: unknown): value is PortfolioApiTransaction {
     && Number.isFinite(Date.parse(value.executedAtUtc))
 }
 
+function validHistory(value: unknown): value is TransactionHistoryResponse {
+  if (!record(value) || !Array.isArray(value.items) || !value.items.every(validTransaction)
+    || !finiteNumber(value.page) || !Number.isInteger(value.page) || value.page < 1
+    || !finiteNumber(value.pageSize) || !Number.isInteger(value.pageSize) || value.pageSize < 1 || value.pageSize > 50
+    || !finiteNumber(value.totalCount) || !Number.isInteger(value.totalCount) || value.totalCount < 0
+    || !nonEmptyString(value.currency) || !/^[A-Z]{3}$/.test(value.currency)
+    || !record(value.summary)) return false
+  const summary = value.summary
+  return value.items.length <= value.pageSize
+    && value.items.length <= value.totalCount
+    && value.page <= Math.max(1, Math.ceil(value.totalCount / value.pageSize))
+    && finiteNumber(summary.totalTrades) && Number.isInteger(summary.totalTrades) && summary.totalTrades >= value.totalCount
+    && finiteNumber(summary.totalInvested) && summary.totalInvested >= 0
+    && finiteNumber(summary.totalProceeds) && summary.totalProceeds >= 0
+}
+
 function codeFor(status: number, value: unknown): PortfolioApiErrorCode {
   if (value === 'portfolio_not_found') return 'portfolio_not_found'
   if (status === 401) return 'unauthorized'
@@ -141,6 +175,17 @@ export function createPortfolioApi(
   }
 
   return {
+    async getTransactionHistory(query: TransactionHistoryQuery, signal?: AbortSignal): Promise<TransactionHistoryResponse> {
+      const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) })
+      for (const key of ['search', 'side', 'from', 'to'] as const) {
+        const value = query[key]?.trim()
+        if (value) params.set(key, value)
+      }
+      const body = await getJson(`/api/portfolio/transactions/history?${params}`, signal)
+      if (!validHistory(body))
+        throw new PortfolioApiError(502, 'invalid_response', messageFor('invalid_response'))
+      return body
+    },
     async getPortfolio(signal?: AbortSignal): Promise<PortfolioApiResponse> {
       const body = await getJson('/api/portfolio', signal)
       if (!validResponse(body))

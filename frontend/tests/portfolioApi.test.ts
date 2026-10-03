@@ -90,3 +90,42 @@ test('portfolio api reads the authenticated recent transaction feed', async () =
   assert.equal(transactions[0]?.symbol, 'AAPL:NASDAQ')
   assert.equal(transactions[0]?.side, 'BUY')
 })
+
+const validHistory = {
+  items: [{ id: 'old-trade', side: 'SELL', symbol: 'AAPL:NASDAQ', quantity: 0.25,
+    executionPrice: 1.2345, totalAmount: 0.3086, executedAtUtc: '2026-01-01T23:59:59Z' }],
+  page: 2, pageSize: 10, totalCount: 11, currency: 'CAD',
+  summary: { totalTrades: 61, totalInvested: 2000, totalProceeds: 3000 },
+}
+
+test('history requests combine filters and preserve server totals and currency', async () => {
+  const controller = new AbortController()
+  const api = createPortfolioApi('https://api.example.test/', async (input, init) => {
+    const url = new URL(String(input))
+    assert.equal(url.pathname, '/api/portfolio/transactions/history')
+    assert.deepEqual(Object.fromEntries(url.searchParams), {
+      page: '2', pageSize: '10', search: 'AAPL:NASDAQ', side: 'SELL', from: '2026-01-01', to: '2026-01-31',
+    })
+    assert.equal(init?.signal, controller.signal)
+    assert.equal((init?.headers as Record<string, string>).Authorization, 'Bearer test-token')
+    return Response.json(validHistory)
+  }, () => ({ Authorization: 'Bearer test-token' }))
+
+  const result = await api.getTransactionHistory({ page: 2, pageSize: 10, search: ' AAPL:NASDAQ ',
+    side: 'SELL', from: '2026-01-01', to: '2026-01-31' }, controller.signal)
+  assert.deepEqual(result, validHistory)
+})
+
+test('history rejects missing currency, invalid rows and malformed pagination', async () => {
+  for (const body of [
+    { ...validHistory, currency: '' },
+    { ...validHistory, items: [{ ...validHistory.items[0], quantity: -1 }] },
+    { ...validHistory, page: 0 },
+    { ...validHistory, totalCount: -1 },
+    { ...validHistory, summary: { ...validHistory.summary, totalProceeds: -1 } },
+  ]) {
+    const api = createPortfolioApi('', async () => Response.json(body), () => ({ Authorization: 'Bearer test-token' }))
+    await assert.rejects(api.getTransactionHistory({ page: 1, pageSize: 10 }),
+      (error: unknown) => error instanceof PortfolioApiError && error.code === 'invalid_response')
+  }
+})
