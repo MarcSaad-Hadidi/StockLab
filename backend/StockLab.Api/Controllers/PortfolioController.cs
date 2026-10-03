@@ -48,6 +48,41 @@ public sealed class PortfolioController(
                     position.Symbol, position.Quantity, position.AverageCost)).ToArray()));
     }
 
+    /// <summary>Gets the authenticated user's portfolio valued with current market quotes.</summary>
+    [HttpGet("performance")]
+    [ProducesResponseType(typeof(PortfolioPerformanceResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<PortfolioPerformanceResponse>> GetPerformanceAsync(
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+            return Unauthorized(new ApiErrorResponse("unauthorized", "Authentication is required."));
+
+        var performance = await portfolioService.GetPerformanceAsync(userId, cancellationToken);
+        return performance is null
+            ? NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."))
+            : Ok(new PortfolioPerformanceResponse(
+                performance.CashBalance,
+                performance.InitialCapital,
+                performance.InvestedValue,
+                performance.PositionsMarketValue,
+                performance.TotalValue,
+                performance.TotalPnl,
+                performance.ReturnPercent,
+                performance.Currency,
+                performance.Positions.Select(position => new PortfolioPerformancePositionResponse(
+                    position.Symbol,
+                    position.Quantity,
+                    position.AverageCost,
+                    position.CurrentPrice,
+                    position.MarketValue,
+                    position.Pnl,
+                    position.PnlPercent)).ToArray()));
+    }
+
     /// <summary>Gets recent simulated transactions for the authenticated user's portfolio.</summary>
     [HttpGet("transactions")]
     [ProducesResponseType(typeof(PortfolioTransactionResponse[]), StatusCodes.Status200OK)]

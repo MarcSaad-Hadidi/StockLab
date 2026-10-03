@@ -137,6 +137,78 @@ public sealed class PortfolioApiTests
     }
 
     [Fact]
+    public async Task Performance_uses_current_quotes_for_position_and_total_metrics()
+    {
+        await using var fixture = await PortfolioFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "performance@example.com");
+        await SeedPortfolioAsync(fixture, account.Id, 97_000m, "USD",
+            ("AAPL", 10m, 180m), ("MSFT", 5m, 300m));
+
+        using var response = await GetWithTokenAsync(fixture.Client, account.Token,
+            "/api/portfolio/performance");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = body.RootElement;
+        Assert.Equal(97_000m, root.GetProperty("cashBalance").GetDecimal());
+        Assert.Equal(100_000m, root.GetProperty("initialCapital").GetDecimal());
+        Assert.Equal(3_300m, root.GetProperty("investedValue").GetDecimal());
+        Assert.Equal(4_067.5m, root.GetProperty("positionsMarketValue").GetDecimal());
+        Assert.Equal(101_067.5m, root.GetProperty("totalValue").GetDecimal());
+        Assert.Equal(1_067.5m, root.GetProperty("totalPnl").GetDecimal());
+        Assert.Equal(1.0675m, root.GetProperty("returnPercent").GetDecimal());
+        Assert.Equal("USD", root.GetProperty("currency").GetString());
+
+        var positions = root.GetProperty("positions").EnumerateArray().ToArray();
+        var apple = Assert.Single(positions, position => position.GetProperty("symbol").GetString() == "AAPL");
+        Assert.Equal(204.5m, apple.GetProperty("currentPrice").GetDecimal());
+        Assert.Equal(2_045m, apple.GetProperty("marketValue").GetDecimal());
+        Assert.Equal(245m, apple.GetProperty("pnl").GetDecimal());
+        Assert.Equal(13.611111111111111111111111110m, apple.GetProperty("pnlPercent").GetDecimal());
+
+        var microsoft = Assert.Single(positions, position => position.GetProperty("symbol").GetString() == "MSFT");
+        Assert.Equal(404.5m, microsoft.GetProperty("currentPrice").GetDecimal());
+        Assert.Equal(2_022.5m, microsoft.GetProperty("marketValue").GetDecimal());
+        Assert.Equal(522.5m, microsoft.GetProperty("pnl").GetDecimal());
+        Assert.Equal(34.833333333333333333333333330m, microsoft.GetProperty("pnlPercent").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Performance_rejects_unavailable_or_mismatched_quotes_without_cost_fallback()
+    {
+        await using var fixture = await PortfolioFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "unavailable-performance@example.com");
+        await SeedPortfolioAsync(fixture, account.Id, 98_000m, "CAD", ("AAPL", 10m, 200m));
+
+        using var response = await GetWithTokenAsync(fixture.Client, account.Token,
+            "/api/portfolio/performance");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("portfolio_performance_unavailable", await ErrorCodeAsync(response));
+    }
+
+    [Fact]
+    public async Task Performance_requires_authentication_and_returns_empty_metrics_for_empty_portfolio()
+    {
+        await using var fixture = await PortfolioFixture.CreateAsync();
+        using var anonymous = await fixture.Client.GetAsync("/api/portfolio/performance");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+
+        var account = await CreateSignedInAccountAsync(fixture, "empty-performance@example.com");
+        using var response = await GetWithTokenAsync(fixture.Client, account.Token,
+            "/api/portfolio/performance");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = body.RootElement;
+        Assert.Equal(100_000m, root.GetProperty("totalValue").GetDecimal());
+        Assert.Equal(0m, root.GetProperty("positionsMarketValue").GetDecimal());
+        Assert.Equal(0m, root.GetProperty("totalPnl").GetDecimal());
+        Assert.Equal(0m, root.GetProperty("returnPercent").GetDecimal());
+        Assert.Empty(root.GetProperty("positions").EnumerateArray());
+    }
+
+    [Fact]
     public async Task Full_history_pages_old_trades_and_keeps_account_totals_currency_and_ownership()
     {
         await using var fixture = await PortfolioFixture.CreateAsync();
