@@ -32,6 +32,9 @@ public sealed class PersistenceIntegrationTests
         Assert.IsType<AiTraderPortfolioService>(scope.ServiceProvider.GetRequiredService<IAiTraderPortfolioService>());
         Assert.IsType<AiRiskManager>(scope.ServiceProvider.GetRequiredService<IAiRiskManager>());
         Assert.IsType<AiPaperTradingEngine>(scope.ServiceProvider.GetRequiredService<IAiTradeExecutionService>());
+        var history = scope.ServiceProvider.GetRequiredService<IAiDecisionHistoryService>();
+        Assert.IsType<AiDecisionHistoryService>(history);
+        Assert.Same(history, scope.ServiceProvider.GetRequiredService<IAiDecisionHistoryService>());
         Assert.Same(scope.ServiceProvider.GetRequiredService<StockLab.Infrastructure.MarketData.DeduplicatingMarketDataProvider>(),
             scope.ServiceProvider.GetRequiredKeyedService<IMarketDataProvider>("Execution"));
     }

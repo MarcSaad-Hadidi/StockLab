@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using StockLab.Domain.Entities;
+using StockLab.Infrastructure.Persistence.Configurations;
 
 namespace StockLab.Infrastructure.Persistence;
 
@@ -14,10 +15,13 @@ public class StockLabDbContext(DbContextOptions<StockLabDbContext> options) : Db
     public DbSet<AiTraderPortfolio> AiTraderPortfolios => Set<AiTraderPortfolio>();
     public DbSet<AiTraderPosition> AiTraderPositions => Set<AiTraderPosition>();
     public DbSet<AiTrade> AiTrades => Set<AiTrade>();
+    public DbSet<AiDecision> AiDecisions => Set<AiDecision>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(StockLabDbContext).Assembly);
+        if (Database.IsSqlServer())
+            AiDecisionConfiguration.ConfigureSqlServerSignal(modelBuilder.Entity<AiDecision>());
     }
 }
