@@ -18,7 +18,7 @@ export type PortfolioPosition = {
 export type PortfolioData = {
   cashBalance: number
   investedValue: number
-  totalValue: number
+  totalValue: number | null
   initialCapital: number
   pnl: number | null
   returnPercent: number | null
@@ -83,30 +83,28 @@ export function usePortfolioData(): PortfolioDataState {
         const investedValue = portfolio.investedValue
         const totalValue = hasCompleteMarketData
           ? portfolio.cashBalance + marketInvestedValue
-          : portfolio.totalValue
+          : null
         // Total return is measured against starting capital so realized gains
-        // remain visible after a position has been fully sold. If any quote is
-        // unavailable, suppress live valuation details to keep every displayed
-        // position consistent with the cost-based API total.
-        const pnl = hasCompleteMarketData ? totalValue - portfolio.initialCapital : null
+        // remain visible after a position has been fully sold. Missing quotes
+        // make aggregate valuation unavailable, but must not hide other prices.
+        const pnl = totalValue === null ? null : totalValue - portfolio.initialCapital
         const returnPercent = pnl === null || portfolio.initialCapital === 0
           ? null
           : (pnl / portfolio.initialCapital) * 100
         const positions = enriched.map(({ position, quote }) => {
-          const effectiveQuote = hasCompleteMarketData ? quote : null
-          const marketValue = effectiveQuote ? position.quantity * effectiveQuote.price : null
+          const marketValue = quote ? position.quantity * quote.price : null
           const pnl = marketValue === null ? null : marketValue - costValue(position)
           return {
             symbol: position.symbol,
-            name: effectiveQuote?.name?.trim() || position.symbol,
+            name: quote?.name?.trim() || position.symbol,
             quantity: position.quantity,
             averagePrice: position.averageCost,
-            currentPrice: effectiveQuote?.price ?? null,
-            dailyChangePercent: effectiveQuote?.changePercent ?? null,
+            currentPrice: quote?.price ?? null,
+            dailyChangePercent: quote?.changePercent ?? null,
             marketValue,
             pnl,
             pnlPercent: pnl === null || costValue(position) === 0 ? null : (pnl / costValue(position)) * 100,
-            weight: totalValue > 0 && marketValue !== null ? (marketValue / totalValue) * 100 : null,
+            weight: totalValue !== null && totalValue > 0 && marketValue !== null ? (marketValue / totalValue) * 100 : null,
           } satisfies PortfolioPosition
         })
 
