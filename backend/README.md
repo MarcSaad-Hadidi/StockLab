@@ -225,6 +225,66 @@ dotnet test backend/StockLab.sln
 That opt-in test creates and removes only its own randomly named LocalDB database;
 it never reads the application's Azure connection. Otherwise it is reported skipped.
 
+### AI paper trade execution (#68)
+
+`IAiTradeExecutionService.ExecuteAsync(AiTradeExecutionRequest, CancellationToken)`
+is implemented by the scoped `AiPaperTradingEngine`. Supply a non-empty,
+caller-generated `OrderId` and an approved `AiRiskDecision` with BUY/SELL, positive
+quantity and no rejection reason. HOLD and malformed/rejected approvals never
+execute. Initialize the AI portfolio separately: execution never creates capital.
+
+The engine resolves a new USD quote through the existing `IMarketDataProvider`
+pipeline keyed `Execution`: rate limiting and in-flight deduplication remain,
+but the website's completed-quote cache is bypassed. BUY also quotes other held
+symbols for valuation; SELL needs only the target quote. Missing, invalid,
+wrong-symbol or non-USD quotes fail without mutation or a risk-price fallback.
+This uses the provider's latest available observation, including outside market
+hours; it does not invent a live exchange price.
+
+All quote calls finish before a `Serializable` transaction loads tracked state.
+The engine compares the portfolio rowversion, balances and positions against the
+state used for valuation; any intervening change returns `ConcurrencyConflict`.
+`AiRiskPolicyEvaluator` shares #67's existing rules with execution. Current
+confidence, cash, position count, exposure, allocation and storage limits apply.
+BUY may shrink to the current safe quantity, but never increases beyond the
+original approval. SELL fails if the original approved quantity exceeds current
+holdings; a partial sale is supported and retains the remaining average cost.
+An approval contains no historical state token, so changes before execution's
+initial read are handled by current-state revalidation, not historical matching.
+
+Quantities are floored to eight decimals. Prices, totals and weighted average
+costs use four decimals with `MidpointRounding.AwayFromZero`. BUY average cost is
+`(old quantity * old cost + executed quantity * execution price) / new quantity`.
+The rounded debit is checked again against cash, allocation and resulting
+exposure (including rounding-induced breaches in other compliant holdings).
+If settlement cannot satisfy the limits, execution fails without mutation;
+neither negative cash nor short positions are allowed. SELL removes a fully
+closed position. One UTC `TimeProvider` timestamp updates portfolio, position
+and trade consistently.
+
+Cash, position changes and the `AiTrade` insert commit together. SQL deadlocks,
+rowversion conflicts and unique-order races produce a committed replay or a
+controlled conflict; the caller may re-evaluate/retry. Other database failures
+return `PersistenceFailure`, without SQL details. No internal retry blindly
+executes a stale order, and cancellation propagates with rollback.
+
+`AddAiTrades` creates only `AiTrades`, its positive-value/side constraints, a
+NoAction FK to `AiPortfolios`, and unique `(AiTraderPortfolioId, OrderId)` index.
+The trade stores a SHA-256 fingerprint of the original normalized symbol, side,
+confidence, risk price and approved quantity. Repeating the same approval returns
+the original committed trade and post-trade balances (`IsIdempotentReplay=true`),
+even if later trades or quotes changed. A changed approval using that OrderId
+returns `DuplicateOrder`; a retry never fetches a new price for a committed order.
+The stored execution quantity/price may differ from the original approval.
+
+No user portfolio/holding/transaction is reused, and the user paper engine is
+unchanged. There is no real broker, controller, scheduler, ML change or frontend.
+Decision/rejection history (#69/#70), trade history and decision links (#72),
+positions endpoints (#71) and AI API (#80) remain separate work.
+Tests use fake quotes and isolated SQLite/LocalDB databases. The same
+`STOCKLAB_TEST_LOCALDB=1` switch runs real simultaneous orders and rollback tests;
+they never use Azure credentials or external market APIs.
+
 ## Market-data contracts
 
 `StockLab.Application/Interfaces/IMarketDataProvider.cs` defines asynchronous

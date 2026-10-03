@@ -1,0 +1,42 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
+using StockLab.Infrastructure.Persistence;
+
+namespace StockLab.UnitTests.Trading;
+
+public sealed class AiTradeExecutionModelTests
+{
+    [Fact]
+    public void Trades_have_ai_only_ownership_unique_orders_and_safe_storage()
+    {
+        using var db = new StockLabDbContext(new DbContextOptionsBuilder<StockLabDbContext>()
+            .UseSqlServer("Server=localhost;Database=StockLabModelOnly;Integrated Security=true").Options);
+        var model = db.GetService<IDesignTimeModel>().Model;
+        var trade = model.FindEntityType("StockLab.Domain.Entities.AiTrade");
+        Assert.NotNull(trade);
+        Assert.Equal("AiTrades", trade.GetTableName());
+        Assert.Equal("Id", Assert.Single(trade.FindPrimaryKey()!.Properties).Name);
+        var fk = Assert.Single(trade.GetForeignKeys());
+        Assert.Equal("AiPortfolios", fk.PrincipalEntityType.GetTableName());
+        Assert.Equal(DeleteBehavior.NoAction, fk.DeleteBehavior);
+        Assert.True(trade.GetIndexes().Single(i => i.Properties.Select(p => p.Name)
+            .SequenceEqual(["AiTraderPortfolioId", "OrderId"])).IsUnique);
+        Assert.Equal("decimal(19,8)", trade.FindProperty("Quantity")!.GetColumnType());
+        Assert.Equal("nvarchar(32)", trade.FindProperty("Symbol")!.GetColumnType());
+        foreach (var name in new[] { "ExecutionPrice", "TotalAmount" })
+            Assert.Equal("decimal(19,4)", trade.FindProperty(name)!.GetColumnType());
+        Assert.Equal("datetime2(7)", trade.FindProperty("ExecutedAtUtc")!.GetColumnType());
+        foreach (var sql in new[] { "[Quantity] > 0", "[ExecutionPrice] > 0", "[TotalAmount] > 0", "[Side] IN ('BUY', 'SELL')" })
+            Assert.Contains(trade.GetCheckConstraints(), c => c.Sql == sql);
+        var assembly = db.GetService<IMigrationsAssembly>();
+        var definition = Assert.Single(assembly.Migrations, m => m.Key.EndsWith("_AddAiTrades"));
+        var migration = assembly.CreateMigration(definition.Value, db.Database.ProviderName!);
+        Assert.Equal("AiTrades", Assert.Single(migration.UpOperations.OfType<CreateTableOperation>()).Name);
+        Assert.All(migration.UpOperations, op => Assert.True(op is CreateTableOperation or CreateIndexOperation));
+        Assert.Equal("AiTrades", Assert.IsType<DropTableOperation>(Assert.Single(migration.DownOperations)).Name);
+        Assert.False(db.Database.HasPendingModelChanges());
+    }
+}
