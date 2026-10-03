@@ -11,6 +11,10 @@ public sealed class PortfolioService(
     StockLabDbContext dbContext,
     IMarketDataProvider marketDataProvider) : IPortfolioService
 {
+    // The shared market-data limiter allows 30 permits per minute by default.
+    // Reserve capacity for unrelated requests instead of letting one portfolio consume it all.
+    private const int MaxPerformanceQuoteLookups = 20;
+
     public Task<Guid?> GetPortfolioIdAsync(Guid userId, CancellationToken cancellationToken) =>
         dbContext.Portfolios
             .AsNoTracking()
@@ -55,6 +59,8 @@ public sealed class PortfolioService(
             .SingleOrDefaultAsync(row => row.UserId == userId, cancellationToken);
         if (portfolio is null)
             return null;
+        if (portfolio.Holdings.Count > MaxPerformanceQuoteLookups)
+            throw new PortfolioPerformanceUnavailableException();
 
         var positions = new List<PortfolioPerformancePosition>(portfolio.Holdings.Count);
         foreach (var holding in portfolio.Holdings.OrderBy(row => row.Symbol, StringComparer.Ordinal))

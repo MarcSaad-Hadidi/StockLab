@@ -12,7 +12,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
+using StockLab.Application.DTOs.MarketData;
+using StockLab.Application.Interfaces;
 using StockLab.Domain.Entities;
+using StockLab.Infrastructure.MarketData;
 using StockLab.Infrastructure.Persistence;
 
 namespace StockLab.UnitTests.Api;
@@ -206,6 +209,25 @@ public sealed class PortfolioApiTests
         Assert.Equal(0m, root.GetProperty("totalPnl").GetDecimal());
         Assert.Equal(0m, root.GetProperty("returnPercent").GetDecimal());
         Assert.Empty(root.GetProperty("positions").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Performance_rejects_portfolios_over_the_per_request_quote_budget()
+    {
+        var marketData = new CountingMarketDataProvider();
+        await using var fixture = await PortfolioFixture.CreateAsync(marketData);
+        var account = await CreateSignedInAccountAsync(fixture, "large-performance@example.com");
+        var positions = Enumerable.Range(0, 21)
+            .Select(index => ($"TEST{index}", 1m, 100m))
+            .ToArray();
+        await SeedPortfolioAsync(fixture, account.Id, 97_900m, "USD", positions);
+
+        using var response = await GetWithTokenAsync(fixture.Client, account.Token,
+            "/api/portfolio/performance");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("portfolio_performance_unavailable", await ErrorCodeAsync(response));
+        Assert.Equal(0, marketData.QuoteCalls);
     }
 
     [Fact]
@@ -539,7 +561,7 @@ public sealed class PortfolioApiTests
         public HttpClient Client { get; } = client;
         public IServiceScope CreateScope() => application.Services.CreateScope();
 
-        public static async Task<PortfolioFixture> CreateAsync()
+        public static async Task<PortfolioFixture> CreateAsync(IMarketDataProvider? marketDataProvider = null)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
@@ -562,6 +584,11 @@ public sealed class PortfolioApiTests
                     services.RemoveAll<StockLabDbContext>();
                     services.AddSingleton(options);
                     services.AddScoped<StockLabDbContext, SqlitePortfolioDbContext>();
+                    if (marketDataProvider is not null)
+                    {
+                        services.RemoveAll<IMarketDataProvider>();
+                        services.AddSingleton(marketDataProvider);
+                    }
                 });
             });
             try
@@ -595,5 +622,26 @@ public sealed class PortfolioApiTests
             modelBuilder.Entity<User>().Property(user => user.Version).ValueGeneratedNever();
             modelBuilder.Entity<Portfolio>().Property(portfolio => portfolio.Version).ValueGeneratedNever();
         }
+    }
+
+    private sealed class CountingMarketDataProvider : IMarketDataProvider
+    {
+        public int QuoteCalls { get; private set; }
+
+        public Task<StockQuote?> GetQuoteAsync(string symbol, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            QuoteCalls++;
+            return Task.FromResult<StockQuote?>(new StockQuote(
+                symbol, "USD", 100m, 0m, 0m, null, DateTimeOffset.UtcNow));
+        }
+
+        public Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(
+            string query, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<StockSearchResult>>(Array.Empty<StockSearchResult>());
+
+        public Task<StockHistory?> GetHistoryAsync(
+            StockHistoryRequest request, CancellationToken cancellationToken = default) =>
+            Task.FromResult<StockHistory?>(null);
     }
 }
