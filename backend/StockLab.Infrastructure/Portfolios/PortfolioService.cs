@@ -1,13 +1,30 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using StockLab.Application.DTOs.Portfolio;
+using StockLab.Application.Exceptions;
 using StockLab.Application.Interfaces;
+using StockLab.Infrastructure.MarketData;
 using StockLab.Infrastructure.Persistence;
 
 namespace StockLab.Infrastructure.Portfolios;
 
-public sealed class PortfolioService(StockLabDbContext dbContext) : IPortfolioService
+public sealed class PortfolioService(
+    StockLabDbContext dbContext,
+    IMarketDataProvider marketDataProvider,
+    IOptions<MarketDataRateLimitOptions> rateLimitOptions) : IPortfolioService
 {
+    // Keep capacity available for unrelated market-data requests. With the default limit of 30,
+    // this permits 20 quotes per portfolio request. Lower configured limits are respected so a
+    // single request never needs to span multiple limiter windows.
+    private const int DefaultMaxPerformanceQuoteLookups = 20;
+    private const int ReservedMarketDataPermits = 10;
+    private readonly int maxPerformanceQuoteLookups = CalculatePerformanceQuoteBudget(
+        rateLimitOptions.Value.PermitLimit);
+
+    private static int CalculatePerformanceQuoteBudget(int permitLimit) =>
+        Math.Min(DefaultMaxPerformanceQuoteLookups, Math.Max(1, permitLimit - ReservedMarketDataPermits));
+
     public Task<Guid?> GetPortfolioIdAsync(Guid userId, CancellationToken cancellationToken) =>
         dbContext.Portfolios
             .AsNoTracking()
@@ -41,6 +58,61 @@ public sealed class PortfolioService(StockLabDbContext dbContext) : IPortfolioSe
 
         return new PortfolioSummary(portfolio.CashBalance, portfolio.InitialCapital, investedValue,
             portfolio.CashBalance + investedValue, portfolio.Currency, positions);
+    }
+
+    public async Task<PortfolioPerformance?> GetPerformanceAsync(
+        Guid userId, CancellationToken cancellationToken)
+    {
+        var portfolio = await dbContext.Portfolios
+            .AsNoTracking()
+            .Include(row => row.Holdings)
+            .SingleOrDefaultAsync(row => row.UserId == userId, cancellationToken);
+        if (portfolio is null)
+            return null;
+        if (portfolio.Holdings.Count > maxPerformanceQuoteLookups)
+            throw new PortfolioPerformanceUnavailableException();
+
+        var positions = new List<PortfolioPerformancePosition>(portfolio.Holdings.Count);
+        foreach (var holding in portfolio.Holdings.OrderBy(row => row.Symbol, StringComparer.Ordinal))
+        {
+            var quote = await marketDataProvider.GetQuoteAsync(holding.Symbol, cancellationToken);
+            if (quote is null || quote.Price <= 0m
+                || !string.Equals(quote.Currency.Trim(), portfolio.Currency.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new PortfolioPerformanceUnavailableException(holding.Symbol);
+            }
+
+            var investedValue = holding.Quantity * holding.AverageCost;
+            var marketValue = holding.Quantity * quote.Price;
+            var pnl = marketValue - investedValue;
+            positions.Add(new PortfolioPerformancePosition(
+                holding.Symbol,
+                holding.Quantity,
+                holding.AverageCost,
+                quote.Price,
+                marketValue,
+                pnl,
+                pnl / investedValue * 100m));
+        }
+
+        var investedCapital = positions.Sum(position => position.Quantity * position.AverageCost);
+        var positionsMarketValue = positions.Sum(position => position.MarketValue);
+        var totalValue = portfolio.CashBalance + positionsMarketValue;
+        var totalPnl = totalValue - portfolio.InitialCapital;
+        var returnPercent = portfolio.InitialCapital == 0m
+            ? 0m
+            : totalPnl / portfolio.InitialCapital * 100m;
+
+        return new PortfolioPerformance(
+            portfolio.CashBalance,
+            portfolio.InitialCapital,
+            investedCapital,
+            positionsMarketValue,
+            totalValue,
+            totalPnl,
+            returnPercent,
+            portfolio.Currency,
+            positions.ToArray());
     }
 
     public async Task<TransactionHistory?> GetTransactionHistoryAsync(

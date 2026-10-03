@@ -7,6 +7,9 @@ public interface IPortfolioService
     /// <summary>Reads the authenticated user's portfolio, or null when none exists.</summary>
     Task<PortfolioSummary?> GetPortfolioAsync(Guid userId, CancellationToken cancellationToken);
 
+    /// <summary>Values the authenticated user's portfolio with current market quotes.</summary>
+    Task<PortfolioPerformance?> GetPerformanceAsync(Guid userId, CancellationToken cancellationToken);
+
     /// <summary>Gets the authenticated user's portfolio identifier, or null when none exists.</summary>
     Task<Guid?> GetPortfolioIdAsync(Guid userId, CancellationToken cancellationToken);
 
