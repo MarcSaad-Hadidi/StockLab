@@ -59,6 +59,7 @@ export type WatchlistItem = {
 }
 
 export type Transaction = {
+  id: string
   symbol: string
   company: string
   type: 'Buy' | 'Sell'
