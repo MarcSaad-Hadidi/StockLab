@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
@@ -221,6 +222,25 @@ public sealed class PortfolioApiTests
             .Select(index => ($"TEST{index}", 1m, 100m))
             .ToArray();
         await SeedPortfolioAsync(fixture, account.Id, 97_900m, "USD", positions);
+
+        using var response = await GetWithTokenAsync(fixture.Client, account.Token,
+            "/api/portfolio/performance");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("portfolio_performance_unavailable", await ErrorCodeAsync(response));
+        Assert.Equal(0, marketData.QuoteCalls);
+    }
+
+    [Fact]
+    public async Task Performance_uses_the_configured_rate_limit_when_bounding_quote_lookups()
+    {
+        var marketData = new CountingMarketDataProvider();
+        await using var fixture = await PortfolioFixture.CreateAsync(marketData, marketDataPermitLimit: 8);
+        var account = await CreateSignedInAccountAsync(fixture, "low-rate-performance@example.com");
+        var positions = Enumerable.Range(0, 9)
+            .Select(index => ($"LOW{index}", 1m, 100m))
+            .ToArray();
+        await SeedPortfolioAsync(fixture, account.Id, 99_100m, "USD", positions);
 
         using var response = await GetWithTokenAsync(fixture.Client, account.Token,
             "/api/portfolio/performance");
@@ -561,22 +581,29 @@ public sealed class PortfolioApiTests
         public HttpClient Client { get; } = client;
         public IServiceScope CreateScope() => application.Services.CreateScope();
 
-        public static async Task<PortfolioFixture> CreateAsync(IMarketDataProvider? marketDataProvider = null)
+        public static async Task<PortfolioFixture> CreateAsync(
+            IMarketDataProvider? marketDataProvider = null,
+            int? marketDataPermitLimit = null)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
             var options = new DbContextOptionsBuilder<StockLabDbContext>().UseSqlite(connection).Options;
             var application = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             {
-                builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
-                    new Dictionary<string, string?>
+                builder.ConfigureAppConfiguration((_, configuration) =>
+                {
+                    var settings = new Dictionary<string, string?>
                     {
                         ["ConnectionStrings:StockLab"] = "Server=localhost;Database=PortfolioTestsNeverUsed;Integrated Security=true;TrustServerCertificate=true",
                         ["Jwt:Issuer"] = TestIssuer,
                         ["Jwt:Audience"] = TestAudience,
                         ["Jwt:SigningKey"] = TestSigningKey,
                         ["MarketData:Provider"] = "Mock"
-                    }));
+                    };
+                    if (marketDataPermitLimit is not null)
+                        settings["MarketDataRateLimit:PermitLimit"] = marketDataPermitLimit.Value.ToString(CultureInfo.InvariantCulture);
+                    configuration.AddInMemoryCollection(settings);
+                });
                 builder.ConfigureTestServices(services =>
                 {
                     services.RemoveAll<DbContextOptions<StockLabDbContext>>();
