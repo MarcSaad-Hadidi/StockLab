@@ -6,7 +6,8 @@ resources. Those implementations belong to their respective issues.
 
 ## Conventions and boundaries
 
-- `Id` is a `uniqueidentifier` primary key on every table.
+- `Id` is a `uniqueidentifier` primary key; `AiRejectedDecisions` instead uses its
+  original `AiDecisionId` as both primary key and foreign key.
 - Columns are required unless marked `NULL`. Dates use `datetime2(7)` in UTC.
 - Monetary amounts and prices use `decimal(19,4)`; share quantities use
   `decimal(19,8)` to permit fractional shares. Floating-point types are excluded.
@@ -41,6 +42,7 @@ erDiagram
     AiPortfolios ||--o{ AiTrades : records
     AiPortfolios ||--o{ AiPortfolioSnapshots : values
     ModelVersions ||--o{ Backtests : evaluates
+    AiDecisions ||--o| AiRejectedDecisions : "risk rejection #70"
     AiDecisions ||..o{ AiTrades : "future #72 association"
 ```
 
@@ -239,9 +241,33 @@ and accepted symbol casing are preserved. Same ID + identical canonical payload
 replays the original timestamp; a changed payload conflicts, including changed
 model version. The PK enforces concurrent idempotency. No default version is used.
 Reads order by DecisionDate, RecordedAtUtc, Id descending with a limit of 1..200.
-Rejection records (#70), trade associations (#72) and actual model version lifecycle
-(#75) remain future work. This implementation supersedes the original #20 target
+Rejection records (#70) now reference this table. Trade associations (#72) and
+actual model version lifecycle (#75) remain future work. This implementation supersedes the original #20 target
 that combined risk outcome fields and portfolio/model references with ML history.
+
+### AiRejectedDecisions (implemented by #70)
+
+| Column | Type / constraint |
+| --- | --- |
+| AiDecisionId | `uniqueidentifier` PK and FK to AiDecisions.Id; no generated ID; NO ACTION on delete |
+| RejectionReason | Required `varchar(64)`, exact existing `AiRiskRejectionReason` code |
+| RejectedAtUtc | Required `datetime2(7)`, backend TimeProvider UTC timestamp |
+
+Each raw decision has zero or one rejection. This table stores no copy of symbol,
+signal, confidence, decision date, model name/version, requested price or financial
+data. DTO reads join the original decision in one bounded SQL query. The CHECK
+constraint permits exactly InvalidDecision, InvalidPrice, HoldSignal, LowConfidence,
+CurrencyMismatch, MaxPositionsReached, MaxSymbolExposureReached, InsufficientCash,
+NoPositionToSell and TradeTooSmall; SQL Server binary collation and byte-length
+checks reject changed casing or padding. The application requires a rejected risk
+outcome, defined reason and zero approved quantity, and validates exact symbol,
+signal and confidence against an existing raw decision before writing or replaying.
+
+History is append-only: same ID/reason replays the original timestamp, a changed
+reason conflicts, and PK races reload the single winner. Reads order by
+RejectedAtUtc, AiDecisions.DecisionDate and AiDecisionId descending, with limits
+1..200. Risk and execution are not invoked and existing user/AI data is unchanged.
+The migration adds only this table and its index; Down drops only this table.
 
 ### AiTrades
 
@@ -310,6 +336,7 @@ Besides primary keys and the unique indexes specified above:
 | Transactions | (PortfolioId, ExecutedAtUtc, Id), (PortfolioId, Symbol, ExecutedAtUtc), (PortfolioId, Side, ExecutedAtUtc): scoped history and filters |
 | PriceAlerts | (UserId, Status), filtered (Symbol, Currency) where Status = 'Active': user lists and grouped monitoring |
 | AiDecisions | (DecisionDate, RecordedAtUtc, Id): bounded newest-first ML history |
+| AiRejectedDecisions | (RejectedAtUtc, AiDecisionId): bounded rejection history joined to the raw decision |
 | AiTrades | (AiPortfolioId, ExecutedAtUtc, Id): trade history |
 | Backtests | (ModelVersionId, CreatedAtUtc): model evaluations |
 

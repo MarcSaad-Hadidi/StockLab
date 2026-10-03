@@ -16,12 +16,16 @@ public class StockLabDbContext(DbContextOptions<StockLabDbContext> options) : Db
     public DbSet<AiTraderPosition> AiTraderPositions => Set<AiTraderPosition>();
     public DbSet<AiTrade> AiTrades => Set<AiTrade>();
     public DbSet<AiDecision> AiDecisions => Set<AiDecision>();
+    public DbSet<AiRejectedDecision> AiRejectedDecisions => Set<AiRejectedDecision>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(StockLabDbContext).Assembly);
         if (Database.IsSqlServer())
+        {
             AiDecisionConfiguration.ConfigureSqlServerSignal(modelBuilder.Entity<AiDecision>());
+            AiRejectedDecisionConfiguration.ConfigureSqlServerReason(modelBuilder.Entity<AiRejectedDecision>());
+        }
     }
 }
