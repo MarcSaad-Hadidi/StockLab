@@ -13,6 +13,7 @@ public class StockLabDbContext(DbContextOptions<StockLabDbContext> options) : Db
     public DbSet<PriceAlert> PriceAlerts => Set<PriceAlert>();
     public DbSet<AiTraderPortfolio> AiTraderPortfolios => Set<AiTraderPortfolio>();
     public DbSet<AiTraderPosition> AiTraderPositions => Set<AiTraderPosition>();
+    public DbSet<AiTrade> AiTrades => Set<AiTrade>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

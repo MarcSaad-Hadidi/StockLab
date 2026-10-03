@@ -65,6 +65,7 @@ builder.Services.AddPaperTrading();
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddAiTraderPortfolio();
 builder.Services.AddAiRiskManager(builder.Configuration);
+builder.Services.AddAiTradeExecution();
 builder.Services.AddOptions<JwtOptions>()
     .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
     .Validate(options => options.IsValid(), JwtOptions.ValidationMessage)

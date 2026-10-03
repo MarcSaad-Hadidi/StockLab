@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using StockLab.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using StockLab.Infrastructure.Persistence;
 namespace StockLab.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(StockLabDbContext))]
-    partial class StockLabDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260928190924_AddAiTrades")]
+    partial class AddAiTrades
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -340,26 +343,14 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("ExecutionPrice")
                         .HasColumnType("decimal(19,4)");
 
-                    b.Property<decimal?>("LimitPrice")
-                        .HasColumnType("decimal(19,4)");
-
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("OrderType")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("varchar(6)")
-                        .HasDefaultValue("market");
 
                     b.Property<Guid>("PortfolioId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(19,8)");
-
-                    b.Property<string>("RequestedSymbol")
-                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("Side")
                         .IsRequired()
@@ -386,8 +377,6 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                     b.ToTable("Transactions", null, t =>
                         {
                             t.HasCheckConstraint("CK_Transactions_ExecutionPrice", "[ExecutionPrice] > 0");
-
-                            t.HasCheckConstraint("CK_Transactions_OrderType", "[OrderType] IN ('market', 'limit')");
 
                             t.HasCheckConstraint("CK_Transactions_Quantity", "[Quantity] > 0");
 
