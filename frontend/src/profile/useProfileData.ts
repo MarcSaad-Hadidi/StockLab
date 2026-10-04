@@ -3,6 +3,7 @@ import { profileApi, ProfileApiError, type ProfileErrorCode, type UpdateProfileR
 import { portfolioApi } from '../api/portfolioApi'
 import { authStorageKey, clearAuthSession, getAuthSession, saveAuthSession, type AuthSession } from '../auth/authStorage'
 
+// Keep the token check for responses issued before a new login.
 const sameSession = (expected: AuthSession | null) => {
   const current = getAuthSession()
   return expected !== null && current !== null
@@ -24,6 +25,7 @@ export function useProfileData() {
   const savingRef = useRef(false)
   const saveController = useRef<AbortController | null>(null)
   const loadController = useRef<AbortController | null>(null)
+  const synchronizeSession = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -34,8 +36,9 @@ export function useProfileData() {
     function invalidateSession() {
       const expected = sessionRef.current
       const current = getAuthSession()
-      if (sameSession(expected)) {
-        if (expected!.user.displayName === current!.user.displayName && expected!.user.email === current!.user.email) return
+      if (expected && current && expected.user.id === current.user.id) {
+        if (expected.accessToken === current.accessToken
+          && expected.user.displayName === current.user.displayName && expected.user.email === current.user.email) return
         controller.abort()
         saveController.current?.abort()
         savingRef.current = false
@@ -58,6 +61,7 @@ export function useProfileData() {
       setLoadError('unauthorized')
       setSaving(false)
     }
+    synchronizeSession.current = invalidateSession
     const onStorage = (event: StorageEvent) => {
       if (event.key === authStorageKey || event.key === null) invalidateSession()
     }
@@ -102,6 +106,7 @@ export function useProfileData() {
       saveController.current?.abort()
       window.removeEventListener('storage', onStorage)
       window.removeEventListener('focus', invalidateSession)
+      if (synchronizeSession.current === invalidateSession) synchronizeSession.current = null
     }
   }, [revision])
 
@@ -109,12 +114,12 @@ export function useProfileData() {
     if (savingRef.current || !profile) return false
     const session = sessionRef.current
     if (!sameSession(session)) {
-      setProfile(null); setCapital(null); setLoadError('unauthorized')
+      synchronizeSession.current?.()
       return false
     }
     const currentSession = getAuthSession()!
     if (session!.user.displayName !== currentSession.user.displayName || session!.user.email !== currentSession.user.email) {
-      window.dispatchEvent(new window.Event('focus'))
+      synchronizeSession.current?.()
       return false
     }
     const controller = new AbortController()
@@ -127,13 +132,13 @@ export function useProfileData() {
       const result = await profileApi.updateProfile(request, controller.signal)
       if (controller.signal.aborted) return false
       if (!sameSession(session)) {
-        setProfile(null); setCapital(null); setLoadError('unauthorized')
+        synchronizeSession.current?.()
         return false
       }
       if (result.id !== session!.user.id) throw new ProfileApiError(502, 'invalid_response')
       const current = getAuthSession()!
       if (session!.user.displayName !== current.user.displayName || session!.user.email !== current.user.email) {
-        window.dispatchEvent(new window.Event('focus'))
+        synchronizeSession.current?.()
         return false
       }
       setProfile(result)
@@ -142,7 +147,8 @@ export function useProfileData() {
       return true
     } catch (error) {
       if (!controller.signal.aborted) {
-        if (errorCode(error) === 'unauthorized' || !sameSession(session)) {
+        if (!sameSession(session)) { synchronizeSession.current?.(); return false }
+        if (errorCode(error) === 'unauthorized') {
           if (sameSession(session)) clearAuthSession()
           loadController.current?.abort()
           setProfile(null); setCapital(null); setLoadError('unauthorized')

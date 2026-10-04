@@ -203,10 +203,8 @@ for (const trigger of ['storage', 'focus', 'save'] as const) {
     const get = t.mock.method(profileApi, 'getProfile', async () => persisted)
     const put = t.mock.method(profileApi, 'updateProfile', async (request) => ({ ...persisted, ...request }))
     t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
-    let state: ReturnType<typeof useProfileData>
-    function Probe() { state = useProfileData(); return null }
     const { default: Page } = await import('../src/profile/ProfilePage.tsx')
-    const view = await mount(React.createElement(React.Fragment, null, React.createElement(Probe), React.createElement(Page)))
+    const view = await mount(React.createElement(Page))
     try {
       const edit = Array.from(view.container.querySelectorAll('button')).find(button => button.textContent === 'Edit Profile')!
       await act(async () => edit.click())
@@ -216,11 +214,10 @@ for (const trigger of ['storage', 'focus', 'save'] as const) {
       await act(async () => {
         if (trigger === 'storage') window.dispatchEvent(new dom.window.StorageEvent('storage', { key: authStorageKey }))
         else if (trigger === 'focus') window.dispatchEvent(new dom.window.Event('focus'))
-        else assert.equal(await state.save({ displayName: user.displayName, email: user.email }), false)
+        else view.container.querySelector('#profile-form')!.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }))
       })
-      assert.equal(state!.profile?.displayName, persisted.displayName)
-      assert.equal(state!.profile?.email, persisted.email)
-      assert.equal(state!.loadError, null)
+      assert.match(view.container.textContent!, /elsewhere@example.com/)
+      assert.equal(view.container.querySelector('[role="alert"]'), null)
       assert.equal(put.mock.callCount(), 0)
       assert.equal(view.container.querySelector('h1')!.textContent, persisted.displayName)
       assert.equal(view.container.querySelector('input[aria-label="Full Name"]'), null)
@@ -278,4 +275,76 @@ for (const code of ['email_already_registered', 'validation_error', 'offline'] a
       assert.doesNotMatch(view.container.textContent!, /Your profile has been saved/)
     } finally { await view.close() }
   })
+}
+
+for (const trigger of ['storage', 'focus', 'save'] as const) {
+  test(`a same-account token rotation reloads on ${trigger} using the current credentials`, async (t) => {
+    seed()
+    const tokens: (string | undefined)[] = []
+    t.mock.method(profileApi, 'getProfile', async () => { tokens.push(getAuthSession()?.accessToken); return profile })
+    t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+    const put = t.mock.method(profileApi, 'updateProfile', async request => ({ ...profile, ...request }))
+    let state: ReturnType<typeof useProfileData>
+    function Probe() { state = useProfileData(); return null }
+    const view = await mount(React.createElement(Probe))
+    try {
+      saveAuthSession({ ...session, accessToken: 'rotated-token' })
+      await act(async () => {
+        if (trigger === 'storage') window.dispatchEvent(new dom.window.StorageEvent('storage', { key: authStorageKey }))
+        else if (trigger === 'focus') window.dispatchEvent(new dom.window.Event('focus'))
+        else assert.equal(await state.save({ displayName: 'Stale Draft', email: user.email }), false)
+      })
+      assert.deepEqual(tokens, [session.accessToken, 'rotated-token'])
+      assert.equal(state!.loadError, null)
+      assert.equal(state!.loading, false)
+      assert.equal(state!.profile?.id, user.id)
+      assert.equal(state!.capital?.currency, 'CAD')
+      assert.equal(put.mock.callCount(), 0)
+      await act(async () => { assert.equal(await state.save({ displayName: 'Fresh Draft', email: user.email }), true) })
+      assert.equal(state!.profile?.displayName, 'Fresh Draft')
+      assert.equal(getAuthSession()?.accessToken, 'rotated-token')
+    } finally { await view.close() }
+  })
+}
+
+for (const operation of ['load', 'save'] as const) {
+  for (const outcome of ['success', 'unauthorized'] as const) {
+    test(`a late ${operation} ${outcome} cannot invalidate or overwrite a rotated token`, async (t) => {
+      seed()
+      let resolve!: (value: typeof profile) => void
+      let reject!: (error: Error) => void
+      const pending = new Promise<typeof profile>((ok, fail) => { resolve = ok; reject = fail })
+      let calls = 0
+      const tokens: (string | undefined)[] = []
+      t.mock.method(profileApi, 'getProfile', async () => {
+        tokens.push(getAuthSession()?.accessToken)
+        if (operation === 'load' && calls++ === 0) return pending
+        return profile
+      })
+      t.mock.method(profileApi, 'updateProfile', () => pending)
+      t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+      let state: ReturnType<typeof useProfileData>
+      function Probe() { state = useProfileData(); return null }
+      const view = await mount(React.createElement(Probe))
+      try {
+        let saving: Promise<boolean> | undefined
+        if (operation === 'save') await act(async () => { saving = state.save({ displayName: 'Old Token Result', email: user.email }) })
+        saveAuthSession({ ...session, accessToken: 'rotated-token' })
+        // No storage/focus notification: the response guard must detect the new login itself.
+        await act(async () => {
+          if (outcome === 'success') resolve({ ...profile, displayName: 'Old Token Result' })
+          else reject(new ProfileApiError(401, 'unauthorized'))
+          if (saving) assert.equal(await saving, false)
+        })
+        assert.deepEqual(tokens, [session.accessToken, 'rotated-token'])
+        assert.equal(getAuthSession()?.accessToken, 'rotated-token')
+        assert.equal(getAuthSession()?.user.displayName, user.displayName)
+        assert.equal(state!.profile?.displayName, user.displayName)
+        assert.equal(state!.loadError, null)
+        assert.equal(state!.saveError, null)
+        assert.equal(state!.loading, false)
+        assert.equal(state!.saving, false)
+      } finally { await view.close() }
+    })
+  }
 }
