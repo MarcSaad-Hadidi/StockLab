@@ -5,9 +5,9 @@ import { routeFor } from '../navigation/routes'
 import { clearAuthSession } from '../auth/authStorage'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { initialProfile, type ProfileData } from './profileData'
+import { useProfileData } from './useProfileData'
+import type { UpdateProfileRequest, UserProfile } from '../api/profileApi'
 import './profile.css'
-
 type IconName =
   | 'activity'
   | 'bell'
@@ -67,91 +67,81 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   return <svg aria-hidden="true" className="icon" height={size} viewBox="0 0 24 24" width={size}>{paths[name]}</svg>
 }
 
-type ProfileOption = { label: string; value: string }
-
-function ProfileField({ label, value, editing, type = 'text', options, onChange, onEdit, readOnly = false }: { label: string; value: string; editing: boolean; type?: 'text' | 'email' | 'password' | 'select'; options?: ProfileOption[]; onChange?: (value: string) => void; onEdit: () => void; readOnly?: boolean }) {
+function ProfileField({ label, value, editing = false, type = 'text', onChange, onEdit, disabled = false, error = false }: {
+  label: string; value: string; editing?: boolean; type?: 'text' | 'email'
+  onChange?: (value: string) => void; onEdit?: () => void; disabled?: boolean; error?: boolean
+}) {
   const { t } = useTranslation()
-  const isSelect = type === 'select' && options !== undefined
-  const fieldControl = isSelect ? <select aria-label={label} onChange={(event) => onChange?.(event.target.value)} required value={value}>{options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : <input aria-label={label} onChange={(event) => onChange?.(event.target.value)} required type={type} value={value} />
-  return <div className="profile-info-row"><span className="profile-info-label">{label}</span>{isSelect ? fieldControl : editing && !readOnly ? fieldControl : <strong>{value}</strong>}<button aria-label={t('common.editField', { field: label })} className="row-edit-button" onClick={onEdit} type="button"><Icon name="edit" size={14} /></button></div>
+  return <div className="profile-info-row">
+    <span className="profile-info-label">{label}</span>
+    {editing && onChange ? <input aria-invalid={error} aria-label={label} disabled={disabled}
+      maxLength={type === 'email' ? 254 : 100} onChange={event => onChange(event.target.value)}
+      required type={type} value={value} /> : <strong title={value}>{value}</strong>}
+    <button aria-label={t('common.editField', { field: label })} className="row-edit-button"
+      disabled={disabled || !onEdit} onClick={onEdit} title={!onEdit ? t('businessData.unavailable') : undefined}
+      type="button"><Icon name="edit" size={14} /></button>
+  </div>
 }
 
-function PreferenceToggle({ label, description, enabled, onChange }: { label: string; description: string; enabled: boolean; onChange: () => void }) {
-  return <div className="preference-row"><div><strong>{label}</strong><small>{description}</small></div><button aria-checked={enabled} aria-label={label} className={`toggle ${enabled ? 'toggle-on' : ''}`} onClick={onChange} role="switch" type="button"><span /></button></div>
-}
-
-function PasswordModal({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
+function UnavailablePreference({ label, description }: { label: string; description: string }) {
   const { t } = useTranslation()
-  const [error, setError] = useState('')
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    const password = String(form.get('new-password') ?? '')
-    const confirmation = String(form.get('confirm-password') ?? '')
-    if (password.length < 8) { setError('profile.passwordModal.shortPassword'); return }
-    if (password !== confirmation) { setError('profile.passwordModal.mismatch'); return }
-    onSave()
-  }
-
-  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="password-title" aria-modal="true" className="password-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label={t('profile.passwordModal.close')} className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="modal-icon"><Icon name="lock" size={20} /></div><h2 id="password-title">{t('profile.passwordModal.title')}</h2><p>{t('profile.passwordModal.description')}</p><form onSubmit={submit}><label htmlFor="current-password">{t('profile.passwordModal.currentPassword')}</label><input id="current-password" name="current-password" required type="password" /><label htmlFor="new-password">{t('profile.passwordModal.newPassword')}</label><input id="new-password" minLength={8} name="new-password" required type="password" /><label htmlFor="confirm-password">{t('profile.passwordModal.confirmPassword')}</label><input id="confirm-password" minLength={8} name="confirm-password" required type="password" />{error && <div className="form-error" role="alert">{t(error)}</div>}<div className="modal-actions"><button className="cancel-button" onClick={onClose} type="button">{t('common.cancel')}</button><button className="modal-primary" type="submit">{t('profile.passwordModal.save')}</button></div></form></section></div>
+  return <div className="preference-row"><div><strong>{label}</strong><small>{description}</small></div>
+    <span aria-label={t('businessData.unavailable')} className="profile-unavailable">—</span></div>
 }
 
 export default function ProfilePage() {
   const { i18n, t } = useTranslation()
-  useEffect(() => {
-    document.title = `${t('profile.title')} | StockLab`
-  }, [i18n.language, t])
-  const [profile, setProfile] = useState<ProfileData>(initialProfile)
-  const [draft, setDraft] = useState<ProfileData>(initialProfile)
-  const [editing, setEditing] = useState(false)
-  const [passwordModalOpen, setPasswordModalOpen] = useState(false)
+  useEffect(() => { document.title = `${t('profile.title')} | StockLab` }, [i18n.language, t])
+  const { profile, capital, loading, loadError, saveError, fieldErrors, saving, sessionWarning, save, reload, clearSaveErrors } = useProfileData()
+  const [draft, setDraft] = useState<UpdateProfileRequest>({ displayName: '', email: '' })
+  const [editingProfile, setEditingProfile] = useState<UserProfile | null>(null)
+  const editing = profile !== null && editingProfile === profile
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [toast, setToast] = useState<{ key: string; options?: { count: number } }>({ key: '' })
-  const [preferences, setPreferences] = useState({ email: true, alerts: true, marketing: false, currency: 'USD ($)', darkMode: false })
-  const countryOptions = ['us', 'ca', 'gb', 'fr', 'de', 'au', 'jp'].map((value) => ({ label: t(`profile.countries.${value}`), value }))
-  const timezoneOptions = ['americaPacific', 'americaMountain', 'americaCentral', 'americaEasternStandard', 'americaEasternDaylight', 'greenwich', 'europeCentral', 'japan'].map((value) => ({ label: t(`profile.timezones.${value}`), value }))
+  const [saved, setSaved] = useState(false)
+  const canEdit = profile !== null && !loading && !saving && loadError === null
+  const nameError = Object.keys(fieldErrors).some(key => key.toLowerCase() === 'displayname')
+  const emailError = saveError === 'email_already_registered' || Object.keys(fieldErrors).some(key => key.toLowerCase() === 'email')
 
-  const showToast = (key: string, options?: { count: number }) => {
-    setToast({ key, options })
-    window.setTimeout(() => setToast({ key: '' }), 2300)
+  const beginEditing = () => {
+    if (!canEdit || editing) return
+    clearSaveErrors()
+    setDraft({ displayName: profile.displayName, email: profile.email })
+    setSaved(false)
+    setEditingProfile(profile)
   }
+  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!canEdit || !draft.displayName.trim()) return
+    setSaved(false)
+    if (await save(draft)) { setEditingProfile(null); setSaved(true) }
+  }
+  const logout = () => { clearAuthSession(); window.location.assign(routeFor('logout')) }
 
-  const beginEditing = () => { setDraft(profile); setEditing(true) }
-  const cancelEditing = () => { setDraft(profile); setEditing(false) }
-  const saveProfile = (event?: FormEvent<HTMLFormElement>) => {
-    event?.preventDefault()
-    setProfile(draft)
-    setEditing(false)
-    showToast('profile.profileSavedToast')
-  }
-  const updatePreference = (key: 'email' | 'alerts' | 'marketing' | 'darkMode') => setPreferences((current) => ({ ...current, [key]: !current[key] }))
-  const logout = () => {
-    clearAuthSession()
-    window.location.assign(routeFor('logout'))
-  }
-
-  const updateDraftField = (key: 'name' | 'email' | 'phone' | 'country' | 'timezone', value: string, commitImmediately = false) => {
-    setDraft((current) => ({ ...current, [key]: value }))
-    if (commitImmediately) setProfile((current) => ({ ...current, [key]: value }))
-  }
-
-  return <div className={`profile-page stocklab-layout ${preferences.darkMode ? 'dark-mode' : ''}`}>
+  return <div className="profile-page stocklab-layout">
     <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
     <main className="profile-main">
       <TopBar onMenuOpen={() => setSidebarOpen(true)} title={t('profile.title')} />
-      <div className="profile-content"><p role="status">{t('businessData.profileDemo')}</p>
+      <div className="profile-content" aria-busy={loading}>
+        {loading && <p className="profile-feedback" role="status">{t('profile.loading')}</p>}
+        {loadError && <div className="profile-feedback form-error" role="alert">
+          <p>{t(`profile.errors.${loadError}`)}</p>
+          {loadError === 'unauthorized' ? <a href={routeFor('login')}>{t('profile.signIn')}</a>
+            : <button className="cancel-button" onClick={() => { setEditingProfile(null); setSaved(false); reload() }} type="button">{t('marketApi.retry')}</button>}
+        </div>}
+        {sessionWarning && <p className="profile-feedback form-error" role="alert">{t('profile.sessionWarning')}</p>}
         <section aria-labelledby="profile-summary-title" className="profile-summary-card">
-          <div className="summary-identity"><div><h1 id="profile-summary-title">{profile.name}</h1><p>{profile.email}</p><span className="verified-badge"><i /> {t('profile.verifiedAccount')}</span></div></div>
+          <div className="summary-identity"><div><h1 id="profile-summary-title" title={profile?.displayName}>{profile?.displayName ?? '—'}</h1><p title={profile?.email}>{profile?.email ?? '—'}</p></div></div>
           <div className="summary-details">
-            <div><span><Icon name="activity" size={15} /> {t('profile.memberSince')}</span><strong>{formatDate(profile.createdAt)}</strong></div>
-            <div><span><Icon name="activity" size={15} /> {t('profile.accountCreated')}</span><strong>{formatDate(profile.createdAt)}</strong></div>
-            <div><span><Icon name="activity" size={15} /> {t('profile.initialCapital')}</span><strong>{formatCurrency(profile.initialCapital)}</strong></div>
-            <div><span>{t('profile.accountStatus')}</span><strong className={`account-status-text ${profile.status === 'active' ? 'status-active' : 'status-inactive'}`}>{t(`profile.${profile.status}`)}</strong></div>
+            <div><span>{t('profile.memberSince')}</span><strong>{profile ? formatDate(profile.createdAtUtc) : '—'}</strong></div>
+            <div><span>{t('profile.accountCreated')}</span><strong>{profile ? formatDate(profile.createdAtUtc) : '—'}</strong></div>
+            <div><span>{t('profile.initialCapital')}</span><strong>{formatCurrency(capital?.initialCapital, i18n.language, 2, capital?.currency)}</strong></div>
+            <div><span>{t('profile.accountStatus')}</span><strong title={t('businessData.unavailable')}>—</strong></div>
           </div>
           <div className="summary-actions">
-            <button className="summary-primary" onClick={() => editing ? saveProfile() : beginEditing()} type="button"><Icon name="edit" size={14} /> {editing ? t('profile.saveProfile') : t('profile.editProfile')}</button>
-            <button className="summary-secondary" onClick={() => setPasswordModalOpen(true)} type="button"><Icon name="lock" size={14} /> {t('profile.changePassword')}</button>
-            <button className="summary-logout" onClick={logout} type="button"><Icon name="logout" size={14} /> {t('profile.logOut')}</button>
+            {editing ? <button key="save" className="summary-primary" disabled={!canEdit || !draft.displayName.trim()} form="profile-form" type="submit"><Icon name="edit" size={14} />{t(saving ? 'profile.saving' : 'profile.saveProfile')}</button>
+              : <button key="edit" className="summary-primary" disabled={!canEdit} onClick={beginEditing} type="button"><Icon name="edit" size={14} />{t('profile.editProfile')}</button>}
+            <button className="summary-secondary" disabled title={t('businessData.unavailable')} type="button"><Icon name="lock" size={14} />{t('profile.changePassword')}</button>
+            <button className="summary-logout" onClick={logout} type="button"><Icon name="logout" size={14} />{t('profile.logOut')}</button>
           </div>
         </section>
         <div className="profile-grid">
@@ -159,38 +149,45 @@ export default function ProfilePage() {
             <div className="panel-heading"><div><h2 id="personal-info-title">{t('profile.personalInformation')}</h2><p>{t('profile.personalInformationDescription')}</p></div></div>
             <form id="profile-form" onSubmit={saveProfile}>
               <div className="profile-info-list">
-                <ProfileField editing={editing} label={t('profile.fullName')} onChange={(value) => updateDraftField('name', value)} onEdit={beginEditing} value={draft.name} />
-                <ProfileField editing={editing} label={t('profile.emailAddress')} onChange={(value) => updateDraftField('email', value)} onEdit={beginEditing} type="email" value={draft.email} />
-                <ProfileField editing={false} label={t('profile.password')} onEdit={() => setPasswordModalOpen(true)} readOnly value="••••••••••••" />
-                <ProfileField editing={editing} label={t('profile.phoneNumber')} onChange={(value) => updateDraftField('phone', value)} onEdit={beginEditing} value={draft.phone} />
-                <ProfileField editing={editing} label={t('profile.country')} onChange={(value) => updateDraftField('country', value, !editing)} onEdit={beginEditing} options={countryOptions} type="select" value={draft.country} />
-                <ProfileField editing={editing} label={t('profile.timeZone')} onChange={(value) => updateDraftField('timezone', value, !editing)} onEdit={beginEditing} options={timezoneOptions} type="select" value={draft.timezone} />
+                <ProfileField disabled={!canEdit} editing={editing && profile !== null} error={nameError} label={t('profile.fullName')}
+                  onChange={displayName => { clearSaveErrors('displayName'); setDraft(current => ({ ...current, displayName })) }} onEdit={beginEditing} value={editing && profile ? draft.displayName : profile?.displayName ?? '—'} />
+                <ProfileField disabled={!canEdit} editing={editing && profile !== null} error={emailError} label={t('profile.emailAddress')}
+                  onChange={email => { clearSaveErrors('email'); setDraft(current => ({ ...current, email })) }} onEdit={beginEditing} type="email" value={editing && profile ? draft.email : profile?.email ?? '—'} />
+                <ProfileField label={t('profile.password')} value={profile ? '••••••••••••' : '—'} />
+                <ProfileField label={t('profile.phoneNumber')} value="—" />
+                <ProfileField label={t('profile.country')} value="—" />
+                <ProfileField label={t('profile.timeZone')} value="—" />
               </div>
-              {editing && <div className="form-actions"><button className="cancel-button" onClick={cancelEditing} type="button">{t('common.cancel')}</button><button className="modal-primary" type="submit">{t('common.saveChanges')}</button></div>}
+              {editing && saveError && <div className="profile-feedback form-error" role="alert"><p>{t(`profile.errors.${saveError}`)}</p>
+                {saveError === 'profile_update_conflict' && <button className="cancel-button" onClick={() => { setEditingProfile(null); reload() }} type="button">{t('marketApi.retry')}</button>}
+              </div>}
+              {editing && profile && <div className="form-actions">
+                <button className="cancel-button" disabled={saving} onClick={() => { setEditingProfile(null); setSaved(false) }} type="button">{t('common.cancel')}</button>
+                <button className="modal-primary" disabled={!canEdit || !draft.displayName.trim()} type="submit">{t(saving ? 'profile.saving' : 'common.saveChanges')}</button>
+              </div>}
+              {saved && profile && <p className="profile-saved" role="status">{t('profile.profileSavedToast')}</p>}
             </form>
           </section>
           <section aria-labelledby="preferences-title" className="panel preferences-panel">
             <div className="panel-heading"><div><h2 id="preferences-title">{t('profile.preferences')}</h2><p>{t('profile.preferencesDescription')}</p></div></div>
             <div className="preferences-list">
-              <PreferenceToggle description={t('profile.emailNotificationsDescription')} enabled={preferences.email} label={t('profile.emailNotifications')} onChange={() => updatePreference('email')} />
-              <PreferenceToggle description={t('profile.tradeAlertsDescription')} enabled={preferences.alerts} label={t('profile.tradeAlerts')} onChange={() => updatePreference('alerts')} />
-              <PreferenceToggle description={t('profile.marketingCommunicationsDescription')} enabled={preferences.marketing} label={t('profile.marketingCommunications')} onChange={() => updatePreference('marketing')} />
-              <div className="preference-row select-row"><div><strong>{t('profile.preferredCurrency')}</strong><small>{t('profile.preferredCurrencyDescription')}</small></div><label className="currency-select"><select aria-label={t('profile.preferredCurrency')} onChange={(event) => setPreferences((current) => ({ ...current, currency: event.target.value }))} value={preferences.currency}><option>USD ($)</option><option>CAD ($)</option><option>EUR (€)</option></select><Icon name="chevron-down" size={13} /></label></div>
-              <PreferenceToggle description={t('profile.darkModeDescription')} enabled={preferences.darkMode} label={t('profile.darkMode')} onChange={() => updatePreference('darkMode')} />
+              <UnavailablePreference description={t('profile.emailNotificationsDescription')} label={t('profile.emailNotifications')} />
+              <UnavailablePreference description={t('profile.tradeAlertsDescription')} label={t('profile.tradeAlerts')} />
+              <UnavailablePreference description={t('profile.marketingCommunicationsDescription')} label={t('profile.marketingCommunications')} />
+              <div className="preference-row select-row"><div><strong>{t('profile.accountCurrency')}</strong><small>{t('profile.accountCurrencyDescription')}</small></div><strong>{capital?.currency ?? '—'}</strong></div>
+              <UnavailablePreference description={t('profile.darkModeDescription')} label={t('profile.darkMode')} />
             </div>
           </section>
         </div>
         <section aria-labelledby="security-title" className="panel account-security-panel">
           <div className="panel-heading"><div><h2 id="security-title">{t('profile.accountSecurity')}</h2><p>{t('profile.accountSecurityDescription')}</p></div></div>
           <div className="security-grid">
-            <button className="security-item" onClick={() => showToast('profile.twoFactorToast')} type="button"><span className="security-icon security-green"><Icon name="shield" size={20} /></span><span><strong>{t('profile.twoFactorAuthentication')}</strong><small>{t('profile.twoFactorDescription')}</small></span><b className="security-badge">{t('profile.enabled')}</b><Icon name="chevron-right" size={15} /></button>
-            <button className="security-item" onClick={() => showToast('profile.sessionsToast', { count: 3 })} type="button"><span className="security-icon security-purple"><Icon name="key" size={20} /></span><span><strong>{t('profile.activeSessions')}</strong><small>{t('profile.activeSessionsDescription')}</small></span><b className="session-count">{t('profile.activeSessionsCount', { count: 3 })}</b><Icon name="chevron-right" size={15} /></button>
+            <button className="security-item" disabled title={t('businessData.unavailable')} type="button"><span className="security-icon security-green"><Icon name="shield" size={20} /></span><span><strong>{t('profile.twoFactorAuthentication')}</strong><small>{t('profile.twoFactorDescription')}</small></span><span>—</span></button>
+            <button className="security-item" disabled title={t('businessData.unavailable')} type="button"><span className="security-icon security-purple"><Icon name="key" size={20} /></span><span><strong>{t('profile.activeSessions')}</strong><small>{t('profile.activeSessionsDescription')}</small></span><span>—</span></button>
           </div>
         </section>
-        <p className="simulation-note"><Icon name="activity" size={14} /> {t('profile.previewNote')}</p>
+        <p className="simulation-note">{t('profile.unavailableNote')}</p>
       </div>
     </main>
-    <div aria-live="polite" className={`toast ${toast.key ? 'visible' : ''}`}>{toast.key ? t(toast.key, toast.options) : ''}</div>
-    {passwordModalOpen && <PasswordModal onClose={() => setPasswordModalOpen(false)} onSave={() => { setPasswordModalOpen(false); showToast('profile.passwordChangeToast') }} />}
   </div>
 }
