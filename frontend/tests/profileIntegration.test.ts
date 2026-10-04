@@ -152,6 +152,7 @@ test('the visible edit form sends changes and only confirms server success', asy
     await act(async () => { form.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true })) })
     assert.match(view.container.textContent!, /Your profile has been saved/)
     assert.equal(view.container.querySelector('h1')!.textContent, 'New Name')
+    assert.equal(view.container.querySelector('.app-topbar-avatar')!.textContent, 'NN')
     assert.equal(view.container.querySelector('input[aria-label="Full Name"]'), null)
   } finally { await view.close() }
 })

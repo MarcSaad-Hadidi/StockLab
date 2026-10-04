@@ -1,4 +1,5 @@
 export const authStorageKey = 'stocklab-auth'
+export const authSessionChangedEvent = 'stocklab-auth-changed'
 
 export type AuthUser = {
   id: string
@@ -22,6 +23,13 @@ function browserStorage(): AuthStorage | undefined {
   } catch {
     return undefined
   }
+}
+
+function notifyAuthChanged(storage: AuthStorage | undefined) {
+  if (typeof window === 'undefined' || !storage || storage !== browserStorage()) return
+  const target = window
+  // Reading an expired session can clear storage during a render; notify after that render.
+  queueMicrotask(() => target.dispatchEvent(new target.Event(authSessionChangedEvent)))
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -48,6 +56,7 @@ export function saveAuthSession(session: AuthSession, storage: AuthStorage | und
       clearAuthSession(storage)
       return false
     }
+    notifyAuthChanged(storage)
     return true
   } catch {
     // Storage can be blocked by browser privacy settings; do not claim an authenticated session.
@@ -58,7 +67,9 @@ export function saveAuthSession(session: AuthSession, storage: AuthStorage | und
 
 export function clearAuthSession(storage: AuthStorage | undefined = browserStorage()) {
   try {
+    const hadSession = storage?.getItem(authStorageKey) != null
     storage?.removeItem(authStorageKey)
+    if (hadSession && storage?.getItem(authStorageKey) === null) notifyAuthChanged(storage)
   } catch {
     // A blocked storage must not prevent the caller from leaving the account.
   }
