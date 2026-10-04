@@ -220,6 +220,13 @@ Consultez ml/README.md pour les contrats de données, les limites d’ingestion,
 
 ## Configuration et secrets
 
+L'[API Price Alerts](backend/README.md#price-alerts-api-41) expose `GET /api/alerts`,
+`POST /api/alerts`, `PUT /api/alerts/{id}`, `POST /api/alerts/{id}/disable` et
+`DELETE /api/alerts/{id}` avec `Authorization: Bearer <token>`. Les alertes sont
+isolées par utilisateur, utilisent `Above`/`Below` et USD, et prennent en charge
+la désactivation idempotente. La documentation backend détaille les exemples,
+la validation, les conflits de concurrence et le smoke test SQL optionnel.
+
 Le dépôt peut être cloné sans identifiants. Ne versionnez jamais de vraies valeurs dans appsettings*.json, les fichiers .env du frontend, les fichiers Python, les exemples de commandes ou les tests.
 
 ### Variables frontend
