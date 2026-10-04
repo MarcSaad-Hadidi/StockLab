@@ -3,6 +3,7 @@ import { marketDataApi } from '../api/marketDataClient'
 import { PortfolioApiError, portfolioApi, type PortfolioApiPosition, type PortfolioApiTransaction } from '../api/portfolioApi'
 import { getAuthSession } from '../auth/authStorage'
 import { useAuthSession } from '../auth/useAuthUser'
+import { useRecentTransactions, type RecentTransactionsState } from './useRecentTransactions'
 
 export type PortfolioPosition = {
   symbol: string
@@ -29,10 +30,15 @@ export type PortfolioData = {
   transactions: PortfolioApiTransaction[]
 }
 
-export type PortfolioDataState = {
-  data: PortfolioData | null
+type PortfolioLoadState = {
+  data: Omit<PortfolioData, 'transactions'> | null
   isLoading: boolean
   error: PortfolioApiError | null
+}
+
+export type PortfolioDataState = Omit<PortfolioLoadState, 'data'> & {
+  data: PortfolioData | null
+  recentTransactions: RecentTransactionsState
 }
 
 function costValue(position: PortfolioApiPosition) {
@@ -47,7 +53,7 @@ export function usePortfolioData(): PortfolioDataState {
   const userId = session?.user.id ?? null
   const authorization = session ? `${session.tokenType} ${session.accessToken}` : null
   const sessionKey = JSON.stringify([userId, authorization])
-  const [result, setResult] = useState<{ sessionKey: string; state: PortfolioDataState } | null>(null)
+  const [result, setResult] = useState<{ sessionKey: string; state: PortfolioLoadState } | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -60,13 +66,6 @@ export function usePortfolioData(): PortfolioDataState {
 
     void portfolioApi.getPortfolio(controller.signal, authorization)
       .then(async (portfolio) => {
-        if (!active()) return
-        const transactions = await portfolioApi.getRecentTransactions(5, controller.signal, authorization).catch((error: unknown) => {
-          if (!active()) throw error
-          // A portfolio can still be rendered while the optional activity feed
-          // is unavailable on an older backend deployment.
-          return []
-        })
         if (!active()) return
         const quotePositions = portfolio.positions.slice(0, portfolioQuoteBudget)
         const quotedPositions: Array<{ position: PortfolioApiPosition; quote: Awaited<ReturnType<typeof marketDataApi.quote>> | null }> = []
@@ -133,7 +132,6 @@ export function usePortfolioData(): PortfolioDataState {
             returnPercent,
             currency: portfolio.currency,
             positions,
-            transactions,
           }, isLoading: false, error: null } })
         }
       })
@@ -148,8 +146,11 @@ export function usePortfolioData(): PortfolioDataState {
     return () => controller.abort()
   }, [userId, authorization, sessionKey])
 
+  const current = result?.sessionKey === sessionKey ? result.state : null
+  const recentTransactions = useRecentTransactions(Boolean(session && current?.data))
   // Mask the old owner's data during render, before effect cleanup and loading run.
   if (!session) return { data: null, isLoading: false,
-    error: new PortfolioApiError(401, 'unauthorized', 'Your session has expired. Please sign in again.') }
-  return result?.sessionKey === sessionKey ? result.state : { data: null, isLoading: true, error: null }
+    error: new PortfolioApiError(401, 'unauthorized', 'Your session has expired. Please sign in again.'), recentTransactions }
+  return { data: current?.data ? { ...current.data, transactions: recentTransactions.data ?? [] } : null,
+    isLoading: current?.isLoading ?? true, error: current?.error ?? null, recentTransactions }
 }
