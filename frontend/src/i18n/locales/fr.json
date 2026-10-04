@@ -806,7 +806,7 @@
     "profileSavedToast": "Votre profil a été enregistré.",
     "twoFactorToast": "L’authentification à deux facteurs est activée dans cet aperçu.",
     "sessionsToast": "Vous avez {{count}} sessions actives.",
-    "passwordChangeToast": "La modification du mot de passe est simulée dans cet aperçu.",
+    "passwordChangeToast": "Votre mot de passe a été modifié.",
     "passwordModal": {
       "close": "Fermer la fenêtre de modification du mot de passe",
       "title": "Modifier le mot de passe",
@@ -816,7 +816,22 @@
       "confirmPassword": "Confirmer le mot de passe",
       "save": "Enregistrer le mot de passe",
       "shortPassword": "Utilisez au moins 8 caractères pour votre nouveau mot de passe.",
-      "mismatch": "Les mots de passe ne correspondent pas."
+      "mismatch": "Les mots de passe ne correspondent pas.",
+      "saving": "Enregistrement…",
+      "errors": {
+        "unauthorized": "Connectez-vous pour modifier votre mot de passe.",
+        "invalid_current_password": "Le mot de passe actuel est incorrect.",
+        "validation_error": "Vérifiez les champs du mot de passe et réessayez.",
+        "user_not_found": "Votre compte est introuvable. Reconnectez-vous.",
+        "password_update_conflict": "Votre compte a changé pendant la modification. Réessayez.",
+        "rate_limited": "Trop de tentatives. Patientez avant de réessayer.",
+        "offline": "Connexion impossible. La modification du mot de passe ne peut pas être confirmée.",
+        "server_error": "La modification du mot de passe ne peut pas être confirmée. Réessayez.",
+        "invalid_response": "Le serveur n’a pas confirmé la modification du mot de passe.",
+        "session_changed": "Votre session a changé. Fermez ce formulaire puis rouvrez-le.",
+        "current_required": "Saisissez votre mot de passe actuel.",
+        "same_password": "Choisissez un mot de passe différent du mot de passe actuel."
+      }
     },
     "countries": {
       "us": "États-Unis",

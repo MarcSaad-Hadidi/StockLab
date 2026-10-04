@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useProfileData } from './useProfileData'
 import type { UpdateProfileRequest, UserProfile } from '../api/profileApi'
+import { PasswordModal } from './PasswordModal'
 import './profile.css'
 type IconName =
   | 'activity'
@@ -98,10 +99,17 @@ export default function ProfilePage() {
   const editing = profile !== null && editingProfile === profile
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [passwordProfile, setPasswordProfile] = useState<UserProfile | null>(null)
+  const [passwordSavedProfile, setPasswordSavedProfile] = useState<UserProfile | null>(null)
   const canEdit = profile !== null && !loading && !saving && loadError === null
   const nameError = Object.keys(fieldErrors).some(key => key.toLowerCase() === 'displayname')
   const emailError = saveError === 'email_already_registered' || Object.keys(fieldErrors).some(key => key.toLowerCase() === 'email')
 
+  const openPassword = () => {
+    if (!canEdit) return
+    setPasswordSavedProfile(null)
+    setPasswordProfile(profile)
+  }
   const beginEditing = () => {
     if (!canEdit || editing) return
     clearSaveErrors()
@@ -140,7 +148,7 @@ export default function ProfilePage() {
           <div className="summary-actions">
             {editing ? <button key="save" className="summary-primary" disabled={!canEdit || !draft.displayName.trim()} form="profile-form" type="submit"><Icon name="edit" size={14} />{t(saving ? 'profile.saving' : 'profile.saveProfile')}</button>
               : <button key="edit" className="summary-primary" disabled={!canEdit} onClick={beginEditing} type="button"><Icon name="edit" size={14} />{t('profile.editProfile')}</button>}
-            <button className="summary-secondary" disabled title={t('businessData.unavailable')} type="button"><Icon name="lock" size={14} />{t('profile.changePassword')}</button>
+            <button className="summary-secondary" disabled={!canEdit} onClick={openPassword} type="button"><Icon name="lock" size={14} />{t('profile.changePassword')}</button>
             <button className="summary-logout" onClick={logout} type="button"><Icon name="logout" size={14} />{t('profile.logOut')}</button>
           </div>
         </section>
@@ -153,7 +161,7 @@ export default function ProfilePage() {
                   onChange={displayName => { clearSaveErrors('displayName'); setDraft(current => ({ ...current, displayName })) }} onEdit={beginEditing} value={editing && profile ? draft.displayName : profile?.displayName ?? '—'} />
                 <ProfileField disabled={!canEdit} editing={editing && profile !== null} error={emailError} label={t('profile.emailAddress')}
                   onChange={email => { clearSaveErrors('email'); setDraft(current => ({ ...current, email })) }} onEdit={beginEditing} type="email" value={editing && profile ? draft.email : profile?.email ?? '—'} />
-                <ProfileField label={t('profile.password')} value={profile ? '••••••••••••' : '—'} />
+                <ProfileField disabled={!canEdit} label={t('profile.password')} onEdit={openPassword} value={profile ? '••••••••••••' : '—'} />
                 <ProfileField label={t('profile.phoneNumber')} value="—" />
                 <ProfileField label={t('profile.country')} value="—" />
                 <ProfileField label={t('profile.timeZone')} value="—" />
@@ -186,8 +194,13 @@ export default function ProfilePage() {
             <button className="security-item" disabled title={t('businessData.unavailable')} type="button"><span className="security-icon security-purple"><Icon name="key" size={20} /></span><span><strong>{t('profile.activeSessions')}</strong><small>{t('profile.activeSessionsDescription')}</small></span><span>—</span></button>
           </div>
         </section>
+        {passwordSavedProfile !== null && passwordSavedProfile === profile && <p className="profile-saved" role="status">{t('profile.passwordChangeToast')}</p>}
         <p className="simulation-note">{t('profile.unavailableNote')}</p>
       </div>
     </main>
+    {passwordProfile !== null && passwordProfile === profile && <PasswordModal onClose={() => setPasswordProfile(null)} onSave={() => {
+      setPasswordProfile(null)
+      setPasswordSavedProfile(profile)
+    }} />}
   </div>
 }
