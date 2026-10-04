@@ -19,7 +19,13 @@ public sealed class AiTradeExecutionModelTests
         Assert.NotNull(trade);
         Assert.Equal("AiTrades", trade.GetTableName());
         Assert.Equal("Id", Assert.Single(trade.FindPrimaryKey()!.Properties).Name);
-        var fk = Assert.Single(trade.GetForeignKeys());
+        Assert.True(trade.FindProperty("AiDecisionId")?.IsNullable);
+        var decisionFk = Assert.Single(trade.GetForeignKeys(), f => f.PrincipalEntityType.GetTableName() == "AiDecisions");
+        Assert.Equal(DeleteBehavior.NoAction, decisionFk.DeleteBehavior);
+        var decisionIndex = Assert.Single(trade.GetIndexes(), i => i.Properties.Select(p => p.Name).SequenceEqual(["AiDecisionId"]));
+        Assert.True(decisionIndex.IsUnique);
+        Assert.Equal("[AiDecisionId] IS NOT NULL", decisionIndex.GetFilter());
+        var fk = Assert.Single(trade.GetForeignKeys(), f => f.PrincipalEntityType.GetTableName() == "AiPortfolios");
         Assert.Equal("AiPortfolios", fk.PrincipalEntityType.GetTableName());
         Assert.Equal(DeleteBehavior.NoAction, fk.DeleteBehavior);
         Assert.True(trade.GetIndexes().Single(i => i.Properties.Select(p => p.Name)

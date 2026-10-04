@@ -29,13 +29,15 @@ public sealed class AiPaperTradingEngine(
         Validate(request);
         cancellationToken.ThrowIfCancellationRequested();
         var decision = request.RiskDecision with { Symbol = request.RiskDecision.Symbol.ToUpperInvariant() };
-        var fingerprint = Fingerprint(decision);
+        var fingerprint = Fingerprint(request.DecisionId, decision);
         try
         {
             // Each attempt owns its contexts; never save another service's pending changes.
             await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
             var existing = await FindTradeAsync(db, request.OrderId, cancellationToken);
             if (existing is not null) return Replay(existing, decision, fingerprint);
+            await ValidateDecisionAsync(db, request, cancellationToken);
+            await EnsureNotExecutedAsync(db, request.DecisionId, cancellationToken);
 
             var before = await db.AiTraderPortfolios.AsNoTracking().Include(p => p.Positions)
                 .SingleOrDefaultAsync(p => p.PortfolioKey == AiTraderPortfolio.MainPortfolioKey, cancellationToken)
@@ -55,6 +57,9 @@ public sealed class AiPaperTradingEngine(
                 ?? throw new AiTradeExecutionException(AiTradeExecutionFailure.ConcurrencyConflict);
             existing = await FindTradeAsync(db, request.OrderId, cancellationToken);
             if (existing is not null) return Replay(existing, decision, fingerprint);
+            // Recheck under serializable locks: a rejection can arrive while quotes are fetched.
+            await ValidateDecisionAsync(db, request, cancellationToken);
+            await EnsureNotExecutedAsync(db, request.DecisionId, cancellationToken);
             if (!SameState(before, portfolio))
                 throw new AiTradeExecutionException(AiTradeExecutionFailure.ConcurrencyConflict);
 
@@ -126,7 +131,7 @@ public sealed class AiPaperTradingEngine(
             db.Entry(portfolio).Property(p => p.UpdatedAtUtc).IsModified = true;
             var trade = new AiTrade
             {
-                Id = Guid.NewGuid(), AiTraderPortfolioId = portfolio.Id, OrderId = request.OrderId,
+                Id = Guid.NewGuid(), AiTraderPortfolioId = portfolio.Id, OrderId = request.OrderId, AiDecisionId = request.DecisionId,
                 OrderFingerprint = fingerprint, Side = decision.Signal == AiTradingSignal.Buy ? "BUY" : "SELL",
                 Symbol = decision.Symbol, Quantity = quantity, ExecutionPrice = price, TotalAmount = total,
                 ExecutedAtUtc = now, CashBalanceAfter = portfolio.CashBalance,
@@ -148,9 +153,13 @@ public sealed class AiPaperTradingEngine(
                 || exception.GetBaseException() is SqlException { Number: 1205 or 2601 or 2627 };
             if (conflict)
             {
-                await using var reader = await dbContextFactory.CreateDbContextAsync(cancellationToken);
                 AiTrade? committed;
-                try { committed = await FindTradeAsync(reader, request.OrderId, cancellationToken); }
+                try
+                {
+                    await using var reader = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+                    committed = await FindTradeAsync(reader, request.OrderId, cancellationToken);
+                    if (committed is null) await EnsureNotExecutedAsync(reader, request.DecisionId, cancellationToken);
+                }
                 catch (Exception readException) when (IsDatabaseFailure(readException))
                 { throw new AiTradeExecutionException(AiTradeExecutionFailure.PersistenceFailure); }
                 if (committed is not null) return Replay(committed, decision, fingerprint);
@@ -181,7 +190,7 @@ public sealed class AiPaperTradingEngine(
 
     private static void Validate(AiTradeExecutionRequest request)
     {
-        if (request is null || request.OrderId == Guid.Empty || request.RiskDecision is not { } decision)
+        if (request is null || request.OrderId == Guid.Empty || request.DecisionId == Guid.Empty || request.RiskDecision is not { } decision)
             throw new AiTradeExecutionException(AiTradeExecutionFailure.InvalidDecision);
         if (!decision.Approved) throw new AiTradeExecutionException(AiTradeExecutionFailure.RiskRejected);
         if (decision.Signal == AiTradingSignal.Hold) throw new AiTradeExecutionException(AiTradeExecutionFailure.HoldNotExecutable);
@@ -193,6 +202,26 @@ public sealed class AiPaperTradingEngine(
             || decision.Symbol.Length > 32 || decision.Symbol.Contains(',')
             || decision.Symbol.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)))
             throw new AiTradeExecutionException(AiTradeExecutionFailure.InvalidDecision);
+    }
+
+    private static async Task ValidateDecisionAsync(StockLabDbContext db, AiTradeExecutionRequest request, CancellationToken token)
+    {
+        var raw = await db.AiDecisions.AsNoTracking().SingleOrDefaultAsync(d => d.Id == request.DecisionId, token)
+            ?? throw new AiTradeExecutionException(AiTradeExecutionFailure.DecisionNotFound);
+        if (raw.Signal == "HOLD") throw new AiTradeExecutionException(AiTradeExecutionFailure.HoldNotExecutable);
+        var risk = request.RiskDecision;
+        // Match #70 against the caller's raw symbol before execution uppercases it.
+        if (!string.Equals(raw.Symbol, risk.Symbol, StringComparison.Ordinal)
+            || raw.Signal != (risk.Signal == AiTradingSignal.Buy ? "BUY" : "SELL") || raw.Confidence != risk.Confidence)
+            throw new AiTradeExecutionException(AiTradeExecutionFailure.DecisionMismatch);
+        if (await db.AiRejectedDecisions.AsNoTracking().AnyAsync(r => r.AiDecisionId == request.DecisionId, token))
+            throw new AiTradeExecutionException(AiTradeExecutionFailure.DecisionRejected);
+    }
+
+    private static async Task EnsureNotExecutedAsync(StockLabDbContext db, Guid decisionId, CancellationToken token)
+    {
+        if (await db.AiTrades.AsNoTracking().AnyAsync(t => t.AiDecisionId == decisionId, token))
+            throw new AiTradeExecutionException(AiTradeExecutionFailure.DecisionAlreadyExecuted);
     }
 
     private static bool SameState(AiTraderPortfolio before, AiTraderPortfolio current) =>
@@ -216,8 +245,8 @@ public sealed class AiPaperTradingEngine(
     // EF's non-retrying SQL strategy wraps transient SQL errors (including deadlocks) in InvalidOperationException.
     private static bool IsDatabaseFailure(Exception exception) => exception is DbUpdateException or DbException
         || exception is InvalidOperationException && exception.GetBaseException() is DbException;
-    private static string Fingerprint(AiRiskDecision decision) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-        string.Join('\n', decision.Symbol, decision.Signal.ToString(), decision.Confidence.ToString("G29", CultureInfo.InvariantCulture),
+    private static string Fingerprint(Guid decisionId, AiRiskDecision decision) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+        string.Join('\n', decisionId.ToString("D"), decision.Symbol, decision.Signal.ToString(), decision.Confidence.ToString("G29", CultureInfo.InvariantCulture),
             decision.RequestedPrice.ToString("G29", CultureInfo.InvariantCulture), decision.ApprovedQuantity.ToString("G29", CultureInfo.InvariantCulture)))));
     private static Task<AiTrade?> FindTradeAsync(StockLabDbContext db, Guid orderId, CancellationToken token) =>
         db.AiTrades.AsNoTracking().SingleOrDefaultAsync(t => t.OrderId == orderId
@@ -228,7 +257,7 @@ public sealed class AiPaperTradingEngine(
         return Result(trade, decision, true);
     }
     private static AiTradeExecutionResult Result(AiTrade trade, AiRiskDecision decision, bool replay) =>
-        new(trade.Id, trade.OrderId, trade.AiTraderPortfolioId, trade.Side, trade.Symbol, decision.ApprovedQuantity,
+        new(trade.Id, trade.AiDecisionId, trade.OrderId, trade.AiTraderPortfolioId, trade.Side, trade.Symbol, decision.ApprovedQuantity,
             trade.Quantity, decision.RequestedPrice, trade.ExecutionPrice, trade.TotalAmount, trade.CashBalanceAfter,
             trade.PositionQuantityAfter, trade.AverageCostAfter, trade.ExecutedAtUtc, replay);
 }

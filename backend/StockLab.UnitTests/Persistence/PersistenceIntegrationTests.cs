@@ -41,6 +41,9 @@ public sealed class PersistenceIntegrationTests
         var rejections = scope.ServiceProvider.GetRequiredService<IAiRejectedDecisionHistoryService>();
         Assert.IsType<AiRejectedDecisionHistoryService>(rejections);
         Assert.Same(rejections, scope.ServiceProvider.GetRequiredService<IAiRejectedDecisionHistoryService>());
+        var trades = scope.ServiceProvider.GetRequiredService<IAiTradesHistoryService>();
+        Assert.IsType<AiTradesHistoryService>(trades);
+        Assert.Same(trades, scope.ServiceProvider.GetRequiredService<IAiTradesHistoryService>());
         Assert.Same(scope.ServiceProvider.GetRequiredService<StockLab.Infrastructure.MarketData.DeduplicatingMarketDataProvider>(),
             scope.ServiceProvider.GetRequiredKeyedService<IMarketDataProvider>("Execution"));
     }

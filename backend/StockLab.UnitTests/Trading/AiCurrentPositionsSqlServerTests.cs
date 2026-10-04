@@ -72,8 +72,9 @@ public sealed class AiCurrentPositionsSqlServerTests
     {
         await using var f = await AiCurrentPositionsFixture.CreateAsync(sqlServer: true);
         await f.InitializeAsync();
+        var request = await f.RecordExecutionAsync();
         var before = await f.StateAsync();
-        var failure = await Assert.ThrowsAsync<AiTradeExecutionException>(() => f.ExecuteAsync(interceptor: new FailAfterSave()));
+        var failure = await Assert.ThrowsAsync<AiTradeExecutionException>(() => f.ExecuteAsync(request, new FailAfterSave()));
         Assert.Equal(AiTradeExecutionFailure.PersistenceFailure, failure.Category);
         Assert.Empty(await f.Service().GetCurrentAsync());
         Assert.Equal(before, await f.StateAsync());

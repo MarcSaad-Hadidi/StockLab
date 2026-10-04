@@ -6,6 +6,9 @@ public sealed class AiTrade
     public Guid AiTraderPortfolioId { get; set; }
     public AiTraderPortfolio Portfolio { get; set; } = null!;
     public Guid OrderId { get; set; }
+    // Null only for trades committed before decision links were introduced.
+    public Guid? AiDecisionId { get; set; }
+    public AiDecision? Decision { get; set; }
     // Canonical original approval, not the possibly reduced execution quantity or fresh price.
     public string OrderFingerprint { get; set; } = string.Empty;
     public string Side { get; set; } = string.Empty;

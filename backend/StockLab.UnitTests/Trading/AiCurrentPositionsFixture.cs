@@ -22,6 +22,7 @@ internal sealed class AiCurrentPositionsFixture(string? sqlConnection, SqliteCon
     public ReadObserver Observer { get; } = new();
 
     public StockLabDbContext CreateDbContext() => CreateContext();
+    public IDbContextFactory<StockLabDbContext> With(IInterceptor interceptor) => new InterceptedFactory(this, interceptor);
     private StockLabDbContext CreateContext(IInterceptor? interceptor = null)
     {
         var builder = new DbContextOptionsBuilder<StockLabDbContext>();
@@ -37,14 +38,26 @@ internal sealed class AiCurrentPositionsFixture(string? sqlConnection, SqliteCon
     public Task<AiTraderPortfolioState> InitializeAsync() =>
         new AiTraderPortfolioService(this, ValuationMarket, new Clock()).GetOrCreateAsync();
 
-    public Task<AiTradeExecutionResult> ExecuteAsync(string symbol = "AAPL", decimal quantity = 10m,
+    public async Task<AiTradeExecutionResult> ExecuteAsync(string symbol = "AAPL", decimal quantity = 10m,
         decimal price = 100m, AiTradingSignal signal = AiTradingSignal.Buy, IInterceptor? interceptor = null)
+        => await ExecuteAsync(await RecordExecutionAsync(symbol, quantity, price, signal), interceptor);
+
+    public Task<AiTradeExecutionResult> ExecuteAsync(AiTradeExecutionRequest request, IInterceptor? interceptor = null)
     {
-        ExecutionMarket.Prices[symbol] = price;
         IDbContextFactory<StockLabDbContext> factory = interceptor is null ? this : new InterceptedFactory(this, interceptor);
         IAiTradeExecutionService engine = new AiPaperTradingEngine(factory, ExecutionMarket,
             Options.Create(new AiRiskOptions()), new Clock());
-        return engine.ExecuteAsync(new(Guid.NewGuid(), new(true, symbol, signal, 0.9m, price, quantity, null)));
+        return engine.ExecuteAsync(request);
+    }
+
+    public async Task<AiTradeExecutionRequest> RecordExecutionAsync(string symbol = "AAPL", decimal quantity = 10m,
+        decimal price = 100m, AiTradingSignal signal = AiTradingSignal.Buy)
+    {
+        ExecutionMarket.Prices[symbol] = price;
+        var decisionId = Guid.NewGuid();
+        await new AiDecisionHistoryService(this, new Clock()).RecordAsync(new(decisionId, symbol, signal,
+            0.9m, new(2026, 10, 2), "test-model", "test-version"));
+        return new(Guid.NewGuid(), decisionId, new(true, symbol, signal, 0.9m, price, quantity, null));
     }
 
     public async Task RecordDecisionAsync(AiTradingSignal signal, AiRiskRejectionReason? reason = null)

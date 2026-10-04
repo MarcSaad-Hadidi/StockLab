@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -34,6 +35,12 @@ public sealed class AiRejectedDecisionHistoryService(
             var existing = await History(db).SingleOrDefaultAsync(r => r.DecisionId == request.DecisionId, cancellationToken);
             if (existing is not null) return Replay(existing, reason);
 
+            // Keep the missing trade range locked until the rejection commits. Execution
+            // reciprocally locks the missing rejection range in its serializable transaction.
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            if (await db.AiTrades.AsNoTracking().AnyAsync(t => t.AiDecisionId == request.DecisionId, cancellationToken))
+                throw new AiRejectedDecisionHistoryException(AiRejectedDecisionHistoryFailure.DecisionAlreadyExecuted);
+
             var rejection = new AiRejectedDecision
             {
                 AiDecisionId = raw.Id,
@@ -44,10 +51,12 @@ public sealed class AiRejectedDecisionHistoryService(
             try
             {
                 await db.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
             }
             catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
             {
-                // The PK is the authority when callers raced past the initial lookup.
+                // Roll back before reloading the committed PK winner outside this attempt.
+                await transaction.RollbackAsync(cancellationToken);
                 db.Entry(rejection).State = EntityState.Detached;
                 var winner = await History(db).SingleOrDefaultAsync(r => r.DecisionId == request.DecisionId, cancellationToken)
                     ?? throw new AiRejectedDecisionHistoryException(AiRejectedDecisionHistoryFailure.PersistenceFailure);
@@ -58,7 +67,8 @@ public sealed class AiRejectedDecisionHistoryService(
         }
         catch (Exception ex) when (IsDatabaseFailure(ex))
         {
-            throw new AiRejectedDecisionHistoryException(AiRejectedDecisionHistoryFailure.PersistenceFailure);
+            throw new AiRejectedDecisionHistoryException(ex.GetBaseException() is SqlException { Number: 1205 }
+                ? AiRejectedDecisionHistoryFailure.ConcurrencyConflict : AiRejectedDecisionHistoryFailure.PersistenceFailure);
         }
     }
 

@@ -22,12 +22,16 @@ public sealed class AiTradeConfiguration : IEntityTypeConfiguration<AiTrade>
         builder.Property(trade => trade.Quantity).HasColumnType("decimal(19,8)");
         builder.Property(trade => trade.ExecutionPrice).HasColumnType("decimal(19,4)");
         builder.Property(trade => trade.TotalAmount).HasColumnType("decimal(19,4)");
-        builder.Property(trade => trade.ExecutedAtUtc).HasColumnType("datetime2(7)");
+        builder.Property(trade => trade.ExecutedAtUtc).HasColumnType("datetime2(7)")
+            .HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
         builder.Property(trade => trade.CashBalanceAfter).HasColumnType("decimal(19,4)");
         builder.Property(trade => trade.PositionQuantityAfter).HasColumnType("decimal(19,8)");
         builder.Property(trade => trade.AverageCostAfter).HasColumnType("decimal(19,4)");
         builder.HasOne(trade => trade.Portfolio).WithMany()
             .HasForeignKey(trade => trade.AiTraderPortfolioId).OnDelete(DeleteBehavior.NoAction);
         builder.HasIndex(trade => new { trade.AiTraderPortfolioId, trade.OrderId }).IsUnique();
+        builder.HasOne(trade => trade.Decision).WithMany()
+            .HasForeignKey(trade => trade.AiDecisionId).OnDelete(DeleteBehavior.NoAction);
+        builder.HasIndex(trade => trade.AiDecisionId).IsUnique().HasFilter("[AiDecisionId] IS NOT NULL");
     }
 }
