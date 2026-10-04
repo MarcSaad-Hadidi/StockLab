@@ -1,3 +1,4 @@
+using System.Data;
 using System.Data.Common;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -34,6 +35,12 @@ public sealed class AiRejectedDecisionHistoryService(
             var existing = await History(db).SingleOrDefaultAsync(r => r.DecisionId == request.DecisionId, cancellationToken);
             if (existing is not null) return Replay(existing, reason);
 
+            // Keep the missing trade range locked until the rejection commits. Execution
+            // reciprocally locks the missing rejection range in its serializable transaction.
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            if (await db.AiTrades.AsNoTracking().AnyAsync(t => t.AiDecisionId == request.DecisionId, cancellationToken))
+                throw new AiRejectedDecisionHistoryException(AiRejectedDecisionHistoryFailure.DecisionAlreadyExecuted);
+
             var rejection = new AiRejectedDecision
             {
                 AiDecisionId = raw.Id,
@@ -41,20 +48,31 @@ public sealed class AiRejectedDecisionHistoryService(
                 RejectedAtUtc = timeProvider.GetUtcNow().UtcDateTime
             };
             db.AiRejectedDecisions.Add(rejection);
-            try
-            {
-                await db.SaveChangesAsync(cancellationToken);
-            }
-            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
-            {
-                // The PK is the authority when callers raced past the initial lookup.
-                db.Entry(rejection).State = EntityState.Detached;
-                var winner = await History(db).SingleOrDefaultAsync(r => r.DecisionId == request.DecisionId, cancellationToken)
-                    ?? throw new AiRejectedDecisionHistoryException(AiRejectedDecisionHistoryFailure.PersistenceFailure);
-                return Replay(winner, reason);
-            }
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
             return new(raw.Id, raw.Symbol, risk.Signal, raw.Confidence, raw.DecisionDate,
                 raw.ModelName, raw.ModelVersion, risk.RejectionReason.Value, rejection.RejectedAtUtc);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            // The failed attempt's transaction and context are disposed before recovery.
+            return await ReplayWinnerAsync(request.DecisionId, request.RiskDecision.RejectionReason!.Value.ToString(), cancellationToken);
+        }
+        catch (Exception ex) when (IsDatabaseFailure(ex))
+        {
+            throw new AiRejectedDecisionHistoryException(ex.GetBaseException() is SqlException { Number: 1205 }
+                ? AiRejectedDecisionHistoryFailure.ConcurrencyConflict : AiRejectedDecisionHistoryFailure.PersistenceFailure);
+        }
+    }
+
+    private async Task<AiRejectedDecisionRecord> ReplayWinnerAsync(Guid decisionId, string reason, CancellationToken token)
+    {
+        try
+        {
+            await using var reader = await dbContextFactory.CreateDbContextAsync(token);
+            var winner = await History(reader).SingleOrDefaultAsync(r => r.DecisionId == decisionId, token)
+                ?? throw new AiRejectedDecisionHistoryException(AiRejectedDecisionHistoryFailure.PersistenceFailure);
+            return Replay(winner, reason);
         }
         catch (Exception ex) when (IsDatabaseFailure(ex))
         {

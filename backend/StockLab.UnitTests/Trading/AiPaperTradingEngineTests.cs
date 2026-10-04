@@ -16,11 +16,119 @@ namespace StockLab.UnitTests.Trading;
 public sealed class AiPaperTradingEngineTests
 {
     [Fact]
-    public async Task Buy_creates_position_and_trade_using_server_price_and_one_timestamp()
+    public async Task Unrecorded_raw_decision_cannot_execute_or_mutate_portfolio()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await f.SeedAsync();
+        var error = await Assert.ThrowsAsync<AiTradeExecutionException>(() => f.Engine().ExecuteAsync(Request()));
+        Assert.Equal(AiTradeExecutionFailure.DecisionNotFound, error.Category);
+        Assert.Empty(f.Market.Calls);
+        await f.AssertUnchangedAsync();
+    }
+
+    [Fact]
+    public async Task Empty_decision_id_fails_before_quotes_and_mutations()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await f.SeedAsync();
+        await Failure(f.Engine(), Request() with { DecisionId = Guid.Empty }, AiTradeExecutionFailure.InvalidDecision);
+        Assert.Empty(f.Market.Calls);
+        await f.AssertUnchangedAsync();
+    }
+
+    [Theory]
+    [InlineData("symbol")]
+    [InlineData("symbol-case")]
+    [InlineData("signal")]
+    [InlineData("confidence")]
+    [InlineData("confidence-precision")]
+    [InlineData("raw-hold")]
+    public async Task Raw_decision_must_match_unmodified_risk_approval_exactly(string mismatch)
     {
         await using var f = await Fixture.CreateAsync();
         await f.SeedAsync();
         var request = Request();
+        await f.RecordAsync(mismatch == "raw-hold" ? request with { RiskDecision = request.RiskDecision with { Signal = AiTradingSignal.Hold } } : request);
+        var risk = request.RiskDecision;
+        risk = mismatch switch
+        {
+            "symbol" => risk with { Symbol = "MSFT" },
+            "symbol-case" => risk with { Symbol = "aapl" },
+            "signal" => risk with { Signal = AiTradingSignal.Sell },
+            "confidence" => risk with { Confidence = 0.81m },
+            "confidence-precision" => risk with { Confidence = 0.8000000000000000000000000001m },
+            _ => risk
+        };
+        await Failure(f.Engine(), request with { RiskDecision = risk }, mismatch == "raw-hold"
+            ? AiTradeExecutionFailure.HoldNotExecutable : AiTradeExecutionFailure.DecisionMismatch);
+        Assert.Empty(f.Market.Calls);
+        await f.AssertUnchangedAsync();
+        await using var db = f.CreateDbContext();
+        Assert.Single(await db.AiDecisions.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Rejection_before_execution_or_during_quote_prevents_commit(bool duringQuote)
+    {
+        await using var f = await Fixture.CreateAsync();
+        await f.SeedAsync();
+        var request = await f.RequestAsync();
+        async Task Reject()
+        {
+            await new AiRejectedDecisionHistoryService(f, new FixedClock()).RecordAsync(new(request.DecisionId,
+                request.RiskDecision with { Approved = false, ApprovedQuantity = 0m, RejectionReason = AiRiskRejectionReason.LowConfidence }));
+        }
+        if (duringQuote) f.Market.BeforeQuote = Reject;
+        else await Reject();
+        await Failure(f.Engine(), request, AiTradeExecutionFailure.DecisionRejected);
+        if (!duringQuote) Assert.Empty(f.Market.Calls);
+        await f.AssertUnchangedAsync();
+        await using var db = f.CreateDbContext();
+        var rejected = await db.AiRejectedDecisions.SingleAsync();
+        Assert.Equal(request.DecisionId, rejected.AiDecisionId);
+        Assert.Equal("LowConfidence", rejected.RejectionReason);
+    }
+
+    [Fact]
+    public async Task Same_decision_under_another_order_cannot_execute_twice()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await f.SeedAsync();
+        var request = await f.RequestAsync();
+        var first = await f.Engine().ExecuteAsync(request);
+        Assert.Equal(request.DecisionId, first.DecisionId);
+        f.Market.Quote = _ => throw new HttpRequestException();
+        await Failure(f.Engine(), request with { OrderId = Guid.NewGuid() }, AiTradeExecutionFailure.DecisionAlreadyExecuted);
+        await using var db = f.CreateDbContext();
+        var trade = await db.AiTrades.SingleAsync();
+        Assert.Equal(request.DecisionId, trade.AiDecisionId);
+        Assert.Equal(90000m, (await db.AiTraderPortfolios.SingleAsync()).CashBalance);
+        Assert.Equal(100m, (await db.AiTraderPositions.SingleAsync()).Quantity);
+    }
+
+    [Fact]
+    public async Task Same_order_with_another_matching_decision_is_a_conflict()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await f.SeedAsync();
+        var first = await f.RequestAsync();
+        await f.Engine().ExecuteAsync(first);
+        var other = first with { DecisionId = Guid.NewGuid() };
+        await f.RecordAsync(other);
+        await Failure(f.Engine(), other, AiTradeExecutionFailure.DuplicateOrder);
+        await using var db = f.CreateDbContext();
+        Assert.Equal(first.DecisionId, (await db.AiTrades.SingleAsync()).AiDecisionId);
+        Assert.Equal(90000m, (await db.AiTraderPortfolios.SingleAsync()).CashBalance);
+    }
+
+    [Fact]
+    public async Task Buy_creates_position_and_trade_using_server_price_and_one_timestamp()
+    {
+        await using var f = await Fixture.CreateAsync();
+        await f.SeedAsync();
+        var request = await f.RequestAsync();
         var result = await f.Engine().ExecuteAsync(request);
         Assert.Equal(90000m, result.CashBalance);
         Assert.Equal(100m, result.ExecutedQuantity);
@@ -56,7 +164,7 @@ public sealed class AiPaperTradingEngineTests
         await using var f = await Fixture.CreateAsync();
         await f.SeedAsync(99000m, ("AAPL", 10m, 100m));
         f.Market.Price = 120m;
-        var result = await f.Engine().ExecuteAsync(Request(quantity: 10m));
+        var result = await f.Engine().ExecuteAsync(await f.RequestAsync(quantity: 10m));
         Assert.Equal(97800m, result.CashBalance);
         Assert.Equal(20m, result.PositionQuantity);
         Assert.Equal(110m, result.AverageCost);
@@ -73,7 +181,7 @@ public sealed class AiPaperTradingEngineTests
         await using var f = await Fixture.CreateAsync();
         await f.SeedAsync(98500m, ("AAPL", 12.5m, 100m));
         f.Market.Price = 120m;
-        var result = await f.Engine().ExecuteAsync(Request(AiTradingSignal.Sell, D(quantity)));
+        var result = await f.Engine().ExecuteAsync(await f.RequestAsync(AiTradingSignal.Sell, D(quantity)));
         Assert.Equal(D(cash), result.CashBalance);
         Assert.Equal(D(remaining), result.PositionQuantity);
         Assert.Equal(D(remaining) == 0m ? null : 100m, result.AverageCost);
@@ -97,7 +205,7 @@ public sealed class AiPaperTradingEngineTests
         await using var f = await Fixture.CreateAsync();
         await f.SeedAsync();
         f.Market.Price = D(price);
-        var result = await f.Engine().ExecuteAsync(Request());
+        var result = await f.Engine().ExecuteAsync(await f.RequestAsync());
         Assert.Equal(D(quantity), result.ExecutedQuantity);
         Assert.Equal(D(cash), result.CashBalance);
         Assert.Equal(100m, result.RiskPrice);
@@ -120,7 +228,7 @@ public sealed class AiPaperTradingEngineTests
     {
         await using var f = await Fixture.CreateAsync();
         await f.SeedAsync();
-        var request = Request();
+        var request = await f.RequestAsync();
         request = scenario switch
         {
             "empty-id" => request with { OrderId = Guid.Empty },
@@ -146,7 +254,7 @@ public sealed class AiPaperTradingEngineTests
     {
         await using var f = await Fixture.CreateAsync();
         await f.SeedAsync();
-        var request = Request(signal);
+        var request = await f.RequestAsync(signal);
         request = request with { RiskDecision = request.RiskDecision with { Symbol = "AAPL,MSFT" } };
         await Failure(f.Engine(), request, AiTradeExecutionFailure.InvalidDecision);
         Assert.Empty(f.Market.Calls);
@@ -177,7 +285,7 @@ public sealed class AiPaperTradingEngineTests
             "currency" => Quote(symbol, 100m) with { Currency = "CAD" },
             _ => Quote("OTHER", 100m)
         };
-        await Failure(f.Engine(), Request(), expected);
+        await Failure(f.Engine(), await f.RequestAsync(), expected);
         await f.AssertUnchangedAsync();
     }
 
@@ -185,7 +293,7 @@ public sealed class AiPaperTradingEngineTests
     public async Task Missing_portfolio_never_creates_capital()
     {
         await using var f = await Fixture.CreateAsync();
-        await Failure(f.Engine(), Request(), AiTradeExecutionFailure.PortfolioNotFound);
+        await Failure(f.Engine(), await f.RequestAsync(), AiTradeExecutionFailure.PortfolioNotFound);
         await using var db = f.CreateDbContext();
         Assert.Empty(await db.AiTraderPortfolios.ToListAsync());
         Assert.Empty(await db.AiTrades.ToListAsync());
@@ -197,8 +305,9 @@ public sealed class AiPaperTradingEngineTests
         await using var f = await Fixture.CreateAsync();
         await f.SeedAsync();
         var request = Request() with { RiskDecision = Request().RiskDecision with { Symbol = "aapl" } };
+        await f.RecordAsync(request);
         var first = await f.Engine().ExecuteAsync(request);
-        await f.Engine().ExecuteAsync(Request(AiTradingSignal.Sell, 50m));
+        await f.Engine().ExecuteAsync(await f.RequestAsync(AiTradingSignal.Sell, 50m));
         f.Market.Quote = _ => throw new HttpRequestException();
         var replay = await f.Engine().ExecuteAsync(request with { RiskDecision = request.RiskDecision with { Symbol = "AAPL" } });
         Assert.Equal(first with { IsIdempotentReplay = true }, replay);
@@ -218,7 +327,7 @@ public sealed class AiPaperTradingEngineTests
     {
         await using var f = await Fixture.CreateAsync();
         await f.SeedAsync();
-        var request = Request();
+        var request = await f.RequestAsync();
         await f.Engine().ExecuteAsync(request);
         var decision = request.RiskDecision;
         decision = field switch
@@ -247,7 +356,7 @@ public sealed class AiPaperTradingEngineTests
             : field == "exposure" ? new[] { ("AAPL", 200m, 100m) }
             : field == "cash" ? new[] { ("OTHER", 100m, 100m) } : [];
         await f.SeedAsync(field == "cash" ? 0m : field == "exposure" ? 80000m : 100000m, positions);
-        var error = await Failure(f.Engine(field == "confidence" ? new() { MinimumConfidence = 0.9m } : null), Request(), AiTradeExecutionFailure.RiskChanged);
+        var error = await Failure(f.Engine(field == "confidence" ? new() { MinimumConfidence = 0.9m } : null), await f.RequestAsync(), AiTradeExecutionFailure.RiskChanged);
         Assert.Equal(reason, error.RiskReason);
         await using var db = f.CreateDbContext();
         Assert.Empty(await db.AiTrades.ToListAsync());
@@ -261,7 +370,7 @@ public sealed class AiPaperTradingEngineTests
     {
         await using var f = await Fixture.CreateAsync();
         await f.SeedAsync(100000m, held == 0 ? [] : [("AAPL", held, 100m)]);
-        await Failure(f.Engine(), Request(AiTradingSignal.Sell, 10m), AiTradeExecutionFailure.InsufficientHoldings);
+        await Failure(f.Engine(), await f.RequestAsync(AiTradingSignal.Sell, 10m), AiTradeExecutionFailure.InsufficientHoldings);
         await using var db = f.CreateDbContext();
         Assert.Empty(await db.AiTrades.ToListAsync());
         Assert.Equal(100000m, (await db.AiTraderPortfolios.SingleAsync()).CashBalance);
@@ -283,7 +392,7 @@ public sealed class AiPaperTradingEngineTests
             else writer.AiTraderPositions.Add(Position((await writer.AiTraderPortfolios.SingleAsync()).Id, "MSFT", 1m, 100m));
             await writer.SaveChangesAsync();
         };
-        await Failure(f.Engine(), Request(), AiTradeExecutionFailure.ConcurrencyConflict);
+        await Failure(f.Engine(), await f.RequestAsync(), AiTradeExecutionFailure.ConcurrencyConflict);
         await using var db = f.CreateDbContext();
         Assert.Empty(await db.AiTrades.ToListAsync());
         Assert.Equal(change == "cash" ? 98000m : 99000m, (await db.AiTraderPortfolios.SingleAsync()).CashBalance);
@@ -294,7 +403,7 @@ public sealed class AiPaperTradingEngineTests
     {
         await using var f = await Fixture.CreateAsync();
         await f.SeedAsync();
-        await Failure(f.Engine(interceptor: new FailAfterSave()), Request(), AiTradeExecutionFailure.PersistenceFailure);
+        await Failure(f.Engine(interceptor: new FailAfterSave()), await f.RequestAsync(), AiTradeExecutionFailure.PersistenceFailure);
         await f.AssertUnchangedAsync();
     }
 
@@ -304,7 +413,7 @@ public sealed class AiPaperTradingEngineTests
         await using var f = await Fixture.CreateAsync();
         await f.SeedAsync();
         f.Market.Price = 1.23445m;
-        var result = await f.Engine().ExecuteAsync(Request(quantity: 1.234567899m));
+        var result = await f.Engine().ExecuteAsync(await f.RequestAsync(quantity: 1.234567899m));
         Assert.Equal(1.23456789m, result.ExecutedQuantity);
         Assert.Equal(1.2345m, result.ExecutionPrice);
         Assert.Equal(1.5241m, result.TotalAmount);
@@ -318,7 +427,7 @@ public sealed class AiPaperTradingEngineTests
         await f.SeedAsync(0.0001m);
         f.Market.Price = 0.0001m;
         var result = await f.Engine(new() { MaxCashAllocationPerTradePercent = 1m, MaxPositionExposurePercent = 1m })
-            .ExecuteAsync(Request(quantity: 1m));
+            .ExecuteAsync(await f.RequestAsync(quantity: 1m));
         Assert.Equal(0m, result.CashBalance);
         Assert.Equal(0.0001m, result.TotalAmount);
     }
@@ -330,7 +439,7 @@ public sealed class AiPaperTradingEngineTests
         // Risk budget is 0.00015: storing a rounded 0.0002 debit would exceed it.
         await f.SeedAsync(0.0015m);
         f.Market.Price = 0.0001m;
-        await Failure(f.Engine(), Request(quantity: 1.5m), AiTradeExecutionFailure.RiskChanged);
+        await Failure(f.Engine(), await f.RequestAsync(quantity: 1.5m), AiTradeExecutionFailure.RiskChanged);
         await using var db = f.CreateDbContext();
         Assert.Equal(0.0015m, (await db.AiTraderPortfolios.SingleAsync()).CashBalance);
         Assert.Empty(await db.AiTrades.ToListAsync());
@@ -344,7 +453,7 @@ public sealed class AiPaperTradingEngineTests
         f.Market.Price = 0.0001m;
         // Safe raw size .92 shares, cost .000092 -> .0001. Exposure .000252
         // would exceed .2 * (.00126 - .0001 + .000092) = .0002504.
-        await Failure(f.Engine(), Request(quantity: 1m), AiTradeExecutionFailure.RiskChanged);
+        await Failure(f.Engine(), await f.RequestAsync(quantity: 1m), AiTradeExecutionFailure.RiskChanged);
         await using var db = f.CreateDbContext();
         Assert.Equal(0.0011m, (await db.AiTraderPortfolios.SingleAsync()).CashBalance);
         Assert.Equal(1.6m, (await db.AiTraderPositions.SingleAsync()).Quantity);
@@ -357,7 +466,7 @@ public sealed class AiPaperTradingEngineTests
         await using var f = await Fixture.CreateAsync();
         await f.SeedAsync(80000m, ("MSFT", 200m, 100m));
         f.Market.Quote = symbol => Quote(symbol, symbol == "AAPL" ? 1.2346m : 100m);
-        await Failure(f.Engine(), Request(quantity: 0.99999m), AiTradeExecutionFailure.RiskChanged);
+        await Failure(f.Engine(), await f.RequestAsync(quantity: 0.99999m), AiTradeExecutionFailure.RiskChanged);
         await using var db = f.CreateDbContext();
         Assert.Equal(80000m, (await db.AiTraderPortfolios.SingleAsync()).CashBalance);
         Assert.Empty(await db.AiTrades.ToListAsync());
@@ -387,8 +496,8 @@ public sealed class AiPaperTradingEngineTests
         });
         var before = await UserState();
         (await db.Users.SingleAsync()).DisplayName = "Pending unrelated edit";
-        await f.Engine().ExecuteAsync(Request());
-        await f.Engine().ExecuteAsync(Request(AiTradingSignal.Sell));
+        await f.Engine().ExecuteAsync(await f.RequestAsync());
+        await f.Engine().ExecuteAsync(await f.RequestAsync(AiTradingSignal.Sell));
         Assert.Equal(before, await UserState());
         Assert.Equal(EntityState.Modified, db.Entry(await db.Users.SingleAsync()).State);
         Assert.Equal(2, await db.AiTrades.CountAsync());
@@ -400,8 +509,8 @@ public sealed class AiPaperTradingEngineTests
         await using var f = await Fixture.CreateAsync();
         await f.SeedAsync(98000m, ("AAPL", 10m, 100m), ("OTHER", 10m, 100m));
         f.Market.Quote = symbol => symbol == "AAPL" ? Quote(symbol, 100m) : null;
-        await Failure(f.Engine(), Request(), AiTradeExecutionFailure.QuoteUnavailable);
-        var sell = await f.Engine().ExecuteAsync(Request(AiTradingSignal.Sell, 10m));
+        await Failure(f.Engine(), await f.RequestAsync(), AiTradeExecutionFailure.QuoteUnavailable);
+        var sell = await f.Engine().ExecuteAsync(await f.RequestAsync(AiTradingSignal.Sell, 10m));
         Assert.Equal(99000m, sell.CashBalance);
         await using var db = f.CreateDbContext();
         Assert.Equal("OTHER", (await db.AiTraderPositions.SingleAsync()).Symbol);
@@ -415,12 +524,13 @@ public sealed class AiPaperTradingEngineTests
         await f.SeedAsync();
         using var cts = new CancellationTokenSource();
         f.Market.BeforeQuote = () => { cts.Cancel(); return Task.CompletedTask; };
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => f.Engine().ExecuteAsync(Request(), cts.Token));
+        var request = await f.RequestAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => f.Engine().ExecuteAsync(request, cts.Token));
         await f.AssertUnchangedAsync();
     }
 
     internal static AiTradeExecutionRequest Request(AiTradingSignal signal = AiTradingSignal.Buy, decimal quantity = 100m) =>
-        new(Guid.NewGuid(), new(true, "AAPL", signal, 0.8m, 100m, quantity, null));
+        new(Guid.NewGuid(), Guid.NewGuid(), new(true, "AAPL", signal, 0.8m, 100m, quantity, null));
     internal static StockQuote Quote(string symbol, decimal price) => new(symbol, "USD", price, null, null, null, Fixture.Now);
     private static decimal D(string value) => decimal.Parse(value, CultureInfo.InvariantCulture);
     internal static async Task<AiTradeExecutionException> Failure(IAiTradeExecutionService engine, AiTradeExecutionRequest request, AiTradeExecutionFailure category)
@@ -436,11 +546,21 @@ public sealed class AiPaperTradingEngineTests
         CreatedAtUtc = Fixture.Before, UpdatedAtUtc = Fixture.Before
     };
 
-    internal sealed class Fixture(SqliteConnection connection) : IAsyncDisposable
+    internal sealed class Fixture(SqliteConnection connection) : IDbContextFactory<StockLabDbContext>, IAsyncDisposable
     {
         internal static readonly DateTimeOffset Now = new(2026, 9, 28, 12, 0, 0, TimeSpan.Zero);
         internal static readonly DateTime Before = Now.AddDays(-1).UtcDateTime;
         public FakeMarket Market { get; } = new();
+        public async Task<AiTradeExecutionRequest> RequestAsync(AiTradingSignal signal = AiTradingSignal.Buy, decimal quantity = 100m)
+        {
+            var request = Request(signal, quantity);
+            await RecordAsync(request);
+            return request;
+        }
+        public Task<AiDecisionRecord> RecordAsync(AiTradeExecutionRequest request) =>
+            new AiDecisionHistoryService(this, new FixedClock()).RecordAsync(new(request.DecisionId,
+                request.RiskDecision.Symbol, request.RiskDecision.Signal, request.RiskDecision.Confidence,
+                new(2026, 9, 27), "test-model", "v1"));
         public StockLabDbContext CreateDbContext() => new SqliteContext(Options());
         private DbContextOptions<StockLabDbContext> Options(IInterceptor? interceptor = null)
         {
