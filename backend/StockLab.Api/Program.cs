@@ -65,6 +65,7 @@ builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddUserRegistration();
 builder.Services.AddWatchlist();
 builder.Services.AddPriceAlerts();
+builder.Services.AddPriceAlertMonitoring(builder.Configuration);
 builder.Services.AddPaperTrading();
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddAiTraderPortfolio();

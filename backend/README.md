@@ -1135,7 +1135,8 @@ shared budget, null/empty behavior, provider failures and safe 429 JSON.
 
 The committed default is MarketData:Provider=Mock. A clone runs without credentials
 and makes no external market-data calls. TwelveData must be selected explicitly.
-No startup probe, health probe, timer or background request contacts Twelve Data.
+No startup or health probe contacts Twelve Data. Periodic price-alert monitoring
+can request quotes for active rules through the existing market-data pipeline.
 
 Both pipelines are Cache -> Dedup -> RateLimit -> terminal (Mock or TwelveData).
 Controllers inject only IMarketDataProvider. Application exposes provider-neutral
@@ -1356,7 +1357,8 @@ on each visit to Market. Up to eight requests wait for the next local minute win
 further requests receive a controlled 429. Cancelled periods leave this queue, while
 rapid chart clicks are debounced for 300 ms and loaded periods use the frontend cache.
 Its local minute boundary and other clients can still differ from the provider quota.
-No polling, retries or fallback keys are used. Alpha has a separate 20/day best-effort
+The frontend does not poll; active price-alert rules are monitored periodically by
+the backend. No retries or fallback keys are used. Alpha has a separate 20/day best-effort
 budget. UI logos load directly from Elbstream with attribution and consume no Alpha
 credits; unavailable logos keep the ticker fallback.
 
@@ -1375,3 +1377,45 @@ feeds fail safely and an empty valid feed remains empty. The frontend additional
 filters headlines for the selected company identity. Article bodies are not copied.
 Logos in the frontend now use the free Elbstream CDN with required attribution;
 Alpha logo endpoints remain available but are not called by StockLogo.
+
+## Price alert monitoring (#42)
+
+`AddPriceAlertMonitoring` registers a scoped `IPriceAlertMonitoringService` and a
+hosted worker. The worker waits for its first `PeriodicTimer` tick, creates an async
+DI scope, and awaits the complete cycle before processing the next tick. Missed
+ticks coalesce; they never produce concurrent cycles. Shutdown cancels timer and
+provider waits, and disposes the cycle's scope. A failed database cycle is logged
+without raw exception details and retried at the next tick.
+
+Only `Active` alerts are projected from SQL with `AsNoTracking`. Alerts are grouped
+across all users by symbol; each group makes exactly one `GetQuoteAsync` call to
+the registered cache -> dedup -> rate-limit -> terminal pipeline. No active rules
+means no quote calls. Lookups are sequential. Missing quotes and provider errors
+skip their symbol; currency mismatches skip the affected rules with one warning
+per symbol. Prices remain `decimal`; Above uses strict `>` and Below strict `<`.
+Equality never matches.
+
+`PriceAlertMonitoring:Interval` defaults to `00:01:00` and can also be supplied as
+`PriceAlertMonitoring__Interval`. Startup validation requires a timer-supported
+interval of 1..4294967294 milliseconds. Configuration changes require a restart.
+With an external terminal, active rules can consume provider quota each cycle;
+the existing cache and limiter still apply. The committed provider is `Mock`.
+
+`RunOnceAsync` returns `PriceAlertMonitoringResult` and `PriceAlertMatch` values
+for #43 to consume. `ObservedAtUtc` comes from `StockQuote.AsOfUtc`. No alert is
+updated: Status, TriggeredPrice, TriggeredAtUtc, UpdatedAtUtc and rowversion remain
+unchanged. No migrations, HTTP endpoints or frontend changes are introduced.
+
+One Information summary is emitted per completed cycle: active alerts, distinct
+symbols, non-null quotes retrieved, matches and failures. `QuoteCount` counts
+non-null quotes; `FailedQuoteCount` counts null or failed lookups. Their sum is the
+number of symbol lookups. A currency mismatch still counts as a retrieved quote.
+
+The offline API-host smoke test seeds AAPL Above, AAPL Below and MSFT Above,
+uses the real configured Mock pipeline with a temporary SQLite database, and
+advances a test clock by one interval. It verifies the worker's summary contains
+3 active alerts, 2 distinct symbols and 2 quotes, and that all alerts stay Active:
+
+```powershell
+dotnet test backend/StockLab.sln --filter FullyQualifiedName~PriceAlertMonitoringCompositionTests
+```

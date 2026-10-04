@@ -10,6 +10,7 @@ Le dépôt est encore en développement. Le code actuel fournit un frontend fonc
 - [État actuel](#état-actuel)
 - [Stack technique](#stack-technique)
 - [Architecture](#architecture)
+- [Price alert monitoring](#price-alert-monitoring)
 - [Structure du dépôt](#structure-du-dépôt)
 - [Prérequis](#prérequis)
 - [Installation locale](#installation-locale)
@@ -80,6 +81,26 @@ L’exécution actuelle comporte trois zones indépendantes et testables :
 La solution .NET suit une structure en couches. StockLab.Domain contient les types et règles du domaine, StockLab.Application expose les contrats et les limites des cas d’utilisation, StockLab.Infrastructure implémente les fournisseurs et les services transversaux, et StockLab.Api assemble l’injection de dépendances et les endpoints HTTP. Le domaine actuel reste volontairement réduit pendant le développement de la persistance et du trading.
 
 Le frontend utilise Vite en mode multi-pages plutôt qu’un routeur côté client. frontend/src/navigation/routes.ts est le registre partagé des routes et le middleware Vite associe les URL lisibles aux pages HTML correspondantes. Pendant le développement et la prévisualisation, le proxy API envoie les requêtes /api vers http://localhost:5274.
+
+## Price alert monitoring
+
+Le backend surveille automatiquement les alertes `Active`, toutes les minutes par
+défaut. `PriceAlertMonitoring:Interval` configure l'intervalle (par exemple
+`"00:01:00"` dans `backend/StockLab.Api/appsettings.json` ou via
+`PriceAlertMonitoring__Interval`). La valeur est validée au démarrage.
+
+- Une seule quote par symbole et par cycle, partagée entre tous les utilisateurs
+  et toutes les conditions, via le pipeline de cache, déduplication et limitation du débit.
+- `Above` compare strictement `prix > cible`; `Below` compare strictement `prix < cible`.
+  L'égalité ne produit aucun match; les devises doivent correspondre.
+- Le worker attend le premier intervalle, crée un scope par cycle et ne lance
+  jamais deux cycles simultanément. Les quotes manquantes ou en erreur sont isolées par symbole.
+- #42 retourne des `PriceAlertMatch` avec l'heure d'observation de la quote et
+  ne persiste pas encore `Triggered`. La mutation atomique appartient à #43.
+
+Le fournisseur `Mock` reste le défaut hors ligne. Avec un fournisseur externe,
+les alertes actives peuvent consommer son quota à chaque cycle; sans alerte active,
+aucun appel de données de marché n'est effectué.
 
 ## Structure du dépôt
 
