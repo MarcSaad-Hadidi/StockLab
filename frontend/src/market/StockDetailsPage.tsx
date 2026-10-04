@@ -1,5 +1,5 @@
 import { FinancialLineChart } from "../components/charts/FinancialLineChart";
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
   formatNumber,
@@ -8,7 +8,8 @@ import {
 } from "../i18n/formatters";
 import { marketDataApi } from "../api/marketDataClient";
 import { TradingApiError, tradingApi } from "../api/tradingApi";
-import { getAuthSession } from "../auth/authStorage";
+import { getAuthSession, type AuthSession } from "../auth/authStorage";
+import { subscribeAuthSession, useAuthUser } from "../auth/useAuthUser";
 import { MarketShell } from "./MarketShell";
 import { MarketIcon } from "./marketIcons";
 import { StockLogo } from "./StockLogo";
@@ -35,6 +36,9 @@ type ToastState = {
   orderType?: TradeOrderType;
 };
 type PendingTrade = {
+  session: AuthSession;
+  submitted?: boolean;
+  outcomeUncertain?: boolean;
   orderId: string;
   side: TradeSide;
   orderType: TradeOrderType;
@@ -43,6 +47,10 @@ type PendingTrade = {
   estimatedPrice: number;
   estimatedTotal: number;
 };
+function sameTradeSession(expected: AuthSession, current: AuthSession | null) {
+  return current !== null && expected.user.id === current.user.id
+    && expected.accessToken === current.accessToken;
+}
 const detailTabs = [
   "overview",
   "financials",
@@ -266,13 +274,52 @@ export function StockDetailsPage({
   const [toast, setToast] = useState<ToastState | null>(null);
   const [pendingTrade, setPendingTrade] = useState<PendingTrade | null>(null);
   const [tradeError, setTradeError] = useState<string | null>(null);
+  const [hasUncertainOrder, setHasUncertainOrder] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [availableCash, setAvailableCash] = useState<number | null>(null);
-  const isAuthenticated = getAuthSession() !== null;
+  const [cashResult, setCashResult] = useState<{ session: AuthSession; balance: number } | null>(null);
+  const activeRequest = useRef<{ controller: AbortController; sent: boolean } | null>(null);
+  const toastTimer = useRef<number | undefined>(undefined);
+  const isAuthenticated = useAuthUser() !== null;
+
+  const cancelChangedSession = useCallback((trade: PendingTrade, current: AuthSession | null) => {
+    const submitted = trade.submitted || activeRequest.current?.sent === true;
+    // A submitted request may already be committed. Keep its original ID and terms
+    // across same-account token rotations so any retry remains idempotent.
+    if (submitted && current?.user.id === trade.session.user.id) {
+      setPendingTrade({ ...trade, session: current, submitted: true });
+      return;
+    }
+    const uncertain = submitted && (trade.outcomeUncertain || activeRequest.current?.sent === true);
+    activeRequest.current?.controller.abort();
+    activeRequest.current = null;
+    window.clearTimeout(toastTimer.current);
+    setPendingTrade(null);
+    setIsSubmitting(false);
+    setToast(null);
+    if (uncertain) setHasUncertainOrder(true);
+    setTradeError(uncertain ? null : "stockDetails.tradeErrors.session_changed");
+  }, [setPendingTrade, setIsSubmitting, setToast, setTradeError, setHasUncertainOrder]);
+
+  useEffect(() => subscribeAuthSession(() => {
+    const current = getAuthSession();
+    if (pendingTrade && !sameTradeSession(pendingTrade.session, current)) cancelChangedSession(pendingTrade, current);
+    if (cashResult && !sameTradeSession(cashResult.session, current)) {
+      setCashResult(null);
+      window.clearTimeout(toastTimer.current);
+      setToast(null);
+    }
+  }), [pendingTrade, cashResult, cancelChangedSession]);
+
+  useEffect(() => () => {
+    activeRequest.current?.controller.abort();
+    activeRequest.current = null;
+    window.clearTimeout(toastTimer.current);
+  }, []);
 
   const showToast = (message: ToastState) => {
     setToast(message);
-    window.setTimeout(() => setToast(null), 2500);
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 2500);
   };
 
   const loadQuote = useCallback(
@@ -339,7 +386,12 @@ export function StockDetailsPage({
     : null;
   const submitTrade = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!details || isSubmitting) return;
+    if (!details || activeRequest.current || pendingTrade?.submitted) return;
+    const session = getAuthSession();
+    if (!session) {
+      setTradeError("stockDetails.tradeErrors.unauthorized");
+      return;
+    }
 
     const parsedQuantity = Number(quantity);
     if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
@@ -367,6 +419,7 @@ export function StockDetailsPage({
     setLimitPriceError("");
     setTradeError(null);
     setPendingTrade({
+      session,
       orderId: crypto.randomUUID(),
       side: tradeSide,
       orderType,
@@ -378,7 +431,16 @@ export function StockDetailsPage({
   };
 
   const confirmTrade = async () => {
-    if (!pendingTrade || isSubmitting) return;
+    if (!pendingTrade || activeRequest.current) return;
+    const current = getAuthSession();
+    if (!sameTradeSession(pendingTrade.session, current)) {
+      cancelChangedSession(pendingTrade, current);
+      return;
+    }
+    const controller = new AbortController();
+    const attempt = { controller, sent: false };
+    activeRequest.current = attempt;
+    const submittedTrade = { ...pendingTrade, submitted: true };
     setIsSubmitting(true);
     setTradeError(null);
     try {
@@ -389,8 +451,21 @@ export function StockDetailsPage({
         quantity: pendingTrade.quantity,
         orderType: pendingTrade.orderType,
         ...(pendingTrade.orderType === "limit" ? { limitPrice: pendingTrade.limitPrice } : {}),
+      }, controller.signal, `${pendingTrade.session.tokenType} ${pendingTrade.session.accessToken}`, () => {
+        if (activeRequest.current === attempt) {
+          attempt.sent = true;
+          setPendingTrade(submittedTrade);
+        }
       });
-      setAvailableCash(result.cashBalance);
+      if (controller.signal.aborted) return;
+      const current = getAuthSession();
+      // Only the original account can receive the result, even if its token rotated
+      // after sending. The request was already authorized with the preparation token.
+      if (current?.user.id !== pendingTrade.session.user.id) {
+        cancelChangedSession(submittedTrade, current);
+        return;
+      }
+      setCashResult({ session: current, balance: result.cashBalance });
       setPendingTrade(null);
       showToast({
         key: "stockDetails.tradeSuccess",
@@ -399,11 +474,38 @@ export function StockDetailsPage({
         orderType: pendingTrade.orderType,
       });
     } catch (error) {
+      if (controller.signal.aborted) return;
+      const current = getAuthSession();
+      if (error instanceof TradingApiError && error.code === "session_changed") {
+        // The API rejected authorization before fetching; this attempt was never sent.
+        controller.abort();
+        activeRequest.current = null;
+        setIsSubmitting(false);
+        cancelChangedSession(pendingTrade, current);
+        return;
+      }
+      if (current?.user.id !== pendingTrade.session.user.id) {
+        cancelChangedSession(submittedTrade, current);
+        return;
+      }
       const code = error instanceof TradingApiError ? error.code : "server_error";
+      // A current-account HTTP rejection remains definitive across token rotations.
+      // A lost/invalid response or server failure cannot confirm whether a trade committed.
+      setPendingTrade({ ...submittedTrade, session: current,
+        outcomeUncertain: pendingTrade.outcomeUncertain || !(error instanceof TradingApiError)
+          || error.status === 0 || error.status >= 500 });
       setTradeError(`stockDetails.tradeErrors.${code}`);
     } finally {
-      setIsSubmitting(false);
+      if (activeRequest.current === attempt) {
+        activeRequest.current = null;
+        setIsSubmitting(false);
+      }
     }
+  };
+  const dismissTrade = () => {
+    if (pendingTrade?.outcomeUncertain) setHasUncertainOrder(true);
+    setPendingTrade(null);
+    setTradeError(null);
   };
   const points = history.data ? historyPoints(history.data, locale) : [];
   const change = quote.data?.changePercent;
@@ -682,6 +784,8 @@ export function StockDetailsPage({
                 <p className="stock-ai-copy">{t("stockPanels.priceFact", { price: formatPrice(quote.data?.price), change: quote.data?.changePercent == null ? "—" : formatSignedPercent(quote.data.changePercent) })}</p>
                 <button className="stock-outline-button" type="button" onClick={() => setActiveTab("insights")}>{t("stockPanels.openInsights")}</button>
               </article>
+              {hasUncertainOrder && <p className="stock-form-error" role="alert">{t("stockDetails.submittedOrderUncertain")}</p>}
+              {!pendingTrade && tradeError && <p className="stock-form-error" role="alert">{t(tradeError)}</p>}
               {!details && (
                 <article className="stock-trade-card">
                   <h2>{t("stockDetails.paperTrading")}</h2>
@@ -715,7 +819,7 @@ export function StockDetailsPage({
                   quantity={quantity}
                   quantityError={quantityError}
                   side={tradeSide}
-                  availableCash={availableCash}
+                  availableCash={cashResult?.balance ?? null}
                   isSubmitting={isSubmitting}
                   isAuthenticated={isAuthenticated}
                 />
@@ -756,10 +860,7 @@ export function StockDetailsPage({
               aria-label={t("stockDetails.closeTradeConfirmation")}
               className="stock-modal-close"
               disabled={isSubmitting}
-              onClick={() => {
-                setPendingTrade(null);
-                setTradeError(null);
-              }}
+              onClick={dismissTrade}
               type="button"
             >
               <MarketIcon name="close" size={14} />
@@ -779,15 +880,14 @@ export function StockDetailsPage({
               <div><span>{t("stockDetails.estimatedPrice")}</span><strong>{money(pendingTrade.estimatedPrice, currency, locale, 4)}</strong></div>
               <div><span>{t("stockDetails.estimatedTotal")}</span><strong>{money(pendingTrade.estimatedTotal, currency, locale, 4)}</strong></div>
             </div>
+            {pendingTrade.outcomeUncertain && <p className="stock-form-error" role="alert">{t("stockDetails.submittedOutcomeUncertain")}</p>}
+            {hasUncertainOrder && <p className="stock-form-error" role="alert">{t("stockDetails.submittedOrderUncertain")}</p>}
             {tradeError && <p className="stock-form-error" role="alert">{t(tradeError)}</p>}
             <div className="stock-modal-actions">
               <button
                 className="stock-secondary-button"
                 disabled={isSubmitting}
-                onClick={() => {
-                  setPendingTrade(null);
-                  setTradeError(null);
-                }}
+                onClick={dismissTrade}
                 type="button"
               >
                 {t("common.cancel")}
@@ -798,7 +898,7 @@ export function StockDetailsPage({
                 onClick={confirmTrade}
                 type="button"
               >
-                {isSubmitting ? t("stockDetails.submittingOrder") : t("stockDetails.confirmOrderButton")}
+                {isSubmitting ? t("stockDetails.submittingOrder") : t(pendingTrade.submitted ? "stockDetails.retryOrderButton" : "stockDetails.confirmOrderButton")}
               </button>
             </div>
           </section>

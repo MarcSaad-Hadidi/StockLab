@@ -100,3 +100,35 @@ test('buy and sell requests preserve fractional quantities and four-decimal limi
     }
   }
 })
+
+test('a prepared order refuses a replaced or missing token before fetching', async () => {
+  for (const current of [null, { Authorization: 'Bearer account-b' }, { Authorization: 'Bearer rotated-account-a' }]) {
+    let requests = 0
+    let sentNotifications = 0
+    const api = createTradingApi('', async () => {
+      requests++
+      return jsonResponse(result)
+    }, () => current)
+    await assert.rejects(api.executeTrade({ orderId: result.orderId, side: 'BUY', symbol: 'AAPL', quantity: 2,
+      orderType: 'market' }, undefined, 'Bearer account-a', () => { sentNotifications++ }),
+    (error: unknown) => error instanceof TradingApiError && error.code === 'session_changed')
+    assert.equal(requests, 0)
+    assert.equal(sentNotifications, 0)
+  }
+})
+
+test('a prepared order sends its checked token and abort signal', async () => {
+  const controller = new AbortController()
+  let authorizationReads = 0
+  let sentNotifications = 0
+  const api = createTradingApi('', async (_, init) => {
+    assert.equal(sentNotifications, 1)
+    assert.equal((init.headers as Record<string, string>).Authorization, 'Bearer account-a')
+    assert.equal(init.signal, controller.signal)
+    return jsonResponse(result)
+  }, () => ({ Authorization: ++authorizationReads === 1 ? 'Bearer account-a' : 'Bearer account-b' }))
+  await api.executeTrade({ orderId: result.orderId, side: 'BUY', symbol: 'AAPL', quantity: 2,
+    orderType: 'market' }, controller.signal, 'Bearer account-a', () => { sentNotifications++ })
+  assert.equal(authorizationReads, 1)
+  assert.equal(sentNotifications, 1)
+})

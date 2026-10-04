@@ -6,7 +6,7 @@ function snapshot(): string | null {
   // A primitive snapshot stays stable between reads and exposes no access token.
   return session ? JSON.stringify({ user: session.user, expiresAtUtc: session.expiresAtUtc }) : null
 }
-function subscribe(changed: () => void) {
+export function subscribeAuthSession(changed: () => void) {
   let timer: number | undefined
   function refresh() {
     window.clearTimeout(timer)
@@ -32,6 +32,6 @@ function subscribe(changed: () => void) {
 }
 
 export function useAuthUser(): AuthUser | null {
-  const value = useSyncExternalStore(subscribe, snapshot, () => null)
+  const value = useSyncExternalStore(subscribeAuthSession, snapshot, () => null)
   return value ? (JSON.parse(value) as { user: AuthUser }).user : null
 }
