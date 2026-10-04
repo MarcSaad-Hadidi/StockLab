@@ -82,6 +82,15 @@ a { text-decoration: none; }
 .topbar-account { gap: 7px; padding: 0 0 0 4px; color: #75849b; }
 .mobile-menu-button { display: none; }
 .profile-content { width: min(100%, 1220px); margin: 0 auto; padding: 22px 18px 34px; }
+.profile-page button:disabled { cursor: not-allowed; opacity: .5; transform: none; }
+.profile-feedback { margin: 0 0 14px; font-size: 12px; }
+.profile-feedback p { margin: 0 0 8px; }
+.profile-feedback a { color: #4357ed; font-weight: 700; text-decoration: underline; }
+.profile-feedback button { padding: 5px 10px; }
+.profile-saved { color: #278347; font-size: 11px; }
+.profile-unavailable { flex: 0 0 auto; color: #8d99aa; font-size: 12px; }
+.profile-info-row input[aria-invalid="true"] { border-color: #b43b47; }
+.profile-page .simulation-note { text-align: center; line-height: 1.5; }
 .profile-summary-card, .panel { background: #fff; border: 1px solid #e8edf4; border-radius: 12px; box-shadow: 0 5px 18px rgba(31, 55, 91, .035); }
 .profile-summary-card {
   display: grid;
