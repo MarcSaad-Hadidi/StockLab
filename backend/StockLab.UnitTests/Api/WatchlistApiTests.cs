@@ -111,7 +111,17 @@ public sealed class WatchlistApiTests
         JsonSerializer.Serialize(new { symbol = new string('X', 33) }), """{"symbol":42}""", "{",
         """{"symbol":"BTC/USD"}""", """{"symbol":"/"}""",
         """{"symbol":"."}""", """{"symbol":".."}""",
-        """{"symbol":"  .  "}""", """{"symbol":"  ..  "}"""
+        """{"symbol":"  .  "}""", """{"symbol":"  ..  "}""",
+        JsonSerializer.Serialize(new { symbol = "A\0B" }),
+        JsonSerializer.Serialize(new { symbol = "\0AAPL" }),
+        JsonSerializer.Serialize(new { symbol = "AAPL\0" }),
+        JsonSerializer.Serialize(new { symbol = "A\tB" }),
+        JsonSerializer.Serialize(new { symbol = "A\nB" }),
+        JsonSerializer.Serialize(new { symbol = "A\rB" }),
+        JsonSerializer.Serialize(new { symbol = "A\u001FB" }),
+        JsonSerializer.Serialize(new { symbol = "A\u007FB" }),
+        JsonSerializer.Serialize(new { symbol = "A\u0085B" }),
+        JsonSerializer.Serialize(new { symbol = "A\u009FB" })
     }.Select(payload => new object[] { payload });
 
     [Theory]
@@ -131,7 +141,17 @@ public sealed class WatchlistApiTests
     [InlineData("..")]
     [InlineData("  .  ")]
     [InlineData("  ..  ")]
-    public async Task Service_rejects_dot_segments_after_trimming(string symbol)
+    [InlineData("A\0B")]
+    [InlineData("\0AAPL")]
+    [InlineData("AAPL\0")]
+    [InlineData("A\tB")]
+    [InlineData("A\nB")]
+    [InlineData("A\rB")]
+    [InlineData("A\u001FB")]
+    [InlineData("A\u007FB")]
+    [InlineData("A\u0085B")]
+    [InlineData("A\u009FB")]
+    public async Task Service_rejects_invalid_symbols_after_trimming(string symbol)
     {
         await using var fixture = await WatchlistFixture.CreateAsync();
         await using var db = fixture.CreateDbContext();
@@ -227,6 +247,9 @@ public sealed class WatchlistApiTests
     [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567")]
     [InlineData("%20.%20")]
     [InlineData("%20..%20")]
+    [InlineData("A%09B")]
+    [InlineData("A%7FB")]
+    [InlineData("A%C2%85B")]
     public async Task Delete_validates_the_symbol(string symbol)
     {
         await using var fixture = await WatchlistFixture.CreateAsync();
@@ -244,6 +267,8 @@ public sealed class WatchlistApiTests
     [InlineData("%2E%2E")]
     [InlineData("...")]
     [InlineData("AAPL..")]
+    [InlineData("A%00B")]
+    [InlineData("A%09B")]
     public async Task Accepted_symbols_round_trip_through_an_encoded_delete_path(string symbol)
     {
         await using var fixture = await WatchlistFixture.CreateAsync();

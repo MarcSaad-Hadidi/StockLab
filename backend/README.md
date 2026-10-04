@@ -729,9 +729,10 @@ POST and each item in GET return only `symbol` and `createdAtUtc` (UTC). GET ord
 by creation time descending, then symbol ascending for equal timestamps. Symbols
 are trimmed and uppercased with invariant casing and must contain 1–32 characters
 after trimming. Thus `" aapl "` and `"AAPL"` identify the same entry. Slash-containing
-symbols and the exact dot segments `.` and `..` are rejected so accepted entries
-fit the single-segment DELETE route and survive URL parsing. The rule applies
-after trimming; ordinary dotted symbols such as `BRK.B` remain valid.
+symbols, control characters (including NUL), and the exact dot segments `.` and
+`..` are rejected so accepted entries fit the single-segment DELETE route and
+survive URL parsing. The rule applies after trimming; ordinary dotted symbols
+such as `BRK.B` remain valid.
 Clients should URL-encode symbols in that route (for example, `BRK.B` and
 `AAPL:NASDAQ` are supported); literal percent sequences are not decoded twice.
 
