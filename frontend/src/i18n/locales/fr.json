@@ -326,6 +326,7 @@
     "signInToTrade": "Connectez-vous pour passer un ordre simulé",
     "tradeSuccess": "L’ordre {{side}} de {{quantity}} {{symbol}} a été exécuté avec succès.",
     "tradeErrors": {
+      "session_changed": "Votre session de connexion a changé. Veuillez préparer votre ordre à nouveau.",
       "validation_error": "Vérifiez les informations de l’ordre puis réessayez.",
       "unauthorized": "Votre session a expiré. Veuillez vous reconnecter.",
       "portfolio_not_found": "Votre portefeuille simulé est introuvable.",

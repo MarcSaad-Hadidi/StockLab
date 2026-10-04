@@ -326,6 +326,7 @@
     "signInToTrade": "Sign in to place a paper order",
     "tradeSuccess": "{{side}} order for {{quantity}} {{symbol}} executed successfully.",
     "tradeErrors": {
+      "session_changed": "Your sign-in session changed. Please prepare your order again.",
       "validation_error": "Check the order details and try again.",
       "unauthorized": "Your session has expired. Please sign in again.",
       "portfolio_not_found": "Your paper portfolio could not be found.",

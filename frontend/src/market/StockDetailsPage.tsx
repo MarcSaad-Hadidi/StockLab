@@ -1,5 +1,5 @@
 import { FinancialLineChart } from "../components/charts/FinancialLineChart";
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
   formatNumber,
@@ -8,7 +8,8 @@ import {
 } from "../i18n/formatters";
 import { marketDataApi } from "../api/marketDataClient";
 import { TradingApiError, tradingApi } from "../api/tradingApi";
-import { getAuthSession } from "../auth/authStorage";
+import { getAuthSession, type AuthSession } from "../auth/authStorage";
+import { subscribeAuthSession, useAuthUser } from "../auth/useAuthUser";
 import { MarketShell } from "./MarketShell";
 import { MarketIcon } from "./marketIcons";
 import { StockLogo } from "./StockLogo";
@@ -35,6 +36,7 @@ type ToastState = {
   orderType?: TradeOrderType;
 };
 type PendingTrade = {
+  session: AuthSession;
   orderId: string;
   side: TradeSide;
   orderType: TradeOrderType;
@@ -43,6 +45,10 @@ type PendingTrade = {
   estimatedPrice: number;
   estimatedTotal: number;
 };
+function sameTradeSession(expected: AuthSession, current: AuthSession | null) {
+  return current !== null && expected.user.id === current.user.id
+    && expected.accessToken === current.accessToken;
+}
 const detailTabs = [
   "overview",
   "financials",
@@ -267,12 +273,41 @@ export function StockDetailsPage({
   const [pendingTrade, setPendingTrade] = useState<PendingTrade | null>(null);
   const [tradeError, setTradeError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [availableCash, setAvailableCash] = useState<number | null>(null);
-  const isAuthenticated = getAuthSession() !== null;
+  const [cashResult, setCashResult] = useState<{ session: AuthSession; balance: number } | null>(null);
+  const activeRequest = useRef<AbortController | null>(null);
+  const toastTimer = useRef<number | undefined>(undefined);
+  const isAuthenticated = useAuthUser() !== null;
+
+  const cancelChangedSession = useCallback(() => {
+    activeRequest.current?.abort();
+    activeRequest.current = null;
+    window.clearTimeout(toastTimer.current);
+    setPendingTrade(null);
+    setIsSubmitting(false);
+    setToast(null);
+    setTradeError("stockDetails.tradeErrors.session_changed");
+  }, [setPendingTrade, setIsSubmitting, setToast, setTradeError]);
+
+  useEffect(() => subscribeAuthSession(() => {
+    const current = getAuthSession();
+    if (pendingTrade && !sameTradeSession(pendingTrade.session, current)) cancelChangedSession();
+    if (cashResult && !sameTradeSession(cashResult.session, current)) {
+      setCashResult(null);
+      window.clearTimeout(toastTimer.current);
+      setToast(null);
+    }
+  }), [pendingTrade, cashResult, cancelChangedSession]);
+
+  useEffect(() => () => {
+    activeRequest.current?.abort();
+    activeRequest.current = null;
+    window.clearTimeout(toastTimer.current);
+  }, []);
 
   const showToast = (message: ToastState) => {
     setToast(message);
-    window.setTimeout(() => setToast(null), 2500);
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 2500);
   };
 
   const loadQuote = useCallback(
@@ -339,7 +374,12 @@ export function StockDetailsPage({
     : null;
   const submitTrade = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!details || isSubmitting) return;
+    if (!details || activeRequest.current) return;
+    const session = getAuthSession();
+    if (!session) {
+      setTradeError("stockDetails.tradeErrors.unauthorized");
+      return;
+    }
 
     const parsedQuantity = Number(quantity);
     if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
@@ -367,6 +407,7 @@ export function StockDetailsPage({
     setLimitPriceError("");
     setTradeError(null);
     setPendingTrade({
+      session,
       orderId: crypto.randomUUID(),
       side: tradeSide,
       orderType,
@@ -378,7 +419,13 @@ export function StockDetailsPage({
   };
 
   const confirmTrade = async () => {
-    if (!pendingTrade || isSubmitting) return;
+    if (!pendingTrade || activeRequest.current) return;
+    if (!sameTradeSession(pendingTrade.session, getAuthSession())) {
+      cancelChangedSession();
+      return;
+    }
+    const controller = new AbortController();
+    activeRequest.current = controller;
     setIsSubmitting(true);
     setTradeError(null);
     try {
@@ -389,8 +436,13 @@ export function StockDetailsPage({
         quantity: pendingTrade.quantity,
         orderType: pendingTrade.orderType,
         ...(pendingTrade.orderType === "limit" ? { limitPrice: pendingTrade.limitPrice } : {}),
-      });
-      setAvailableCash(result.cashBalance);
+      }, controller.signal, `${pendingTrade.session.tokenType} ${pendingTrade.session.accessToken}`);
+      if (controller.signal.aborted) return;
+      if (!sameTradeSession(pendingTrade.session, getAuthSession())) {
+        cancelChangedSession();
+        return;
+      }
+      setCashResult({ session: pendingTrade.session, balance: result.cashBalance });
       setPendingTrade(null);
       showToast({
         key: "stockDetails.tradeSuccess",
@@ -399,10 +451,19 @@ export function StockDetailsPage({
         orderType: pendingTrade.orderType,
       });
     } catch (error) {
+      if (controller.signal.aborted) return;
+      if (!sameTradeSession(pendingTrade.session, getAuthSession())
+        || (error instanceof TradingApiError && error.code === "session_changed")) {
+        cancelChangedSession();
+        return;
+      }
       const code = error instanceof TradingApiError ? error.code : "server_error";
       setTradeError(`stockDetails.tradeErrors.${code}`);
     } finally {
-      setIsSubmitting(false);
+      if (activeRequest.current === controller) {
+        activeRequest.current = null;
+        setIsSubmitting(false);
+      }
     }
   };
   const points = history.data ? historyPoints(history.data, locale) : [];
@@ -682,6 +743,7 @@ export function StockDetailsPage({
                 <p className="stock-ai-copy">{t("stockPanels.priceFact", { price: formatPrice(quote.data?.price), change: quote.data?.changePercent == null ? "—" : formatSignedPercent(quote.data.changePercent) })}</p>
                 <button className="stock-outline-button" type="button" onClick={() => setActiveTab("insights")}>{t("stockPanels.openInsights")}</button>
               </article>
+              {!pendingTrade && tradeError && <p className="stock-form-error" role="alert">{t(tradeError)}</p>}
               {!details && (
                 <article className="stock-trade-card">
                   <h2>{t("stockDetails.paperTrading")}</h2>
@@ -715,7 +777,7 @@ export function StockDetailsPage({
                   quantity={quantity}
                   quantityError={quantityError}
                   side={tradeSide}
-                  availableCash={availableCash}
+                  availableCash={cashResult?.balance ?? null}
                   isSubmitting={isSubmitting}
                   isAuthenticated={isAuthenticated}
                 />

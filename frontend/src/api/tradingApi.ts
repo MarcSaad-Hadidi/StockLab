@@ -29,6 +29,7 @@ export type PaperTradeResponse = {
 export type TradingApiErrorCode =
   | 'validation_error'
   | 'unauthorized'
+  | 'session_changed'
   | 'portfolio_not_found'
   | 'stock_not_found'
   | 'currency_mismatch'
@@ -104,6 +105,7 @@ function messageFor(code: TradingApiErrorCode): string {
   return ({
     validation_error: 'The order information is invalid.',
     unauthorized: 'Your session has expired. Please sign in again.',
+    session_changed: 'Your sign-in session changed. Please prepare your order again.',
     portfolio_not_found: 'Your paper portfolio could not be found.',
     stock_not_found: 'This stock could not be found.',
     currency_mismatch: 'This stock is quoted in a different currency than your portfolio.',
@@ -126,8 +128,10 @@ export function createTradingApi(
   authorization: () => { Authorization: string } | null = getAuthorizationHeader,
 ) {
   return {
-    async executeTrade(request: ExecuteTradeRequest, signal?: AbortSignal): Promise<PaperTradeResponse> {
+    async executeTrade(request: ExecuteTradeRequest, signal?: AbortSignal, expectedAuthorization?: string): Promise<PaperTradeResponse> {
       const authHeader = authorization()
+      if (expectedAuthorization !== undefined && authHeader?.Authorization !== expectedAuthorization)
+        throw new TradingApiError(401, 'session_changed', messageFor('session_changed'))
       if (!authHeader)
         throw new TradingApiError(401, 'unauthorized', messageFor('unauthorized'))
 
