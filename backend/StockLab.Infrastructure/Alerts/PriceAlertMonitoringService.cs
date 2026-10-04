@@ -10,6 +10,7 @@ namespace StockLab.Infrastructure.Alerts;
 public sealed class PriceAlertMonitoringService(
     StockLabDbContext dbContext,
     IMarketDataProvider marketDataProvider,
+    PriceAlertMonitoringBudget budget,
     ILogger<PriceAlertMonitoringService> logger) : IPriceAlertMonitoringService
 {
     public async Task<PriceAlertMonitoringResult> RunOnceAsync(CancellationToken cancellationToken = default)
@@ -25,10 +26,21 @@ public sealed class PriceAlertMonitoringService(
         var matches = new List<PriceAlertMatch>();
         var quoteCount = 0;
         var failedQuoteCount = 0;
+        var deferredSymbolCount = 0;
+        var lastAttemptedSymbol = budget.LastAttemptedSymbol;
 
-        foreach (var group in groups.OrderBy(group => group.Key, StringComparer.Ordinal))
+        // Resume after the last attempted symbol so a partial cycle does not starve later symbols.
+        foreach (var group in groups.OrderBy(group => string.CompareOrdinal(group.Key, lastAttemptedSymbol) <= 0 ? 1 : 0)
+                     .ThenBy(group => group.Key, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (!budget.TryAcquire(group.Key))
+            {
+                deferredSymbolCount = groups.Length - quoteCount - failedQuoteCount;
+                break;
+            }
+            var logSymbol = string.Concat(group.Key.Select(character =>
+                char.IsControl(character) || character is '\u2028' or '\u2029' ? '?' : character));
             StockQuote? quote;
             try
             {
@@ -43,14 +55,14 @@ public sealed class PriceAlertMonitoringService(
             {
                 failedQuoteCount++;
                 // Upstream exceptions may contain credentials or raw response data.
-                logger.LogWarning("Price alert quote lookup failed for {Symbol}; continuing the cycle.", group.Key);
+                logger.LogWarning("Price alert quote lookup failed for {Symbol}; continuing the cycle.", logSymbol);
                 continue;
             }
 
             if (quote is null)
             {
                 failedQuoteCount++;
-                logger.LogWarning("Price alert quote unavailable for {Symbol}; skipping the symbol.", group.Key);
+                logger.LogWarning("Price alert quote unavailable for {Symbol}; skipping the symbol.", logSymbol);
                 continue;
             }
 
@@ -80,14 +92,14 @@ public sealed class PriceAlertMonitoringService(
             if (currencyMismatchCount > 0)
             {
                 logger.LogWarning("Price alert currency mismatch for {Symbol}; skipped {AlertCount} alerts.",
-                    group.Key, currencyMismatchCount);
+                    logSymbol, currencyMismatchCount);
             }
         }
 
-        var result = new PriceAlertMonitoringResult(alerts.Length, groups.Length, quoteCount, failedQuoteCount, matches.AsReadOnly());
+        var result = new PriceAlertMonitoringResult(alerts.Length, groups.Length, quoteCount, failedQuoteCount, matches.AsReadOnly(), deferredSymbolCount);
         logger.LogInformation(
-            "Price alert monitoring: {ActiveAlertCount} active alerts, {DistinctSymbolCount} distinct symbols, {QuoteCount} quotes retrieved, {MatchCount} matches, {FailedQuoteCount} failures.",
-            result.ActiveAlertCount, result.DistinctSymbolCount, result.QuoteCount, result.Matches.Count, result.FailedQuoteCount);
+            "Price alert monitoring: {ActiveAlertCount} active alerts, {DistinctSymbolCount} distinct symbols, {QuoteCount} quotes retrieved, {MatchCount} matches, {FailedQuoteCount} failures, {DeferredSymbolCount} symbols deferred by the daily budget.",
+            result.ActiveAlertCount, result.DistinctSymbolCount, result.QuoteCount, result.Matches.Count, result.FailedQuoteCount, result.DeferredSymbolCount);
         return result;
     }
 }

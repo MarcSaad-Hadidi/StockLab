@@ -89,7 +89,7 @@ défaut. `PriceAlertMonitoring:Interval` configure l'intervalle (par exemple
 `"00:01:00"` dans `backend/StockLab.Api/appsettings.json` ou via
 `PriceAlertMonitoring__Interval`). La valeur est validée au démarrage.
 
-- Une seule quote par symbole et par cycle, partagée entre tous les utilisateurs
+- Au plus une quote par symbole et par cycle, partagée entre tous les utilisateurs
   et toutes les conditions, via le pipeline de cache, déduplication et limitation du débit.
 - `Above` compare strictement `prix > cible`; `Below` compare strictement `prix < cible`.
   L'égalité ne produit aucun match; les devises doivent correspondre.
@@ -99,8 +99,14 @@ défaut. `PriceAlertMonitoring:Interval` configure l'intervalle (par exemple
   ne persiste pas encore `Triggered`. La mutation atomique appartient à #43.
 
 Le fournisseur `Mock` reste le défaut hors ligne. Avec un fournisseur externe,
-les alertes actives peuvent consommer son quota à chaque cycle; sans alerte active,
-aucun appel de données de marché n'est effectué.
+`PriceAlertMonitoring:DailyQuoteBudget` limite le monitoring à 200 lookups par jour
+UTC par défaut, tous utilisateurs et symboles confondus. Après épuisement, les
+symboles restants sont reportés au prochain jour UTC, en reprenant après le dernier
+symbole traité. Les erreurs, quotes absentes et hits de cache comptent aussi.
+La limite, strictement positive, est configurable et stockée en mémoire par instance;
+un redémarrage la réinitialise. Ce budget laisse les requêtes foreground indépendantes
+et ne remplace pas le quota du fournisseur. Sans alerte active, aucun appel de
+données de marché n'est effectué. Les symboles sont nettoyés avant journalisation.
 
 ## Structure du dépôt
 

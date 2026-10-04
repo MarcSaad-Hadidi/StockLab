@@ -18,8 +18,11 @@ namespace StockLab.UnitTests.Alerts;
 
 public sealed class PriceAlertMonitoringCompositionTests(ITestOutputHelper output)
 {
-    [Fact]
-    public async Task Api_runs_periodic_monitoring_with_configured_mock_pipeline_and_three_alerts()
+    [Theory]
+    [InlineData(200, 2, 3, 0)]
+    [InlineData(1, 1, 2, 1)]
+    public async Task Api_runs_periodic_monitoring_with_configured_mock_pipeline_and_three_alerts(
+        int dailyBudget, int expectedQuotes, int expectedMatches, int expectedDeferred)
     {
         await using var database = await MonitoringDatabase.CreateAsync();
         await database.SeedAsync(database.Alert("AAPL", "Above", 1m), database.Alert("AAPL", "Below", 1000m),
@@ -34,7 +37,8 @@ public sealed class PriceAlertMonitoringCompositionTests(ITestOutputHelper outpu
                 ["ConnectionStrings:StockLab"] = "Server=localhost;Database=MonitoringSmokeNeverUsed;Integrated Security=true;TrustServerCertificate=true",
                 ["Jwt:SigningKey"] = "MONITORING-TEST-ONLY-SIGNING-KEY-AT-LEAST-32",
                 ["MarketData:Provider"] = "Mock",
-                ["PriceAlertMonitoring:Interval"] = "00:00:17"
+                ["PriceAlertMonitoring:Interval"] = "00:00:17",
+                ["PriceAlertMonitoring:DailyQuoteBudget"] = dailyBudget.ToString(System.Globalization.CultureInfo.InvariantCulture)
             }));
             builder.ConfigureTestServices(services =>
             {
@@ -59,10 +63,19 @@ public sealed class PriceAlertMonitoringCompositionTests(ITestOutputHelper outpu
         output.WriteLine(summary.Message);
         Assert.Equal(3, summary.Fields["ActiveAlertCount"]);
         Assert.Equal(2, summary.Fields["DistinctSymbolCount"]);
-        Assert.Equal(2, summary.Fields["QuoteCount"]);
-        Assert.Equal(3, summary.Fields["MatchCount"]);
+        Assert.Equal(expectedQuotes, summary.Fields["QuoteCount"]);
+        Assert.Equal(expectedMatches, summary.Fields["MatchCount"]);
         Assert.Equal(0, summary.Fields["FailedQuoteCount"]);
+        Assert.Equal(expectedDeferred, summary.Fields["DeferredSymbolCount"]);
         Assert.Single(logs.Entries);
+        if (dailyBudget == 1)
+        {
+            clock.Advance(TimeSpan.FromSeconds(17));
+            var nextSummary = await logs.Summaries.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(0, nextSummary.Fields["QuoteCount"]);
+            Assert.Equal(2, nextSummary.Fields["DeferredSymbolCount"]);
+            Assert.Equal(0, nextSummary.Fields["FailedQuoteCount"]);
+        }
         await using var db = database.CreateDbContext();
         var alerts = await db.PriceAlerts.AsNoTracking().ToArrayAsync();
         Assert.All(alerts, alert =>

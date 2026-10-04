@@ -12,8 +12,10 @@ public static class PriceAlertMonitoringRegistration
         services.AddOptions<PriceAlertMonitoringOptions>()
             .Bind(configuration.GetSection(PriceAlertMonitoringOptions.SectionName))
             .Validate(options => options.IsValid(), PriceAlertMonitoringOptions.ValidationMessage)
+            .Validate(options => options.DailyQuoteBudget > 0, "PriceAlertMonitoring:DailyQuoteBudget must be positive.")
             .ValidateOnStart();
         services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<PriceAlertMonitoringBudget>();
         services.AddScoped<IPriceAlertMonitoringService, PriceAlertMonitoringService>();
         services.AddHostedService<PriceAlertMonitoringWorker>();
         return services;

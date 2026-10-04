@@ -4,6 +4,8 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using StockLab.Application.DTOs.MarketData;
 using StockLab.Application.Interfaces;
 using StockLab.Domain.Entities;
@@ -14,6 +16,123 @@ namespace StockLab.UnitTests.Alerts;
 
 public sealed class PriceAlertMonitoringServiceTests
 {
+    [Theory]
+    [InlineData("null")]
+    [InlineData("exception")]
+    [InlineData("currency_mismatch")]
+    public async Task Warning_symbols_cannot_forge_multiline_logs(string scenario)
+    {
+        const string symbol = "AA\nPL\rFORGED\t\u001b\u0085\u2028\u2029";
+        await using var f = await MonitoringDatabase.CreateAsync();
+        await f.SeedAsync(f.Alert(symbol, "Above", 1m));
+        var provider = new QuoteProvider((requested, _) => scenario switch
+        {
+            "null" => Task.FromResult<StockQuote?>(null),
+            "exception" => Task.FromException<StockQuote?>(new InvalidOperationException("private upstream detail")),
+            _ => Task.FromResult<StockQuote?>(Quote(requested, 250m) with { Currency = "CAD" })
+        });
+        using var logs = new MonitoringLogs();
+        using var factory = LoggerFactory.Create(builder => builder.AddProvider(logs));
+        var budget = new PriceAlertMonitoringBudget(Options.Create(new PriceAlertMonitoringOptions()), new MonitoringClock());
+        var service = new PriceAlertMonitoringService(f.Db, provider, budget, factory.CreateLogger<PriceAlertMonitoringService>());
+
+        await service.RunOnceAsync();
+
+        Assert.Equal(new[] { symbol }, provider.Calls);
+        var warning = Assert.Single(logs.Entries, entry => entry.Level == LogLevel.Warning);
+        Assert.Equal("AA?PL?FORGED?????", warning.Fields["Symbol"]);
+        Assert.DoesNotContain(warning.Message, character => char.IsControl(character) || character is '\u2028' or '\u2029');
+        Assert.Null(warning.Exception);
+        Assert.DoesNotContain("private upstream detail", warning.Message);
+    }
+
+    [Fact]
+    public async Task Daily_budget_is_shared_across_users_symbols_cycles_and_service_scopes()
+    {
+        await using var f = await MonitoringDatabase.CreateAsync();
+        await f.SeedAsync(f.Alert("AAPL", "Above", 1m), f.Alert("AAPL", "Below", 1000m),
+            f.Alert("MSFT", "Above", 1m), f.Alert("NVDA", "Above", 1m));
+        var clock = new MonitoringClock();
+        var budget = new PriceAlertMonitoringBudget(Options.Create(new PriceAlertMonitoringOptions { DailyQuoteBudget = 2 }), clock);
+        var provider = new QuoteProvider((symbol, _) => Task.FromResult<StockQuote?>(Quote(symbol, 250m)));
+
+        var first = await Service(f, provider, budget).RunOnceAsync();
+        await using var fresh = f.CreateDbContext();
+        var second = await new PriceAlertMonitoringService(fresh, provider, budget, NullLogger<PriceAlertMonitoringService>.Instance).RunOnceAsync();
+
+        Assert.Equal(new[] { "AAPL", "MSFT" }, provider.Calls);
+        Assert.Equal(4, first.ActiveAlertCount);
+        Assert.Equal(3, first.DistinctSymbolCount);
+        Assert.Equal(2, first.QuoteCount);
+        Assert.Equal(0, first.FailedQuoteCount);
+        Assert.Equal(1, first.DeferredSymbolCount);
+        Assert.Equal(3, first.Matches.Count);
+        Assert.Equal(0, second.QuoteCount);
+        Assert.Equal(0, second.FailedQuoteCount);
+        Assert.Equal(3, second.DeferredSymbolCount);
+        Assert.Empty(second.Matches);
+    }
+
+    [Fact]
+    public async Task Default_budget_caps_a_full_day_of_minute_cycles()
+    {
+        await using var f = await MonitoringDatabase.CreateAsync();
+        await f.SeedAsync(f.Alert("AAPL", "Above", 1m));
+        var clock = new MonitoringClock();
+        clock.Advance(TimeSpan.FromHours(-12));
+        var budget = new PriceAlertMonitoringBudget(Options.Create(new PriceAlertMonitoringOptions()), clock);
+        var provider = new QuoteProvider((symbol, _) => Task.FromResult<StockQuote?>(Quote(symbol, 250m)));
+
+        for (var minute = 0; minute < 1440; minute++)
+        {
+            await Service(f, provider, budget).RunOnceAsync();
+            clock.Advance(TimeSpan.FromMinutes(1));
+        }
+
+        Assert.Equal(200, provider.Calls.Count);
+    }
+
+    [Fact]
+    public async Task Next_utc_day_resumes_after_the_last_attempted_symbol()
+    {
+        await using var f = await MonitoringDatabase.CreateAsync();
+        await f.SeedAsync(f.Alert("AAPL", "Above", 1m), f.Alert("MSFT", "Above", 1m), f.Alert("NVDA", "Above", 1m));
+        var clock = new MonitoringClock();
+        var budget = new PriceAlertMonitoringBudget(Options.Create(new PriceAlertMonitoringOptions { DailyQuoteBudget = 2 }), clock);
+        var provider = new QuoteProvider((symbol, _) => Task.FromResult<StockQuote?>(Quote(symbol, 250m)));
+        await Service(f, provider, budget).RunOnceAsync();
+        clock.Advance(TimeSpan.FromHours(12) - TimeSpan.FromTicks(1));
+        var beforeMidnight = await Service(f, provider, budget).RunOnceAsync();
+        Assert.Equal(3, beforeMidnight.DeferredSymbolCount);
+
+        clock.Advance(TimeSpan.FromTicks(1));
+        var nextDay = await Service(f, provider, budget).RunOnceAsync();
+
+        Assert.Equal(new[] { "AAPL", "MSFT", "NVDA", "AAPL" }, provider.Calls);
+        Assert.Equal(2, nextDay.QuoteCount);
+        Assert.Equal(1, nextDay.DeferredSymbolCount);
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("exception")]
+    public async Task Missing_and_failed_quotes_consume_budget_without_retries(string failure)
+    {
+        await using var f = await MonitoringDatabase.CreateAsync();
+        await f.SeedAsync(f.Alert("AAPL", "Above", 1m));
+        var budget = new PriceAlertMonitoringBudget(Options.Create(new PriceAlertMonitoringOptions { DailyQuoteBudget = 1 }), new MonitoringClock());
+        var provider = new QuoteProvider((_, _) => failure == "null" ? Task.FromResult<StockQuote?>(null)
+            : Task.FromException<StockQuote?>(new InvalidOperationException("private upstream detail")));
+
+        var first = await Service(f, provider, budget).RunOnceAsync();
+        var second = await Service(f, provider, budget).RunOnceAsync();
+
+        Assert.Equal(new[] { "AAPL" }, provider.Calls);
+        Assert.Equal(1, first.FailedQuoteCount);
+        Assert.Equal(0, second.FailedQuoteCount);
+        Assert.Equal(1, second.DeferredSymbolCount);
+    }
+
     [Fact]
     public async Task Groups_all_users_and_conditions_into_one_lookup_per_symbol()
     {
@@ -227,8 +346,9 @@ public sealed class PriceAlertMonitoringServiceTests
         Assert.Equal(new[] { "AAPL" }, provider.Calls);
     }
 
-    private static PriceAlertMonitoringService Service(MonitoringDatabase f, IMarketDataProvider provider) =>
-        new(f.Db, provider, NullLogger<PriceAlertMonitoringService>.Instance);
+    private static PriceAlertMonitoringService Service(MonitoringDatabase f, IMarketDataProvider provider, PriceAlertMonitoringBudget? budget = null) =>
+        new(f.Db, provider, budget ?? new PriceAlertMonitoringBudget(Options.Create(new PriceAlertMonitoringOptions()), TimeProvider.System),
+            NullLogger<PriceAlertMonitoringService>.Instance);
 
     private static StockQuote Quote(string symbol, decimal price) =>
         new(symbol, "USD", price, null, null, null, new DateTimeOffset(2026, 8, 28, 20, 0, 0, TimeSpan.Zero));

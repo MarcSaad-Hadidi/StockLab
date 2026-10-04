@@ -145,6 +145,19 @@ public sealed class PriceAlertMonitoringWorkerTests
         await Assert.ThrowsAsync<OptionsValidationException>(() => host.StartAsync());
     }
 
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    public async Task Invalid_daily_budget_fails_host_startup(string budget)
+    {
+        var builder = Host.CreateApplicationBuilder();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["PriceAlertMonitoring:DailyQuoteBudget"] = budget });
+        builder.Services.AddPriceAlertMonitoring(builder.Configuration);
+        using var host = builder.Build();
+
+        await Assert.ThrowsAsync<OptionsValidationException>(() => host.StartAsync());
+    }
+
     [Fact]
     public void Registration_resolves_monitoring_service_scoped_and_worker_once()
     {

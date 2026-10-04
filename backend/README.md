@@ -1388,11 +1388,13 @@ provider waits, and disposes the cycle's scope. A failed database cycle is logge
 without raw exception details and retried at the next tick.
 
 Only `Active` alerts are projected from SQL with `AsNoTracking`. Alerts are grouped
-across all users by symbol; each group makes exactly one `GetQuoteAsync` call to
+across all users by symbol; each admitted group makes one `GetQuoteAsync` call to
 the registered cache -> dedup -> rate-limit -> terminal pipeline. No active rules
 means no quote calls. Lookups are sequential. Missing quotes and provider errors
 skip their symbol; currency mismatches skip the affected rules with one warning
-per symbol. Prices remain `decimal`; Above uses strict `>` and Below strict `<`.
+per symbol. Warning symbols replace control characters and Unicode line/paragraph
+separators with `?`, preserving the original identifiers for quotes and matches.
+Prices remain `decimal`; Above uses strict `>` and Below strict `<`.
 Equality never matches.
 
 `PriceAlertMonitoring:Interval` defaults to `00:01:00` and can also be supplied as
@@ -1401,15 +1403,34 @@ interval of 1..4294967294 milliseconds. Configuration changes require a restart.
 With an external terminal, active rules can consume provider quota each cycle;
 the existing cache and limiter still apply. The committed provider is `Mock`.
 
+`PriceAlertMonitoring:DailyQuoteBudget` defaults to 200 and must be positive at
+startup. It caps **all monitoring quote lookups per UTC day**, shared across users,
+symbols, cycles and DI scopes. Every lookup reserves budget before entering the
+market-data pipeline, including cache hits, missing quotes, failures and cancelled
+attempts. Reservations are never refunded, so monitoring cannot spend more than
+the configured number of outbound quote requests during one process's UTC day.
+Foreground quotes/search/history do not use this monitoring-specific budget.
+
+After the budget is spent, remaining symbols are counted as deferred and make no
+provider calls until the next UTC day. Monitoring resumes after the last attempted
+symbol, wrapping in ordinal order, so partial cycles do not always favor the first
+symbols. A backward clock correction does not reset spent budget. Configure the
+budget for the provider plan and desired foreground headroom. This safeguard is
+in memory per backend instance; restarting resets it, and other instances or
+clients can spend the provider's quota independently. It is not an account-wide
+provider quota ledger. Rules remain Active while their evaluation is deferred.
+
 `RunOnceAsync` returns `PriceAlertMonitoringResult` and `PriceAlertMatch` values
 for #43 to consume. `ObservedAtUtc` comes from `StockQuote.AsOfUtc`. No alert is
 updated: Status, TriggeredPrice, TriggeredAtUtc, UpdatedAtUtc and rowversion remain
 unchanged. No migrations, HTTP endpoints or frontend changes are introduced.
 
 One Information summary is emitted per completed cycle: active alerts, distinct
-symbols, non-null quotes retrieved, matches and failures. `QuoteCount` counts
+symbols, non-null quotes retrieved, matches, failures and deferred symbols. `QuoteCount` counts
 non-null quotes; `FailedQuoteCount` counts null or failed lookups. Their sum is the
-number of symbol lookups. A currency mismatch still counts as a retrieved quote.
+number of symbol lookups; adding `DeferredSymbolCount` gives the distinct-symbol
+count for the cycle. Deferred symbols are not quote failures. A currency mismatch
+still counts as a retrieved quote.
 
 The offline API-host smoke test seeds AAPL Above, AAPL Below and MSFT Above,
 uses the real configured Mock pipeline with a temporary SQLite database, and
