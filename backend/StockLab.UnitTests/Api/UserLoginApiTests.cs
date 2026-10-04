@@ -20,7 +20,7 @@ using StockLab.Infrastructure.Persistence;
 
 namespace StockLab.UnitTests.Api;
 
-public sealed class UserLoginApiTests
+public sealed partial class UserLoginApiTests
 {
     private const string TestIssuer = "StockLab.Api.Tests";
     private const string TestAudience = "StockLab.Tests";

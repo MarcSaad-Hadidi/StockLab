@@ -552,6 +552,29 @@ The token issuer, audience and lifetime are configured by `Jwt:Issuer`,
 Secrets or an environment variable; startup rejects missing or weak keys. See
 the repository README's backend secrets section for local setup.
 
+## Password change
+
+`PUT /api/auth/password` requires a valid Bearer token and accepts
+`currentPassword`, `newPassword`, and `confirmPassword`. The user ID comes only
+from the authenticated JWT. The current password must match the stored hash;
+the new password must contain at least eight characters, differ from the current
+password, and match the confirmation. Passwords are never trimmed.
+
+A `204 No Content` response is returned only after the new hash is saved.
+Invalid input returns `400 validation_error`; a wrong current password returns
+`400 invalid_current_password`; a missing account returns `404 user_not_found`.
+Concurrent updates return `409 password_update_conflict`, and persistence failures
+use the existing generic `500` response. The endpoint shares the configured login
+rate limit and returns `429` when exhausted. No plaintext password is stored or
+returned. Existing JWTs retain their configured expiry; this change does not add
+a token revocation mechanism.
+
+The frontend waits for `204` before showing success, renders safe localized
+errors, blocks duplicate submissions, and discards responses after the sign-in
+session changes. API tests use isolated SQLite persistence and the actual password
+hasher/login services to verify that the old password is rejected and the new one
+works. This test setup does not validate Azure SQL connectivity.
+
 ## User profile
 
 The authenticated user's profile is available at <code>GET /api/profile</code> and

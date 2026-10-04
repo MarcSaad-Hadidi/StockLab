@@ -806,7 +806,7 @@
     "profileSavedToast": "Your profile has been saved.",
     "twoFactorToast": "Two-factor authentication is enabled in this preview.",
     "sessionsToast": "You have {{count}} active sessions.",
-    "passwordChangeToast": "Password change is simulated in this preview.",
+    "passwordChangeToast": "Your password has been changed.",
     "passwordModal": {
       "close": "Close change password dialog",
       "title": "Change Password",
@@ -816,7 +816,22 @@
       "confirmPassword": "Confirm new password",
       "save": "Save password",
       "shortPassword": "Use at least 8 characters for your new password.",
-      "mismatch": "The passwords do not match."
+      "mismatch": "The passwords do not match.",
+      "saving": "Saving…",
+      "errors": {
+        "unauthorized": "Please sign in to change your password.",
+        "invalid_current_password": "The current password is incorrect.",
+        "validation_error": "Check the password fields and try again.",
+        "user_not_found": "Your account could not be found. Please sign in again.",
+        "password_update_conflict": "Your account changed during the operation. Please try again.",
+        "rate_limited": "Too many attempts. Please wait before trying again.",
+        "offline": "Unable to connect. Your password change could not be confirmed.",
+        "server_error": "The password change could not be confirmed. Please try again.",
+        "invalid_response": "The server did not confirm the password change.",
+        "session_changed": "Your sign-in session changed. Close this dialog and reopen it.",
+        "current_required": "Enter your current password.",
+        "same_password": "Choose a password different from your current password."
+      }
     },
     "countries": {
       "us": "United States",
