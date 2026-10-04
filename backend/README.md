@@ -279,11 +279,44 @@ The stored execution quantity/price may differ from the original approval.
 
 No user portfolio/holding/transaction is reused, and the user paper engine is
 unchanged. There is no real broker, controller, scheduler, ML change or frontend.
-Rejection history (#70), trade history and decision links (#72),
-positions endpoints (#71) and AI API (#80) remain separate work.
+Trade history and decision links (#72) and AI API endpoints (#80) remain separate work.
 Tests use fake quotes and isolated SQLite/LocalDB databases. The same
 `STOCKLAB_TEST_LOCALDB=1` switch runs real simultaneous orders and rollback tests;
 they never use Azure credentials or external market APIs.
+
+## AI current positions (#71)
+
+`IAiCurrentPositionsService.GetCurrentAsync` returns a read-only list of open AI
+positions in ordinal ascending symbol order. `AiPositions` is the current state
+maintained transactionally by actual #68 paper executions; `AiTrades` is audit
+history and is not replayed. Raw ML, rejected and HOLD decisions do not create
+positions, and user portfolios/holdings are never read. Full SELL removes the
+position; partial SELL preserves the remaining quantity and average cost.
+
+`AiCurrentPosition` contains only `Symbol`, decimal `Quantity`, `AveragePrice`,
+`CurrentPrice`, `MarketValue` and `PnL`. Average price maps the persisted
+`AverageCost`; fractional quantities retain their eight decimal places. The
+service maps #66's `GetSnapshotAsync(initializeIfMissing: false)` without new
+quote calls or valuation formulas. That existing valuation uses `IMarketDataProvider`:
+cost basis is quantity × average cost, market value is quantity × current price,
+and P&L is market value − cost basis, equivalently quantity × (current price −
+average price). Position P&L is **unrealized monetary P&L** in portfolio currency
+(USD in V1), retains positive/negative/zero values and excludes realized gains.
+No percentage is added.
+
+A missing portfolio fails with the existing `InvalidOperationException` and is
+never initialized by this read. An existing empty portfolio returns `[]` with
+zero quote calls; otherwise #66 requests one quote per open position through the
+existing provider cache/rate-limit pipeline. Missing, nonpositive or
+currency-mismatched quotes fail the whole read; provider errors and cancellation
+propagate. There is no fake/stale fallback, partial result or implicit FX.
+
+No saves, timestamps, cash, position/history mutations or schema changes occur.
+Current price, market value and P&L remain dynamic and are not persisted.
+The service is registered scoped in API composition. No controller is introduced;
+#80 will expose this contract for the future #59 frontend. Tests use fake quotes,
+SQLite and isolated LocalDB databases, including actual executed BUY/additional
+BUY/partial SELL/full SELL, rollback visibility and unchanged SQL rowversions.
 
 ## AI decision history
 

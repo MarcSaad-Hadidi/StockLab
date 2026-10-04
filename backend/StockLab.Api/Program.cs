@@ -64,6 +64,7 @@ builder.Services.AddUserRegistration();
 builder.Services.AddPaperTrading();
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddAiTraderPortfolio();
+builder.Services.AddAiCurrentPositions();
 builder.Services.AddAiRiskManager(builder.Configuration);
 builder.Services.AddAiTradeExecution();
 builder.Services.AddAiDecisionHistory();
