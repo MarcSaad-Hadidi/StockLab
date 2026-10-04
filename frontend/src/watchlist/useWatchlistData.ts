@@ -17,13 +17,13 @@ function unquoted(item: WatchlistApiItem): WatchlistItem {
   return { ...item, name: item.symbol, exchange: '—', currency: null, price: null, change: null, changePercent: null, tone: '' }
 }
 
-async function enrich(items: WatchlistItem[], signal: AbortSignal): Promise<WatchlistItem[]> {
+async function enrich(items: WatchlistItem[], signal: AbortSignal, refreshQuotes: boolean): Promise<WatchlistItem[]> {
   const result: WatchlistItem[] = []
   for (let start = 0; start < items.length; start += 5) {
     signal.throwIfAborted()
     result.push(...await Promise.all(items.slice(start, start + 5).map(async item => {
       try {
-        const quote = await marketDataApi.quote(item.symbol, signal)
+        const quote = await marketDataApi.quote(item.symbol, signal, { refresh: refreshQuotes })
         const currency = quote.currency.trim().toUpperCase()
         return { ...item, name: quote.name?.trim() || item.symbol, exchange: quote.exchange?.trim() || '—',
           currency: /^[A-Z]{3}$/.test(currency) ? currency : null, price: quote.price, change: quote.change, changePercent: quote.changePercent,
@@ -42,7 +42,7 @@ const initialState = (): State => ({ items: [], loading: true, error: null, muta
 
 export function useWatchlistData(enrichQuotes = true) {
   const [state, setState] = useState<State>(initialState)
-  const [revision, setRevision] = useState(0)
+  const [loadRequest, setLoadRequest] = useState({ refreshQuotes: false })
   const sessionRef = useRef<AuthSession | null>(null)
   const pending = useRef(new Set<string>())
   const mutations = useRef(new Set<AbortController>())
@@ -60,7 +60,7 @@ export function useWatchlistData(enrichQuotes = true) {
       mutationControllers.forEach(request => request.abort())
       pendingSymbols.clear()
       setState(initialState())
-      setRevision(value => value + 1)
+      setLoadRequest({ refreshQuotes: false })
     }
     synchronize.current = synchronizeSession
     const onStorage = (event: StorageEvent) => {
@@ -79,7 +79,7 @@ export function useWatchlistData(enrichQuotes = true) {
       // Membership is available even while the independent quote provider is loading.
       setState({ ...initialState(), items, loading: enrichQuotes && items.length > 0 })
       if (enrichQuotes && items.length > 0) {
-        const quoted = await enrich(items, controller.signal)
+        const quoted = await enrich(items, controller.signal, loadRequest.refreshQuotes)
         if (controller.signal.aborted) return
         if (!sameSession(session)) { synchronizeSession(); return }
         setState(current => ({ ...current, items: quoted, loading: false }))
@@ -99,11 +99,11 @@ export function useWatchlistData(enrichQuotes = true) {
       window.removeEventListener('focus', synchronizeSession)
       if (synchronize.current === synchronizeSession) synchronize.current = null
     }
-  }, [revision, enrichQuotes])
+  }, [loadRequest, enrichQuotes])
 
   const reload = useCallback(() => {
-    if (pending.current.size === 0) setRevision(value => value + 1)
-  }, [])
+    if (pending.current.size === 0) setLoadRequest({ refreshQuotes: enrichQuotes })
+  }, [enrichQuotes])
 
   async function mutate(symbol: string, operation: 'add' | 'remove'): Promise<boolean> {
     symbol = symbol.trim().toUpperCase()

@@ -7,6 +7,7 @@ import { JSDOM } from 'jsdom'
 import React, { act } from 'react'
 import { watchlistApi, WatchlistApiError } from '../src/api/watchlistApi.ts'
 import { marketDataApi } from '../src/api/marketDataClient.ts'
+import { createMarketDataApi } from '../src/api/marketDataApi.ts'
 import { saveAuthSession, getAuthSession } from '../src/auth/authStorage.ts'
 import { useWatchlistData } from '../src/watchlist/useWatchlistData.ts'
 
@@ -202,6 +203,36 @@ test('Watchlist renders persisted rows, partial quotes, currency and real dates 
     const select = view.container.querySelector('select[aria-label="Sort watchlist"]') as HTMLSelectElement
     await act(async () => { select.value = 'price'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true })) })
     assert.equal(view.container.querySelector('.watchlist-symbol strong')?.textContent, 'AAPL')
+  } finally { await view.close() }
+})
+
+test('Watchlist Refresh prices fetches fresh quotes within the cache lifetime on every click', async t => {
+  seed()
+  const now = Date.now()
+  t.mock.method(Date, 'now', () => now)
+  let price = 200
+  let quoteRequests = 0
+  const client = createMarketDataApi('', async () => {
+    quoteRequests++
+    return Response.json({ ...quote, price })
+  })
+  await client.quote('AAPL', new AbortController().signal)
+  t.mock.method(watchlistApi, 'getWatchlist', async () => [aapl])
+  t.mock.method(marketDataApi, 'quote', client.quote)
+  const { default: Page } = await import('../src/watchlist/WatchlistPage.tsx')
+  const view = await mount(React.createElement(Page))
+  try {
+    assert.equal(quoteRequests, 1, 'ordinary page loading reuses the cached quote')
+    assert.equal(view.container.querySelector('.watchlist-price strong')?.textContent, 'CA$200.00')
+    for (const nextPrice of [225, 250]) {
+      price = nextPrice
+      const previousRequests = quoteRequests
+      await act(async () => (view.container.querySelector('.panel-action') as HTMLButtonElement).click())
+      assert.equal(quoteRequests, previousRequests + 1, 'each explicit refresh must reach the backend before the cache expires')
+      assert.equal(view.container.querySelector('.watchlist-price strong')?.textContent, `CA$${nextPrice}.00`)
+      assert.equal((await client.quote('AAPL', new AbortController().signal)).price, nextPrice)
+      assert.equal(quoteRequests, previousRequests + 1, 'ordinary consumers reuse the refreshed cache entry')
+    }
   } finally { await view.close() }
 })
 
