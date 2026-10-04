@@ -26,8 +26,12 @@ export function TopBar({ onMenuOpen, title }: TopBarProps) {
   const { t } = useTranslation()
   const user = useAuthUser()
   const letters = user?.displayName.normalize('NFC').trim().split(/\s+/u)
-    .map(word => word.match(/\p{L}/u)?.[0]).filter((letter): letter is string => Boolean(letter)) ?? []
-  const initials = letters.length > 1 ? `${letters[0]}${letters[letters.length - 1]}`.toUpperCase() : letters[0]?.toUpperCase()
+    .map(word => {
+      const letter = word.match(/\p{L}/u)?.[0]
+      // Uppercasing can expand one letter; keep one Unicode code point per name.
+      return letter ? Array.from(letter.toUpperCase())[0] : undefined
+    }).filter((letter): letter is string => Boolean(letter)) ?? []
+  const initials = letters.length > 1 ? `${letters[0]}${letters[letters.length - 1]}` : letters[0]
   const identity = user ? `${user.displayName} (${user.email})` : t('common.openProfile')
 
   return (

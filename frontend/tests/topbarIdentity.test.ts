@@ -46,11 +46,17 @@ test('TopBar reads the authenticated identity and follows profile edits, login a
 for (const [displayName, expected] of [
   ['  Samira   Martin  ', 'SM'], ['Ghaith', 'G'], ['Jean-Luc Picard', 'JP'], ['Ada Mary Lovelace', 'AL'],
   ['Élodie Laurent', 'ÉL'], ['E\u0301lodie Laurent', 'ÉL'], ['李 雷', '李雷'], ['123 !!!', ''],
+  ['ß Müller', 'SM'], ['և Արամ', 'ԵԱ'], ['ﬃ Smith', 'FS'], ['Samira ß', 'SS'],
+  ['ß', 'S'], ['ﬃ ﬄ', 'FF'], ['\u{10428} Smith', '\u{10400}S'],
 ] as const) {
   test(`TopBar derives initials from ${displayName}`, async () => {
     window.localStorage.clear(); saveAuthSession({ ...session, user: { ...session.user, displayName } })
     const view = await mount()
-    try { assert.equal(view.avatar().textContent, expected); if (!expected) assert.ok(view.avatar().querySelector('svg')) }
+    try {
+      assert.equal(view.avatar().textContent, expected)
+      assert.ok(Array.from(view.avatar().textContent ?? '').length <= 2)
+      if (!expected) assert.ok(view.avatar().querySelector('svg'))
+    }
     finally { await view.close() }
   })
 }
