@@ -13,6 +13,29 @@ namespace StockLab.UnitTests.Trading;
 public sealed class AiTradesHistoryServiceTests
 {
     [Fact]
+    public async Task Executed_decision_cannot_later_be_recorded_as_rejected()
+    {
+        await using var f = await AiCurrentPositionsFixture.CreateAsync();
+        await VerifyRejectionAfterExecutionAsync(f);
+    }
+
+    internal static async Task VerifyRejectionAfterExecutionAsync(AiCurrentPositionsFixture f)
+    {
+        await f.InitializeAsync();
+        var request = await f.RecordExecutionAsync();
+        await f.ExecuteAsync(request);
+        var before = await f.StateAsync();
+        var rejected = new AiRejectedDecisionRecordRequest(request.DecisionId, request.RiskDecision with
+            { Approved = false, ApprovedQuantity = 0m, RejectionReason = AiRiskRejectionReason.LowConfidence });
+        var service = new AiRejectedDecisionHistoryService(f, new AiCurrentPositionsFixture.Clock());
+        var failure = await Assert.ThrowsAsync<AiRejectedDecisionHistoryException>(() => service.RecordAsync(rejected));
+        Assert.Equal(AiRejectedDecisionHistoryFailure.DecisionAlreadyExecuted, failure.Category);
+        Assert.Null(failure.InnerException);
+        Assert.Null(await service.GetByDecisionIdAsync(request.DecisionId));
+        Assert.Equal(before, await f.StateAsync());
+    }
+
+    [Fact]
     public async Task Execution_links_original_model_and_actual_fractional_quantity_and_price()
     {
         await using var f = await AiCurrentPositionsFixture.CreateAsync();

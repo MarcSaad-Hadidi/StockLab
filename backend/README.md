@@ -331,6 +331,10 @@ rows, bounded deterministic queries, no N+1/tracking/writes/market calls, user
 isolation, decision validation and retries. `STOCKLAB_TEST_LOCALDB=1` additionally
 tests real SQL query shape, FK/unique/delete restrictions, migration upgrade and
 Down preserving old trades, and concurrent executions for one decision.
+Rejection recording also checks for an executed trade within a serializable
+transaction. Rejection and execution cannot both commit for the same decision;
+a late rejection returns `DecisionAlreadyExecuted`, and an overlapping SQL
+deadlock returns a safe `ConcurrencyConflict` after rollback.
 
 ## AI current positions (#71)
 
@@ -435,8 +439,12 @@ original returns typed `DecisionNotFound` and never creates a raw decision.
 Same ID and reason returns the original DTO and timestamp; a changed reason
 returns `RejectionConflict`. Both paths first validate the risk payload against
 the raw decision. The PK resolves concurrent inserts: only SQL Server errors
-2601/2627 reload the winner and compare its reason. Other database errors return
-safe `PersistenceFailure` without SQL or connection details. Each call owns its
+2601/2627 roll back the attempt, reload the winner and compare its reason.
+Recording a new rejection holds a serializable transaction around the missing
+trade check and rejection insert, preventing a decision from becoming both
+rejected and executed. An already executed decision returns
+`DecisionAlreadyExecuted`; an overlapping SQL deadlock returns `ConcurrencyConflict`.
+Other database errors return safe `PersistenceFailure` without SQL or connection details. Each call owns its
 EF context and cannot save unrelated scoped changes. There are no update/delete
 methods, risk/execution calls, portfolio initialization or financial side effects.
 

@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Options;
@@ -15,6 +16,66 @@ namespace StockLab.UnitTests.Trading;
 public sealed class AiTradesHistorySqlServerTests
 {
     private const string PreviousMigration = "20261003233535_AddAiRejectedDecisions";
+
+    [LocalDbFact]
+    public async Task Sql_executed_decision_cannot_later_be_recorded_as_rejected()
+    {
+        await using var f = await AiCurrentPositionsFixture.CreateAsync(sqlServer: true);
+        await VerifyRejectionAfterExecutionAsync(f);
+    }
+
+    [LocalDbTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Concurrent_rejection_and_execution_are_mutually_exclusive(bool executionFirst)
+    {
+        await using var f = await AiCurrentPositionsFixture.CreateAsync(sqlServer: true);
+        await f.InitializeAsync();
+        var request = await f.RecordExecutionAsync();
+        var gate = new OutcomeSaveGate();
+        async Task<object> Execute()
+        {
+            try { return await f.ExecuteAsync(request, gate); }
+            catch (AiTradeExecutionException ex) { return ex; }
+        }
+        async Task<object> Reject()
+        {
+            var service = new AiRejectedDecisionHistoryService(f.With(gate), new AiCurrentPositionsFixture.Clock());
+            try { return await service.RecordAsync(new(request.DecisionId, request.RiskDecision with
+                { Approved = false, ApprovedQuantity = 0m, RejectionReason = AiRiskRejectionReason.LowConfidence })); }
+            catch (AiRejectedDecisionHistoryException ex) { return ex; }
+        }
+        var first = executionFirst ? Execute() : Reject();
+        await gate.FirstArrival.WaitAsync(TimeSpan.FromSeconds(30));
+        var second = executionFirst ? Reject() : Execute();
+        var results = await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(60));
+        Assert.Single(results, result => result is AiTradeExecutionResult or AiRejectedDecisionRecord);
+        var failure = Assert.Single(results.OfType<Exception>());
+        if (failure is AiTradeExecutionException executionFailure)
+            Assert.Contains(executionFailure.Category, new[] { AiTradeExecutionFailure.DecisionRejected, AiTradeExecutionFailure.ConcurrencyConflict });
+        else
+            Assert.Contains(Assert.IsType<AiRejectedDecisionHistoryException>(failure).Category,
+                new[] { AiRejectedDecisionHistoryFailure.DecisionAlreadyExecuted, AiRejectedDecisionHistoryFailure.ConcurrencyConflict });
+        Assert.Null(failure.InnerException);
+        await using var db = f.CreateDbContext();
+        var trades = await db.AiTrades.AsNoTracking().ToArrayAsync();
+        var rejections = await db.AiRejectedDecisions.AsNoTracking().ToArrayAsync();
+        Assert.Equal(1, trades.Length + rejections.Length);
+        var portfolio = await db.AiTraderPortfolios.SingleAsync();
+        if (trades.Length == 1)
+        {
+            Assert.Equal(request.DecisionId, trades[0].AiDecisionId);
+            Assert.Equal(99000m, portfolio.CashBalance);
+            Assert.Equal(10m, (await db.AiTraderPositions.SingleAsync()).Quantity);
+        }
+        else
+        {
+            Assert.Equal(request.DecisionId, rejections[0].AiDecisionId);
+            Assert.Equal(100000m, portfolio.CashBalance);
+            Assert.Empty(await db.AiTraderPositions.ToArrayAsync());
+        }
+        Assert.Single(await db.AiDecisions.ToArrayAsync());
+    }
 
     [LocalDbFact]
     public async Task Concurrent_orders_for_one_decision_commit_at_most_one_linked_trade()
@@ -160,6 +221,32 @@ public sealed class AiTradesHistorySqlServerTests
         {
             if (Interlocked.Increment(ref arrivals) == 2) ready.SetResult();
             await ready.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        }
+    }
+
+    private sealed class OutcomeSaveGate : SaveChangesInterceptor
+    {
+        private int arrivals;
+        private readonly TaskCompletionSource first = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource both = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task FirstArrival => first.Task;
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            var arrival = Interlocked.Increment(ref arrivals);
+            if (arrival == 1) first.SetResult();
+            if (arrival == 2) both.SetResult();
+            await both.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+            return result;
+        }
+    }
+
+    private sealed class LocalDbTheoryAttribute : TheoryAttribute
+    {
+        public LocalDbTheoryAttribute()
+        {
+            if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("STOCKLAB_TEST_LOCALDB") != "1")
+                Skip = "Set STOCKLAB_TEST_LOCALDB=1 on Windows with SQL Server LocalDB.";
         }
     }
 
