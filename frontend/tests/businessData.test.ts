@@ -9,7 +9,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import * as dashboard from "../src/dashboard/dashboardData.ts";
 import * as portfolio from "../src/portfolio/portfolioData.ts";
 import * as transactions from "../src/transactions/transactionsData.ts";
-import * as watchlist from "../src/watchlist/watchlistData.ts";
 import * as alerts from "../src/alerts/alertsData.ts";
 import * as ai from "../src/ai-trader/aiTraderData.ts";
 import {
@@ -54,7 +53,6 @@ test("unconnected business services contain no manufactured holdings, orders, al
     dashboard.transactions,
     portfolio.positions,
     transactions.transactions,
-    watchlist.watchlistItems,
     alerts.initialAlerts,
     alerts.assetOptions,
     ai.positions,
@@ -96,7 +94,7 @@ for (const [path, label] of [
   ["dashboard/DashboardPage", "No portfolio data yet"],
   ["portfolio/PortfolioPage", "No portfolio data yet"],
   ["transactions/TransactionsPage", "Loading transactions"],
-  ["watchlist/WatchlistPage", "No watchlist items"],
+  ["watchlist/WatchlistPage", "Loading watchlist"],
   ["alerts/AlertsPage", "No alerts"],
   ["ai-trader/AITraderPage", "AI Trader is not available yet"],
 ] as const)

@@ -476,6 +476,20 @@
     "simulationNote": "L’historique des transactions est simulé dans cet aperçu frontend."
   },
   "watchlist": {
+    "loading": "Chargement de la liste de suivi…",
+    "retry": "Réessayer",
+    "addedToast": "{{symbol}} a été ajouté à votre liste de suivi.",
+    "emptyHint": "Recherchez une action dans Marché et sélectionnez son étoile pour l’ajouter ici.",
+    "dataNote": "Enregistrée dans votre compte. Les cours sont actualisés au chargement.",
+    "errors": {
+      "unauthorized": "Votre session a expiré. Connectez-vous pour accéder à votre liste de suivi.",
+      "already_exists": "Cette action figure déjà dans votre liste de suivi. Actualisez et réessayez.",
+      "not_found": "Cette action ne figure plus dans votre liste de suivi. Actualisez et réessayez.",
+      "offline": "Impossible d’accéder à votre liste de suivi. Vérifiez votre connexion et réessayez.",
+      "invalid_response": "Le service de suivi a renvoyé une réponse invalide. Réessayez.",
+      "server_error": "Impossible de charger ou de modifier votre liste de suivi. Réessayez.",
+      "invalid_symbol": "Ce symbole ne peut pas être ajouté à votre liste de suivi."
+    },
     "currentPrice": "Prix actuel",
     "stockDetails": "Détails de l’action",
     "removeFromWatchlist": "Retirer {{symbol}} de la liste de suivi",

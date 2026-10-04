@@ -476,6 +476,20 @@
     "simulationNote": "Transaction history is simulated for this frontend preview."
   },
   "watchlist": {
+    "loading": "Loading watchlist…",
+    "retry": "Retry",
+    "addedToast": "{{symbol}} added to your watchlist.",
+    "emptyHint": "Find a stock in Market and select its star to add it here.",
+    "dataNote": "Saved to your account. Prices are refreshed on load.",
+    "errors": {
+      "unauthorized": "Your session has expired. Please sign in to access your watchlist.",
+      "already_exists": "This stock is already in your watchlist. Refresh and try again.",
+      "not_found": "This stock is no longer in your watchlist. Refresh and try again.",
+      "offline": "Unable to reach your watchlist. Check your connection and try again.",
+      "invalid_response": "The watchlist service returned an invalid response. Please try again.",
+      "server_error": "Your watchlist could not be loaded or updated. Please try again.",
+      "invalid_symbol": "This symbol cannot be added to your watchlist."
+    },
     "currentPrice": "Current price",
     "stockDetails": "Stock details",
     "removeFromWatchlist": "Remove {{symbol}} from watchlist",
