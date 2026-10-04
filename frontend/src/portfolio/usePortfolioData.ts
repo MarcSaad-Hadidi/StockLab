@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { marketDataApi } from '../api/marketDataClient'
 import { PortfolioApiError, portfolioApi, type PortfolioApiPosition, type PortfolioApiTransaction } from '../api/portfolioApi'
+import { getAuthSession } from '../auth/authStorage'
+import { useAuthSession } from '../auth/useAuthUser'
 
 export type PortfolioPosition = {
   symbol: string
@@ -41,22 +43,35 @@ const portfolioQuoteBudget = 20
 const portfolioQuoteBatchSize = 5
 
 export function usePortfolioData(): PortfolioDataState {
-  const [state, setState] = useState<PortfolioDataState>({ data: null, isLoading: true, error: null })
+  const session = useAuthSession()
+  const userId = session?.user.id ?? null
+  const authorization = session ? `${session.tokenType} ${session.accessToken}` : null
+  const sessionKey = JSON.stringify([userId, authorization])
+  const [result, setResult] = useState<{ sessionKey: string; state: PortfolioDataState } | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
+    if (!userId || !authorization) return () => controller.abort()
+    const active = () => {
+      const current = getAuthSession()
+      return !controller.signal.aborted && current?.user.id === userId
+        && `${current.tokenType} ${current.accessToken}` === authorization
+    }
 
-    void portfolioApi.getPortfolio(controller.signal)
+    void portfolioApi.getPortfolio(controller.signal, authorization)
       .then(async (portfolio) => {
-        const transactions = await portfolioApi.getRecentTransactions(5, controller.signal).catch((error: unknown) => {
-          if (controller.signal.aborted) throw error
+        if (!active()) return
+        const transactions = await portfolioApi.getRecentTransactions(5, controller.signal, authorization).catch((error: unknown) => {
+          if (!active()) throw error
           // A portfolio can still be rendered while the optional activity feed
           // is unavailable on an older backend deployment.
           return []
         })
+        if (!active()) return
         const quotePositions = portfolio.positions.slice(0, portfolioQuoteBudget)
         const quotedPositions: Array<{ position: PortfolioApiPosition; quote: Awaited<ReturnType<typeof marketDataApi.quote>> | null }> = []
         for (let start = 0; start < quotePositions.length; start += portfolioQuoteBatchSize) {
+          if (!active()) return
           const batch = quotePositions.slice(start, start + portfolioQuoteBatchSize)
           const results = await Promise.all(batch.map(async (position) => {
             try {
@@ -108,8 +123,8 @@ export function usePortfolioData(): PortfolioDataState {
           } satisfies PortfolioPosition
         })
 
-        if (!controller.signal.aborted) {
-          setState({ data: {
+        if (active()) {
+          setResult({ sessionKey, state: { data: {
             cashBalance: portfolio.cashBalance,
             investedValue,
             totalValue,
@@ -119,19 +134,22 @@ export function usePortfolioData(): PortfolioDataState {
             currency: portfolio.currency,
             positions,
             transactions,
-          }, isLoading: false, error: null })
+          }, isLoading: false, error: null } })
         }
       })
       .catch((error: unknown) => {
-        if (controller.signal.aborted) return
+        if (!active()) return
         const portfolioError = error instanceof PortfolioApiError
           ? error
           : new PortfolioApiError(502, 'invalid_response', 'The portfolio service returned an invalid response.')
-        setState({ data: null, isLoading: false, error: portfolioError })
+        setResult({ sessionKey, state: { data: null, isLoading: false, error: portfolioError } })
       })
 
     return () => controller.abort()
-  }, [])
+  }, [userId, authorization, sessionKey])
 
-  return state
+  // Mask the old owner's data during render, before effect cleanup and loading run.
+  if (!session) return { data: null, isLoading: false,
+    error: new PortfolioApiError(401, 'unauthorized', 'Your session has expired. Please sign in again.') }
+  return result?.sessionKey === sessionKey ? result.state : { data: null, isLoading: true, error: null }
 }

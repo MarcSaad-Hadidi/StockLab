@@ -143,9 +143,11 @@ export function createPortfolioApi(
   fetcher: typeof fetch = fetch,
   authorization: () => { Authorization: string } | null = getAuthorizationHeader,
 ) {
-  async function getJson(path: string, signal?: AbortSignal): Promise<unknown> {
+  async function getJson(path: string, signal?: AbortSignal, expectedAuthorization?: string): Promise<unknown> {
     const authHeader = authorization()
     if (!authHeader)
+      throw new PortfolioApiError(401, 'unauthorized', messageFor('unauthorized'))
+    if (expectedAuthorization !== undefined && authHeader.Authorization !== expectedAuthorization)
       throw new PortfolioApiError(401, 'unauthorized', messageFor('unauthorized'))
 
     let response: Response
@@ -175,26 +177,26 @@ export function createPortfolioApi(
   }
 
   return {
-    async getTransactionHistory(query: TransactionHistoryQuery, signal?: AbortSignal): Promise<TransactionHistoryResponse> {
+    async getTransactionHistory(query: TransactionHistoryQuery, signal?: AbortSignal, expectedAuthorization?: string): Promise<TransactionHistoryResponse> {
       const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) })
       for (const key of ['search', 'side', 'from', 'to'] as const) {
         const value = query[key]?.trim()
         if (value) params.set(key, value)
       }
-      const body = await getJson(`/api/portfolio/transactions/history?${params}`, signal)
+      const body = await getJson(`/api/portfolio/transactions/history?${params}`, signal, expectedAuthorization)
       if (!validHistory(body))
         throw new PortfolioApiError(502, 'invalid_response', messageFor('invalid_response'))
       return body
     },
-    async getPortfolio(signal?: AbortSignal): Promise<PortfolioApiResponse> {
-      const body = await getJson('/api/portfolio', signal)
+    async getPortfolio(signal?: AbortSignal, expectedAuthorization?: string): Promise<PortfolioApiResponse> {
+      const body = await getJson('/api/portfolio', signal, expectedAuthorization)
       if (!validResponse(body))
         throw new PortfolioApiError(502, 'invalid_response', messageFor('invalid_response'))
 
       return body
     },
-    async getRecentTransactions(limit = 5, signal?: AbortSignal): Promise<PortfolioApiTransaction[]> {
-      const body = await getJson(`/api/portfolio/transactions?limit=${encodeURIComponent(String(limit))}`, signal)
+    async getRecentTransactions(limit = 5, signal?: AbortSignal, expectedAuthorization?: string): Promise<PortfolioApiTransaction[]> {
+      const body = await getJson(`/api/portfolio/transactions?limit=${encodeURIComponent(String(limit))}`, signal, expectedAuthorization)
       if (!Array.isArray(body) || !body.every(validTransaction))
         throw new PortfolioApiError(502, 'invalid_response', messageFor('invalid_response'))
       return body
