@@ -7,7 +7,7 @@ import { JSDOM } from 'jsdom'
 import React, { act } from 'react'
 import { profileApi, ProfileApiError } from '../src/api/profileApi.ts'
 import { portfolioApi } from '../src/api/portfolioApi.ts'
-import { saveAuthSession, getAuthSession, clearAuthSession } from '../src/auth/authStorage.ts'
+import { saveAuthSession, getAuthSession, clearAuthSession, authStorageKey } from '../src/auth/authStorage.ts'
 import { useProfileData } from '../src/profile/useProfileData.ts'
 
 registerHooks({ load(url, context, nextLoad) {
@@ -195,3 +195,38 @@ test('a save that fails after another login cannot retain the previous account',
     assert.equal(state!.loadError, 'unauthorized')
   } finally { await view.close() }
 })
+
+for (const trigger of ['storage', 'focus', 'save'] as const) {
+  test(`same-account changes reload the profile on ${trigger} and discard the stale draft`, async (t) => {
+    seed()
+    let persisted = profile
+    const get = t.mock.method(profileApi, 'getProfile', async () => persisted)
+    const put = t.mock.method(profileApi, 'updateProfile', async (request) => ({ ...persisted, ...request }))
+    t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+    let state: ReturnType<typeof useProfileData>
+    function Probe() { state = useProfileData(); return null }
+    const { default: Page } = await import('../src/profile/ProfilePage.tsx')
+    const view = await mount(React.createElement(React.Fragment, null, React.createElement(Probe), React.createElement(Page)))
+    try {
+      const edit = Array.from(view.container.querySelectorAll('button')).find(button => button.textContent === 'Edit Profile')!
+      await act(async () => edit.click())
+      assert.ok(view.container.querySelector('input[aria-label="Full Name"]'))
+      persisted = { ...profile, displayName: 'Updated Elsewhere', email: 'elsewhere@example.com' }
+      saveAuthSession({ ...session, user: persisted })
+      await act(async () => {
+        if (trigger === 'storage') window.dispatchEvent(new dom.window.StorageEvent('storage', { key: authStorageKey }))
+        else if (trigger === 'focus') window.dispatchEvent(new dom.window.Event('focus'))
+        else assert.equal(await state.save({ displayName: user.displayName, email: user.email }), false)
+      })
+      assert.equal(state!.profile?.displayName, persisted.displayName)
+      assert.equal(state!.profile?.email, persisted.email)
+      assert.equal(state!.loadError, null)
+      assert.equal(put.mock.callCount(), 0)
+      assert.equal(view.container.querySelector('h1')!.textContent, persisted.displayName)
+      assert.equal(view.container.querySelector('input[aria-label="Full Name"]'), null)
+      const count = get.mock.callCount()
+      await act(async () => window.dispatchEvent(new dom.window.Event('focus')))
+      assert.equal(get.mock.callCount(), count, 'unchanged identity must not reload')
+    } finally { await view.close() }
+  })
+}

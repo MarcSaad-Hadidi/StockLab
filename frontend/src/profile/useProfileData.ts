@@ -32,7 +32,24 @@ export function useProfileData() {
     sessionRef.current = session
 
     function invalidateSession() {
-      if (sameSession(session)) return
+      const expected = sessionRef.current
+      const current = getAuthSession()
+      if (sameSession(expected)) {
+        if (expected!.user.displayName === current!.user.displayName && expected!.user.email === current!.user.email) return
+        controller.abort()
+        saveController.current?.abort()
+        savingRef.current = false
+        setSaving(false)
+        setProfile(null)
+        setCapital(null)
+        setLoading(true)
+        setLoadError(null)
+        setSaveError(null)
+        setFieldErrors({})
+        setSessionWarning(false)
+        setRevision(value => value + 1)
+        return
+      }
       controller.abort()
       saveController.current?.abort()
       setProfile(null)
@@ -55,6 +72,7 @@ export function useProfileData() {
         const current = getAuthSession()!
         if (current.user.displayName !== result.displayName || current.user.email !== result.email)
           setSessionWarning(!saveAuthSession({ ...current, user: { id: result.id, displayName: result.displayName, email: result.email } }))
+        sessionRef.current = getAuthSession()
       }).catch(error => {
         if (!controller.signal.aborted) {
           if (!sameSession(session)) { invalidateSession(); return }
@@ -94,6 +112,11 @@ export function useProfileData() {
       setProfile(null); setCapital(null); setLoadError('unauthorized')
       return false
     }
+    const currentSession = getAuthSession()!
+    if (session!.user.displayName !== currentSession.user.displayName || session!.user.email !== currentSession.user.email) {
+      window.dispatchEvent(new window.Event('focus'))
+      return false
+    }
     const controller = new AbortController()
     saveController.current = controller
     savingRef.current = true
@@ -108,9 +131,14 @@ export function useProfileData() {
         return false
       }
       if (result.id !== session!.user.id) throw new ProfileApiError(502, 'invalid_response')
-      setProfile(result)
       const current = getAuthSession()!
+      if (session!.user.displayName !== current.user.displayName || session!.user.email !== current.user.email) {
+        window.dispatchEvent(new window.Event('focus'))
+        return false
+      }
+      setProfile(result)
       setSessionWarning(!saveAuthSession({ ...current, user: { id: result.id, displayName: result.displayName, email: result.email } }))
+      sessionRef.current = getAuthSession()
       return true
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -125,8 +153,10 @@ export function useProfileData() {
       }
       return false
     } finally {
-      savingRef.current = false
-      if (!controller.signal.aborted) setSaving(false)
+      if (saveController.current === controller) {
+        savingRef.current = false
+        if (!controller.signal.aborted) setSaving(false)
+      }
     }
   }
 

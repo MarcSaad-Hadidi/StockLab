@@ -6,7 +6,7 @@ import { clearAuthSession } from '../auth/authStorage'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useProfileData } from './useProfileData'
-import type { UpdateProfileRequest } from '../api/profileApi'
+import type { UpdateProfileRequest, UserProfile } from '../api/profileApi'
 import './profile.css'
 type IconName =
   | 'activity'
@@ -94,7 +94,8 @@ export default function ProfilePage() {
   useEffect(() => { document.title = `${t('profile.title')} | StockLab` }, [i18n.language, t])
   const { profile, capital, loading, loadError, saveError, fieldErrors, saving, sessionWarning, save, reload } = useProfileData()
   const [draft, setDraft] = useState<UpdateProfileRequest>({ displayName: '', email: '' })
-  const [editing, setEditing] = useState(false)
+  const [editingProfile, setEditingProfile] = useState<UserProfile | null>(null)
+  const editing = profile !== null && editingProfile === profile
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [saved, setSaved] = useState(false)
   const canEdit = profile !== null && !loading && !saving && loadError === null
@@ -105,13 +106,13 @@ export default function ProfilePage() {
     if (!canEdit) return
     setDraft({ displayName: profile.displayName, email: profile.email })
     setSaved(false)
-    setEditing(true)
+    setEditingProfile(profile)
   }
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!canEdit || !draft.displayName.trim()) return
     setSaved(false)
-    if (await save(draft)) { setEditing(false); setSaved(true) }
+    if (await save(draft)) { setEditingProfile(null); setSaved(true) }
   }
   const logout = () => { clearAuthSession(); window.location.assign(routeFor('logout')) }
 
@@ -124,7 +125,7 @@ export default function ProfilePage() {
         {loadError && <div className="profile-feedback form-error" role="alert">
           <p>{t(`profile.errors.${loadError}`)}</p>
           {loadError === 'unauthorized' ? <a href={routeFor('login')}>{t('profile.signIn')}</a>
-            : <button className="cancel-button" onClick={() => { setEditing(false); setSaved(false); reload() }} type="button">{t('marketApi.retry')}</button>}
+            : <button className="cancel-button" onClick={() => { setEditingProfile(null); setSaved(false); reload() }} type="button">{t('marketApi.retry')}</button>}
         </div>}
         {sessionWarning && <p className="profile-feedback form-error" role="alert">{t('profile.sessionWarning')}</p>}
         <section aria-labelledby="profile-summary-title" className="profile-summary-card">
@@ -157,10 +158,10 @@ export default function ProfilePage() {
                 <ProfileField label={t('profile.timeZone')} value="—" />
               </div>
               {editing && saveError && <div className="profile-feedback form-error" role="alert"><p>{t(`profile.errors.${saveError}`)}</p>
-                {saveError === 'profile_update_conflict' && <button className="cancel-button" onClick={() => { setEditing(false); reload() }} type="button">{t('marketApi.retry')}</button>}
+                {saveError === 'profile_update_conflict' && <button className="cancel-button" onClick={() => { setEditingProfile(null); reload() }} type="button">{t('marketApi.retry')}</button>}
               </div>}
               {editing && profile && <div className="form-actions">
-                <button className="cancel-button" disabled={saving} onClick={() => { setEditing(false); setSaved(false) }} type="button">{t('common.cancel')}</button>
+                <button className="cancel-button" disabled={saving} onClick={() => { setEditingProfile(null); setSaved(false) }} type="button">{t('common.cancel')}</button>
                 <button className="modal-primary" disabled={!canEdit || !draft.displayName.trim()} type="submit">{t(saving ? 'profile.saving' : 'common.saveChanges')}</button>
               </div>}
               {saved && profile && <p className="profile-saved" role="status">{t('profile.profileSavedToast')}</p>}
