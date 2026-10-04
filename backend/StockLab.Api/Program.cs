@@ -19,6 +19,7 @@ using StockLab.Infrastructure.Persistence;
 using StockLab.Infrastructure.Identity;
 using StockLab.Infrastructure.Trading;
 using StockLab.Infrastructure.Portfolios;
+using StockLab.Infrastructure.Watchlists;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,6 +62,7 @@ builder.Services.AddOpenApi(options =>
 builder.Services.AddHealthChecks();
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddUserRegistration();
+builder.Services.AddWatchlist();
 builder.Services.AddPaperTrading();
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
 builder.Services.AddAiTraderPortfolio();

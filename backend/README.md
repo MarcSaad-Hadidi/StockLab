@@ -707,6 +707,51 @@ balances, multiple/fractional positions, user isolation, invalid tokens, missing
 portfolios, safe failures and the OpenAPI contract. SQLite does not replace
 validation against Azure SQL.
 
+## Watchlist API
+
+The watchlist is one implicit list per user, persisted in the existing `Watchlists`
+table. All endpoints require `Authorization: Bearer <access-token>` and use only
+the JWT `sub` for ownership; request bodies and query strings cannot select a user.
+
+| Method | Route | Success | Other documented responses |
+| --- | --- | --- | --- |
+| GET | `/api/watchlist` | 200, an array (empty for a new user) | 401, 500 |
+| POST | `/api/watchlist` | 201, the added item | 400, 401, 409, 500 |
+| DELETE | `/api/watchlist/{symbol}` | 204, no body | 400, 401, 404, 500 |
+
+Add a symbol with `POST /api/watchlist`:
+
+```json
+{ "symbol": "AAPL" }
+```
+
+POST and each item in GET return only `symbol` and `createdAtUtc` (UTC). GET orders
+by creation time descending, then symbol ascending for equal timestamps. Symbols
+are trimmed and uppercased with invariant casing and must contain 1–32 characters
+after trimming. Thus `" aapl "` and `"AAPL"` identify the same entry. Slash-containing
+symbols, control characters (including NUL), and the exact dot segments `.` and
+`..` are rejected so accepted entries fit the single-segment DELETE route and
+survive URL parsing. The rule applies after trimming; ordinary dotted symbols
+such as `BRK.B` remain valid.
+Clients should URL-encode symbols in that route (for example, `BRK.B` and
+`AAPL:NASDAQ` are supported); literal percent sequences are not decoded twice.
+
+Duplicates return 409 with `watchlist_item_already_exists`. The existing unique
+`(UserId, Symbol)` index also protects concurrent additions; the same symbol can
+belong to different users. `DELETE /api/watchlist/AAPL` deletes only the caller's
+entry, returning 404 with `watchlist_item_not_found` if absent or already removed
+by a concurrent request. Invalid symbols
+return the existing 400 validation envelope. Adding or removing entries makes no
+market-provider calls and does not change portfolios, holdings, transactions or
+price alerts. This feature needs no new migration.
+
+The API tests use an isolated relational SQLite database, including simultaneous
+inserts and a register/login/add/restart/read/delete persistence check. To verify
+the configured Azure SQL environment, repeat that flow against the running API:
+register a test account, log in, POST AAPL, GET the list, restart the backend,
+GET with the same token, DELETE AAPL, and GET an empty array. Apply existing
+migrations separately before testing; the API never changes the schema at startup.
+
 ## Global exception handling
 
 `StockLab.Api/Middleware/ExceptionHandlingMiddleware.cs` wraps the HTTP pipeline
