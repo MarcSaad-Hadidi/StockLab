@@ -206,10 +206,11 @@ export function createMarketDataApi(
     signal: AbortSignal,
     ttl: number,
     cacheKey = path,
+    refresh = false,
   ): Promise<T> {
     signal.throwIfAborted();
     const cached = cache.get(cacheKey);
-    if (cached && cached.expires > Date.now()) return cached.value as T;
+    if (!refresh && cached && cached.expires > Date.now()) return cached.value as T;
     let response: Response;
     try {
       response = await fetcher(`${baseUrl.replace(/\/$/, "")}${path}`, {
@@ -336,12 +337,15 @@ export function createMarketDataApi(
         43_200_000,
       );
     },
-    quote(symbol: string, signal: AbortSignal) {
+    quote(symbol: string, signal: AbortSignal, options: { refresh?: boolean } = {}) {
+      const path = `/api/stocks/${encodeURIComponent(symbol.trim().toUpperCase())}/quote`;
       return get(
-        `/api/stocks/${encodeURIComponent(symbol.trim().toUpperCase())}/quote`,
+        path,
         quote,
         signal,
         15_000,
+        path,
+        options.refresh,
       );
     },
     async search(query: string, signal: AbortSignal) {

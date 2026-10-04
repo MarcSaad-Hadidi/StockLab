@@ -9,6 +9,9 @@ import { money } from "./stockDetailsData";
 import { useMarketRequest } from "./useMarketRequest";
 import { MarketRequestStatus } from "./MarketRequestStatus";
 import { localeForLanguage, formatSignedPercent } from "../i18n/formatters";
+import { useWatchlistData } from "../watchlist/useWatchlistData";
+import { WatchlistFeedback } from "../watchlist/WatchlistFeedback";
+import { getAuthSession } from "../auth/authStorage";
 
 export function MarketPage({
   onOpenStock,
@@ -29,7 +32,16 @@ export function MarketPage({
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [assetFilter, setAssetFilter] = useState("all");
-  const favorites = new Set<string>();
+  const watchlist = useWatchlistData(false);
+  const { favorites } = watchlist;
+  const [watchlistNotice, setWatchlistNotice] = useState<{ symbol: string; key: string; sessionToken: string } | null>(null);
+  async function toggleFavorite(symbol: string) {
+    setWatchlistNotice(null);
+    const removing = favorites.has(symbol);
+    const sessionToken = getAuthSession()?.accessToken;
+    const success = await (removing ? watchlist.remove(symbol) : watchlist.add(symbol));
+    if (success && sessionToken) setWatchlistNotice({ symbol, key: removing ? 'watchlist.removedToast' : 'watchlist.addedToast', sessionToken });
+  }
   const load = useCallback(
     (signal: AbortSignal) => marketDataApi.search(query, signal),
     [query],
@@ -54,6 +66,9 @@ export function MarketPage({
         <h1 id="market-title">{t("market.title")}</h1>
         <p>{t("marketApi.subtitle")}</p>
       </section>
+      <WatchlistFeedback loading={watchlist.loading} error={watchlist.error} retry={watchlist.reload} />
+      <WatchlistFeedback error={watchlist.mutationError} />
+      {watchlistNotice && !watchlist.loading && !watchlist.error && watchlistNotice.sessionToken === getAuthSession()?.accessToken && <div className="watchlist-feedback" role="status">{t(watchlistNotice.key, { symbol: watchlistNotice.symbol })}</div>}
       <label className="market-search-bar">
         <MarketIcon name="search" size={17} />
         <span className="market-sr-only">{t("market.searchLabel")}</span>
@@ -266,8 +281,8 @@ export function MarketPage({
                             { symbol: stock.symbol },
                           )}
                           aria-pressed={favorites.has(stock.symbol)}
-                          disabled
-                          title={t("businessData.unavailable")}
+                          disabled={watchlist.loading || Boolean(watchlist.error) || watchlist.pendingSymbols.has(stock.symbol)}
+                          onClick={() => { void toggleFavorite(stock.symbol); }}
                         >
                           <MarketIcon
                             name="star"

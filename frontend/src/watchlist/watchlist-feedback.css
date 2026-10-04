@@ -1,0 +1,4 @@
+.watchlist-feedback { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 12px 0; color: #66748a; font-size: 12px; }
+.watchlist-feedback[role="alert"] { color: #b23c4b; }
+.watchlist-feedback a, .watchlist-feedback button { color: #476cf2; }
+.watchlist-feedback button { padding: 5px 10px; border: 1px solid #dfebff; border-radius: 5px; background: #fff; cursor: pointer; }
