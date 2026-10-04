@@ -525,6 +525,99 @@ The HTTP launch profile selects Development and listens on
 HTTPS redirection remains enabled; the HTTP-only profile can log that no HTTPS
 port is configured. Stop the API with Ctrl+C.
 
+## Price Alerts API (#41)
+
+All price-alert operations require `Authorization: Bearer <token>`. The JWT `sub`
+claim supplies the user ID; every lookup is scoped to that user. Missing alerts
+and alerts owned by another account return the same `404 alert_not_found`.
+
+| Method | Route | Success | Other documented statuses |
+| --- | --- | --- | --- |
+| GET | `/api/alerts` | 200, array (empty for a new user) | 401, 500 |
+| POST | `/api/alerts` | 201, created alert | 400, 401, 500 |
+| PUT | `/api/alerts/{id}` | 200, updated alert | 400, 401, 404, 409, 500 |
+| POST | `/api/alerts/{id}/disable` | 200, disabled alert | 401, 404, 409, 500 |
+| DELETE | `/api/alerts/{id}` | 204, empty body | 401, 404, 409, 500 |
+
+Create accepts exactly `symbol`, `condition`, and `targetPrice`. Symbols are trimmed,
+uppercased, required, and limited to 32 characters after normalization. Conditions
+are trimmed and case-insensitive at input, then stored as `Above` or `Below`.
+Prices are rounded to four decimals using `MidpointRounding.AwayFromZero`; the
+rounded value must be positive and at most `999999999999999.9999` (`decimal(19,4)`).
+For example, `0.00005` becomes `0.0001`, while `0.000049` is rejected.
+Invalid bodies return `400 validation_error`, including unsupported fields.
+
+```http
+POST /api/alerts
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{"symbol":"  aapl  ","condition":"above","targetPrice":250}
+```
+
+The response contains `id`, `symbol`, `currency`, `condition`, `targetPrice`,
+`status`, `triggeredPrice`, `triggeredAtUtc`, `createdAtUtc`, and `updatedAtUtc`.
+It omits user identifiers, navigation properties, and the internal rowversion.
+Timestamps are UTC. Creation always uses USD, Active status, and null trigger
+fields. The two initial timestamps come from the same `TimeProvider` instant.
+Multiple alerts for one symbol are allowed.
+
+```http
+GET /api/alerts
+Authorization: Bearer <token>
+```
+
+Lists use an untracked query ordered by creation time descending, then ID for
+stable ties. To change an alert, supply only its condition and target price:
+
+```http
+PUT /api/alerts/<id>
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{"condition":"Below","targetPrice":180}
+```
+
+Updates preserve the symbol, currency, creation time, and status. Both Active and
+Disabled alerts can be updated. Disable changes Active to Disabled and updates
+the timestamp; disabling an already Disabled alert succeeds without a write or
+timestamp change.
+
+```http
+POST /api/alerts/<id>/disable
+Authorization: Bearer <token>
+```
+
+Triggered is terminal for editing and disabling: both return
+`409 alert_already_triggered`. Create a new alert to rearm it. All owned alerts,
+including Triggered alerts, can be deleted:
+
+```http
+DELETE /api/alerts/<id>
+Authorization: Bearer <token>
+```
+
+EF uses the existing SQL Server rowversion for writes. A concurrent update,
+disable, or delete returns `409 alert_update_conflict` with a controlled message.
+No migration, polling, market-price lookup, automatic triggering, activation
+endpoint, or frontend integration is included. Monitoring and triggering remain
+scoped to #42/#43, with the frontend integration in #57.
+
+`PriceAlertsApiTests` exercises real JWT authentication and relational SQLite
+persistence, validation, user isolation, lifecycle, application restart, terminal
+states, and stale-token concurrency. Default test runs do not access Azure SQL.
+`PriceAlertsSqlServerApiTests` is opt-in using
+`STOCKLAB_PRICE_ALERTS_SQL_CONNECTION`, supplied securely outside the repository.
+It uses the existing schema without DDL or migrations, creates disposable users,
+logs in through the API, runs create/list/update/disable/restart/list/delete, and
+checks persisted SQL fields and real generated rowversion conflicts. Its cleanup
+removes only the users, portfolios, and alerts created by that test fixture.
+
+```powershell
+# Supply STOCKLAB_PRICE_ALERTS_SQL_CONNECTION securely in the local process first.
+dotnet test backend/StockLab.sln --no-build --filter FullyQualifiedName~PriceAlertsSqlServerApiTests
+```
+
 ## Stock quote HTTP API
 
 `GET /api/stocks/{symbol}/quote` delegates to `IMarketDataProvider` through
