@@ -8,7 +8,7 @@ public sealed class AddWatchlistItemRequest
 
     [Required]
     [StringLength(32)]
-    [RegularExpression("^[^/]+$")]
+    [RegularExpression(@"^(?!\.{1,2}$)[^/]+$")]
     public string Symbol
     {
         get => symbol;

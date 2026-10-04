@@ -74,7 +74,8 @@ public sealed class WatchlistController(IWatchlistService watchlistService) : Co
         }
 
         var trimmedSymbol = symbol.Trim();
-        if (string.IsNullOrWhiteSpace(trimmedSymbol) || trimmedSymbol.Length > 32 || trimmedSymbol.Contains('/'))
+        if (string.IsNullOrWhiteSpace(trimmedSymbol) || trimmedSymbol.Length > 32 || trimmedSymbol.Contains('/')
+            || trimmedSymbol is "." or "..")
         {
             return BadRequest(new ApiValidationErrorResponse(
                 "validation_error", "The request contains invalid data.",

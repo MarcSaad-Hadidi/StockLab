@@ -85,9 +85,12 @@ public sealed class WatchlistService(StockLabDbContext dbContext, TimeProvider t
     private static string NormalizeSymbol(string symbol)
     {
         var normalized = symbol?.Trim().ToUpperInvariant();
-        if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 32 || normalized.Contains('/'))
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 32 || normalized.Contains('/')
+            || normalized is "." or "..")
         {
-            throw new ArgumentException("Symbol must contain between 1 and 32 characters without slashes.", nameof(symbol));
+            throw new ArgumentException(
+                "Symbol must contain between 1 and 32 characters without slashes and must not be '.' or '..'.",
+                nameof(symbol));
         }
 
         return normalized;

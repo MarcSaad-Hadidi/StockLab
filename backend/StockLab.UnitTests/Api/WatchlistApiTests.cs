@@ -17,6 +17,7 @@ using StockLab.Application.DTOs.MarketData;
 using StockLab.Application.Interfaces;
 using StockLab.Domain.Entities;
 using StockLab.Infrastructure.Persistence;
+using StockLab.Infrastructure.Watchlists;
 
 namespace StockLab.UnitTests.Api;
 
@@ -108,7 +109,9 @@ public sealed class WatchlistApiTests
     {
         "{}", """{"symbol":null}""", """{"symbol":""}""", """{"symbol":"   "}""",
         JsonSerializer.Serialize(new { symbol = new string('X', 33) }), """{"symbol":42}""", "{",
-        """{"symbol":"BTC/USD"}""", """{"symbol":"/"}"""
+        """{"symbol":"BTC/USD"}""", """{"symbol":"/"}""",
+        """{"symbol":"."}""", """{"symbol":".."}""",
+        """{"symbol":"  .  "}""", """{"symbol":"  ..  "}"""
     }.Select(payload => new object[] { payload });
 
     [Theory]
@@ -120,6 +123,22 @@ public sealed class WatchlistApiTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("validation_error", await ErrorCodeAsync(response));
         await using var db = fixture.CreateDbContext();
+        Assert.Empty(await db.Watchlists.ToArrayAsync());
+    }
+
+    [Theory]
+    [InlineData(".")]
+    [InlineData("..")]
+    [InlineData("  .  ")]
+    [InlineData("  ..  ")]
+    public async Task Service_rejects_dot_segments_after_trimming(string symbol)
+    {
+        await using var fixture = await WatchlistFixture.CreateAsync();
+        await using var db = fixture.CreateDbContext();
+        var service = new WatchlistService(db, fixture.Clock);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.AddAsync(fixture.UserA, symbol, CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.RemoveAsync(fixture.UserA, symbol, CancellationToken.None));
         Assert.Empty(await db.Watchlists.ToArrayAsync());
     }
 
@@ -206,6 +225,8 @@ public sealed class WatchlistApiTests
     [Theory]
     [InlineData("%20%20%20")]
     [InlineData("ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567")]
+    [InlineData("%20.%20")]
+    [InlineData("%20..%20")]
     public async Task Delete_validates_the_symbol(string symbol)
     {
         await using var fixture = await WatchlistFixture.CreateAsync();
@@ -219,6 +240,10 @@ public sealed class WatchlistApiTests
     [InlineData("AAPL:NASDAQ")]
     [InlineData("BTC%2FUSD")]
     [InlineData("PERCENT%")]
+    [InlineData("%2E")]
+    [InlineData("%2E%2E")]
+    [InlineData("...")]
+    [InlineData("AAPL..")]
     public async Task Accepted_symbols_round_trip_through_an_encoded_delete_path(string symbol)
     {
         await using var fixture = await WatchlistFixture.CreateAsync();
