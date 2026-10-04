@@ -25,6 +25,7 @@ public sealed class AiTradeExecutionModelTests
         var decisionIndex = Assert.Single(trade.GetIndexes(), i => i.Properties.Select(p => p.Name).SequenceEqual(["AiDecisionId"]));
         Assert.True(decisionIndex.IsUnique);
         Assert.Equal("[AiDecisionId] IS NOT NULL", decisionIndex.GetFilter());
+        Assert.Single(trade.GetIndexes(), i => i.Properties.Select(p => p.Name).SequenceEqual(["ExecutedAtUtc", "Id"]));
         var fk = Assert.Single(trade.GetForeignKeys(), f => f.PrincipalEntityType.GetTableName() == "AiPortfolios");
         Assert.Equal("AiPortfolios", fk.PrincipalEntityType.GetTableName());
         Assert.Equal(DeleteBehavior.NoAction, fk.DeleteBehavior);
@@ -43,6 +44,15 @@ public sealed class AiTradeExecutionModelTests
         Assert.Equal("AiTrades", Assert.Single(migration.UpOperations.OfType<CreateTableOperation>()).Name);
         Assert.All(migration.UpOperations, op => Assert.True(op is CreateTableOperation or CreateIndexOperation));
         Assert.Equal("AiTrades", Assert.IsType<DropTableOperation>(Assert.Single(migration.DownOperations)).Name);
+        var historyDefinition = Assert.Single(assembly.Migrations, m => m.Key.EndsWith("_IndexAiTradeHistory"));
+        var historyMigration = assembly.CreateMigration(historyDefinition.Value, db.Database.ProviderName!);
+        var historyIndex = Assert.IsType<CreateIndexOperation>(Assert.Single(historyMigration.UpOperations));
+        Assert.Equal("AiTrades", historyIndex.Table);
+        Assert.Equal(new[] { "ExecutedAtUtc", "Id" }, historyIndex.Columns);
+        Assert.False(historyIndex.IsUnique);
+        var removeHistoryIndex = Assert.IsType<DropIndexOperation>(Assert.Single(historyMigration.DownOperations));
+        Assert.Equal(historyIndex.Name, removeHistoryIndex.Name);
+        Assert.Equal("AiTrades", removeHistoryIndex.Table);
         Assert.False(db.Database.HasPendingModelChanges());
     }
 }

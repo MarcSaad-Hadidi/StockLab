@@ -33,5 +33,6 @@ public sealed class AiTradeConfiguration : IEntityTypeConfiguration<AiTrade>
         builder.HasOne(trade => trade.Decision).WithMany()
             .HasForeignKey(trade => trade.AiDecisionId).OnDelete(DeleteBehavior.NoAction);
         builder.HasIndex(trade => trade.AiDecisionId).IsUnique().HasFilter("[AiDecisionId] IS NOT NULL");
+        builder.HasIndex(trade => new { trade.ExecutedAtUtc, trade.Id });
     }
 }

@@ -291,6 +291,7 @@ they never use Azure credentials or external market APIs.
 after a position closes. The scoped `IAiTradesHistoryService` exposes
 `GetByIdAsync` (unknown ID returns null; empty ID is invalid) and
 `GetRecentAsync` (limit 1..200), ordered by `ExecutedAtUtc DESC, Id DESC`.
+The `(ExecutedAtUtc, Id)` index supports this ordering through a backward scan.
 Each read uses one projected, untracked SQL query with a LEFT JOIN to
 `AiDecisions`. It never creates a portfolio, saves changes, reads user trading
 tables, fetches market data or calculates current P&L.
@@ -331,6 +332,7 @@ rows, bounded deterministic queries, no N+1/tracking/writes/market calls, user
 isolation, decision validation and retries. `STOCKLAB_TEST_LOCALDB=1` additionally
 tests real SQL query shape, FK/unique/delete restrictions, migration upgrade and
 Down preserving old trades, and concurrent executions for one decision.
+`IndexAiTradeHistory` adds only that recent-history index; Down removes only it.
 Rejection recording also checks for an executed trade within a serializable
 transaction. Rejection and execution cannot both commit for the same decision;
 a late rejection returns `DecisionAlreadyExecuted`, and an overlapping SQL
@@ -439,7 +441,8 @@ original returns typed `DecisionNotFound` and never creates a raw decision.
 Same ID and reason returns the original DTO and timestamp; a changed reason
 returns `RejectionConflict`. Both paths first validate the risk payload against
 the raw decision. The PK resolves concurrent inserts: only SQL Server errors
-2601/2627 roll back the attempt, reload the winner and compare its reason.
+2601/2627 dispose the failed transaction/context, reload the winner through a
+fresh context and compare its reason.
 Recording a new rejection holds a serializable transaction around the missing
 trade check and rejection insert, preventing a decision from becoming both
 rejected and executed. An already executed decision returns
