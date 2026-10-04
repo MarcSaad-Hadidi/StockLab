@@ -37,8 +37,10 @@ public sealed class AiPaperTradingSqlServerTests
         var policy = new AiRiskOptions { MaxCashAllocationPerTradePercent = 0.2m };
         if (scenario == "positions") policy.MaxOpenPositions = 1;
         var first = Request(scenario == "sell" ? AiTradingSignal.Sell : AiTradingSignal.Buy, scenario == "sell" ? 10m : 200m);
-        var second = scenario == "same-order" ? first : first with { OrderId = Guid.NewGuid() };
+        var second = scenario == "same-order" ? first : first with { OrderId = Guid.NewGuid(), DecisionId = Guid.NewGuid() };
         if (scenario is "cash" or "positions") second = second with { RiskDecision = second.RiskDecision with { Symbol = "MSFT" } };
+        await f.RecordAsync(first);
+        if (scenario != "same-order") await f.RecordAsync(second);
         var gate = new QuoteGate();
         async Task<object> Execute(AiTradeExecutionRequest request)
         {
@@ -89,8 +91,9 @@ public sealed class AiPaperTradingSqlServerTests
         var factory = new ContextFactory(new DbContextOptionsBuilder<StockLabDbContext>().UseSqlServer(f.Connection)
             .AddInterceptors(observer, new FailAfterSql()).Options);
         var market = new FakeMarket { BeforeQuote = () => { Assert.False(observer.Started); return Task.CompletedTask; } };
+        var request = await f.RequestAsync();
         await Failure(new AiPaperTradingEngine(factory, market, Options.Create(new AiRiskOptions()), new FixedClock()),
-            Request(), AiTradeExecutionFailure.PersistenceFailure);
+            request, AiTradeExecutionFailure.PersistenceFailure);
         Assert.True(observer.Started);
         Assert.Equal(IsolationLevel.Serializable, observer.Isolation);
         db.ChangeTracker.Clear();
@@ -108,7 +111,7 @@ public sealed class AiPaperTradingSqlServerTests
         await using var f = await SqlFixture.CreateAsync();
         await f.SeedAsync(1000000000000m, ("AAPL", 99999999998.99999999m, 1m));
         f.Market.Price = 1m;
-        var result = await f.Engine().ExecuteAsync(Request());
+        var result = await f.Engine().ExecuteAsync(await f.RequestAsync());
         Assert.Equal(1m, result.ExecutedQuantity);
         Assert.Equal(99999999999.99999999m, result.PositionQuantity);
         Assert.Equal(999999999999m, result.CashBalance);
@@ -126,7 +129,7 @@ public sealed class AiPaperTradingSqlServerTests
         var held = scenario == "position-full" ? 99999999999.99999999m : 100m;
         await f.SeedAsync(cash, ("AAPL", held, 1m));
         f.Market.Price = scenario == "total-overflow" ? 100000000000000m : 1m;
-        var request = Request(scenario.EndsWith("overflow") ? AiTradingSignal.Sell : AiTradingSignal.Buy,
+        var request = await f.RequestAsync(scenario.EndsWith("overflow") ? AiTradingSignal.Sell : AiTradingSignal.Buy,
             scenario == "quantity-too-small" ? 0.000000001m : 100m);
         await Failure(f.Engine(), request, failure);
         await using var db = f.CreateDbContext();
@@ -171,6 +174,16 @@ public sealed class AiPaperTradingSqlServerTests
         public string Connection => connection;
         public FakeMarket Market { get; } = new();
         public AiPaperTradingEngine Engine() => new(this, Market, Options.Create(new AiRiskOptions()), new FixedClock());
+        public async Task<AiTradeExecutionRequest> RequestAsync(AiTradingSignal signal = AiTradingSignal.Buy, decimal quantity = 100m)
+        {
+            var request = Request(signal, quantity);
+            await RecordAsync(request);
+            return request;
+        }
+        public Task<AiDecisionRecord> RecordAsync(AiTradeExecutionRequest request) =>
+            new AiDecisionHistoryService(this, new FixedClock()).RecordAsync(new(request.DecisionId,
+                request.RiskDecision.Symbol, request.RiskDecision.Signal, request.RiskDecision.Confidence,
+                new(2026, 9, 27), "test-model", "v1"));
         public StockLabDbContext CreateDbContext() => new(new DbContextOptionsBuilder<StockLabDbContext>().UseSqlServer(connection).Options);
         public async Task SeedAsync(decimal cash, params (string Symbol, decimal Quantity, decimal Cost)[] positions)
         {

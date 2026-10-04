@@ -229,7 +229,8 @@ it never reads the application's Azure connection. Otherwise it is reported skip
 
 `IAiTradeExecutionService.ExecuteAsync(AiTradeExecutionRequest, CancellationToken)`
 is implemented by the scoped `AiPaperTradingEngine`. Supply a non-empty,
-caller-generated `OrderId` and an approved `AiRiskDecision` with BUY/SELL, positive
+caller-generated `OrderId`, the `DecisionId` of an already recorded ML decision,
+and an approved `AiRiskDecision` with BUY/SELL, positive
 quantity and no rejection reason. HOLD and malformed/rejected approvals never
 execute. Initialize the AI portfolio separately: execution never creates capital.
 
@@ -270,7 +271,7 @@ executes a stale order, and cancellation propagates with rollback.
 
 `AddAiTrades` creates only `AiTrades`, its positive-value/side constraints, a
 NoAction FK to `AiPortfolios`, and unique `(AiTraderPortfolioId, OrderId)` index.
-The trade stores a SHA-256 fingerprint of the original normalized symbol, side,
+The trade stores a SHA-256 fingerprint of the decision ID, original normalized symbol, side,
 confidence, risk price and approved quantity. Repeating the same approval returns
 the original committed trade and post-trade balances (`IsIdempotentReplay=true`),
 even if later trades or quotes changed. A changed approval using that OrderId
@@ -279,10 +280,57 @@ The stored execution quantity/price may differ from the original approval.
 
 No user portfolio/holding/transaction is reused, and the user paper engine is
 unchanged. There is no real broker, controller, scheduler, ML change or frontend.
-Trade history and decision links (#72) and AI API endpoints (#80) remain separate work.
+AI API endpoints (#80) remain separate work.
 Tests use fake quotes and isolated SQLite/LocalDB databases. The same
 `STOCKLAB_TEST_LOCALDB=1` switch runs real simultaneous orders and rollback tests;
 they never use Azure credentials or external market APIs.
+
+## AI executed trade history (#72)
+
+`AiTrades` is the source of committed AI paper trades, including BUY and SELL
+after a position closes. The scoped `IAiTradesHistoryService` exposes
+`GetByIdAsync` (unknown ID returns null; empty ID is invalid) and
+`GetRecentAsync` (limit 1..200), ordered by `ExecutedAtUtc DESC, Id DESC`.
+Each read uses one projected, untracked SQL query with a LEFT JOIN to
+`AiDecisions`. It never creates a portfolio, saves changes, reads user trading
+tables, fetches market data or calculates current P&L.
+
+`AiTradeHistoryItem` returns trade/order/decision IDs, side, symbol, actual
+executed quantity, persisted execution price and total, and execution time.
+Its optional `AiTradeDecisionSummary` contains the exact original decision ID,
+signal, decimal confidence, decision date, model name and model version.
+Historical execution prices and model identities remain unchanged by current
+quotes or model versions. Database failures use a safe `PersistenceFailure`;
+cancellation propagates.
+
+New execution requests require a nonempty `DecisionId`. Record the raw ML
+decision through #69 first, evaluate risk through #67, then execute the approved
+order. Execution verifies the stored decision exists, matches the raw risk
+symbol ordinally, signal and confidence exactly, is BUY/SELL, and has no #70
+rejection. It checks again within the serializable transaction after market I/O;
+the link, trade, cash and position changes commit atomically. It never creates,
+updates or deletes raw decisions or rejection records.
+
+The decision ID participates in the canonical order fingerprint. Exact retries
+return the original linked trade without another quote. Reusing an order ID with
+another decision returns `DuplicateOrder`; another order for an executed decision
+returns `DecisionAlreadyExecuted`. The filtered unique index independently
+enforces at most one trade for a non-null decision, including concurrent requests.
+
+`LinkAiTradesToDecisions` adds nullable `AiDecisionId`, a NoAction FK to
+`AiDecisions.Id`, and unique `IX_AiTrades_AiDecisionId` filtered by
+`[AiDecisionId] IS NOT NULL`. Existing trades remain visible with null decision
+ID/summary; no association is guessed or backfilled. Null is solely legacy
+compatibility: the new execution contract always commits a real decision ID.
+The migration preserves existing trade constraints and order uniqueness; its
+Down removes only the link column, FK and index. No new trade table or endpoint
+is introduced; #80 will expose these contracts later.
+
+Tests cover fractional execution facts, BUY/SELL and closed positions, legacy
+rows, bounded deterministic queries, no N+1/tracking/writes/market calls, user
+isolation, decision validation and retries. `STOCKLAB_TEST_LOCALDB=1` additionally
+tests real SQL query shape, FK/unique/delete restrictions, migration upgrade and
+Down preserving old trades, and concurrent executions for one decision.
 
 ## AI current positions (#71)
 
@@ -354,8 +402,8 @@ The SQL Server signal check uses binary collation and exact byte lengths so lowe
 or padded values cannot pass the constraint and later break the canonical reader.
 The history service is registered scoped in the API composition root.
 
-Risk rejection records (#70) now reference the stable decision ID; trade associations
-remain planned for #72. Actual model version lifecycle belongs to #75; this issue stores
+Risk rejection records (#70) and executed trades (#72) reference the stable decision
+ID. Actual model version lifecycle belongs to #75; this issue stores
 only the explicit version supplied by the caller. There is no portfolio/model FK,
 rejection reason, execution data, probability field or public update/delete API.
 SQLite tests cover validation, all signals, retries, conflicts, UTC timestamps,

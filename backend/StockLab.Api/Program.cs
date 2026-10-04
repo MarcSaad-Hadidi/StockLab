@@ -69,6 +69,7 @@ builder.Services.AddAiRiskManager(builder.Configuration);
 builder.Services.AddAiTradeExecution();
 builder.Services.AddAiDecisionHistory();
 builder.Services.AddAiRejectedDecisionHistory();
+builder.Services.AddAiTradesHistory();
 builder.Services.AddOptions<JwtOptions>()
     .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
     .Validate(options => options.IsValid(), JwtOptions.ValidationMessage)

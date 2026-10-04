@@ -19,7 +19,11 @@ public enum AiTradeExecutionFailure
     DuplicateOrder,
     ConcurrencyConflict,
     PortfolioNotFound,
-    PersistenceFailure
+    PersistenceFailure,
+    DecisionNotFound,
+    DecisionMismatch,
+    DecisionRejected,
+    DecisionAlreadyExecuted
 }
 
 /// <summary>Safe execution failure; provider and database details are never exposed.</summary>
