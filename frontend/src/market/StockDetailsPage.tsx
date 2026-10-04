@@ -37,6 +37,8 @@ type ToastState = {
 };
 type PendingTrade = {
   session: AuthSession;
+  submitted?: boolean;
+  sessionChangedAfterSubmit?: boolean;
   orderId: string;
   side: TradeSide;
   orderType: TradeOrderType;
@@ -272,25 +274,34 @@ export function StockDetailsPage({
   const [toast, setToast] = useState<ToastState | null>(null);
   const [pendingTrade, setPendingTrade] = useState<PendingTrade | null>(null);
   const [tradeError, setTradeError] = useState<string | null>(null);
+  const [hasUncertainOrder, setHasUncertainOrder] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cashResult, setCashResult] = useState<{ session: AuthSession; balance: number } | null>(null);
   const activeRequest = useRef<AbortController | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   const isAuthenticated = useAuthUser() !== null;
 
-  const cancelChangedSession = useCallback(() => {
+  const cancelChangedSession = useCallback((trade: PendingTrade, current: AuthSession | null) => {
+    const submitted = trade.submitted || activeRequest.current !== null;
+    // A submitted request may already be committed. Keep its original ID and terms
+    // across same-account token rotations so any retry remains idempotent.
+    if (submitted && current?.user.id === trade.session.user.id) {
+      setPendingTrade({ ...trade, session: current, submitted: true, sessionChangedAfterSubmit: true });
+      return;
+    }
     activeRequest.current?.abort();
     activeRequest.current = null;
     window.clearTimeout(toastTimer.current);
     setPendingTrade(null);
     setIsSubmitting(false);
     setToast(null);
-    setTradeError("stockDetails.tradeErrors.session_changed");
-  }, [setPendingTrade, setIsSubmitting, setToast, setTradeError]);
+    if (submitted) setHasUncertainOrder(true);
+    setTradeError(submitted ? null : "stockDetails.tradeErrors.session_changed");
+  }, [setPendingTrade, setIsSubmitting, setToast, setTradeError, setHasUncertainOrder]);
 
   useEffect(() => subscribeAuthSession(() => {
     const current = getAuthSession();
-    if (pendingTrade && !sameTradeSession(pendingTrade.session, current)) cancelChangedSession();
+    if (pendingTrade && !sameTradeSession(pendingTrade.session, current)) cancelChangedSession(pendingTrade, current);
     if (cashResult && !sameTradeSession(cashResult.session, current)) {
       setCashResult(null);
       window.clearTimeout(toastTimer.current);
@@ -374,7 +385,7 @@ export function StockDetailsPage({
     : null;
   const submitTrade = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!details || activeRequest.current) return;
+    if (!details || activeRequest.current || pendingTrade?.submitted) return;
     const session = getAuthSession();
     if (!session) {
       setTradeError("stockDetails.tradeErrors.unauthorized");
@@ -420,12 +431,15 @@ export function StockDetailsPage({
 
   const confirmTrade = async () => {
     if (!pendingTrade || activeRequest.current) return;
-    if (!sameTradeSession(pendingTrade.session, getAuthSession())) {
-      cancelChangedSession();
+    const current = getAuthSession();
+    if (!sameTradeSession(pendingTrade.session, current)) {
+      cancelChangedSession(pendingTrade, current);
       return;
     }
     const controller = new AbortController();
     activeRequest.current = controller;
+    const submittedTrade = { ...pendingTrade, submitted: true };
+    setPendingTrade(submittedTrade);
     setIsSubmitting(true);
     setTradeError(null);
     try {
@@ -438,11 +452,14 @@ export function StockDetailsPage({
         ...(pendingTrade.orderType === "limit" ? { limitPrice: pendingTrade.limitPrice } : {}),
       }, controller.signal, `${pendingTrade.session.tokenType} ${pendingTrade.session.accessToken}`);
       if (controller.signal.aborted) return;
-      if (!sameTradeSession(pendingTrade.session, getAuthSession())) {
-        cancelChangedSession();
+      const current = getAuthSession();
+      // Only the original account can receive the result, even if its token rotated
+      // after sending. The request was already authorized with the preparation token.
+      if (current?.user.id !== pendingTrade.session.user.id) {
+        cancelChangedSession(submittedTrade, current);
         return;
       }
-      setCashResult({ session: pendingTrade.session, balance: result.cashBalance });
+      setCashResult({ session: current, balance: result.cashBalance });
       setPendingTrade(null);
       showToast({
         key: "stockDetails.tradeSuccess",
@@ -452,9 +469,10 @@ export function StockDetailsPage({
       });
     } catch (error) {
       if (controller.signal.aborted) return;
-      if (!sameTradeSession(pendingTrade.session, getAuthSession())
+      const current = getAuthSession();
+      if (!sameTradeSession(pendingTrade.session, current)
         || (error instanceof TradingApiError && error.code === "session_changed")) {
-        cancelChangedSession();
+        cancelChangedSession(submittedTrade, current);
         return;
       }
       const code = error instanceof TradingApiError ? error.code : "server_error";
@@ -465,6 +483,11 @@ export function StockDetailsPage({
         setIsSubmitting(false);
       }
     }
+  };
+  const dismissTrade = () => {
+    if (pendingTrade?.sessionChangedAfterSubmit) setHasUncertainOrder(true);
+    setPendingTrade(null);
+    setTradeError(null);
   };
   const points = history.data ? historyPoints(history.data, locale) : [];
   const change = quote.data?.changePercent;
@@ -743,6 +766,7 @@ export function StockDetailsPage({
                 <p className="stock-ai-copy">{t("stockPanels.priceFact", { price: formatPrice(quote.data?.price), change: quote.data?.changePercent == null ? "—" : formatSignedPercent(quote.data.changePercent) })}</p>
                 <button className="stock-outline-button" type="button" onClick={() => setActiveTab("insights")}>{t("stockPanels.openInsights")}</button>
               </article>
+              {hasUncertainOrder && <p className="stock-form-error" role="alert">{t("stockDetails.submittedOrderUncertain")}</p>}
               {!pendingTrade && tradeError && <p className="stock-form-error" role="alert">{t(tradeError)}</p>}
               {!details && (
                 <article className="stock-trade-card">
@@ -818,10 +842,7 @@ export function StockDetailsPage({
               aria-label={t("stockDetails.closeTradeConfirmation")}
               className="stock-modal-close"
               disabled={isSubmitting}
-              onClick={() => {
-                setPendingTrade(null);
-                setTradeError(null);
-              }}
+              onClick={dismissTrade}
               type="button"
             >
               <MarketIcon name="close" size={14} />
@@ -841,15 +862,14 @@ export function StockDetailsPage({
               <div><span>{t("stockDetails.estimatedPrice")}</span><strong>{money(pendingTrade.estimatedPrice, currency, locale, 4)}</strong></div>
               <div><span>{t("stockDetails.estimatedTotal")}</span><strong>{money(pendingTrade.estimatedTotal, currency, locale, 4)}</strong></div>
             </div>
+            {pendingTrade.sessionChangedAfterSubmit && <p className="stock-form-error" role="alert">{t("stockDetails.submittedSessionChanged")}</p>}
+            {hasUncertainOrder && <p className="stock-form-error" role="alert">{t("stockDetails.submittedOrderUncertain")}</p>}
             {tradeError && <p className="stock-form-error" role="alert">{t(tradeError)}</p>}
             <div className="stock-modal-actions">
               <button
                 className="stock-secondary-button"
                 disabled={isSubmitting}
-                onClick={() => {
-                  setPendingTrade(null);
-                  setTradeError(null);
-                }}
+                onClick={dismissTrade}
                 type="button"
               >
                 {t("common.cancel")}
@@ -860,7 +880,7 @@ export function StockDetailsPage({
                 onClick={confirmTrade}
                 type="button"
               >
-                {isSubmitting ? t("stockDetails.submittingOrder") : t("stockDetails.confirmOrderButton")}
+                {isSubmitting ? t("stockDetails.submittingOrder") : t(pendingTrade.submitted ? "stockDetails.retryOrderButton" : "stockDetails.confirmOrderButton")}
               </button>
             </div>
           </section>

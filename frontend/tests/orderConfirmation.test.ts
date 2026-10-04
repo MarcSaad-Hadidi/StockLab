@@ -169,6 +169,98 @@ test('a late response from account A cannot close or update account B confirmati
   } finally { await view.close() }
 })
 
+test('token rotation after the trade commits retains the original request until its response arrives', async t => {
+  let release: (() => void) | undefined
+  const view = await mount(t, request => new Promise(resolve => { release = () => resolve(result(request.order)) }))
+  try {
+    await view.prepare()
+    await act(async () => view.confirm().click())
+    await act(async () => saveAuthSession({ ...accountA, accessToken: 'rotated-token' }))
+    assert.ok(view.dialog())
+    assert.equal(view.sent[0].signal.aborted, false)
+    assert.equal(view.confirm().disabled, true)
+    assert.match(view.dialog()!.textContent!, /same order.*original reference/i)
+    await view.prepare()
+    assert.equal(view.sent.length, 1)
+    await act(async () => release!())
+    assert.equal(Boolean(view.dialog()), false)
+    assert.match(view.container.textContent!, /executed successfully/)
+    assert.equal(view.sent.length, 1)
+  } finally { await view.close() }
+})
+
+test('a lost committed response can be retried after token rotation using the same order ID and terms', async t => {
+  let rejectFirst: (() => void) | undefined
+  let executions = 0
+  const committed = new Set<string>()
+  const view = await mount(t, request => {
+    if (!committed.has(request.order.orderId)) { committed.add(request.order.orderId); executions++ }
+    if (request.authorization === 'Bearer test-token-a') return new Promise((_, reject) => { rejectFirst = () => reject(new Error('response lost')) })
+    return Promise.resolve(result(request.order))
+  })
+  try {
+    await view.prepare()
+    await act(async () => view.confirm().click())
+    await act(async () => saveAuthSession({ ...accountA, accessToken: 'rotated-token' }))
+    await act(async () => rejectFirst!())
+    assert.ok(view.dialog())
+    assert.equal(view.confirm().disabled, false)
+    assert.match(view.dialog()!.textContent!, /same order.*original reference/i)
+    await act(async () => { view.confirm().click(); view.confirm().click() })
+    assert.equal(view.sent.length, 2)
+    assert.deepEqual(view.sent[1].order, view.sent[0].order)
+    assert.equal(view.sent[1].authorization, 'Bearer rotated-token')
+    assert.equal(executions, 1)
+    assert.equal(Boolean(view.dialog()), false)
+  } finally { await view.close() }
+})
+
+test('confirmation preserves a submitted order when the rotated session event has not arrived yet', async t => {
+  let attempts = 0
+  const view = await mount(t, request => ++attempts === 1
+    ? Promise.reject(new Error('response lost')) : Promise.resolve(result(request.order)))
+  try {
+    await view.prepare()
+    await act(async () => view.confirm().click())
+    window.localStorage.setItem(authStorageKey, JSON.stringify({ ...accountA, accessToken: 'rotated-token' }))
+    await act(async () => view.confirm().click())
+    assert.ok(view.dialog())
+    assert.equal(view.sent.length, 1)
+    await act(async () => view.confirm().click())
+    assert.deepEqual(view.sent[1].order, view.sent[0].order)
+    assert.equal(view.sent[1].authorization, 'Bearer rotated-token')
+  } finally { await view.close() }
+})
+
+test('changing accounts after submission warns that the original trade may already have executed', async t => {
+  let release: (() => void) | undefined
+  const view = await mount(t, request => new Promise(resolve => { release = () => resolve(result(request.order)) }))
+  try {
+    await view.prepare()
+    await act(async () => view.confirm().click())
+    await act(async () => saveAuthSession(accountB))
+    assert.equal(Boolean(view.dialog()), false)
+    assert.match(view.container.textContent!, /may already have executed.*transactions.*another order/i)
+    assert.doesNotMatch(view.container.textContent!, /prepare your order again/i)
+    await act(async () => release!())
+    assert.doesNotMatch(view.container.textContent!, /executed successfully/)
+  } finally { await view.close() }
+})
+
+test('dismissing an uncertain submitted order keeps the warning when preparing a different order', async t => {
+  const view = await mount(t, () => Promise.reject(new Error('response lost')))
+  try {
+    await view.prepare()
+    await act(async () => view.confirm().click())
+    await act(async () => saveAuthSession({ ...accountA, accessToken: 'rotated-token' }))
+    await act(async () => view.container.querySelector<HTMLButtonElement>('.stock-secondary-button')!.click())
+    assert.match(view.container.textContent!, /may already have executed.*transactions.*another order/i)
+    await view.prepare()
+    assert.match(view.dialog()!.textContent!, /may already have executed.*transactions.*another order/i)
+    assert.equal(view.sent.length, 1)
+  } finally { await view.close() }
+})
+
 test('session expiry closes the confirmation while the page stays open', async t => {
   let now = Date.parse('2026-10-04T12:00:00Z')
   t.mock.method(Date, 'now', () => now)
