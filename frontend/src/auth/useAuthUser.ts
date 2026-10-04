@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { authSessionChangedEvent, authStorageKey, getAuthSession, type AuthUser } from './authStorage'
+import { authSessionChangedEvent, authStorageKey, getAuthSession, type AuthSession, type AuthUser } from './authStorage'
 
 function snapshot(): string | null {
   const session = getAuthSession()
@@ -34,4 +34,15 @@ export function subscribeAuthSession(changed: () => void) {
 export function useAuthUser(): AuthUser | null {
   const value = useSyncExternalStore(subscribeAuthSession, snapshot, () => null)
   return value ? (JSON.parse(value) as { user: AuthUser }).user : null
+}
+
+function sessionSnapshot(): string | null {
+  const session = getAuthSession()
+  return session ? JSON.stringify(session) : null
+}
+
+// Data loaders also need to follow token rotations, even when identity is unchanged.
+export function useAuthSession(): AuthSession | null {
+  const value = useSyncExternalStore(subscribeAuthSession, sessionSnapshot, () => null)
+  return value ? JSON.parse(value) as AuthSession : null
 }

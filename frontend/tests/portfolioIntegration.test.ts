@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { test } from 'node:test'
+import { beforeEach, test } from 'node:test'
 import { registerHooks } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -8,6 +8,7 @@ import React, { act } from 'react'
 import { portfolioApi, type TransactionHistoryQuery, type TransactionHistoryResponse } from '../src/api/portfolioApi.ts'
 import { marketDataApi } from '../src/api/marketDataClient.ts'
 import { usePortfolioData, type PortfolioDataState } from '../src/portfolio/usePortfolioData.ts'
+import { saveAuthSession } from '../src/auth/authStorage.ts'
 
 registerHooks({
   load(url, context, nextLoad) {
@@ -22,6 +23,11 @@ Object.assign(globalThis, { React, window: dom.window, document: dom.window.docu
 const { createRoot } = await import('react-dom/client')
 const { i18n } = await import('../src/i18n/i18n.ts')
 await i18n.changeLanguage('en')
+beforeEach(() => {
+  window.localStorage.clear()
+  saveAuthSession({ accessToken: 'portfolio-test-token', tokenType: 'Bearer', expiresAtUtc: '2099-01-01T00:00:00Z',
+    user: { id: 'portfolio-test-user', displayName: 'Test Account', email: 'portfolio@example.com' } })
+})
 
 const base = { cashBalance: 1000, initialCapital: 1000, investedValue: 0, totalValue: 1000, currency: 'CAD', positions: [] }
 const trade = { id: 'trade-1', side: 'BUY' as const, symbol: 'AAPL', quantity: 0.25, executionPrice: 1.2345,

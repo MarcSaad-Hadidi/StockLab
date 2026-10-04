@@ -46,6 +46,18 @@ test('portfolio api rejects calls without an authenticated session', async () =>
   assert.equal(calls, 0)
 })
 
+test('portfolio requests cannot silently switch away from their captured authorization', async () => {
+  let calls = 0
+  const api = createPortfolioApi('', async () => { calls += 1; return new Response('{}') },
+    () => ({ Authorization: 'Bearer account-b' }))
+  for (const request of [
+    () => api.getPortfolio(undefined, 'Bearer account-a'),
+    () => api.getRecentTransactions(5, undefined, 'Bearer account-a'),
+    () => api.getTransactionHistory({ page: 1, pageSize: 10 }, undefined, 'Bearer account-a'),
+  ]) await assert.rejects(request(), (error: unknown) => error instanceof PortfolioApiError && error.code === 'unauthorized')
+  assert.equal(calls, 0)
+})
+
 test('portfolio api rejects malformed successful responses instead of exposing partial data', async () => {
   const api = createPortfolioApi('', async () => new Response(JSON.stringify({
     ...validPortfolio,

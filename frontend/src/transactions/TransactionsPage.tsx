@@ -11,6 +11,8 @@ import {
   type TransactionTypeFilter,
 } from './transactionsData'
 import './transactions.css'
+import { getAuthSession, type AuthSession } from '../auth/authStorage'
+import { useAuthSession } from '../auth/useAuthUser'
 
 type IconName =
   | 'activity'
@@ -209,6 +211,11 @@ function Pagination({ currentPage, onPageChange, totalPages }: PaginationProps) 
 }
 
 export function TransactionsPage() {
+  const session = useAuthSession()
+  return <AccountTransactionsPage key={session?.user.id ?? 'signed-out'} session={session} />
+}
+
+function AccountTransactionsPage({ session }: { session: AuthSession | null }) {
   const { i18n, t } = useTranslation()
   useEffect(() => {
     document.title = `${t('common.navigation.transactions')} | StockLab`
@@ -218,36 +225,45 @@ export function TransactionsPage() {
   const [page, setPage] = useState(1)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [result, setResult] = useState<{ key: string; data: TransactionHistoryResponse | null; failed: boolean } | null>(null)
-  const requestKey = JSON.stringify({ page, pageSize: 10, search: filters.query.trim(),
+  const userId = session?.user.id ?? null
+  const authorization = session ? `${session.tokenType} ${session.accessToken}` : null
+  const queryKey = JSON.stringify({ page, pageSize: 10, search: filters.query.trim(),
     side: filters.action === 'All' ? undefined : filters.action, from: filters.from, to: filters.to })
+  const requestKey = JSON.stringify([userId, authorization, queryKey])
   const invalidDates = Boolean(filters.from && filters.to && filters.from > filters.to)
 
   useEffect(() => {
-    if (invalidDates) return
+    if (invalidDates || !userId || !authorization) return
     const controller = new AbortController()
+    const active = () => {
+      const current = getAuthSession()
+      return !controller.signal.aborted && current?.user.id === userId
+        && `${current.tokenType} ${current.accessToken}` === authorization
+    }
     const timer = window.setTimeout(() => {
-      void portfolioApi.getTransactionHistory(JSON.parse(requestKey), controller.signal)
+      if (!active()) return
+      void portfolioApi.getTransactionHistory(JSON.parse(queryKey), controller.signal, authorization)
         .then((data) => {
-          if (!controller.signal.aborted) setResult({ key: requestKey, data, failed: false })
+          if (active()) setResult({ key: requestKey, data, failed: false })
         })
         .catch(() => {
-          if (!controller.signal.aborted) setResult({ key: requestKey, data: null, failed: true })
+          if (active()) setResult({ key: requestKey, data: null, failed: true })
         })
     }, 150)
     return () => { window.clearTimeout(timer); controller.abort() }
-  }, [requestKey, invalidDates])
+  }, [requestKey, queryKey, invalidDates, userId, authorization])
 
   // Do not show a previous page or its totals underneath newly selected filters.
-  const current = !invalidDates && result?.key === requestKey ? result : null
+  const current = session && !invalidDates && result?.key === requestKey ? result : null
   const history = current?.data
   const liveSummary = history?.summary
   const currency = history?.currency ?? 'USD'
-  const isLoading = !invalidDates && current === null
+  const isLoading = session !== null && !invalidDates && current === null
   const totalPages = Math.max(1, Math.ceil((history?.totalCount ?? 0) / (history?.pageSize ?? 10)))
   const currentPage = history?.page ?? 1
   const startIndex = history && history.items.length > 0 ? (history.page - 1) * history.pageSize + 1 : 0
   const endIndex = startIndex === 0 ? 0 : startIndex + (history?.items.length ?? 0) - 1
-  const message = t(invalidDates ? 'transactions.invalidDates' : current?.failed
+  const message = t(!session ? 'stockDetails.tradeErrors.unauthorized' : invalidDates ? 'transactions.invalidDates' : current?.failed
     ? 'transactions.loadError' : isLoading ? 'transactions.loading' : 'transactions.noTransactions')
   const activeFilterCount = [
     filters.query.trim().length > 0,
