@@ -230,3 +230,52 @@ for (const trigger of ['storage', 'focus', 'save'] as const) {
     } finally { await view.close() }
   })
 }
+
+for (const code of ['email_already_registered', 'validation_error', 'offline'] as const) {
+  test(`${code} errors follow the edited fields and do not survive cancel and reopen`, async (t) => {
+    seed()
+    t.mock.method(profileApi, 'getProfile', async () => profile)
+    t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+    const put = t.mock.method(profileApi, 'updateProfile', async () => {
+      throw new ProfileApiError(code === 'validation_error' ? 400 : 409, code,
+        code === 'validation_error' ? { DisplayName: ['invalid name'], Email: ['invalid email'] } : {})
+    })
+    const { default: Page } = await import('../src/profile/ProfilePage.tsx')
+    const view = await mount(React.createElement(Page))
+    const button = (label: string) => Array.from(view.container.querySelectorAll('button')).find(item => item.textContent === label)!
+    const input = (label: string) => view.container.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement
+    const change = (label: string, value: string) => {
+      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value')!.set!.call(input(label), value)
+      input(label).dispatchEvent(new dom.window.Event('input', { bubbles: true }))
+    }
+    const submit = () => view.container.querySelector('#profile-form')!.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }))
+    try {
+      await act(async () => button('Edit Profile').click())
+      await act(async () => submit())
+      assert.ok(view.container.querySelector('[role="alert"]'))
+      await act(async () => change('Full Name', 'Corrected Name'))
+      assert.equal(input('Full Name').getAttribute('aria-invalid'), 'false')
+      if (code !== 'offline') {
+        assert.ok(view.container.querySelector('[role="alert"]'), 'errors on the untouched email remain visible')
+        assert.equal(input('Email Address').getAttribute('aria-invalid'), 'true')
+      }
+      await act(async () => change('Email Address', 'corrected@example.com'))
+      assert.equal(view.container.querySelector('[role="alert"]'), null)
+      assert.equal(input('Email Address').getAttribute('aria-invalid'), 'false')
+      assert.equal(put.mock.callCount(), 1, 'editing must not submit')
+      await act(async () => view.container.querySelector<HTMLButtonElement>('[aria-label="Edit Full Name"]')!.click())
+      assert.equal(input('Full Name').value, 'Corrected Name', 'row edit buttons must not reset the active draft')
+      await act(async () => submit())
+      assert.ok(view.container.querySelector('[role="alert"]'))
+      await act(async () => button('Cancel').click())
+      await act(async () => button('Edit Profile').click())
+      assert.equal(view.container.querySelector('[role="alert"]'), null)
+      assert.equal(input('Full Name').getAttribute('aria-invalid'), 'false')
+      assert.equal(input('Email Address').getAttribute('aria-invalid'), 'false')
+      assert.equal(input('Full Name').value, user.displayName)
+      assert.equal(input('Email Address').value, user.email)
+      assert.equal(getAuthSession()?.user.email, user.email)
+      assert.doesNotMatch(view.container.textContent!, /Your profile has been saved/)
+    } finally { await view.close() }
+  })
+}

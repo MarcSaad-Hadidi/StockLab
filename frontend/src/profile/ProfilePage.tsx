@@ -92,7 +92,7 @@ function UnavailablePreference({ label, description }: { label: string; descript
 export default function ProfilePage() {
   const { i18n, t } = useTranslation()
   useEffect(() => { document.title = `${t('profile.title')} | StockLab` }, [i18n.language, t])
-  const { profile, capital, loading, loadError, saveError, fieldErrors, saving, sessionWarning, save, reload } = useProfileData()
+  const { profile, capital, loading, loadError, saveError, fieldErrors, saving, sessionWarning, save, reload, clearSaveErrors } = useProfileData()
   const [draft, setDraft] = useState<UpdateProfileRequest>({ displayName: '', email: '' })
   const [editingProfile, setEditingProfile] = useState<UserProfile | null>(null)
   const editing = profile !== null && editingProfile === profile
@@ -103,7 +103,8 @@ export default function ProfilePage() {
   const emailError = saveError === 'email_already_registered' || Object.keys(fieldErrors).some(key => key.toLowerCase() === 'email')
 
   const beginEditing = () => {
-    if (!canEdit) return
+    if (!canEdit || editing) return
+    clearSaveErrors()
     setDraft({ displayName: profile.displayName, email: profile.email })
     setSaved(false)
     setEditingProfile(profile)
@@ -149,9 +150,9 @@ export default function ProfilePage() {
             <form id="profile-form" onSubmit={saveProfile}>
               <div className="profile-info-list">
                 <ProfileField disabled={!canEdit} editing={editing && profile !== null} error={nameError} label={t('profile.fullName')}
-                  onChange={displayName => setDraft(current => ({ ...current, displayName }))} onEdit={beginEditing} value={editing && profile ? draft.displayName : profile?.displayName ?? '—'} />
+                  onChange={displayName => { clearSaveErrors('displayName'); setDraft(current => ({ ...current, displayName })) }} onEdit={beginEditing} value={editing && profile ? draft.displayName : profile?.displayName ?? '—'} />
                 <ProfileField disabled={!canEdit} editing={editing && profile !== null} error={emailError} label={t('profile.emailAddress')}
-                  onChange={email => setDraft(current => ({ ...current, email }))} onEdit={beginEditing} type="email" value={editing && profile ? draft.email : profile?.email ?? '—'} />
+                  onChange={email => { clearSaveErrors('email'); setDraft(current => ({ ...current, email })) }} onEdit={beginEditing} type="email" value={editing && profile ? draft.email : profile?.email ?? '—'} />
                 <ProfileField label={t('profile.password')} value={profile ? '••••••••••••' : '—'} />
                 <ProfileField label={t('profile.phoneNumber')} value="—" />
                 <ProfileField label={t('profile.country')} value="—" />

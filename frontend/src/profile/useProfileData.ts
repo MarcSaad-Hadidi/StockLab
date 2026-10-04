@@ -160,6 +160,14 @@ export function useProfileData() {
     }
   }
 
+  function clearSaveErrors(field?: keyof UpdateProfileRequest) {
+    const remaining = field ? Object.fromEntries(Object.entries(fieldErrors)
+      .filter(([key]) => key.toLowerCase() !== field.toLowerCase())) : {}
+    setFieldErrors(remaining)
+    if (!field || (saveError === 'email_already_registered' ? field === 'email'
+      : saveError !== 'validation_error' || Object.keys(remaining).length === 0)) setSaveError(null)
+  }
+
   function reload() {
     if (savingRef.current) return
     setProfile(null)
@@ -171,5 +179,5 @@ export function useProfileData() {
     setSessionWarning(false)
     setRevision(value => value + 1)
   }
-  return { profile, capital, loading, loadError, saveError, fieldErrors, saving, sessionWarning, save, reload }
+  return { profile, capital, loading, loadError, saveError, fieldErrors, saving, sessionWarning, save, reload, clearSaveErrors }
 }
