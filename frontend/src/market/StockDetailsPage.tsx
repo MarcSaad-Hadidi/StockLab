@@ -38,7 +38,7 @@ type ToastState = {
 type PendingTrade = {
   session: AuthSession;
   submitted?: boolean;
-  sessionChangedAfterSubmit?: boolean;
+  outcomeUncertain?: boolean;
   orderId: string;
   side: TradeSide;
   orderType: TradeOrderType;
@@ -277,26 +277,27 @@ export function StockDetailsPage({
   const [hasUncertainOrder, setHasUncertainOrder] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cashResult, setCashResult] = useState<{ session: AuthSession; balance: number } | null>(null);
-  const activeRequest = useRef<AbortController | null>(null);
+  const activeRequest = useRef<{ controller: AbortController; sent: boolean } | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   const isAuthenticated = useAuthUser() !== null;
 
   const cancelChangedSession = useCallback((trade: PendingTrade, current: AuthSession | null) => {
-    const submitted = trade.submitted || activeRequest.current !== null;
+    const submitted = trade.submitted || activeRequest.current?.sent === true;
     // A submitted request may already be committed. Keep its original ID and terms
     // across same-account token rotations so any retry remains idempotent.
     if (submitted && current?.user.id === trade.session.user.id) {
-      setPendingTrade({ ...trade, session: current, submitted: true, sessionChangedAfterSubmit: true });
+      setPendingTrade({ ...trade, session: current, submitted: true });
       return;
     }
-    activeRequest.current?.abort();
+    const uncertain = submitted && (trade.outcomeUncertain || activeRequest.current?.sent === true);
+    activeRequest.current?.controller.abort();
     activeRequest.current = null;
     window.clearTimeout(toastTimer.current);
     setPendingTrade(null);
     setIsSubmitting(false);
     setToast(null);
-    if (submitted) setHasUncertainOrder(true);
-    setTradeError(submitted ? null : "stockDetails.tradeErrors.session_changed");
+    if (uncertain) setHasUncertainOrder(true);
+    setTradeError(uncertain ? null : "stockDetails.tradeErrors.session_changed");
   }, [setPendingTrade, setIsSubmitting, setToast, setTradeError, setHasUncertainOrder]);
 
   useEffect(() => subscribeAuthSession(() => {
@@ -310,7 +311,7 @@ export function StockDetailsPage({
   }), [pendingTrade, cashResult, cancelChangedSession]);
 
   useEffect(() => () => {
-    activeRequest.current?.abort();
+    activeRequest.current?.controller.abort();
     activeRequest.current = null;
     window.clearTimeout(toastTimer.current);
   }, []);
@@ -437,9 +438,9 @@ export function StockDetailsPage({
       return;
     }
     const controller = new AbortController();
-    activeRequest.current = controller;
+    const attempt = { controller, sent: false };
+    activeRequest.current = attempt;
     const submittedTrade = { ...pendingTrade, submitted: true };
-    setPendingTrade(submittedTrade);
     setIsSubmitting(true);
     setTradeError(null);
     try {
@@ -450,7 +451,12 @@ export function StockDetailsPage({
         quantity: pendingTrade.quantity,
         orderType: pendingTrade.orderType,
         ...(pendingTrade.orderType === "limit" ? { limitPrice: pendingTrade.limitPrice } : {}),
-      }, controller.signal, `${pendingTrade.session.tokenType} ${pendingTrade.session.accessToken}`);
+      }, controller.signal, `${pendingTrade.session.tokenType} ${pendingTrade.session.accessToken}`, () => {
+        if (activeRequest.current === attempt) {
+          attempt.sent = true;
+          setPendingTrade(submittedTrade);
+        }
+      });
       if (controller.signal.aborted) return;
       const current = getAuthSession();
       // Only the original account can receive the result, even if its token rotated
@@ -470,22 +476,34 @@ export function StockDetailsPage({
     } catch (error) {
       if (controller.signal.aborted) return;
       const current = getAuthSession();
-      if (!sameTradeSession(pendingTrade.session, current)
-        || (error instanceof TradingApiError && error.code === "session_changed")) {
+      if (error instanceof TradingApiError && error.code === "session_changed") {
+        // The API rejected authorization before fetching; this attempt was never sent.
+        controller.abort();
+        activeRequest.current = null;
+        setIsSubmitting(false);
+        cancelChangedSession(pendingTrade, current);
+        return;
+      }
+      if (current?.user.id !== pendingTrade.session.user.id) {
         cancelChangedSession(submittedTrade, current);
         return;
       }
       const code = error instanceof TradingApiError ? error.code : "server_error";
+      // A current-account HTTP rejection remains definitive across token rotations.
+      // A lost/invalid response or server failure cannot confirm whether a trade committed.
+      setPendingTrade({ ...submittedTrade, session: current,
+        outcomeUncertain: pendingTrade.outcomeUncertain || !(error instanceof TradingApiError)
+          || error.status === 0 || error.status >= 500 });
       setTradeError(`stockDetails.tradeErrors.${code}`);
     } finally {
-      if (activeRequest.current === controller) {
+      if (activeRequest.current === attempt) {
         activeRequest.current = null;
         setIsSubmitting(false);
       }
     }
   };
   const dismissTrade = () => {
-    if (pendingTrade?.sessionChangedAfterSubmit) setHasUncertainOrder(true);
+    if (pendingTrade?.outcomeUncertain) setHasUncertainOrder(true);
     setPendingTrade(null);
     setTradeError(null);
   };
@@ -862,7 +880,7 @@ export function StockDetailsPage({
               <div><span>{t("stockDetails.estimatedPrice")}</span><strong>{money(pendingTrade.estimatedPrice, currency, locale, 4)}</strong></div>
               <div><span>{t("stockDetails.estimatedTotal")}</span><strong>{money(pendingTrade.estimatedTotal, currency, locale, 4)}</strong></div>
             </div>
-            {pendingTrade.sessionChangedAfterSubmit && <p className="stock-form-error" role="alert">{t("stockDetails.submittedSessionChanged")}</p>}
+            {pendingTrade.outcomeUncertain && <p className="stock-form-error" role="alert">{t("stockDetails.submittedOutcomeUncertain")}</p>}
             {hasUncertainOrder && <p className="stock-form-error" role="alert">{t("stockDetails.submittedOrderUncertain")}</p>}
             {tradeError && <p className="stock-form-error" role="alert">{t(tradeError)}</p>}
             <div className="stock-modal-actions">

@@ -325,7 +325,7 @@
     "submittingOrder": "Envoi de l’ordre…",
     "signInToTrade": "Connectez-vous pour passer un ordre simulé",
     "tradeSuccess": "L’ordre {{side}} de {{quantity}} {{symbol}} a été exécuté avec succès.",
-    "submittedSessionChanged": "Votre session a changé après l’envoi de cet ordre. Il a peut-être déjà été exécuté. Une nouvelle tentative du même ordre conserve sa référence pour éviter un doublon. Vérifiez vos transactions avant de placer un ordre différent.",
+    "submittedOutcomeUncertain": "Le résultat de votre ordre n’a pas pu être confirmé. Il a peut-être déjà été exécuté. Une nouvelle tentative du même ordre conserve sa référence pour éviter un doublon. Vérifiez vos transactions avant de placer un ordre différent.",
     "submittedOrderUncertain": "L’ordre envoyé sous le compte d’origine a peut-être déjà été exécuté. Vérifiez les transactions de ce compte avant de placer un autre ordre.",
     "retryOrderButton": "Réessayer le même ordre",
     "tradeErrors": {

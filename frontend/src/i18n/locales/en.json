@@ -325,7 +325,7 @@
     "submittingOrder": "Submitting order…",
     "signInToTrade": "Sign in to place a paper order",
     "tradeSuccess": "{{side}} order for {{quantity}} {{symbol}} executed successfully.",
-    "submittedSessionChanged": "Your session changed after this order was sent. It may already have executed. Retrying this same order uses its original reference to avoid a duplicate. Check your transactions before placing a different order.",
+    "submittedOutcomeUncertain": "Your order’s result could not be confirmed. It may already have executed. Retrying this same order uses its original reference to avoid a duplicate. Check your transactions before placing a different order.",
     "submittedOrderUncertain": "The order sent under the original account may already have executed. Check that account’s transactions before placing another order.",
     "retryOrderButton": "Retry same order",
     "tradeErrors": {

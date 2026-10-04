@@ -128,7 +128,8 @@ export function createTradingApi(
   authorization: () => { Authorization: string } | null = getAuthorizationHeader,
 ) {
   return {
-    async executeTrade(request: ExecuteTradeRequest, signal?: AbortSignal, expectedAuthorization?: string): Promise<PaperTradeResponse> {
+    async executeTrade(request: ExecuteTradeRequest, signal?: AbortSignal, expectedAuthorization?: string,
+      onRequestSent?: () => void): Promise<PaperTradeResponse> {
       const authHeader = authorization()
       if (expectedAuthorization !== undefined && authHeader?.Authorization !== expectedAuthorization)
         throw new TradingApiError(401, 'session_changed', messageFor('session_changed'))
@@ -137,17 +138,19 @@ export function createTradingApi(
 
       let response: Response
       try {
+        const body = JSON.stringify({
+          orderId: request.orderId,
+          side: request.side,
+          symbol: request.symbol.trim().toUpperCase(),
+          quantity: request.quantity,
+          orderType: request.orderType,
+          ...(request.orderType === 'limit' ? { limitPrice: request.limitPrice } : {}),
+        })
+        onRequestSent?.()
         response = await fetcher(`${baseUrl.replace(/\/$/, '')}/api/portfolio/trades`, {
           method: 'POST',
           headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...authHeader },
-          body: JSON.stringify({
-            orderId: request.orderId,
-            side: request.side,
-            symbol: request.symbol.trim().toUpperCase(),
-            quantity: request.quantity,
-            orderType: request.orderType,
-            ...(request.orderType === 'limit' ? { limitPrice: request.limitPrice } : {}),
-          }),
+          body,
           signal,
         })
       } catch {

@@ -179,7 +179,7 @@ test('token rotation after the trade commits retains the original request until 
     assert.ok(view.dialog())
     assert.equal(view.sent[0].signal.aborted, false)
     assert.equal(view.confirm().disabled, true)
-    assert.match(view.dialog()!.textContent!, /same order.*original reference/i)
+    assert.doesNotMatch(view.dialog()!.textContent!, /may already have executed/i)
     await view.prepare()
     assert.equal(view.sent.length, 1)
     await act(async () => release!())
@@ -188,6 +188,91 @@ test('token rotation after the trade commits retains the original request until 
     assert.equal(view.sent.length, 1)
   } finally { await view.close() }
 })
+
+for (const [code, message] of [
+  ['insufficient_cash', /not enough available cash/i],
+  ['limit_not_reached', /does not meet your limit price/i],
+] as const) {
+  for (const notify of [true, false]) {
+    test(`${code} stays definitive after same-account rotation ${notify ? 'with' : 'without'} a session event`, async t => {
+      let release: (() => void) | undefined
+      let attempts = 0
+      const view = await mount(t, request => ++attempts === 1
+        ? new Promise(resolve => { release = () => resolve(Response.json({ error: code }, { status: 422 })) })
+        : Promise.resolve(result(request.order)))
+      try {
+        await view.prepare()
+        await act(async () => view.confirm().click())
+        const rotated = { ...accountA, accessToken: 'rotated-token' }
+        if (notify) await act(async () => saveAuthSession(rotated))
+        else window.localStorage.setItem(authStorageKey, JSON.stringify(rotated))
+        await act(async () => release!())
+        assert.ok(view.dialog())
+        assert.match(view.dialog()!.textContent!, message)
+        assert.doesNotMatch(view.container.textContent!, /may already have executed|executed successfully/i)
+        assert.equal(view.confirm().disabled, false)
+        await act(async () => saveAuthSession({ ...rotated, accessToken: 'rotated-again' }))
+        assert.match(view.dialog()!.textContent!, message)
+        assert.doesNotMatch(view.dialog()!.textContent!, /may already have executed/i)
+        await act(async () => view.confirm().click())
+        assert.equal(view.sent.length, 2)
+        assert.deepEqual(view.sent[1].order, view.sent[0].order)
+        assert.equal(view.sent[1].authorization, 'Bearer rotated-again')
+      } finally { await view.close() }
+    })
+  }
+}
+
+test('a definitive rejection can be dismissed after rotation without an uncertain-order warning', async t => {
+  const view = await mount(t, () => Promise.resolve(Response.json({ error: 'insufficient_cash' }, { status: 422 })))
+  try {
+    await view.prepare()
+    await act(async () => view.confirm().click())
+    await act(async () => saveAuthSession({ ...accountA, accessToken: 'rotated-token' }))
+    await act(async () => view.container.querySelector<HTMLButtonElement>('.stock-secondary-button')!.click())
+    await view.prepare()
+    assert.doesNotMatch(view.dialog()!.textContent!, /may already have executed/i)
+    assert.equal(view.sent.length, 1)
+  } finally { await view.close() }
+})
+
+test('the local authorization guard cancels an unsubmitted order without claiming uncertain execution', async t => {
+  const view = await mount(t)
+  const executeTrade = tradingApi.executeTrade
+  t.mock.method(tradingApi, 'executeTrade', (...args: Parameters<typeof tradingApi.executeTrade>) => {
+    window.localStorage.setItem(authStorageKey, JSON.stringify({ ...accountA, accessToken: 'rotated-token' }))
+    return executeTrade(...args)
+  })
+  try {
+    await view.prepare()
+    await act(async () => view.confirm().click())
+    assert.equal(view.sent.length, 0)
+    assert.equal(Boolean(view.dialog()), false)
+    assert.match(view.container.textContent!, /session.*changed.*prepare/i)
+    assert.doesNotMatch(view.container.textContent!, /may already have executed/i)
+  } finally { await view.close() }
+})
+
+for (const lostResponse of [false, true]) {
+  test(`a retry stopped before fetching ${lostResponse ? 'preserves an earlier lost outcome' : 'keeps an earlier rejection definitive'}`, async t => {
+    const view = await mount(t, () => lostResponse ? Promise.reject(new Error('response lost'))
+      : Promise.resolve(Response.json({ error: 'insufficient_cash' }, { status: 422 })))
+    try {
+      await view.prepare()
+      await act(async () => view.confirm().click())
+      const executeTrade = tradingApi.executeTrade
+      t.mock.method(tradingApi, 'executeTrade', (...args: Parameters<typeof tradingApi.executeTrade>) => {
+        window.localStorage.setItem(authStorageKey, JSON.stringify(accountB))
+        return executeTrade(...args)
+      })
+      await act(async () => view.confirm().click())
+      assert.equal(view.sent.length, 1)
+      assert.equal(Boolean(view.dialog()), false)
+      if (lostResponse) assert.match(view.container.textContent!, /may already have executed/i)
+      else assert.doesNotMatch(view.container.textContent!, /may already have executed/i)
+    } finally { await view.close() }
+  })
+}
 
 test('a lost committed response can be retried after token rotation using the same order ID and terms', async t => {
   let rejectFirst: (() => void) | undefined
