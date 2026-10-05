@@ -404,6 +404,20 @@
     }
   },
   "portfolio": {
+    "loading": "Chargement de votre portefeuille…",
+    "partialPrices": "Certains cours sont indisponibles. Vos liquidités et positions restent disponibles, mais la valorisation totale ne peut pas être calculée.",
+    "quoteLimit": "Le chargement des cours est limité à {{count}} positions. Les cours des positions au-delà de cette limite ne sont pas chargés.",
+    "lastSuccessfulData": "Les valeurs affichées proviennent du dernier chargement réussi.",
+    "valuationUnavailable": "La répartition des actifs ne peut pas être calculée tant que le portefeuille et tous les cours ne sont pas disponibles.",
+    "positionsUnavailable": "Les positions n’ont pas pu être chargées.",
+    "performanceUnavailable": "L’historique de performance du portefeuille n’est pas encore disponible.",
+    "emptyPositions": "Aucune position pour le moment.",
+    "errors": {
+      "server_error": "Impossible de charger votre portefeuille. Veuillez réessayer.",
+      "offline": "Impossible de joindre StockLab. Vérifiez votre connexion et réessayez.",
+      "invalid_response": "Le service de portefeuille a retourné une réponse invalide. Veuillez réessayer.",
+      "portfolio_not_found": "Votre portefeuille de simulation est introuvable. Veuillez réessayer."
+    },
     "totalPortfolioValue": "Valeur totale du portefeuille",
     "availableCash": "Liquidités disponibles",
     "investedCapital": "Capital investi",

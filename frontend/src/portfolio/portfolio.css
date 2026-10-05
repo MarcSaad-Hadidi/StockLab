@@ -62,6 +62,35 @@ a {
   flex: 1;
 }
 
+.portfolio-feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.portfolio-feedback > div { flex: 1 1 240px; }
+.portfolio-feedback p { margin: 0; line-height: 1.6; }
+.portfolio-feedback p + p { margin-top: 4px; color: var(--muted); }
+.portfolio-feedback button, .portfolio-feedback a {
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  cursor: pointer;
+  text-decoration: none;
+}
+.portfolio-feedback button:disabled { opacity: .6; cursor: wait; }
+.portfolio-empty { padding: 24px; text-align: center; color: var(--muted); line-height: 1.6; }
+
 .portfolio-topbar {
   display: flex;
   min-height: 66px;

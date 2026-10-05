@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { marketDataApi } from '../api/marketDataClient'
 import { PortfolioApiError, portfolioApi, type PortfolioApiPosition, type PortfolioApiTransaction } from '../api/portfolioApi'
 import { getAuthSession } from '../auth/authStorage'
@@ -32,13 +32,17 @@ export type PortfolioData = {
 
 type PortfolioLoadState = {
   data: Omit<PortfolioData, 'transactions'> | null
-  isLoading: boolean
   error: PortfolioApiError | null
+  marketDataIncomplete: boolean
+  quoteLimit: number | null
+  quoteLoadFailed: boolean
 }
 
 export type PortfolioDataState = Omit<PortfolioLoadState, 'data'> & {
   data: PortfolioData | null
+  isLoading: boolean
   recentTransactions: RecentTransactionsState
+  retry: () => void
 }
 
 function costValue(position: PortfolioApiPosition) {
@@ -53,11 +57,17 @@ export function usePortfolioData(): PortfolioDataState {
   const userId = session?.user.id ?? null
   const authorization = session ? `${session.tokenType} ${session.accessToken}` : null
   const sessionKey = JSON.stringify([userId, authorization])
-  const [result, setResult] = useState<{ sessionKey: string; state: PortfolioLoadState } | null>(null)
+  const [revision, setRevision] = useState(0)
+  const requestKey = JSON.stringify([sessionKey, revision])
+  const [result, setResult] = useState<{ sessionKey: string; requestKey: string; state: PortfolioLoadState } | null>(null)
+  const activeRequest = useRef<AbortController | null>(null)
+  const retryQueued = useRef(false)
 
   useEffect(() => {
+    retryQueued.current = false
     const controller = new AbortController()
     if (!userId || !authorization) return () => controller.abort()
+    activeRequest.current = controller
     const active = () => {
       const current = getAuthSession()
       return !controller.signal.aborted && current?.user.id === userId
@@ -68,6 +78,7 @@ export function usePortfolioData(): PortfolioDataState {
       .then(async (portfolio) => {
         if (!active()) return
         const quotePositions = portfolio.positions.slice(0, portfolioQuoteBudget)
+        let quoteLoadFailed = false
         const quotedPositions: Array<{ position: PortfolioApiPosition; quote: Awaited<ReturnType<typeof marketDataApi.quote>> | null }> = []
         for (let start = 0; start < quotePositions.length; start += portfolioQuoteBatchSize) {
           if (!active()) return
@@ -80,6 +91,7 @@ export function usePortfolioData(): PortfolioDataState {
               return { position, quote }
             } catch (error) {
               if (controller.signal.aborted) throw error
+              quoteLoadFailed = true
               return { position, quote: null }
             }
           }))
@@ -123,7 +135,7 @@ export function usePortfolioData(): PortfolioDataState {
         })
 
         if (active()) {
-          setResult({ sessionKey, state: { data: {
+          setResult({ sessionKey, requestKey, state: { data: {
             cashBalance: portfolio.cashBalance,
             investedValue,
             totalValue,
@@ -132,7 +144,9 @@ export function usePortfolioData(): PortfolioDataState {
             returnPercent,
             currency: portfolio.currency,
             positions,
-          }, isLoading: false, error: null } })
+          }, error: null, marketDataIncomplete: !hasCompleteMarketData,
+          quoteLimit: portfolio.positions.length > portfolioQuoteBudget ? portfolioQuoteBudget : null,
+          quoteLoadFailed } })
         }
       })
       .catch((error: unknown) => {
@@ -140,17 +154,40 @@ export function usePortfolioData(): PortfolioDataState {
         const portfolioError = error instanceof PortfolioApiError
           ? error
           : new PortfolioApiError(502, 'invalid_response', 'The portfolio service returned an invalid response.')
-        setResult({ sessionKey, state: { data: null, isLoading: false, error: portfolioError } })
+        // Keep this account's last successful data on a failed refresh. A rejected
+        // session must not continue displaying financial data from that session.
+        setResult(previous => ({ sessionKey, requestKey, state: {
+          data: portfolioError.code !== 'unauthorized' && previous?.sessionKey === sessionKey ? previous.state.data : null,
+          error: portfolioError,
+          marketDataIncomplete: previous?.sessionKey === sessionKey && previous.state.marketDataIncomplete,
+          quoteLimit: previous?.sessionKey === sessionKey ? previous.state.quoteLimit : null,
+          quoteLoadFailed: previous?.sessionKey === sessionKey && previous.state.quoteLoadFailed,
+        } }))
       })
+      .finally(() => { if (activeRequest.current === controller) activeRequest.current = null })
 
-    return () => controller.abort()
-  }, [userId, authorization, sessionKey])
+    return () => {
+      controller.abort()
+      if (activeRequest.current === controller) activeRequest.current = null
+    }
+  }, [userId, authorization, sessionKey, requestKey])
+
+  function retry() {
+    const current = getAuthSession()
+    if (!current || current.user.id !== userId || `${current.tokenType} ${current.accessToken}` !== authorization
+      || activeRequest.current || retryQueued.current) return
+    retryQueued.current = true
+    setRevision(value => value + 1)
+  }
 
   const current = result?.sessionKey === sessionKey ? result.state : null
   const recentTransactions = useRecentTransactions(Boolean(session && current?.data))
   // Mask the old owner's data during render, before effect cleanup and loading run.
   if (!session) return { data: null, isLoading: false,
-    error: new PortfolioApiError(401, 'unauthorized', 'Your session has expired. Please sign in again.'), recentTransactions }
+    error: new PortfolioApiError(401, 'unauthorized', 'Your session has expired. Please sign in again.'),
+    marketDataIncomplete: false, quoteLimit: null, quoteLoadFailed: false, retry, recentTransactions }
   return { data: current?.data ? { ...current.data, transactions: recentTransactions.data ?? [] } : null,
-    isLoading: current?.isLoading ?? true, error: current?.error ?? null, recentTransactions }
+    isLoading: result?.sessionKey !== sessionKey || result.requestKey !== requestKey,
+    error: current?.error ?? null, marketDataIncomplete: current?.marketDataIncomplete ?? false,
+    quoteLimit: current?.quoteLimit ?? null, quoteLoadFailed: current?.quoteLoadFailed ?? false, retry, recentTransactions }
 }
