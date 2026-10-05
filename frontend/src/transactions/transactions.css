@@ -291,6 +291,7 @@ select:focus-visible {
 
 .summary-card > strong {
   display: block;
+  overflow-wrap: anywhere;
   color: #24314a;
   font-family: Manrope, sans-serif;
   font-size: 17px;

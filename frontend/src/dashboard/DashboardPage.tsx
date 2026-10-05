@@ -4,7 +4,7 @@ import { PerformanceLineChart } from '../components/charts/PerformanceLineChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
 import { getTrendClass, getTrendIcon, getTrendTone } from '../components/trend/trend'
-import { formatDate, formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
+import { formatDate, formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent, formatTradeAmount } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
 import { usePortfolioData } from '../portfolio/usePortfolioData'
 import { useTranslation } from 'react-i18next'
@@ -159,7 +159,7 @@ function TransactionRow({ transaction, currency }: { transaction: Transaction; c
       <StockMark size="small" symbol={transaction.symbol} />
       <div className="transaction-name"><strong>{transaction.symbol}</strong><small>{transaction.company}</small></div>
       <div className={`transaction-type ${transaction.type.toLowerCase()}`}><span className="transaction-dot" />{t(`common.${transaction.type.toLowerCase()}`)}</div>
-      <div className="transaction-amount"><strong>{formatCurrency(transaction.amount, i18n.language, 2, currency)}</strong><small>{t('dashboard.shares', { count: transaction.shares })}</small></div>
+      <div className="transaction-amount"><strong>{formatTradeAmount(transaction.amount, i18n.language, 2, currency)}</strong><small>{t('dashboard.shares', { count: transaction.shares })}</small></div>
       <small className="transaction-time">{transaction.executedAtUtc ? localizedTime : transaction.timeKey ? t(transaction.timeKey, { time: localizedTime }) : localizedTime}</small>
     </li>
   )

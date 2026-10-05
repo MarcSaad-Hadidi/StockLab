@@ -4,14 +4,19 @@ export function localeForLanguage(language = i18n.language) {
   return language === 'fr' ? 'fr-FR' : 'en-US'
 }
 
-export function formatCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
+export function formatCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD', maximumFractionDigits = fractionDigits) {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   return new Intl.NumberFormat(localeForLanguage(language), {
     currency,
-    maximumFractionDigits: fractionDigits,
+    maximumFractionDigits,
     minimumFractionDigits: fractionDigits,
     style: 'currency',
   }).format(value)
+}
+
+/** Preserve the twelve-decimal trade amount while keeping each view's usual minimum precision. */
+export function formatTradeAmount(value: number | null | undefined, language = i18n.language, minimumFractionDigits = 2, currency = 'USD') {
+  return formatCurrency(value, language, minimumFractionDigits, currency, 12)
 }
 
 export function formatCompactCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {

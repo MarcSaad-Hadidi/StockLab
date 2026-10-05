@@ -136,3 +136,49 @@ test('dashboard preserves distinct transactions for the same symbol and time', a
     assert.ok(errors.every(error => !/same key|unique.*key/i.test(error)), errors.join('\n'))
   } finally { await view.close() }
 })
+
+for (const language of ['en', 'fr']) {
+  const tiny = language === 'fr' ? /0,000000000001/ : /0\.000000000001/
+  const fractional = language === 'fr' ? /0,61725/ : /0\.61725/
+  const ordinary = language === 'fr' ? /204,50/ : /204\.50/
+  const exactTrades = [
+    { ...trade, id: 'tiny', quantity: 0.00000001, executionPrice: 0.0001, totalAmount: 0.000000000001 },
+    { ...trade, id: 'fractional', side: 'SELL' as const, quantity: 0.5, totalAmount: 0.61725 },
+    { ...trade, id: 'ordinary', quantity: 1, executionPrice: 204.5, totalAmount: 204.5 },
+  ]
+
+  test(`transaction rows and summaries preserve exact fractional amounts in ${language}`, async t => {
+    await i18n.changeLanguage(language)
+    t.mock.method(portfolioApi, 'getTransactionHistory', async (): Promise<TransactionHistoryResponse> => ({
+      items: exactTrades, page: 1, pageSize: 10, totalCount: 3, currency: 'CAD',
+      summary: { totalTrades: 3, totalInvested: 0.000000000001, totalProceeds: 0.61725 },
+    }))
+    const { TransactionsPage } = await import('../src/transactions/TransactionsPage.tsx')
+    const view = await mount(React.createElement(TransactionsPage))
+    try {
+      await settle()
+      const amounts = [...view.container.querySelectorAll('tbody .money-cell strong')].map(node => node.textContent!)
+      assert.equal(amounts.length, 3)
+      assert.match(amounts[0], tiny)
+      assert.match(amounts[1], fractional)
+      assert.match(amounts[2], ordinary)
+      assert.match(view.container.querySelector('.summary-grid')!.textContent!, tiny)
+      assert.match(view.container.querySelector('.summary-grid')!.textContent!, fractional)
+    } finally { await view.close(); await i18n.changeLanguage('en') }
+  })
+
+  test(`dashboard recent activity preserves exact fractional amounts in ${language}`, async t => {
+    await i18n.changeLanguage(language)
+    t.mock.method(portfolioApi, 'getPortfolio', async () => base)
+    t.mock.method(portfolioApi, 'getRecentTransactions', async () => exactTrades)
+    const { DashboardPage } = await import('../src/dashboard/DashboardPage.tsx')
+    const view = await mount(React.createElement(DashboardPage))
+    try {
+      const amounts = [...view.container.querySelectorAll('.transaction-amount strong')].map(node => node.textContent!)
+      assert.equal(amounts.length, 3)
+      assert.match(amounts[0], tiny)
+      assert.match(amounts[1], fractional)
+      assert.match(amounts[2], ordinary)
+    } finally { await view.close(); await i18n.changeLanguage('en') }
+  })
+}
