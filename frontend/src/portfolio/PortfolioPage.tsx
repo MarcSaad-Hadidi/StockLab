@@ -97,7 +97,7 @@ export default function PortfolioPage() {
   }, [i18n.language, t])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [range, setRange] = useState<TimeRange>('3M')
-  const { data, isLoading, error, marketDataIncomplete, retry } = usePortfolioData()
+  const { data, isLoading, error, marketDataIncomplete, quoteLimit, quoteLoadFailed, retry } = usePortfolioData()
   const positions = data?.positions ?? []
   const currency = data?.currency ?? 'USD'
   const pnlTone = toneFor(data?.pnl)
@@ -108,10 +108,11 @@ export default function PortfolioPage() {
     : marketDataIncomplete ? t('portfolio.partialPrices') : null
 
   return <div className="portfolio-app stocklab-layout"><Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} /><div className="portfolio-main"><TopBar onMenuOpen={() => setSidebarOpen(true)} title={t('common.navigation.portfolio')} /><main className="portfolio-content" aria-busy={isLoading}>
-    {feedback && <div className="portfolio-feedback" role={isLoading ? 'status' : 'alert'}>
-      <div><p>{feedback}</p>{data && (error || isLoading) && <p>{t('portfolio.lastSuccessfulData')}</p>}</div>
+    {feedback && <div className="portfolio-feedback" role={isLoading || (!error && !quoteLoadFailed) ? 'status' : 'alert'}>
+      <div><p>{feedback}</p>{data && (error || isLoading) && <p>{t('portfolio.lastSuccessfulData')}</p>}
+        {data && quoteLimit !== null && <p>{t('portfolio.quoteLimit', { count: quoteLimit })}</p>}</div>
       {unauthorized ? <a href="/login">{t('login.signIn')}</a>
-        : <button type="button" data-retry-portfolio disabled={isLoading} onClick={retry}>{t('watchlist.retry')}</button>}
+        : (isLoading || error || quoteLoadFailed) && <button type="button" data-retry-portfolio disabled={isLoading} onClick={retry}>{t('watchlist.retry')}</button>}
     </div>}
     <section className="metrics-grid"><MetricCard label={t('portfolio.totalPortfolioValue')} value={formatCurrency(data?.totalValue, i18n.language, 2, currency)} detail={data?.pnl === null || data?.pnl === undefined ? undefined : formatSignedCurrency(data.pnl, i18n.language, 2, currency)} tone={pnlTone} /><MetricCard label={t('portfolio.availableCash')} value={formatCurrency(data?.cashBalance, i18n.language, 2, currency)} /><MetricCard label={t('portfolio.investedCapital')} value={formatCurrency(data?.investedValue, i18n.language, 2, currency)} /><MetricCard label={t('portfolio.totalReturnAllTime')} value={formatSignedPercent(data?.returnPercent, i18n.language)} detail={data?.initialCapital === null || data?.initialCapital === undefined ? undefined : t('portfolio.sinceInitialCapital')} tone={returnTone} /></section><section className="overview-grid"><section className="panel performance-panel"><div className="panel-header"><h2>{t('portfolio.performanceTitle')} <Icon name="info" /></h2></div><div className="range-tabs" role="tablist" aria-label={t('common.performanceTimeRange')}>{(Object.keys(performanceSeries) as TimeRange[]).map((option) => <button key={option} type="button" className={range === option ? 'selected' : ''} aria-selected={range === option} onClick={() => setRange(option)} role="tab">{t(`common.timeRanges.${option}`)}</button>)}</div><PerformanceChart key={range} range={range} /></section><AllocationPanel positions={positions} cashBalance={data?.cashBalance ?? null} totalValue={data?.totalValue ?? null} currency={currency} /></section>{data ? <PositionsTable positions={positions} currency={currency} />
       : <section className="panel positions-panel"><div className="panel-header"><h2>{t('portfolio.positions')}</h2></div>

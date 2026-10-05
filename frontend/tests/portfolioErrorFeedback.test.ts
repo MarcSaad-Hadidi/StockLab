@@ -182,6 +182,67 @@ test('quotes in another currency do not produce an invented valuation', async t 
     assert.match(view.metrics().textContent!, /CA\$1,111\.00/)
     assert.equal(view.container.querySelector('.metric-card strong')?.textContent, '—')
     assert.doesNotMatch(view.container.querySelector('tbody')!.textContent!, /150\.00/)
+    assert.equal(view.container.querySelectorAll('[data-retry-portfolio]').length, 0)
+  } finally { await view.close() }
+})
+
+for (const language of ['en', 'fr']) {
+  test(`the quote cap explains incomplete valuation without a futile retry in ${language}`, async t => {
+    await i18n.changeLanguage(language)
+    const positions = Array.from({ length: 25 }, (_, i) => ({ symbol: `S${i}`, quantity: 1, averageCost: 100 }))
+    t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, positions }))
+    t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
+    const calls: string[] = []
+    t.mock.method(marketDataApi, 'quote', async symbol => { calls.push(symbol); return quote(symbol) })
+    const view = await mount()
+    try {
+      assert.equal(calls.length, 20)
+      assert.equal(view.container.querySelectorAll('tbody tr').length, 25)
+      assert.match(view.feedback().textContent!, language === 'fr' ? /limité à 20 positions/ : /limited to 20 positions/)
+      assert.doesNotMatch(view.feedback().textContent!, /Retry|Réessayer|try again|réessayer/)
+      assert.equal(view.container.querySelectorAll('[data-retry-portfolio]').length, 0)
+      assert.match(view.metrics().textContent!, language === 'fr' ? /1\s*111,00/ : /1,111\.00/)
+      assert.equal(view.container.querySelector('.metric-card strong')?.textContent, '—')
+      assert.match(view.container.querySelectorAll('tbody tr')[24].textContent!, /S24.*—/)
+    } finally { await view.close() }
+  })
+}
+
+test('a recoverable quote failure above the cap can retry and then leaves only the limit notice', async t => {
+  const positions = Array.from({ length: 25 }, (_, i) => ({ symbol: `S${i}`, quantity: 1, averageCost: 100 }))
+  t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, positions }))
+  t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
+  let fail = true
+  const calls: string[] = []
+  t.mock.method(marketDataApi, 'quote', async symbol => {
+    calls.push(symbol)
+    if (fail && symbol === 'S2') throw new Error('provider unavailable')
+    return quote(symbol)
+  })
+  const view = await mount()
+  try {
+    assert.match(view.feedback().textContent!, /limited to 20 positions/)
+    assert.equal(view.container.querySelector('[data-retry-portfolio]')?.textContent, 'Retry')
+    fail = false; await view.retry()
+    assert.equal(calls.length, 40)
+    assert.ok(calls.every(symbol => Number(symbol.slice(1)) < 20))
+    assert.equal(view.container.querySelectorAll('[data-retry-portfolio]').length, 0)
+    assert.match(view.feedback().textContent!, /limited to 20 positions/)
+    assert.doesNotMatch(view.feedback().textContent!, /try again/)
+    assert.match(view.container.querySelectorAll('tbody tr')[2].textContent!, /S2.*CA\$150\.00/)
+    assert.equal(view.container.querySelector('.metric-card strong')?.textContent, '—')
+  } finally { await view.close() }
+})
+
+test('exactly twenty successfully quoted positions have a complete valuation and no limit notice', async t => {
+  const positions = Array.from({ length: 20 }, (_, i) => ({ symbol: `S${i}`, quantity: 1, averageCost: 100 }))
+  t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, positions }))
+  t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
+  t.mock.method(marketDataApi, 'quote', async symbol => quote(symbol))
+  const view = await mount()
+  try {
+    assert.equal(view.container.querySelector('.portfolio-feedback'), null)
+    assert.equal(view.container.querySelector('.metric-card strong')?.textContent, 'CA$4,111.00')
   } finally { await view.close() }
 })
 

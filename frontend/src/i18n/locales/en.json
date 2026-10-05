@@ -405,7 +405,8 @@
   },
   "portfolio": {
     "loading": "Loading your portfolio…",
-    "partialPrices": "Some prices are unavailable. Your cash and positions remain available, but the total valuation cannot be calculated. Please try again.",
+    "partialPrices": "Some prices are unavailable. Your cash and positions remain available, but the total valuation cannot be calculated.",
+    "quoteLimit": "Price loading is limited to {{count}} positions. Prices for positions above this limit are not loaded.",
     "lastSuccessfulData": "Displayed values are from the last successful load.",
     "valuationUnavailable": "The asset allocation cannot be calculated until the portfolio and all prices are available.",
     "positionsUnavailable": "Positions could not be loaded.",

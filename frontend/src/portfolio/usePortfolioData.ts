@@ -34,6 +34,8 @@ type PortfolioLoadState = {
   data: Omit<PortfolioData, 'transactions'> | null
   error: PortfolioApiError | null
   marketDataIncomplete: boolean
+  quoteLimit: number | null
+  quoteLoadFailed: boolean
 }
 
 export type PortfolioDataState = Omit<PortfolioLoadState, 'data'> & {
@@ -76,6 +78,7 @@ export function usePortfolioData(): PortfolioDataState {
       .then(async (portfolio) => {
         if (!active()) return
         const quotePositions = portfolio.positions.slice(0, portfolioQuoteBudget)
+        let quoteLoadFailed = false
         const quotedPositions: Array<{ position: PortfolioApiPosition; quote: Awaited<ReturnType<typeof marketDataApi.quote>> | null }> = []
         for (let start = 0; start < quotePositions.length; start += portfolioQuoteBatchSize) {
           if (!active()) return
@@ -88,6 +91,7 @@ export function usePortfolioData(): PortfolioDataState {
               return { position, quote }
             } catch (error) {
               if (controller.signal.aborted) throw error
+              quoteLoadFailed = true
               return { position, quote: null }
             }
           }))
@@ -140,7 +144,9 @@ export function usePortfolioData(): PortfolioDataState {
             returnPercent,
             currency: portfolio.currency,
             positions,
-          }, error: null, marketDataIncomplete: !hasCompleteMarketData } })
+          }, error: null, marketDataIncomplete: !hasCompleteMarketData,
+          quoteLimit: portfolio.positions.length > portfolioQuoteBudget ? portfolioQuoteBudget : null,
+          quoteLoadFailed } })
         }
       })
       .catch((error: unknown) => {
@@ -154,6 +160,8 @@ export function usePortfolioData(): PortfolioDataState {
           data: portfolioError.code !== 'unauthorized' && previous?.sessionKey === sessionKey ? previous.state.data : null,
           error: portfolioError,
           marketDataIncomplete: previous?.sessionKey === sessionKey && previous.state.marketDataIncomplete,
+          quoteLimit: previous?.sessionKey === sessionKey ? previous.state.quoteLimit : null,
+          quoteLoadFailed: previous?.sessionKey === sessionKey && previous.state.quoteLoadFailed,
         } }))
       })
       .finally(() => { if (activeRequest.current === controller) activeRequest.current = null })
@@ -177,8 +185,9 @@ export function usePortfolioData(): PortfolioDataState {
   // Mask the old owner's data during render, before effect cleanup and loading run.
   if (!session) return { data: null, isLoading: false,
     error: new PortfolioApiError(401, 'unauthorized', 'Your session has expired. Please sign in again.'),
-    marketDataIncomplete: false, retry, recentTransactions }
+    marketDataIncomplete: false, quoteLimit: null, quoteLoadFailed: false, retry, recentTransactions }
   return { data: current?.data ? { ...current.data, transactions: recentTransactions.data ?? [] } : null,
     isLoading: result?.sessionKey !== sessionKey || result.requestKey !== requestKey,
-    error: current?.error ?? null, marketDataIncomplete: current?.marketDataIncomplete ?? false, retry, recentTransactions }
+    error: current?.error ?? null, marketDataIncomplete: current?.marketDataIncomplete ?? false,
+    quoteLimit: current?.quoteLimit ?? null, quoteLoadFailed: current?.quoteLoadFailed ?? false, retry, recentTransactions }
 }

@@ -68,6 +68,8 @@ test('more than twenty positions retain available quotes without inventing aggre
     assert.equal(data.investedValue, 5000)
     assert.equal(data.totalValue, null)
     assert.equal(data.pnl, null)
+    assert.equal(state?.quoteLimit, 20)
+    assert.equal(state?.quoteLoadFailed, true)
     assert.ok(data.positions.every(position => position.weight === null))
   } finally { await view.close() }
 })
