@@ -142,6 +142,10 @@ th:last-child, td:last-child { padding-right: 2px; text-align: right; }
 .change-pill.neutral { background: #f0f2f6; color: #7a849a; }
 
 .transaction-list { margin-top: 12px; }
+.recent-transactions-feedback, .recent-transactions-empty { color: #64748b; font-size: 12px; padding: 24px 0; text-align: center; }
+.recent-transactions-feedback p { line-height: 1.5; margin: 0 0 12px; }
+.recent-transactions-feedback button, .recent-transactions-feedback a { background: #f0f3ff; border: 1px solid #dce3ff; border-radius: 6px; color: #4353f5; display: inline-block; font: inherit; padding: 7px 12px; text-decoration: none; }
+.recent-transactions-feedback button:disabled { cursor: wait; opacity: .6; }
 .transaction-row { align-items: center; border-bottom: 1px solid #f0f2f6; display: grid; gap: 8px; grid-template-columns: 28px minmax(80px, 1fr) 48px auto; min-height: 57px; transition: background .18s ease, padding .18s ease; }
 .transaction-row:hover { background: #fbfdff; padding-left: 4px; }
 .transaction-row:last-child { border-bottom: 0; }

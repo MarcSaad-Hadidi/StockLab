@@ -137,6 +137,8 @@
     "holdings": "Participations",
     "transactionsSubtitle": "Votre activité récente",
     "recentTransactions": "Transactions récentes",
+    "recentTransactionsLoading": "Chargement des transactions récentes…",
+    "recentTransactionsError": "Impossible de charger les transactions récentes. Veuillez réessayer.",
     "today": "Aujourd’hui",
     "aiSubtitle": "Analyses et signaux autonomes du portefeuille",
     "openAiTrader": "Ouvrir le Trader IA",

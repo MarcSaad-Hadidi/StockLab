@@ -137,6 +137,8 @@
     "holdings": "Holdings",
     "transactionsSubtitle": "Your latest activity",
     "recentTransactions": "Recent transactions",
+    "recentTransactionsLoading": "Loading recent transactions…",
+    "recentTransactionsError": "Unable to load recent transactions. Please try again.",
     "today": "Today",
     "aiSubtitle": "Autonomous portfolio insights and signals",
     "openAiTrader": "Open AI Trader",
