@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -88,11 +89,11 @@ public sealed class PaperTradingPrecisionSqlServerTests
     }
 
     [LocalDbTheory]
-    [InlineData("0.00000001", "0.0001", 12)]
-    [InlineData("0.5", "1.2345", 12)]
-    [InlineData("1", "1.2345", 4)]
-    public async Task Downgrade_preserves_trade_amounts_and_cash_and_can_be_upgraded_again(
-        string quantityText, string priceText, int expectedScale)
+    [InlineData("0.00000001", "0.0001", true)]
+    [InlineData("0.5", "1.2345", true)]
+    [InlineData("1", "1.2345", false)]
+    public async Task Downgrade_only_succeeds_when_trade_amounts_and_cash_fit_without_loss(
+        string quantityText, string priceText, bool blocked)
     {
         await using var fixture = await SqlFixture.CreateAsync();
         var engine = new PaperTradingEngine(fixture, TimeProvider.System, new MockMarketDataProvider());
@@ -102,7 +103,13 @@ public sealed class PaperTradingPrecisionSqlServerTests
         await using var db = fixture.CreateDbContext();
         var originalVersion = (await db.Portfolios.AsNoTracking().SingleAsync()).Version;
 
-        await db.GetService<IMigrator>().MigrateAsync(PreviousMigration);
+        if (blocked)
+            await AssertDowngradeBlockedAsync(db);
+        else
+        {
+            await db.GetService<IMigrator>().MigrateAsync(PreviousMigration);
+            Assert.Equal(PreviousMigration, (await db.Database.GetAppliedMigrationsAsync()).Last());
+        }
 
         var stored = Assert.Single(await db.Transactions.AsNoTracking().ToListAsync());
         Assert.Equal(bought.TransactionId, stored.Id);
@@ -110,19 +117,26 @@ public sealed class PaperTradingPrecisionSqlServerTests
         var portfolio = await db.Portfolios.AsNoTracking().SingleAsync();
         Assert.Equal(bought.CashBalance, portfolio.CashBalance);
         Assert.Equal(originalVersion, portfolio.Version);
-        await AssertMoneyColumnScaleAsync(db, expectedScale);
-        Assert.Equal(PreviousMigration, (await db.Database.GetAppliedMigrationsAsync()).Last());
+        await AssertMoneyColumnScaleAsync(db, blocked ? 12 : 4);
 
         await db.Database.MigrateAsync();
         await AssertMoneyColumnScaleAsync(db, 12);
         Assert.Equal(bought, await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request));
         Assert.Single(await db.Transactions.AsNoTracking().ToListAsync());
+        if (blocked)
+        {
+            // A refused downgrade must release its locks and leave the current engine usable.
+            var next = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId,
+                new PaperTradeRequest(Guid.NewGuid(), "BUY", "MSFT:NASDAQ", 1m, 10m));
+            Assert.Equal(bought.CashBalance - 10m, next.CashBalance);
+            Assert.Equal(2, await db.Transactions.CountAsync());
+        }
     }
 
     [LocalDbTheory]
     [InlineData("99.999999999999")]
     [InlineData("999999999999999.999999999999")]
-    public async Task Downgrade_preserves_precision_when_only_cash_cannot_fit_the_previous_type(string cashText)
+    public async Task Downgrade_is_blocked_when_only_cash_cannot_fit_the_previous_type(string cashText)
     {
         await using var fixture = await SqlFixture.CreateAsync();
         await using var db = fixture.CreateDbContext();
@@ -131,7 +145,7 @@ public sealed class PaperTradingPrecisionSqlServerTests
         portfolio.CashBalance = cash;
         await db.SaveChangesAsync();
 
-        await db.GetService<IMigrator>().MigrateAsync(PreviousMigration);
+        await AssertDowngradeBlockedAsync(db);
 
         Assert.Equal(cash, (await db.Portfolios.AsNoTracking().SingleAsync()).CashBalance);
         Assert.Empty(await db.Transactions.AsNoTracking().ToListAsync());
@@ -141,7 +155,7 @@ public sealed class PaperTradingPrecisionSqlServerTests
     }
 
     [LocalDbFact]
-    public async Task Downgrade_preserves_tiny_history_when_round_trip_cash_fits_four_decimals()
+    public async Task Downgrade_is_blocked_by_tiny_history_when_round_trip_cash_fits_four_decimals()
     {
         await using var fixture = await SqlFixture.CreateAsync();
         var engine = new PaperTradingEngine(fixture, TimeProvider.System, new MockMarketDataProvider());
@@ -151,7 +165,7 @@ public sealed class PaperTradingPrecisionSqlServerTests
             new PaperTradeRequest(Guid.NewGuid(), "SELL", "AAPL:NASDAQ", 0.00000001m, 0.0001m));
         await using var db = fixture.CreateDbContext();
 
-        await db.GetService<IMigrator>().MigrateAsync(PreviousMigration);
+        await AssertDowngradeBlockedAsync(db);
 
         Assert.Equal(InitialCapital, (await db.Portfolios.AsNoTracking().SingleAsync()).CashBalance);
         var transactions = await db.Transactions.AsNoTracking().ToListAsync();
@@ -161,6 +175,18 @@ public sealed class PaperTradingPrecisionSqlServerTests
         await db.Database.MigrateAsync();
         Assert.All(await db.Transactions.AsNoTracking().ToListAsync(),
             row => Assert.Equal(0.000000000001m, row.TotalAmount));
+    }
+
+    private static async Task AssertDowngradeBlockedAsync(StockLabDbContext db)
+    {
+        var applied = (await db.Database.GetAppliedMigrationsAsync()).ToArray();
+        var error = await Assert.ThrowsAsync<SqlException>(() =>
+            db.GetService<IMigrator>().MigrateAsync(PreviousMigration));
+        Assert.Equal(51021, error.Number);
+        Assert.Contains("cannot be represented exactly as decimal(19,4)", error.Message);
+        Assert.Equal(applied, (await db.Database.GetAppliedMigrationsAsync()).ToArray());
+        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
+        await AssertMoneyColumnScaleAsync(db, 12);
     }
 
     private static async Task AssertMoneyColumnScaleAsync(StockLabDbContext db, int expectedScale)

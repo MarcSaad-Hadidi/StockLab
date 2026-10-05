@@ -150,10 +150,12 @@ The `PreservePaperTradingAmountPrecision` migration widens CashBalance and
 TotalAmount without changing existing amounts. Its rollback policy is lossless:
 both columns return to `decimal(19,4)` only if every stored value converts exactly.
 If any cash balance or trade total would round, become zero or overflow, the
-rollback completes while retaining both columns as `decimal(27,12)` and prints
-a diagnostic. Rows, IDs, amounts and CHECK constraints are preserved; no minimum
-amount is fabricated and no transaction is removed. Upgrading again is supported
-from either rollback outcome.
+rollback aborts with SQL error 51021 before changing any column. The migration
+remains applied in `__EFMigrationsHistory`, both columns stay `decimal(27,12)`,
+and rows, IDs, amounts and CHECK constraints are preserved. Keep the current
+application version: the previous engine rounds cash to four decimals and cannot
+preserve these amounts. No minimum amount is fabricated and no transaction is
+removed. A successful, exactly representable downgrade can be upgraded again.
 
 ### Watchlists
 
