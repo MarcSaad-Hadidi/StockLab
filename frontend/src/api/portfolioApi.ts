@@ -83,7 +83,7 @@ function validResponse(value: unknown): value is PortfolioApiResponse {
     || !finiteNumber(value.cashBalance) || value.cashBalance < 0
     || !finiteNumber(value.investedValue) || value.investedValue < 0
     || !finiteNumber(value.totalValue) || value.totalValue < 0
-    || !nonEmptyString(value.currency)
+    || !nonEmptyString(value.currency) || !/^[A-Z]{3}$/.test(value.currency)
     || !Array.isArray(value.positions)
     || !value.positions.every(validPosition)) {
     return false

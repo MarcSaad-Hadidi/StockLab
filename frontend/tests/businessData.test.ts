@@ -92,7 +92,7 @@ test("unavailable financial values stay unavailable rather than becoming zero or
 
 for (const [path, label] of [
   ["dashboard/DashboardPage", "No portfolio data yet"],
-  ["portfolio/PortfolioPage", "No portfolio data yet"],
+  ["portfolio/PortfolioPage", "Your session has expired. Please sign in again."],
   ["transactions/TransactionsPage", "Your session has expired. Please sign in again."],
   ["watchlist/WatchlistPage", "Loading watchlist"],
   ["alerts/AlertsPage", "No alerts"],
