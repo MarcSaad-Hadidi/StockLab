@@ -24,7 +24,7 @@ public sealed class TransactionConfiguration : IEntityTypeConfiguration<Transact
         builder.Property(transaction => transaction.OrderType).HasColumnType("varchar(6)").IsRequired().HasDefaultValue("market");
         builder.Property(transaction => transaction.LimitPrice).HasColumnType("decimal(19,4)");
         builder.Property(transaction => transaction.ExecutionPrice).HasColumnType("decimal(19,4)");
-        builder.Property(transaction => transaction.TotalAmount).HasColumnType("decimal(19,4)");
+        builder.Property(transaction => transaction.TotalAmount).HasColumnType("decimal(27,12)");
         builder.Property(transaction => transaction.ExecutedAtUtc).HasColumnType("datetime2(7)");
         builder.HasOne(transaction => transaction.Portfolio)
             .WithMany(portfolio => portfolio.Transactions)

@@ -32,6 +32,59 @@ public sealed class PaperTradingApiTests
         TwelveDataProviderTests.QuoteJson.Replace("\"currency\":\"USD\"", $"\"currency\":\"USD\",\"exchange\":\"{exchange}\"");
 
     [Theory]
+    [InlineData("1.2345", "1", "0.61725")]
+    [InlineData("0.0001", "0.00000002", "0.000000000001")]
+    public async Task Fractional_sales_return_exact_amounts_and_preserve_portfolio_cash(
+        string price, string buyQuantity, string sellAmount)
+    {
+        using var provider = new TwelveDataProviderTests.Fixture(
+            ListingQuote("NASDAQ").Replace("\"close\":\"204.50\"", $"\"close\":\"{price}\""));
+        await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
+        var account = await CreateSignedInAccountAsync(fixture, "fractional-api@example.com");
+        var quantity = decimal.Parse(buyQuantity, System.Globalization.CultureInfo.InvariantCulture);
+        using var buy = await PostTradeAsync(fixture.Client, account.Token, new
+        {
+            orderId = Guid.NewGuid(), side = "BUY", symbol = "AAPL:NASDAQ", quantity, orderType = "market"
+        });
+        Assert.Equal(HttpStatusCode.OK, buy.StatusCode);
+        var bought = await buy.Content.ReadFromJsonAsync<PaperTradeResponse>();
+        Assert.NotNull(bought);
+        var expectedSell = decimal.Parse(sellAmount, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(2m * expectedSell, bought.TotalAmount);
+        Assert.Equal(100_000m - bought.TotalAmount, bought.CashBalance);
+
+        for (var i = 0; i < 2; i++)
+        {
+            var order = new { orderId = Guid.NewGuid(), side = "SELL", symbol = "AAPL:NASDAQ",
+                quantity = quantity / 2m, orderType = "market" };
+            using var sell = await PostTradeAsync(fixture.Client, account.Token, order);
+            Assert.Equal(HttpStatusCode.OK, sell.StatusCode);
+            var sold = await sell.Content.ReadFromJsonAsync<PaperTradeResponse>();
+            Assert.NotNull(sold);
+            Assert.Equal(expectedSell, sold.TotalAmount);
+            Assert.Equal(100_000m - (1 - i) * expectedSell, sold.CashBalance);
+            using var retry = await PostTradeAsync(fixture.Client, account.Token, order);
+            Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+            Assert.Equal(sold, await retry.Content.ReadFromJsonAsync<PaperTradeResponse>());
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/portfolio");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", account.Token);
+        using var response = await fixture.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var portfolio = await response.Content.ReadFromJsonAsync<PortfolioResponse>();
+        Assert.NotNull(portfolio);
+        Assert.Equal(100_000m, portfolio.CashBalance);
+        Assert.Equal(100_000m, portfolio.TotalValue);
+        Assert.Empty(portfolio.Positions);
+        using var scope = fixture.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        var transactions = await context.Transactions.AsNoTracking().ToListAsync();
+        Assert.Equal(3, transactions.Count);
+        Assert.All(transactions.Where(row => row.Side == "SELL"), row => Assert.Equal(expectedSell, row.TotalAmount));
+    }
+
+    [Theory]
     [InlineData("BUY", "AAPL", false, 1)]
     [InlineData("BUY", "AAPL:NASDAQ", true, 1)]
     [InlineData("SELL", "AAPL", false, 1)]
@@ -706,6 +759,7 @@ public sealed class PaperTradingApiTests
             // Keep the SQL Server decimal boundary values exact in this SQLite fixture.
             modelBuilder.Entity<Portfolio>().Property(portfolio => portfolio.CashBalance).HasColumnType("TEXT");
             modelBuilder.Entity<Holding>().Property(holding => holding.Quantity).HasColumnType("TEXT");
+            modelBuilder.Entity<Transaction>().Property(transaction => transaction.TotalAmount).HasColumnType("TEXT");
         }
     }
 
