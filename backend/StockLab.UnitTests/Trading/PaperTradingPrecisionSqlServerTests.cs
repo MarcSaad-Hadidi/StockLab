@@ -13,6 +13,7 @@ namespace StockLab.UnitTests.Trading;
 public sealed class PaperTradingPrecisionSqlServerTests
 {
     private const decimal InitialCapital = 999_999_999_999_999.9999m;
+    private const string PreviousMigration = "20261004011946_IndexAiTradeHistory";
 
     [LocalDbTheory]
     [InlineData("1", "1.2345", "0.5", "1.2345")]
@@ -86,6 +87,93 @@ public sealed class PaperTradingPrecisionSqlServerTests
         Assert.False(verifier.Database.HasPendingModelChanges());
     }
 
+    [LocalDbTheory]
+    [InlineData("0.00000001", "0.0001", 12)]
+    [InlineData("0.5", "1.2345", 12)]
+    [InlineData("1", "1.2345", 4)]
+    public async Task Downgrade_preserves_trade_amounts_and_cash_and_can_be_upgraded_again(
+        string quantityText, string priceText, int expectedScale)
+    {
+        await using var fixture = await SqlFixture.CreateAsync();
+        var engine = new PaperTradingEngine(fixture, TimeProvider.System, new MockMarketDataProvider());
+        var request = new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL:NASDAQ",
+            decimal.Parse(quantityText, CultureInfo.InvariantCulture), decimal.Parse(priceText, CultureInfo.InvariantCulture));
+        var bought = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request);
+        await using var db = fixture.CreateDbContext();
+        var originalVersion = (await db.Portfolios.AsNoTracking().SingleAsync()).Version;
+
+        await db.GetService<IMigrator>().MigrateAsync(PreviousMigration);
+
+        var stored = Assert.Single(await db.Transactions.AsNoTracking().ToListAsync());
+        Assert.Equal(bought.TransactionId, stored.Id);
+        Assert.Equal(bought.TotalAmount, stored.TotalAmount);
+        var portfolio = await db.Portfolios.AsNoTracking().SingleAsync();
+        Assert.Equal(bought.CashBalance, portfolio.CashBalance);
+        Assert.Equal(originalVersion, portfolio.Version);
+        await AssertMoneyColumnScaleAsync(db, expectedScale);
+        Assert.Equal(PreviousMigration, (await db.Database.GetAppliedMigrationsAsync()).Last());
+
+        await db.Database.MigrateAsync();
+        await AssertMoneyColumnScaleAsync(db, 12);
+        Assert.Equal(bought, await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request));
+        Assert.Single(await db.Transactions.AsNoTracking().ToListAsync());
+    }
+
+    [LocalDbTheory]
+    [InlineData("99.999999999999")]
+    [InlineData("999999999999999.999999999999")]
+    public async Task Downgrade_preserves_precision_when_only_cash_cannot_fit_the_previous_type(string cashText)
+    {
+        await using var fixture = await SqlFixture.CreateAsync();
+        await using var db = fixture.CreateDbContext();
+        var cash = decimal.Parse(cashText, CultureInfo.InvariantCulture);
+        var portfolio = await db.Portfolios.SingleAsync();
+        portfolio.CashBalance = cash;
+        await db.SaveChangesAsync();
+
+        await db.GetService<IMigrator>().MigrateAsync(PreviousMigration);
+
+        Assert.Equal(cash, (await db.Portfolios.AsNoTracking().SingleAsync()).CashBalance);
+        Assert.Empty(await db.Transactions.AsNoTracking().ToListAsync());
+        await AssertMoneyColumnScaleAsync(db, 12);
+        await db.Database.MigrateAsync();
+        Assert.Equal(cash, (await db.Portfolios.AsNoTracking().SingleAsync()).CashBalance);
+    }
+
+    [LocalDbFact]
+    public async Task Downgrade_preserves_tiny_history_when_round_trip_cash_fits_four_decimals()
+    {
+        await using var fixture = await SqlFixture.CreateAsync();
+        var engine = new PaperTradingEngine(fixture, TimeProvider.System, new MockMarketDataProvider());
+        await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId,
+            new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL:NASDAQ", 0.00000001m, 0.0001m));
+        await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId,
+            new PaperTradeRequest(Guid.NewGuid(), "SELL", "AAPL:NASDAQ", 0.00000001m, 0.0001m));
+        await using var db = fixture.CreateDbContext();
+
+        await db.GetService<IMigrator>().MigrateAsync(PreviousMigration);
+
+        Assert.Equal(InitialCapital, (await db.Portfolios.AsNoTracking().SingleAsync()).CashBalance);
+        var transactions = await db.Transactions.AsNoTracking().ToListAsync();
+        Assert.Equal(2, transactions.Count);
+        Assert.All(transactions, row => Assert.Equal(0.000000000001m, row.TotalAmount));
+        await AssertMoneyColumnScaleAsync(db, 12);
+        await db.Database.MigrateAsync();
+        Assert.All(await db.Transactions.AsNoTracking().ToListAsync(),
+            row => Assert.Equal(0.000000000001m, row.TotalAmount));
+    }
+
+    private static async Task AssertMoneyColumnScaleAsync(StockLabDbContext db, int expectedScale)
+    {
+        var scales = await db.Database.SqlQueryRaw<int>("""
+            SELECT CAST([scale] AS int) AS [Value] FROM sys.columns
+            WHERE ([object_id] = OBJECT_ID(N'[dbo].[Transactions]') AND [name] = N'TotalAmount')
+               OR ([object_id] = OBJECT_ID(N'[dbo].[Portfolios]') AND [name] = N'CashBalance')
+            """).ToListAsync();
+        Assert.Equal(2, scales.Count);
+        Assert.All(scales, scale => Assert.Equal(expectedScale, scale));
+    }
+
     private sealed class SqlFixture(string connection) : IDbContextFactory<StockLabDbContext>, IAsyncDisposable
     {
         public Guid UserId { get; } = Guid.NewGuid();
@@ -101,7 +189,7 @@ public sealed class PaperTradingPrecisionSqlServerTests
             {
                 await using var db = fixture.CreateDbContext();
                 if (previousSchema)
-                    await db.GetService<IMigrator>().MigrateAsync("20261004011946_IndexAiTradeHistory");
+                    await db.GetService<IMigrator>().MigrateAsync(PreviousMigration);
                 else
                     await db.Database.MigrateAsync();
                 db.Users.Add(new User

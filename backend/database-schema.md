@@ -9,8 +9,11 @@ resources. Those implementations belong to their respective issues.
 - `Id` is a `uniqueidentifier` primary key; `AiRejectedDecisions` instead uses its
   original `AiDecisionId` as both primary key and foreign key.
 - Columns are required unless marked `NULL`. Dates use `datetime2(7)` in UTC.
-- Monetary amounts and prices use `decimal(19,4)`; share quantities use
-  `decimal(19,8)` to permit fractional shares. Floating-point types are excluded.
+- Prices, initial capital and average costs use `decimal(19,4)`; share quantities
+  use `decimal(19,8)` to permit fractional shares. User portfolio cash and transaction
+  totals use `decimal(27,12)` to preserve the exact quantity × execution-price
+  product and the existing 15-digit integer range (#221). AI cash and trade totals
+  retain `decimal(19,4)`. Floating-point types are excluded.
   ML logical session dates use SQL `date`; technical recorded timestamps remain UTC.
 - Currency is `char(3)`, initially USD. Each portfolio uses one currency; orders
   and valuations in another currency are rejected until FX support is designed.
@@ -48,8 +51,9 @@ erDiagram
 
 The user-to-portfolio relationship is zero-or-one at the database level. Issue #19
 will create exactly one portfolio with registration in the same transaction.
-User portfolios and AI portfolios occupy separate tables; the shared trading
-engine will apply identical accounting rules without sharing balances or positions.
+User portfolios and AI portfolios occupy separate tables without sharing balances
+or positions. The exact user trading amounts introduced by #221 apply to Portfolios
+and Transactions; AI accounting is defined separately below.
 
 ## User and paper-trading tables
 
@@ -78,7 +82,7 @@ authentication are implemented by #16/#17, not by this document.
 | UserId | FK Users.Id, unique |
 | Currency | `char(3)`, initially USD |
 | InitialCapital | `decimal(19,4)`, default 100000.0000, > 0 |
-| CashBalance | `decimal(19,4)`, default 100000.0000, >= 0 |
+| CashBalance | `decimal(27,12)`, default 100000.000000000000, >= 0 |
 | CreatedAtUtc | `datetime2(7)` |
 | Version | `rowversion` |
 
@@ -115,12 +119,15 @@ with its concurrency token.
 | OrderType | `varchar(6)`: market or limit |
 | LimitPrice | `decimal(19,4)`, positive for limit orders; NULL for market orders |
 | ExecutionPrice | `decimal(19,4)`, > 0 |
-| TotalAmount | `decimal(19,4)`, > 0 |
+| TotalAmount | `decimal(27,12)`, > 0 |
 | ExecutedAtUtc | `datetime2(7)` |
 
-Append-only ledger of successful executions. TotalAmount is Quantity multiplied
-by ExecutionPrice, rounded once to four decimals (midpoints away from zero);
-the exact same amount updates cash. Orders rounding to zero are rejected.
+Append-only ledger of successful executions. Quantity is normalized to eight
+decimals and ExecutionPrice to four decimals (midpoints away from zero).
+TotalAmount is their exact product, requiring up to twelve decimals; the exact same
+amount updates cash without further rounding. The minimum positive trade total is
+0.000000000001. At a constant execution price and without fees, cash plus the
+remaining position's value is conserved through split BUY/SELL orders.
 No fees, deposits, short sales or partial fills are modeled in V1.
 OrderId is a stable operation identifier for retries, not a broker order ID.
 The trading API uses the quote's exchange metadata to resolve unqualified and
@@ -138,6 +145,15 @@ date or order term is changed. Reconciliation is scoped to the portfolio owner a
 shares the order's transaction and portfolio concurrency check; rejected or failed
 orders roll back all reconciliation changes. Unknown listings are rejected, and
 positions on different exchanges remain separate.
+
+The `PreservePaperTradingAmountPrecision` migration widens CashBalance and
+TotalAmount without changing existing amounts. Its rollback policy is lossless:
+both columns return to `decimal(19,4)` only if every stored value converts exactly.
+If any cash balance or trade total would round, become zero or overflow, the
+rollback completes while retaining both columns as `decimal(27,12)` and prints
+a diagnostic. Rows, IDs, amounts and CHECK constraints are preserved; no minimum
+amount is fabricated and no transaction is removed. Upgrading again is supported
+from either rollback outcome.
 
 ### Watchlists
 
@@ -182,8 +198,8 @@ so two workers cannot record the same trigger twice.
 ### AiPortfolios
 
 Id, Name (`nvarchar(100)`, unique, nonblank), Currency, InitialCapital,
-CashBalance, CreatedAtUtc and Version have the same financial types and constraints
-as Portfolios. Initial capital is 100000.0000 USD. There is no UserId or foreign
+CashBalance, CreatedAtUtc and Version follow Portfolios, with AI CashBalance
+remaining `decimal(19,4)`. Initial capital is 100000.0000 USD. There is no UserId or foreign
 key to Portfolios. V1 provisions one bot portfolio; a unique Name identifies it.
 
 ### AiPositions
@@ -272,7 +288,9 @@ The migration adds only this table and its index; Down drops only this table.
 ### AiTrades
 
 Id, AiPortfolioId (FK AiPortfolios.Id), Side, Symbol, Quantity, ExecutionPrice,
-TotalAmount and ExecutedAtUtc follow Transactions types and accounting rules.
+TotalAmount and ExecutedAtUtc follow Transactions, with AI TotalAmount remaining
+`decimal(19,4)` and AI totals and cash rounded to four decimals (midpoints away from
+zero). The user amount precision change in #221 does not modify the AI engine.
 The decision association remains planned for #72: a DecisionId FK can reference
 AiDecisions.Id. No such FK is introduced by #69; AiTrades continues to use the
 existing portfolio-scoped OrderId for execution retries.
@@ -319,7 +337,8 @@ leakage is a pipeline/backtesting responsibility, not a relational constraint.
 PortfolioSnapshots and AiPortfolioSnapshots support historical equity charts and
 drawdown without treating today's quotes as historical prices. Each has Id,
 PortfolioId (FK Portfolios.Id) or AiPortfolioId (FK AiPortfolios.Id),
-ValuedAtUtc (`datetime2(7)`), CashBalance (`decimal(19,4)`, >= 0) and
+ValuedAtUtc (`datetime2(7)`), CashBalance (`decimal(27,12)` for user snapshots,
+`decimal(19,4)` for AI snapshots, >= 0) and
 PositionsValue (`decimal(19,4)`, >= 0). Unique (parent ID, ValuedAtUtc).
 Total equity is their sum; P&L and return derive from equity and initial capital.
 The valuation services must use a consistent as-of quote policy and currency.
