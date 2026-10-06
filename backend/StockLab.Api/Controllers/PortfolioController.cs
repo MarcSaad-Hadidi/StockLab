@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using StockLab.Api.Authentication;
 using StockLab.Api.DTOs;
 using StockLab.Api.DTOs.Portfolio;
@@ -110,7 +111,7 @@ public sealed class PortfolioController(
                 transaction.Symbol,
                 transaction.Quantity,
                 transaction.ExecutionPrice,
-                transaction.TotalAmount,
+                transaction.TotalAmount.ToString("0.############", CultureInfo.InvariantCulture),
                 DateTime.SpecifyKind(transaction.ExecutedAtUtc, DateTimeKind.Utc))).ToArray());
     }
 
@@ -130,9 +131,13 @@ public sealed class PortfolioController(
         return history is null
             ? NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."))
             : Ok(new TransactionHistoryResponse(history.Items.Select(row => new PortfolioTransactionResponse(
-                row.Id, row.Side, row.Symbol, row.Quantity, row.ExecutionPrice, row.TotalAmount,
+                row.Id, row.Side, row.Symbol, row.Quantity, row.ExecutionPrice,
+                row.TotalAmount.ToString("0.############", CultureInfo.InvariantCulture),
                 DateTime.SpecifyKind(row.ExecutedAtUtc, DateTimeKind.Utc))).ToArray(),
-                history.Page, history.PageSize, history.TotalCount, history.Currency, history.Summary));
+                history.Page, history.PageSize, history.TotalCount, history.Currency,
+                new TransactionHistorySummaryResponse(history.Summary.TotalTrades,
+                    history.Summary.TotalInvested.ToString("0.############", CultureInfo.InvariantCulture),
+                    history.Summary.TotalProceeds.ToString("0.############", CultureInfo.InvariantCulture))));
     }
 
     /// <summary>Executes a simulated BUY or SELL order in the authenticated user's portfolio.</summary>

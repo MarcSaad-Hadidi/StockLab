@@ -6,5 +6,5 @@ public sealed record PortfolioTransactionResponse(
     string Symbol,
     decimal Quantity,
     decimal ExecutionPrice,
-    decimal TotalAmount,
+    string TotalAmount,
     DateTime ExecutedAtUtc);

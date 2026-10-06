@@ -31,7 +31,7 @@ beforeEach(() => {
 
 const base = { cashBalance: 1000, initialCapital: 1000, investedValue: 0, totalValue: 1000, currency: 'CAD', positions: [] }
 const trade = { id: 'trade-1', side: 'BUY' as const, symbol: 'AAPL', quantity: 0.25, executionPrice: 1.2345,
-  totalAmount: 0.3086, executedAtUtc: '2026-01-01T23:59:59Z' }
+  totalAmount: '0.3086', executedAtUtc: '2026-01-01T23:59:59Z' }
 
 async function mount(component: React.ReactElement) {
   const container = document.createElement('div')
@@ -90,7 +90,7 @@ test('transactions use server counts, pagination, currency and eight decimal qua
     calls.push(query)
     return { items: [{ ...trade, id: `trade-${query.page}`, quantity: query.page === 1 ? 0.00000001 : 1.75 }],
       page: query.page, pageSize: 10, totalCount: 61, currency: 'CAD',
-      summary: { totalTrades: 61, totalInvested: 12000, totalProceeds: 15000 } }
+      summary: { totalTrades: 61, totalInvested: '12000', totalProceeds: '15000' } }
   })
   const { TransactionsPage } = await import('../src/transactions/TransactionsPage.tsx')
   const view = await mount(React.createElement(TransactionsPage))
@@ -126,7 +126,7 @@ test('failed history requests do not masquerade as an empty account with zero to
 
 test('dashboard preserves distinct transactions for the same symbol and time', async (t) => {
   t.mock.method(portfolioApi, 'getPortfolio', async () => base)
-  t.mock.method(portfolioApi, 'getRecentTransactions', async () => [trade, { ...trade, id: 'trade-2', totalAmount: 50 }])
+  t.mock.method(portfolioApi, 'getRecentTransactions', async () => [trade, { ...trade, id: 'trade-2', totalAmount: '50' }])
   const errors: string[] = []
   t.mock.method(console, 'error', (...args: unknown[]) => { errors.push(args.join(' ')) })
   const { DashboardPage } = await import('../src/dashboard/DashboardPage.tsx')
@@ -142,26 +142,30 @@ for (const language of ['en', 'fr']) {
   const fractional = language === 'fr' ? /0,61725/ : /0\.61725/
   const ordinary = language === 'fr' ? /204,50/ : /204\.50/
   const exactTrades = [
-    { ...trade, id: 'tiny', quantity: 0.00000001, executionPrice: 0.0001, totalAmount: 0.000000000001 },
-    { ...trade, id: 'fractional', side: 'SELL' as const, quantity: 0.5, totalAmount: 0.61725 },
-    { ...trade, id: 'ordinary', quantity: 1, executionPrice: 204.5, totalAmount: 204.5 },
+    { ...trade, id: 'tiny', quantity: 0.00000001, executionPrice: 0.0001, totalAmount: '0.000000000001' },
+    { ...trade, id: 'fractional', side: 'SELL' as const, quantity: 0.5, totalAmount: '0.61725' },
+    { ...trade, id: 'ordinary', quantity: 1, executionPrice: 204.5, totalAmount: '204.5' },
+    { ...trade, id: 'large', totalAmount: '999999989999999.999900000001' },
+    { ...trade, id: 'last-digit', totalAmount: '10000.000000000001' },
   ]
 
   test(`transaction rows and summaries preserve exact fractional amounts in ${language}`, async t => {
     await i18n.changeLanguage(language)
     t.mock.method(portfolioApi, 'getTransactionHistory', async (): Promise<TransactionHistoryResponse> => ({
-      items: exactTrades, page: 1, pageSize: 10, totalCount: 3, currency: 'CAD',
-      summary: { totalTrades: 3, totalInvested: 0.000000000001, totalProceeds: 0.61725 },
+      items: exactTrades, page: 1, pageSize: 10, totalCount: 5, currency: 'CAD',
+      summary: { totalTrades: 5, totalInvested: '0.000000000001', totalProceeds: '0.61725' },
     }))
     const { TransactionsPage } = await import('../src/transactions/TransactionsPage.tsx')
     const view = await mount(React.createElement(TransactionsPage))
     try {
       await settle()
       const amounts = [...view.container.querySelectorAll('tbody .money-cell strong')].map(node => node.textContent!)
-      assert.equal(amounts.length, 3)
+      assert.equal(amounts.length, 5)
       assert.match(amounts[0], tiny)
       assert.match(amounts[1], fractional)
       assert.match(amounts[2], ordinary)
+      assert.equal(amounts[3], language === 'fr' ? '999\u202f999\u202f989\u202f999\u202f999,999900000001\u00a0$CA' : 'CA$999,999,989,999,999.999900000001')
+      assert.equal(amounts[4], language === 'fr' ? '10\u202f000,000000000001\u00a0$CA' : 'CA$10,000.000000000001')
       assert.match(view.container.querySelector('.summary-grid')!.textContent!, tiny)
       assert.match(view.container.querySelector('.summary-grid')!.textContent!, fractional)
     } finally { await view.close(); await i18n.changeLanguage('en') }
@@ -175,10 +179,12 @@ for (const language of ['en', 'fr']) {
     const view = await mount(React.createElement(DashboardPage))
     try {
       const amounts = [...view.container.querySelectorAll('.transaction-amount strong')].map(node => node.textContent!)
-      assert.equal(amounts.length, 3)
+      assert.equal(amounts.length, 5)
       assert.match(amounts[0], tiny)
       assert.match(amounts[1], fractional)
       assert.match(amounts[2], ordinary)
+      assert.equal(amounts[3], language === 'fr' ? '999\u202f999\u202f989\u202f999\u202f999,999900000001\u00a0$CA' : 'CA$999,999,989,999,999.999900000001')
+      assert.equal(amounts[4], language === 'fr' ? '10\u202f000,000000000001\u00a0$CA' : 'CA$10,000.000000000001')
     } finally { await view.close(); await i18n.changeLanguage('en') }
   })
 }

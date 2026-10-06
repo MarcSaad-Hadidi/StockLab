@@ -50,8 +50,9 @@ public sealed class PaperTradingApiTests
         var bought = await buy.Content.ReadFromJsonAsync<PaperTradeResponse>();
         Assert.NotNull(bought);
         var expectedSell = decimal.Parse(sellAmount, System.Globalization.CultureInfo.InvariantCulture);
-        Assert.Equal(2m * expectedSell, bought.TotalAmount);
-        Assert.Equal(100_000m - bought.TotalAmount, bought.CashBalance);
+        var boughtAmount = decimal.Parse(bought.TotalAmount, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(2m * expectedSell, boughtAmount);
+        Assert.Equal(100_000m - boughtAmount, bought.CashBalance);
 
         for (var i = 0; i < 2; i++)
         {
@@ -61,7 +62,10 @@ public sealed class PaperTradingApiTests
             Assert.Equal(HttpStatusCode.OK, sell.StatusCode);
             var sold = await sell.Content.ReadFromJsonAsync<PaperTradeResponse>();
             Assert.NotNull(sold);
-            Assert.Equal(expectedSell, sold.TotalAmount);
+            Assert.Equal(expectedSell, decimal.Parse(sold.TotalAmount, System.Globalization.CultureInfo.InvariantCulture));
+            using var wire = JsonDocument.Parse(await sell.Content.ReadAsStringAsync());
+            Assert.Equal(expectedSell, decimal.Parse(wire.RootElement.GetProperty("totalAmount").GetString()!,
+                System.Globalization.CultureInfo.InvariantCulture));
             Assert.Equal(100_000m - (1 - i) * expectedSell, sold.CashBalance);
             using var retry = await PostTradeAsync(fixture.Client, account.Token, order);
             Assert.Equal(HttpStatusCode.OK, retry.StatusCode);

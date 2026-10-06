@@ -28,7 +28,7 @@ const accountB: AuthSession = { ...accountA, accessToken: 'test-token-b', user: 
 type SentOrder = { authorization: string; order: ExecuteTradeRequest; signal: AbortSignal }
 function result(order: ExecuteTradeRequest, cashBalance = 99000) {
   return Response.json({ transactionId: 'test-transaction', orderId: order.orderId, side: order.side, symbol: order.symbol,
-    quantity: order.quantity, executionPrice: 100, totalAmount: order.quantity * 100, cashBalance,
+    quantity: order.quantity, executionPrice: 100, totalAmount: (order.quantity * 100).toFixed(12), cashBalance,
     holdingQuantity: order.quantity, averageCost: 100, executedAtUtc: '2026-10-04T12:00:00Z' })
 }
 async function mount(t: TestContext, fetcher?: (sent: SentOrder) => Promise<Response>) {

@@ -27,6 +27,37 @@ public sealed class PortfolioApiTests
     private const string TestAudience = "StockLab.Tests";
     private const string TestSigningKey = "test-only-signing-key-at-least-32-bytes-long";
 
+    [Theory]
+    [InlineData("999999989999999.999900000001")]
+    [InlineData("10000.000000000001")]
+    [InlineData("0.000000000001")]
+    [InlineData("204.5000")]
+    public async Task History_and_recent_activity_serialize_ledger_amounts_as_exact_decimal_strings(string amount)
+    {
+        await using var fixture = await PortfolioFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "exact-json@example.com");
+        var portfolioId = await SeedPortfolioAsync(fixture, account.Id, 100_000m, "USD");
+        await SeedTransactionAsync(fixture, portfolioId, "AAPL", DateTime.UtcNow,
+            decimal.Parse(amount, CultureInfo.InvariantCulture));
+
+        foreach (var path in new[] { "/api/portfolio/transactions", "/api/portfolio/transactions/history" })
+        {
+            using var response = await GetWithTokenAsync(fixture.Client, account.Token, path);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var root = body.RootElement;
+            var row = Assert.Single((root.ValueKind == JsonValueKind.Array ? root : root.GetProperty("items")).EnumerateArray());
+            Assert.Equal(decimal.Parse(amount, CultureInfo.InvariantCulture),
+                decimal.Parse(row.GetProperty("totalAmount").GetString()!, CultureInfo.InvariantCulture));
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                Assert.Equal(decimal.Parse(amount, CultureInfo.InvariantCulture),
+                    decimal.Parse(root.GetProperty("summary").GetProperty("totalInvested").GetString()!, CultureInfo.InvariantCulture));
+                Assert.Equal(0m, decimal.Parse(root.GetProperty("summary").GetProperty("totalProceeds").GetString()!, CultureInfo.InvariantCulture));
+            }
+        }
+    }
+
     [Fact]
     public async Task Get_portfolio_requires_authentication()
     {
@@ -292,8 +323,8 @@ public sealed class PortfolioApiTests
             Assert.Equal(66, root.GetProperty("totalCount").GetInt32());
             Assert.Equal("CAD", root.GetProperty("currency").GetString());
             Assert.Equal(66, root.GetProperty("summary").GetProperty("totalTrades").GetInt32());
-            Assert.Equal(13_000m, root.GetProperty("summary").GetProperty("totalInvested").GetDecimal());
-            Assert.Equal(3.0864m, root.GetProperty("summary").GetProperty("totalProceeds").GetDecimal());
+            Assert.Equal(13_000m, decimal.Parse(root.GetProperty("summary").GetProperty("totalInvested").GetString()!, CultureInfo.InvariantCulture));
+            Assert.Equal("3.0864", root.GetProperty("summary").GetProperty("totalProceeds").GetString());
             var rows = root.GetProperty("items").EnumerateArray().ToArray();
             Assert.Equal(page == 7 ? 6 : 10, rows.Length);
             foreach (var row in rows)
@@ -351,7 +382,7 @@ public sealed class PortfolioApiTests
         Assert.Empty(body.RootElement.GetProperty("items").EnumerateArray());
         Assert.Equal(1, body.RootElement.GetProperty("page").GetInt32());
         Assert.Equal(0, body.RootElement.GetProperty("totalCount").GetInt32());
-        Assert.Equal(0m, body.RootElement.GetProperty("summary").GetProperty("totalInvested").GetDecimal());
+        Assert.Equal("0", body.RootElement.GetProperty("summary").GetProperty("totalInvested").GetString());
     }
 
     [Fact]
@@ -460,6 +491,11 @@ public sealed class PortfolioApiTests
         var position = ResolveSchema(root, schema.GetProperty("properties").GetProperty("positions").GetProperty("items"));
         Assert.Equal(new[] { "averageCost", "quantity", "symbol" },
             position.GetProperty("properties").EnumerateObject().Select(p => p.Name).OrderBy(name => name).ToArray());
+        var schemas = root.GetProperty("components").GetProperty("schemas");
+        foreach (var name in new[] { "PortfolioTransactionResponse", "PaperTradeResponse" })
+            Assert.Equal("string", schemas.GetProperty(name).GetProperty("properties").GetProperty("totalAmount").GetProperty("type").GetString());
+        foreach (var name in new[] { "totalInvested", "totalProceeds" })
+            Assert.Equal("string", schemas.GetProperty("TransactionHistorySummaryResponse").GetProperty("properties").GetProperty(name).GetProperty("type").GetString());
     }
 
     private static JsonElement ResolveSchema(JsonElement root, JsonElement schema) =>
@@ -530,7 +566,8 @@ public sealed class PortfolioApiTests
         return portfolio.Id;
     }
 
-    private static async Task SeedTransactionAsync(PortfolioFixture fixture, Guid portfolioId, string symbol, DateTime executedAtUtc)
+    private static async Task SeedTransactionAsync(PortfolioFixture fixture, Guid portfolioId, string symbol, DateTime executedAtUtc,
+        decimal amount = 200m)
     {
         using var scope = fixture.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
@@ -543,7 +580,7 @@ public sealed class PortfolioApiTests
             Symbol = symbol,
             Quantity = 2m,
             ExecutionPrice = 100m,
-            TotalAmount = 200m,
+            TotalAmount = amount,
             ExecutedAtUtc = executedAtUtc,
         });
         await context.SaveChangesAsync();
@@ -648,6 +685,7 @@ public sealed class PortfolioApiTests
             base.OnModelCreating(modelBuilder);
             modelBuilder.Entity<User>().Property(user => user.Version).ValueGeneratedNever();
             modelBuilder.Entity<Portfolio>().Property(portfolio => portfolio.Version).ValueGeneratedNever();
+            modelBuilder.Entity<Transaction>().Property(transaction => transaction.TotalAmount).HasColumnType("TEXT");
         }
     }
 

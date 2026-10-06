@@ -16,12 +16,27 @@ const result = {
   symbol: 'AAPL',
   quantity: 2,
   executionPrice: 125,
-  totalAmount: 250,
+  totalAmount: '250',
   cashBalance: 99_750,
   holdingQuantity: 2,
   averageCost: 125,
   executedAtUtc: '2026-09-27T12:00:00Z',
 }
+
+test('executed order totals remain exact decimal strings and reject lossy numeric responses', async () => {
+  const request = { orderId: result.orderId, side: 'BUY' as const, symbol: 'AAPL', quantity: 2, orderType: 'market' as const }
+  for (const totalAmount of ['999999989999999.999900000001', '10000.000000000001', '0.000000000001']) {
+    const api = createTradingApi('', async () => jsonResponse({ ...result, totalAmount }),
+      () => ({ Authorization: 'Bearer test-token' }))
+    assert.equal((await api.executeTrade(request)).totalAmount, totalAmount)
+  }
+  for (const totalAmount of [250, '', '-1', '0', '1e-12', '0.0000000000001']) {
+    const api = createTradingApi('', async () => jsonResponse({ ...result, totalAmount }),
+      () => ({ Authorization: 'Bearer test-token' }))
+    await assert.rejects(api.executeTrade(request),
+      (error: unknown) => error instanceof TradingApiError && error.code === 'invalid_response')
+  }
+})
 
 test('executeTrade sends the authenticated paper order contract', async () => {
   let request: { url: string; init: RequestInit } | undefined

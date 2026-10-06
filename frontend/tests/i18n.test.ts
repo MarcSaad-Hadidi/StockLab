@@ -154,16 +154,21 @@ test('formats the same financial values and dates for each locale', () => {
 })
 
 for (const language of ['en', 'fr']) {
+  test(`decimal strings preserve every ledger digit before formatting in ${language}`, () => {
+    const amount = (en: string, fr: string) => language === 'fr' ? fr : en
+    assert.equal(formatTradeAmount('999999989999999.999900000001', language), amount('$999,999,989,999,999.999900000001', '999\u202f999\u202f989\u202f999\u202f999,999900000001\u00a0$US'))
+    assert.equal(formatTradeAmount('10000.000000000001', language), amount('$10,000.000000000001', '10\u202f000,000000000001\u00a0$US'))
+  })
   test(`trade amounts retain twelve-decimal precision and ordinary currency formatting in ${language}`, () => {
     const amount = (en: string, fr: string) => language === 'fr' ? fr : en
-    assert.equal(formatTradeAmount(1e-12, language), amount('$0.000000000001', '0,000000000001\u00a0$US'))
-    assert.equal(formatTradeAmount(-1e-12, language), amount('-$0.000000000001', '-0,000000000001\u00a0$US'))
-    assert.equal(formatTradeAmount(0.61725, language), amount('$0.61725', '0,61725\u00a0$US'))
-    assert.equal(formatTradeAmount(0.152407394910, language), amount('$0.15240739491', '0,15240739491\u00a0$US'))
-    assert.equal(formatTradeAmount(204.5, language), amount('$204.50', '204,50\u00a0$US'))
-    assert.equal(formatTradeAmount(204.5, language, 4), amount('$204.5000', '204,5000\u00a0$US'))
-    assert.equal(formatTradeAmount(1e-12, language, 2, 'CAD'), amount('CA$0.000000000001', '0,000000000001\u00a0$CA'))
-    assert.equal(formatTradeAmount(0, language), amount('$0.00', '0,00\u00a0$US'))
-    for (const unavailable of [null, undefined, NaN, Infinity]) assert.equal(formatTradeAmount(unavailable, language), '—')
+    assert.equal(formatTradeAmount('0.000000000001', language), amount('$0.000000000001', '0,000000000001\u00a0$US'))
+    assert.equal(formatTradeAmount('-0.000000000001', language), amount('-$0.000000000001', '-0,000000000001\u00a0$US'))
+    assert.equal(formatTradeAmount('0.61725', language), amount('$0.61725', '0,61725\u00a0$US'))
+    assert.equal(formatTradeAmount('0.152407394910', language), amount('$0.15240739491', '0,15240739491\u00a0$US'))
+    assert.equal(formatTradeAmount('204.5', language), amount('$204.50', '204,50\u00a0$US'))
+    assert.equal(formatTradeAmount('204.5', language, 4), amount('$204.5000', '204,5000\u00a0$US'))
+    assert.equal(formatTradeAmount('0.000000000001', language, 2, 'CAD'), amount('CA$0.000000000001', '0,000000000001\u00a0$CA'))
+    assert.equal(formatTradeAmount('0', language), amount('$0.00', '0,00\u00a0$US'))
+    for (const unavailable of [null, undefined, 'NaN', 'Infinity', '', '1e-12', '0.0000000000001', '1,234']) assert.equal(formatTradeAmount(unavailable, language), '—')
   })
 }

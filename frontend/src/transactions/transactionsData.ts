@@ -10,7 +10,7 @@ export type Transaction = {
   action: TransactionAction
   quantity: number
   executionPrice: number
-  totalAmount: number
+  totalAmount: string
   date: string
 }
 

@@ -1,4 +1,5 @@
 import { getAuthorizationHeader } from '../auth/authStorage'
+import { isNonNegativeAmount, isPositiveAmount } from './decimalAmount'
 
 export type PortfolioApiPosition = {
   symbol: string
@@ -21,7 +22,7 @@ export type PortfolioApiTransaction = {
   symbol: string
   quantity: number
   executionPrice: number
-  totalAmount: number
+  totalAmount: string
   executedAtUtc: string
 }
 
@@ -40,7 +41,7 @@ export type TransactionHistoryResponse = {
   pageSize: number
   totalCount: number
   currency: string
-  summary: { totalTrades: number; totalInvested: number; totalProceeds: number }
+  summary: { totalTrades: number; totalInvested: string; totalProceeds: string }
 }
 
 export type PortfolioApiErrorCode =
@@ -99,7 +100,7 @@ function validTransaction(value: unknown): value is PortfolioApiTransaction {
     && nonEmptyString(value.symbol)
     && finiteNumber(value.quantity) && value.quantity > 0
     && finiteNumber(value.executionPrice) && value.executionPrice > 0
-    && finiteNumber(value.totalAmount) && value.totalAmount > 0
+    && isPositiveAmount(value.totalAmount)
     && typeof value.executedAtUtc === 'string'
     && Number.isFinite(Date.parse(value.executedAtUtc))
 }
@@ -116,8 +117,8 @@ function validHistory(value: unknown): value is TransactionHistoryResponse {
     && value.items.length <= value.totalCount
     && value.page <= Math.max(1, Math.ceil(value.totalCount / value.pageSize))
     && finiteNumber(summary.totalTrades) && Number.isInteger(summary.totalTrades) && summary.totalTrades >= value.totalCount
-    && finiteNumber(summary.totalInvested) && summary.totalInvested >= 0
-    && finiteNumber(summary.totalProceeds) && summary.totalProceeds >= 0
+    && isNonNegativeAmount(summary.totalInvested)
+    && isNonNegativeAmount(summary.totalProceeds)
 }
 
 function codeFor(status: number, value: unknown): PortfolioApiErrorCode {

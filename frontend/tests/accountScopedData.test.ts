@@ -30,8 +30,8 @@ const accountB: AuthSession = { ...accountA, accessToken: 'token-b',
   user: { id: 'account-b', displayName: 'Bob Brown', email: 'bob@example.com' } }
 const base = { cashBalance: 1000, investedValue: 0, totalValue: 1000, initialCapital: 1000, currency: 'CAD', positions: [] }
 const tradeA = { id: 'trade-a', symbol: 'AAA', side: 'BUY', quantity: 1, executionPrice: 100,
-  totalAmount: 100, executedAtUtc: '2026-01-01T00:00:00Z' }
-const tradeB = { ...tradeA, id: 'trade-b', symbol: 'BBB', totalAmount: 200 }
+  totalAmount: '100', executedAtUtc: '2026-01-01T00:00:00Z' }
+const tradeB = { ...tradeA, id: 'trade-b', symbol: 'BBB', totalAmount: '200' }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -50,7 +50,7 @@ function apiFixture(t: TestContext, handler?: (url: string, token: string, init?
     if (url.includes('/history')) {
       const page = Number(new URL(url, 'http://localhost').searchParams.get('page'))
       return json({ items: [isA ? tradeA : tradeB], page, pageSize: 10, totalCount: 21, currency: 'CAD',
-        summary: { totalTrades: 21, totalInvested: isA ? 1111 : 2222, totalProceeds: 0 } })
+        summary: { totalTrades: 21, totalInvested: isA ? '1111' : '2222', totalProceeds: '0' } })
     }
     return json([isA ? tradeA : tradeB])
   })
@@ -151,7 +151,7 @@ test('transactions clear old rows and totals immediately, reset pagination and i
     if (token === 'Bearer token-b') return next.promise
     if (page === 2) return old.promise
     return json({ items: [tradeA], page: 1, pageSize: 10, totalCount: 21, currency: 'CAD',
-      summary: { totalTrades: 21, totalInvested: 1111, totalProceeds: 0 } })
+      summary: { totalTrades: 21, totalInvested: '1111', totalProceeds: '0' } })
   })
   const view = await mount(React.createElement(TransactionsPage))
   try {
@@ -167,7 +167,7 @@ test('transactions clear old rows and totals immediately, reset pagination and i
     await settle()
     assert.match(calls.at(-1)!.url, /page=1&/)
     await act(async () => next.resolve(json({ items: [tradeB], page: 1, pageSize: 10, totalCount: 1, currency: 'CAD',
-      summary: { totalTrades: 1, totalInvested: 2222, totalProceeds: 0 } })))
+      summary: { totalTrades: 1, totalInvested: '2222', totalProceeds: '0' } })))
     await act(async () => old.resolve(json({ error: 'unauthorized' }, 401)))
     assert.match(view.container.querySelector('tbody')!.textContent!, /BBB/)
     assert.match(view.container.querySelector('.summary-grid')!.textContent!, /2,222/)
@@ -249,14 +249,14 @@ test('late old-account history success cannot overwrite the current account tota
   const old = deferred<Response>()
   apiFixture(t, async (_url, token) => token === 'Bearer token-a' ? old.promise : json({
     items: [tradeB], page: 1, pageSize: 10, totalCount: 1, currency: 'CAD',
-    summary: { totalTrades: 1, totalInvested: 2222, totalProceeds: 0 } }))
+    summary: { totalTrades: 1, totalInvested: '2222', totalProceeds: '0' } }))
   const view = await mount(React.createElement(TransactionsPage))
   try {
     await settle()
     await change(accountB)
     await settle()
     await act(async () => old.resolve(json({ items: [tradeA], page: 1, pageSize: 10, totalCount: 1, currency: 'CAD',
-      summary: { totalTrades: 1, totalInvested: 1111, totalProceeds: 0 } })))
+      summary: { totalTrades: 1, totalInvested: '1111', totalProceeds: '0' } })))
     assert.match(view.container.querySelector('tbody')!.textContent!, /BBB/)
     assert.doesNotMatch(view.container.querySelector('tbody')!.textContent!, /AAA/)
     assert.match(view.container.querySelector('.summary-grid')!.textContent!, /2,222/)

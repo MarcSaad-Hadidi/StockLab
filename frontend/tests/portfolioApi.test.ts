@@ -92,7 +92,7 @@ test('portfolio api reads the authenticated recent transaction feed', async () =
       symbol: 'AAPL:NASDAQ',
       quantity: 2,
       executionPrice: 200,
-      totalAmount: 400,
+      totalAmount: '400',
       executedAtUtc: '2026-09-28T12:00:00Z',
     }]), { status: 200 })
   }, () => ({ Authorization: 'Bearer test-token' }))
@@ -105,10 +105,45 @@ test('portfolio api reads the authenticated recent transaction feed', async () =
 
 const validHistory = {
   items: [{ id: 'old-trade', side: 'SELL', symbol: 'AAPL:NASDAQ', quantity: 0.25,
-    executionPrice: 1.2345, totalAmount: 0.3086, executedAtUtc: '2026-01-01T23:59:59Z' }],
+    executionPrice: 1.2345, totalAmount: '0.3086', executedAtUtc: '2026-01-01T23:59:59Z' }],
   page: 2, pageSize: 10, totalCount: 11, currency: 'CAD',
-  summary: { totalTrades: 61, totalInvested: 2000, totalProceeds: 3000 },
+  summary: { totalTrades: 61, totalInvested: '2000', totalProceeds: '3000' },
 }
+
+test('history and recent activity preserve decimal strings through JSON parsing', async () => {
+  const exact = '999999989999999.999900000001'
+  const history = { ...validHistory, items: [{ ...validHistory.items[0], totalAmount: exact }],
+    summary: { ...validHistory.summary, totalInvested: '10000.000000000001', totalProceeds: exact } }
+  const api = createPortfolioApi('', async input => Response.json(String(input).includes('/history') ? history : history.items),
+    () => ({ Authorization: 'Bearer test-token' }))
+  const result = await api.getTransactionHistory({ page: 2, pageSize: 10 })
+  assert.equal(result.items[0].totalAmount, exact)
+  assert.equal(result.summary.totalInvested, '10000.000000000001')
+  assert.equal(result.summary.totalProceeds, exact)
+  assert.equal((await api.getRecentTransactions())[0].totalAmount, exact)
+})
+
+test('transaction APIs reject numeric, malformed, zero and negative ledger totals', async () => {
+  for (const amount of [1e-12, 999999990000000, null, '', 'NaN', 'Infinity', '1e-12', '1,000',
+    ' 1.25 ', '0.0000000000001', '0', '0.0000', '-0.01']) {
+    const history = { ...validHistory, items: [{ ...validHistory.items[0], totalAmount: amount }] }
+    const api = createPortfolioApi('', async input => Response.json(String(input).includes('/history') ? history : history.items),
+      () => ({ Authorization: 'Bearer test-token' }))
+    await assert.rejects(api.getTransactionHistory({ page: 2, pageSize: 10 }),
+      (error: unknown) => error instanceof PortfolioApiError && error.code === 'invalid_response')
+    await assert.rejects(api.getRecentTransactions(),
+      (error: unknown) => error instanceof PortfolioApiError && error.code === 'invalid_response')
+  }
+})
+
+test('history validates exact nonnegative aggregates without parsing a number', async () => {
+  for (const amount of [Number('10000.000000000001'), '', '-0.000000000001', '1e4', '0.0000000000001']) {
+    const api = createPortfolioApi('', async () => Response.json({ ...validHistory,
+      summary: { ...validHistory.summary, totalInvested: amount } }), () => ({ Authorization: 'Bearer test-token' }))
+    await assert.rejects(api.getTransactionHistory({ page: 2, pageSize: 10 }),
+      (error: unknown) => error instanceof PortfolioApiError && error.code === 'invalid_response')
+  }
+})
 
 test('history requests combine filters and preserve server totals and currency', async () => {
   const controller = new AbortController()
@@ -134,7 +169,7 @@ test('history rejects missing currency, invalid rows and malformed pagination', 
     { ...validHistory, items: [{ ...validHistory.items[0], quantity: -1 }] },
     { ...validHistory, page: 0 },
     { ...validHistory, totalCount: -1 },
-    { ...validHistory, summary: { ...validHistory.summary, totalProceeds: -1 } },
+    { ...validHistory, summary: { ...validHistory.summary, totalProceeds: '-1' } },
   ]) {
     const api = createPortfolioApi('', async () => Response.json(body), () => ({ Authorization: 'Bearer test-token' }))
     await assert.rejects(api.getTransactionHistory({ page: 1, pageSize: 10 }),

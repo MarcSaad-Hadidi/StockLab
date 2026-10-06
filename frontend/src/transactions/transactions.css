@@ -689,6 +689,12 @@ select:focus-visible {
   font-weight: 800;
 }
 
+.transactions-table td.money-cell,
+.transactions-table td.number-cell {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .table-footer {
   display: flex;
   min-height: 48px;

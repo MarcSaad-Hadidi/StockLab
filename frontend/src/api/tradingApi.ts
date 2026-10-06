@@ -1,4 +1,5 @@
 import { getAuthorizationHeader } from '../auth/authStorage'
+import { isPositiveAmount } from './decimalAmount'
 
 export type TradeSide = 'BUY' | 'SELL'
 export type TradeOrderType = 'market' | 'limit'
@@ -19,7 +20,7 @@ export type PaperTradeResponse = {
   symbol: string
   quantity: number
   executionPrice: number
-  totalAmount: number
+  totalAmount: string
   cashBalance: number
   holdingQuantity: number
   averageCost: number | null
@@ -80,7 +81,7 @@ function validResponse(value: unknown): value is PaperTradeResponse {
     && string(value.symbol)
     && number(value.quantity) && value.quantity > 0
     && number(value.executionPrice) && value.executionPrice > 0
-    && number(value.totalAmount) && value.totalAmount > 0
+    && isPositiveAmount(value.totalAmount)
     && number(value.cashBalance) && value.cashBalance >= 0
     && number(value.holdingQuantity) && value.holdingQuantity >= 0
     && (value.averageCost === null || (number(value.averageCost) && value.averageCost > 0))

@@ -1,22 +1,28 @@
 import { i18n } from './i18n.ts'
+import { isDecimalAmount } from '../api/decimalAmount.ts'
 
 export function localeForLanguage(language = i18n.language) {
   return language === 'fr' ? 'fr-FR' : 'en-US'
 }
 
-export function formatCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD', maximumFractionDigits = fractionDigits) {
+export function formatCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   return new Intl.NumberFormat(localeForLanguage(language), {
     currency,
-    maximumFractionDigits,
+    maximumFractionDigits: fractionDigits,
     minimumFractionDigits: fractionDigits,
     style: 'currency',
   }).format(value)
 }
 
 /** Preserve the twelve-decimal trade amount while keeping each view's usual minimum precision. */
-export function formatTradeAmount(value: number | null | undefined, language = i18n.language, minimumFractionDigits = 2, currency = 'USD') {
-  return formatCurrency(value, language, minimumFractionDigits, currency, 12)
+export function formatTradeAmount(value: string | null | undefined, language = i18n.language, minimumFractionDigits = 2, currency = 'USD') {
+  if (!isDecimalAmount(value)) return '—'
+  const formatter = new Intl.NumberFormat(localeForLanguage(language), {
+    currency, minimumFractionDigits, maximumFractionDigits: 12, style: 'currency',
+  })
+  // Intl formats decimal strings losslessly. TypeScript's declaration still omits that overload.
+  return (formatter.format as unknown as (decimal: string) => string)(value)
 }
 
 export function formatCompactCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {

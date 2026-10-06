@@ -72,7 +72,7 @@ h1 span { color: #e4a857; font-size: .75em; margin-left: 2px; }
 .metric-icon-purple { background: #f0ecff; color: #876cec; }
 .metric-icon-orange { background: #fff3e6; color: #e99a4c; }
 .metric-card p { color: #8895a9; font-size: 11px; margin: 0 0 7px; }
-.metric-card > strong { color: #192743; display: block; font-family: Manrope, sans-serif; font-size: 21px; letter-spacing: -.6px; line-height: 1.2; }
+.metric-card > strong { overflow-wrap: anywhere; color: #192743; display: block; font-family: Manrope, sans-serif; font-size: 21px; letter-spacing: -.6px; line-height: 1.2; }
 .metric-change { align-items: center; display: flex; font-size: 10px; font-weight: 700; gap: 3px; margin-top: 8px; }
 .metric-change-positive { color: #25a278; }
 .metric-change-negative { color: #e16e78; }
@@ -152,7 +152,7 @@ th:last-child, td:last-child { padding-right: 2px; text-align: right; }
 .transaction-type { align-items: center; display: flex; font-size: 9px; font-weight: 700; gap: 5px; }
 .transaction-type.buy { color: #25a278; }.transaction-type.sell { color: #e16e78; }
 .transaction-dot { background: currentColor; border-radius: 50%; height: 5px; width: 5px; }
-.transaction-amount { text-align: right; }.transaction-amount strong, .transaction-amount small { display: block; }.transaction-amount strong { color: #3a4861; font-size: 10px; }.transaction-amount small { color: #a0aabb; font-size: 9px; margin-top: 3px; }
+.transaction-amount { min-width: 0; overflow-wrap: anywhere; text-align: right; }.transaction-amount strong, .transaction-amount small { display: block; }.transaction-amount strong { color: #3a4861; font-size: 10px; }.transaction-amount small { color: #a0aabb; font-size: 9px; margin-top: 3px; }
 .transaction-time { color: #a1abbb; display: none; font-size: 9px; white-space: nowrap; }
 
 .ai-panel { margin-bottom: 10px; padding: 19px 21px; }

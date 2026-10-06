@@ -1,4 +1,5 @@
 using StockLab.Application.DTOs.Trading;
+using System.Globalization;
 
 namespace StockLab.Api.DTOs.Portfolio;
 
@@ -10,7 +11,7 @@ public sealed record PaperTradeResponse(
     string Symbol,
     decimal Quantity,
     decimal ExecutionPrice,
-    decimal TotalAmount,
+    string TotalAmount,
     decimal CashBalance,
     decimal HoldingQuantity,
     decimal? AverageCost,
@@ -25,7 +26,7 @@ public sealed record PaperTradeResponse(
         result.Symbol,
         result.Quantity,
         result.ExecutionPrice,
-        result.TotalAmount,
+        result.TotalAmount.ToString("0.############", CultureInfo.InvariantCulture),
         result.CashBalance,
         result.HoldingQuantity,
         result.AverageCost,

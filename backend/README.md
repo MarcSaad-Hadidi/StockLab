@@ -757,6 +757,15 @@ portfolio data, and they require no database migration.
 
 ## Portfolio API
 
+Human trade responses (`POST /api/portfolio/trades`, recent transactions and
+transaction history) serialize `totalAmount` as a plain decimal **JSON string**,
+for example `"999999989999999.999900000001"`. History summary fields
+`totalInvested` and `totalProceeds` also use decimal strings (including `"0"`).
+These amounts retain up to twelve fractional digits; clients must preserve the
+strings through parsing and formatting rather than convert them to JavaScript
+`number`. This contract applies to human trade amounts; quantity, execution
+price and the other portfolio fields retain their existing JSON types.
+
 `GET /api/portfolio` returns the authenticated user's stored portfolio. Send
 `Authorization: Bearer <token>`, using the access token from
 `POST /api/auth/login`. The user ID comes exclusively from the JWT `sub` claim;

@@ -11,7 +11,7 @@ const fixtureTransactions: Transaction[] = [
     action: 'BUY',
     quantity: 10,
     executionPrice: 191.45,
-    totalAmount: 1914.5,
+    totalAmount: '1914.5',
     date: '2024-05-24T14:32:00.000Z',
   },
   {
@@ -22,7 +22,7 @@ const fixtureTransactions: Transaction[] = [
     action: 'SELL',
     quantity: 8,
     executionPrice: 415.6,
-    totalAmount: 3324.8,
+    totalAmount: '3324.8',
     date: '2024-05-23T18:15:00.000Z',
   },
   {
@@ -33,7 +33,7 @@ const fixtureTransactions: Transaction[] = [
     action: 'BUY',
     quantity: 4,
     executionPrice: 534.12,
-    totalAmount: 2136.48,
+    totalAmount: '2136.48',
     date: '2024-05-20T13:30:00.000Z',
   },
 ]

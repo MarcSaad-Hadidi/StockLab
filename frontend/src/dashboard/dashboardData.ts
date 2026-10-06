@@ -64,7 +64,7 @@ export type Transaction = {
   company: string
   type: 'Buy' | 'Sell'
   shares: number
-  amount: number
+  amount: string
   time?: string
   timeKey?: string
   executedAtUtc?: string
