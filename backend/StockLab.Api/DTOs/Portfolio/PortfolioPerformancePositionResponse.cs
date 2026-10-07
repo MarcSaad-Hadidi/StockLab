@@ -5,6 +5,6 @@ public sealed record PortfolioPerformancePositionResponse(
     decimal Quantity,
     decimal AverageCost,
     decimal CurrentPrice,
-    decimal MarketValue,
-    decimal Pnl,
+    string MarketValue,
+    string Pnl,
     decimal PnlPercent);

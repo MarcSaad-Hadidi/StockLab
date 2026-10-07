@@ -110,7 +110,7 @@ function MetricCard({ metric, currency }: { metric: Metric; currency: string }) 
     <article className="metric-card">
       <div className={`metric-icon metric-icon-${metric.tone}`}><Icon name={metric.icon} size={20} /></div>
       <p>{t(metric.label)}</p>
-      <strong>{metric.label === 'dashboard.metrics.return' ? formatPercent(metric.value, i18n.language) : formatCurrency(metric.value, i18n.language, 2, currency)}</strong>
+      <strong>{metric.label === 'dashboard.metrics.return' ? formatPercent(typeof metric.value === "number" ? metric.value : null, i18n.language) : formatCurrency(metric.value, i18n.language, 2, currency)}</strong>
       <span className={`metric-change ${getTrendClass(trendTone)}`}>{trendIcon && <Icon name={trendIcon} size={13} />} {formatSignedPercent(metric.change)} <em>{t(metric.detail)}</em></span>
     </article>
   )

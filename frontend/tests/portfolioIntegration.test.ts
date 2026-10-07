@@ -29,9 +29,43 @@ beforeEach(() => {
     user: { id: 'portfolio-test-user', displayName: 'Test Account', email: 'portfolio@example.com' } })
 })
 
-const base = { cashBalance: 1000, initialCapital: 1000, investedValue: 0, totalValue: 1000, currency: 'CAD', positions: [] }
+const base = { cashBalance: '1000', initialCapital: '1000', investedValue: '0', totalValue: '1000', currency: 'CAD', positions: [] }
 const trade = { id: 'trade-1', side: 'BUY' as const, symbol: 'AAPL', quantity: 0.25, executionPrice: 1.2345,
   totalAmount: '0.3086', executedAtUtc: '2026-01-01T23:59:59Z' }
+
+for (const [cashBalance, initialCapital] of [
+  ['99999.999999999999', '100000'],
+  ['999999999999999.999899999999', '999999999999999.9999'],
+]) {
+  test(`valuation retains tiny fractions beside ${initialCapital} capital`, async t => {
+    t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, cashBalance, initialCapital,
+      investedValue: '0.000000000001', totalValue: initialCapital,
+      positions: [{ symbol: 'MSFT', quantity: 0.00000001, averageCost: 0.0001 }] }))
+    t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
+    t.mock.method(marketDataApi, 'quote', async () => ({ symbol: 'MSFT', price: 0.0001, currency: 'CAD' }))
+    let state: PortfolioDataState | undefined
+    function Probe() { state = usePortfolioData(); return null }
+    const view = await mount(React.createElement(Probe))
+    try {
+      assert.equal(state?.data?.cashBalance, cashBalance)
+      assert.equal(state?.data?.positions[0].marketValue, '0.000000000001')
+      assert.equal(state?.data?.totalValue, initialCapital)
+      assert.equal(state?.data?.pnl, '0')
+      assert.equal(state?.data?.returnPercent, 0)
+    } finally { await view.close() }
+  })
+  test(`realized losses below floating point resolution stay visible beside ${initialCapital}`, async t => {
+    t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, cashBalance, initialCapital, totalValue: cashBalance }))
+    t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
+    let state: PortfolioDataState | undefined
+    function Probe() { state = usePortfolioData(); return null }
+    const view = await mount(React.createElement(Probe))
+    try {
+      assert.equal(state?.data?.pnl, '-0.000000000001')
+      assert.ok(state?.data?.returnPercent !== null && state!.data!.returnPercent! < 0)
+    } finally { await view.close() }
+  })
+}
 
 async function mount(component: React.ReactElement) {
   const container = document.createElement('div')
@@ -44,7 +78,7 @@ async function settle() { await act(async () => { await new Promise(resolve => s
 
 test('more than twenty positions retain available quotes without inventing aggregate valuation', async (t) => {
   const positions = Array.from({ length: 25 }, (_, i) => ({ symbol: `S${i}`, quantity: 2, averageCost: 100 }))
-  t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, positions, investedValue: 5000, totalValue: 6000 }))
+  t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, positions, investedValue: '5000', totalValue: '6000' }))
   t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
   const calls: string[] = []
   t.mock.method(marketDataApi, 'quote', async (symbol: string) => {
@@ -61,11 +95,11 @@ test('more than twenty positions retain available quotes without inventing aggre
     assert.ok(data)
     assert.equal(data.positions.length, 25)
     assert.equal(data.positions[0].currentPrice, 150)
-    assert.equal(data.positions[0].marketValue, 300)
-    assert.equal(data.positions[0].pnl, 100)
+    assert.equal(data.positions[0].marketValue, '300')
+    assert.equal(data.positions[0].pnl, '100')
     assert.equal(data.positions[0].dailyChangePercent, 3)
     for (const i of [1, 2, 24]) assert.equal(data.positions[i].currentPrice, null)
-    assert.equal(data.investedValue, 5000)
+    assert.equal(data.investedValue, '5000')
     assert.equal(data.totalValue, null)
     assert.equal(data.pnl, null)
     assert.equal(state?.quoteLimit, 20)
@@ -75,12 +109,12 @@ test('more than twenty positions retain available quotes without inventing aggre
 })
 
 test('a fully sold portfolio retains realized gains and all-time return', async (t) => {
-  t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, cashBalance: 1100, totalValue: 1100 }))
+  t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, cashBalance: '1100', totalValue: '1100' }))
   t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
   let state: PortfolioDataState | undefined
   function Probe() { state = usePortfolioData(); return null }
   const view = await mount(React.createElement(Probe))
-  try { assert.equal(state?.data?.pnl, 100); assert.equal(state?.data?.returnPercent, 10) }
+  try { assert.equal(state?.data?.pnl, '100'); assert.equal(state?.data?.returnPercent, 10) }
   finally { await view.close() }
 })
 

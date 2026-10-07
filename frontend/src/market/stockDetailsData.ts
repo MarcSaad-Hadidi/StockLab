@@ -1,4 +1,6 @@
 import type { HistoryQuery, StockHistory } from "../api/marketDataApi.ts";
+import { isDecimalAmount } from '../api/decimalAmount';
+import { tradeProduct } from '../api/decimalMath';
 export const chartRanges = [
   "1D",
   "5D",
@@ -69,19 +71,19 @@ export function historyPoints(history: StockHistory, locale: string) {
   }));
 }
 export function money(
-  value: number | null | undefined,
+  value: number | string | null | undefined,
   currency: string | null,
   locale: string,
   maximumFractionDigits = 2,
 ) {
-  if (value == null || !Number.isFinite(value)) return "—";
+  if (value == null || (typeof value === 'string' ? !isDecimalAmount(value) : !Number.isFinite(value))) return "—";
   return new Intl.NumberFormat(locale, {
     ...(currency && /^[A-Z]{3}$/.test(currency)
       ? { style: "currency", currency }
       : {}),
     minimumFractionDigits: 2,
     maximumFractionDigits,
-  }).format(value);
+  }).format(value as number);
 }
 export function calculateTradeTotal(price: number, quantity: number) {
   if (
@@ -90,8 +92,8 @@ export function calculateTradeTotal(price: number, quantity: number) {
     price <= 0 ||
     quantity <= 0
   )
-    return 0;
-  return Math.round(price * quantity * 10_000) / 10_000;
+    return '0';
+  return tradeProduct(price, quantity);
 }
 export function getTradeExecutionPrice(
   orderType: TradeOrderType,

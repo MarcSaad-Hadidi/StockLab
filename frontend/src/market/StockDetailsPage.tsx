@@ -45,7 +45,7 @@ type PendingTrade = {
   quantity: number;
   limitPrice?: number;
   estimatedPrice: number;
-  estimatedTotal: number;
+  estimatedTotal: string;
 };
 function sameTradeSession(expected: AuthSession, current: AuthSession | null) {
   return current !== null && expected.user.id === current.user.id
@@ -99,7 +99,7 @@ function TradeTicket({
   orderType: TradeOrderType;
   limitPrice: string;
   limitPriceError: string;
-  availableCash: number | null;
+  availableCash: string | null;
   isSubmitting: boolean;
   isAuthenticated: boolean;
   onSideChange: (side: TradeSide) => void;
@@ -109,8 +109,8 @@ function TradeTicket({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const formatCurrency = (value: number) =>
-    money(value, details.currency, localeForLanguage(i18n.language), 4);
+  const formatCurrency = (value: number | string) =>
+    money(value, details.currency, localeForLanguage(i18n.language), typeof value === "string" ? 12 : 4);
   const parsedQuantity = Number(quantity);
   const estimatedPrice = getTradeExecutionPrice(
     orderType,
@@ -276,7 +276,7 @@ export function StockDetailsPage({
   const [tradeError, setTradeError] = useState<string | null>(null);
   const [hasUncertainOrder, setHasUncertainOrder] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [cashResult, setCashResult] = useState<{ session: AuthSession; balance: number } | null>(null);
+  const [cashResult, setCashResult] = useState<{ session: AuthSession; balance: string } | null>(null);
   const activeRequest = useRef<{ controller: AbortController; sent: boolean } | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   const isAuthenticated = useAuthUser() !== null;
@@ -878,7 +878,7 @@ export function StockDetailsPage({
               <div><span>{t("common.asset")}</span><strong>{symbol}</strong></div>
               <div><span>{t("common.quantity")}</span><strong>{pendingTrade.quantity}</strong></div>
               <div><span>{t("stockDetails.estimatedPrice")}</span><strong>{money(pendingTrade.estimatedPrice, currency, locale, 4)}</strong></div>
-              <div><span>{t("stockDetails.estimatedTotal")}</span><strong>{money(pendingTrade.estimatedTotal, currency, locale, 4)}</strong></div>
+              <div><span>{t("stockDetails.estimatedTotal")}</span><strong>{money(pendingTrade.estimatedTotal, currency, locale, 12)}</strong></div>
             </div>
             {pendingTrade.outcomeUncertain && <p className="stock-form-error" role="alert">{t("stockDetails.submittedOutcomeUncertain")}</p>}
             {hasUncertainOrder && <p className="stock-form-error" role="alert">{t("stockDetails.submittedOrderUncertain")}</p>}

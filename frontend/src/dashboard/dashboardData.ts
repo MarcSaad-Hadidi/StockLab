@@ -22,7 +22,7 @@ export type IconName =
 
 export type Metric = {
   label: string
-  value: number | null
+  value: number | string | null
   change: number | null
   detail: string
   icon: IconName
@@ -42,7 +42,7 @@ export type Position = {
   symbol: string
   company: string
   shares: number
-  value: number | null
+  value: number | string | null
   allocation: number | null
   price: number | null
   change: number | null

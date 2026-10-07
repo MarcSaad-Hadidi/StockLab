@@ -40,10 +40,10 @@ public sealed class PortfolioController(
         return portfolio is null
             ? NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."))
             : Ok(new PortfolioResponse(
-                portfolio.CashBalance,
-                portfolio.InitialCapital,
-                portfolio.InvestedValue,
-                portfolio.TotalValue,
+                portfolio.CashBalance.ToString("0.############", CultureInfo.InvariantCulture),
+                portfolio.InitialCapital.ToString("0.############", CultureInfo.InvariantCulture),
+                portfolio.InvestedValue.ToString("0.############", CultureInfo.InvariantCulture),
+                portfolio.TotalValue.ToString("0.############", CultureInfo.InvariantCulture),
                 portfolio.Currency,
                 portfolio.Positions.Select(position => new PortfolioPositionResponse(
                     position.Symbol, position.Quantity, position.AverageCost)).ToArray()));
@@ -69,12 +69,12 @@ public sealed class PortfolioController(
         return performance is null
             ? NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."))
             : Ok(new PortfolioPerformanceResponse(
-                performance.CashBalance,
-                performance.InitialCapital,
-                performance.InvestedValue,
-                performance.PositionsMarketValue,
-                performance.TotalValue,
-                performance.TotalPnl,
+                performance.CashBalance.ToString("0.############", CultureInfo.InvariantCulture),
+                performance.InitialCapital.ToString("0.############", CultureInfo.InvariantCulture),
+                performance.InvestedValue.ToString("0.############", CultureInfo.InvariantCulture),
+                performance.PositionsMarketValue.ToString("0.############", CultureInfo.InvariantCulture),
+                performance.TotalValue.ToString("0.############", CultureInfo.InvariantCulture),
+                performance.TotalPnl.ToString("0.############", CultureInfo.InvariantCulture),
                 performance.ReturnPercent,
                 performance.Currency,
                 performance.Positions.Select(position => new PortfolioPerformancePositionResponse(
@@ -82,8 +82,8 @@ public sealed class PortfolioController(
                     position.Quantity,
                     position.AverageCost,
                     position.CurrentPrice,
-                    position.MarketValue,
-                    position.Pnl,
+                    position.MarketValue.ToString("0.############", CultureInfo.InvariantCulture),
+                    position.Pnl.ToString("0.############", CultureInfo.InvariantCulture),
                     position.PnlPercent)).ToArray()));
     }
 

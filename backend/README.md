@@ -763,8 +763,15 @@ for example `"999999989999999.999900000001"`. History summary fields
 `totalInvested` and `totalProceeds` also use decimal strings (including `"0"`).
 These amounts retain up to twelve fractional digits; clients must preserve the
 strings through parsing and formatting rather than convert them to JavaScript
-`number`. This contract applies to human trade amounts; quantity, execution
-price and the other portfolio fields retain their existing JSON types.
+`number`. `cashBalance` uses the same representation in trade responses and both
+`GET /api/portfolio` and `GET /api/portfolio/performance`. Portfolio monetary
+aggregates (`initialCapital`, `investedValue`, `positionsMarketValue`, `totalValue`,
+`totalPnl`, and performance positions' `marketValue`/`pnl`) are decimal strings too,
+so calculating a small gain beside a large balance remains lossless. Quantities,
+unit prices and percentage fields retain their numeric JSON types. Deploy the API
+and frontend together; numeric money responses are rejected instead of silently
+accepting already rounded values. Order estimates normalize quantity to eight and
+price to four decimals, then multiply exactly and display up to twelve decimals.
 
 `GET /api/portfolio` returns the authenticated user's stored portfolio. Send
 `Authorization: Bearer <token>`, using the access token from
@@ -776,9 +783,10 @@ A newly registered account returns:
 
 ```json
 {
-  "cashBalance": 100000,
-  "investedValue": 0,
-  "totalValue": 100000,
+  "cashBalance": "100000",
+  "initialCapital": "100000",
+  "investedValue": "0",
+  "totalValue": "100000",
   "currency": "USD",
   "positions": []
 }

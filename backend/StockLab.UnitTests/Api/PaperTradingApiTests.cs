@@ -52,7 +52,7 @@ public sealed class PaperTradingApiTests
         var expectedSell = decimal.Parse(sellAmount, System.Globalization.CultureInfo.InvariantCulture);
         var boughtAmount = decimal.Parse(bought.TotalAmount, System.Globalization.CultureInfo.InvariantCulture);
         Assert.Equal(2m * expectedSell, boughtAmount);
-        Assert.Equal(100_000m - boughtAmount, bought.CashBalance);
+        Assert.Equal(100_000m - boughtAmount, decimal.Parse(bought.CashBalance, System.Globalization.CultureInfo.InvariantCulture));
 
         for (var i = 0; i < 2; i++)
         {
@@ -66,7 +66,7 @@ public sealed class PaperTradingApiTests
             using var wire = JsonDocument.Parse(await sell.Content.ReadAsStringAsync());
             Assert.Equal(expectedSell, decimal.Parse(wire.RootElement.GetProperty("totalAmount").GetString()!,
                 System.Globalization.CultureInfo.InvariantCulture));
-            Assert.Equal(100_000m - (1 - i) * expectedSell, sold.CashBalance);
+            Assert.Equal(100_000m - (1 - i) * expectedSell, decimal.Parse(sold.CashBalance, System.Globalization.CultureInfo.InvariantCulture));
             using var retry = await PostTradeAsync(fixture.Client, account.Token, order);
             Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
             Assert.Equal(sold, await retry.Content.ReadFromJsonAsync<PaperTradeResponse>());
@@ -78,8 +78,8 @@ public sealed class PaperTradingApiTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var portfolio = await response.Content.ReadFromJsonAsync<PortfolioResponse>();
         Assert.NotNull(portfolio);
-        Assert.Equal(100_000m, portfolio.CashBalance);
-        Assert.Equal(100_000m, portfolio.TotalValue);
+        Assert.Equal(100_000m, decimal.Parse(portfolio.CashBalance, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(100_000m, decimal.Parse(portfolio.TotalValue, System.Globalization.CultureInfo.InvariantCulture));
         Assert.Empty(portfolio.Positions);
         using var scope = fixture.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
@@ -123,7 +123,7 @@ public sealed class PaperTradingApiTests
             : initialCost / initialQuantity, 4, MidpointRounding.AwayFromZero);
         Assert.Equal("AAPL:NASDAQ", result.Symbol);
         Assert.Equal(expectedQuantity, result.HoldingQuantity);
-        Assert.Equal(100_000m + (side == "BUY" ? -1m : 1m) * quantity * 204.5m, result.CashBalance);
+        Assert.Equal(100_000m + (side == "BUY" ? -1m : 1m) * quantity * 204.5m, decimal.Parse(result.CashBalance, System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal(expectedQuantity == 0m ? (decimal?)null : expectedAverage, result.AverageCost);
 
         using (var scope = fixture.CreateScope())
@@ -408,7 +408,7 @@ public sealed class PaperTradingApiTests
         var executionPrice = body.RootElement.GetProperty("executionPrice").GetDecimal();
         Assert.True(executionPrice > 0m);
         Assert.Equal(decimal.Round(100_000m - 2m * executionPrice, 4),
-            body.RootElement.GetProperty("cashBalance").GetDecimal());
+            decimal.Parse(body.RootElement.GetProperty("cashBalance").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal(2m, body.RootElement.GetProperty("holdingQuantity").GetDecimal());
     }
 
@@ -432,7 +432,7 @@ public sealed class PaperTradingApiTests
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("SELL", body.RootElement.GetProperty("side").GetString());
         Assert.Equal(2m, body.RootElement.GetProperty("holdingQuantity").GetDecimal());
-        Assert.True(body.RootElement.GetProperty("cashBalance").GetDecimal() > 100_000m);
+        Assert.True(decimal.Parse(body.RootElement.GetProperty("cashBalance").GetString()!, System.Globalization.CultureInfo.InvariantCulture) > 100_000m);
     }
 
     [Fact]
@@ -538,8 +538,8 @@ public sealed class PaperTradingApiTests
         Assert.Equal(HttpStatusCode.OK, retryResponse.StatusCode);
         Assert.Equal(firstBody.RootElement.GetProperty("transactionId").GetGuid(),
             retryBody.RootElement.GetProperty("transactionId").GetGuid());
-        Assert.Equal(firstBody.RootElement.GetProperty("cashBalance").GetDecimal(),
-            retryBody.RootElement.GetProperty("cashBalance").GetDecimal());
+        Assert.Equal(decimal.Parse(firstBody.RootElement.GetProperty("cashBalance").GetString()!, System.Globalization.CultureInfo.InvariantCulture),
+            decimal.Parse(retryBody.RootElement.GetProperty("cashBalance").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
 
         using var changedTermsResponse = await PostTradeAsync(fixture.Client, account.Token, new
         {

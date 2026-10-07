@@ -5,7 +5,8 @@ export function localeForLanguage(language = i18n.language) {
   return language === 'fr' ? 'fr-FR' : 'en-US'
 }
 
-export function formatCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
+export function formatCurrency(value: number | string | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
+  if (typeof value === 'string') return formatTradeAmount(value, language, fractionDigits, currency)
   if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   return new Intl.NumberFormat(localeForLanguage(language), {
     currency,
@@ -25,18 +26,22 @@ export function formatTradeAmount(value: string | null | undefined, language = i
   return (formatter.format as unknown as (decimal: string) => string)(value)
 }
 
-export function formatCompactCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
-  if (value === null || value === undefined || !Number.isFinite(value)) return '—'
+export function formatCompactCurrency(value: number | string | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
+  if (value == null || (typeof value === 'string' ? !isDecimalAmount(value) : !Number.isFinite(value))) return '—'
   return new Intl.NumberFormat(localeForLanguage(language), {
     currency,
     maximumFractionDigits: fractionDigits,
     minimumFractionDigits: fractionDigits,
     notation: 'compact',
     style: 'currency',
-  }).format(value)
+  }).format(value as number)
 }
 
-export function formatSignedCurrency(value: number | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
+export function formatSignedCurrency(value: number | string | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
+  if (typeof value === 'string') {
+    if (!isDecimalAmount(value)) return '—'
+    return `${value.startsWith('-') ? '-' : '+'}${formatTradeAmount(value.replace(/^-/, ''), language, fractionDigits, currency)}`
+  }
   if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   return `${value >= 0 ? '+' : '-'}${formatCurrency(Math.abs(value), language, fractionDigits, currency)}`
 }

@@ -28,6 +28,27 @@ public sealed class PortfolioApiTests
     private const string TestSigningKey = "test-only-signing-key-at-least-32-bytes-long";
 
     [Theory]
+    [InlineData("99999.999999999999")]
+    [InlineData("999999999999999.999899999999")]
+    public async Task Portfolio_and_performance_preserve_exact_cash_and_derived_amounts(string cash)
+    {
+        await using var fixture = await PortfolioFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "exact-cash@example.com");
+        await SeedPortfolioAsync(fixture, account.Id, decimal.Parse(cash, CultureInfo.InvariantCulture), "USD");
+        foreach (var path in new[] { "/api/portfolio", "/api/portfolio/performance" })
+        {
+            using var response = await GetWithTokenAsync(fixture.Client, account.Token, path);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(cash, body.RootElement.GetProperty("cashBalance").GetString());
+            Assert.Equal(cash, body.RootElement.GetProperty("totalValue").GetString());
+            if (path.EndsWith("performance"))
+                Assert.Equal(decimal.Parse(cash, CultureInfo.InvariantCulture) - 100_000m,
+                    decimal.Parse(body.RootElement.GetProperty("totalPnl").GetString()!, CultureInfo.InvariantCulture));
+        }
+    }
+
+    [Theory]
     [InlineData("999999989999999.999900000001")]
     [InlineData("10000.000000000001")]
     [InlineData("0.000000000001")]
@@ -185,26 +206,26 @@ public sealed class PortfolioApiTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var root = body.RootElement;
-        Assert.Equal(97_000m, root.GetProperty("cashBalance").GetDecimal());
-        Assert.Equal(100_000m, root.GetProperty("initialCapital").GetDecimal());
-        Assert.Equal(3_300m, root.GetProperty("investedValue").GetDecimal());
-        Assert.Equal(4_067.5m, root.GetProperty("positionsMarketValue").GetDecimal());
-        Assert.Equal(101_067.5m, root.GetProperty("totalValue").GetDecimal());
-        Assert.Equal(1_067.5m, root.GetProperty("totalPnl").GetDecimal());
+        Assert.Equal(97_000m, decimal.Parse(root.GetProperty("cashBalance").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(100_000m, decimal.Parse(root.GetProperty("initialCapital").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(3_300m, decimal.Parse(root.GetProperty("investedValue").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(4_067.5m, decimal.Parse(root.GetProperty("positionsMarketValue").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(101_067.5m, decimal.Parse(root.GetProperty("totalValue").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(1_067.5m, decimal.Parse(root.GetProperty("totalPnl").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal(1.0675m, root.GetProperty("returnPercent").GetDecimal());
         Assert.Equal("USD", root.GetProperty("currency").GetString());
 
         var positions = root.GetProperty("positions").EnumerateArray().ToArray();
         var apple = Assert.Single(positions, position => position.GetProperty("symbol").GetString() == "AAPL");
         Assert.Equal(204.5m, apple.GetProperty("currentPrice").GetDecimal());
-        Assert.Equal(2_045m, apple.GetProperty("marketValue").GetDecimal());
-        Assert.Equal(245m, apple.GetProperty("pnl").GetDecimal());
+        Assert.Equal(2_045m, decimal.Parse(apple.GetProperty("marketValue").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(245m, decimal.Parse(apple.GetProperty("pnl").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal(13.611111111111111111111111110m, apple.GetProperty("pnlPercent").GetDecimal());
 
         var microsoft = Assert.Single(positions, position => position.GetProperty("symbol").GetString() == "MSFT");
         Assert.Equal(404.5m, microsoft.GetProperty("currentPrice").GetDecimal());
-        Assert.Equal(2_022.5m, microsoft.GetProperty("marketValue").GetDecimal());
-        Assert.Equal(522.5m, microsoft.GetProperty("pnl").GetDecimal());
+        Assert.Equal(2_022.5m, decimal.Parse(microsoft.GetProperty("marketValue").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(522.5m, decimal.Parse(microsoft.GetProperty("pnl").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal(34.833333333333333333333333330m, microsoft.GetProperty("pnlPercent").GetDecimal());
     }
 
@@ -236,9 +257,9 @@ public sealed class PortfolioApiTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var root = body.RootElement;
-        Assert.Equal(100_000m, root.GetProperty("totalValue").GetDecimal());
-        Assert.Equal(0m, root.GetProperty("positionsMarketValue").GetDecimal());
-        Assert.Equal(0m, root.GetProperty("totalPnl").GetDecimal());
+        Assert.Equal(100_000m, decimal.Parse(root.GetProperty("totalValue").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(0m, decimal.Parse(root.GetProperty("positionsMarketValue").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(0m, decimal.Parse(root.GetProperty("totalPnl").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal(0m, root.GetProperty("returnPercent").GetDecimal());
         Assert.Empty(root.GetProperty("positions").EnumerateArray());
     }
@@ -492,6 +513,10 @@ public sealed class PortfolioApiTests
         Assert.Equal(new[] { "averageCost", "quantity", "symbol" },
             position.GetProperty("properties").EnumerateObject().Select(p => p.Name).OrderBy(name => name).ToArray());
         var schemas = root.GetProperty("components").GetProperty("schemas");
+        foreach (var name in new[] { "PortfolioResponse", "PortfolioPerformanceResponse", "PaperTradeResponse" })
+            Assert.Equal("string", schemas.GetProperty(name).GetProperty("properties").GetProperty("cashBalance").GetProperty("type").GetString());
+        foreach (var name in new[] { "initialCapital", "investedValue", "totalValue" })
+            Assert.Equal("string", schemas.GetProperty("PortfolioResponse").GetProperty("properties").GetProperty(name).GetProperty("type").GetString());
         foreach (var name in new[] { "PortfolioTransactionResponse", "PaperTradeResponse" })
             Assert.Equal("string", schemas.GetProperty(name).GetProperty("properties").GetProperty("totalAmount").GetProperty("type").GetString());
         foreach (var name in new[] { "totalInvested", "totalProceeds" })
@@ -505,10 +530,10 @@ public sealed class PortfolioApiTests
 
     private static void AssertBalances(JsonElement body, decimal cash, decimal initialCapital, decimal invested, decimal total, string currency)
     {
-        Assert.Equal(cash, body.GetProperty("cashBalance").GetDecimal());
-        Assert.Equal(initialCapital, body.GetProperty("initialCapital").GetDecimal());
-        Assert.Equal(invested, body.GetProperty("investedValue").GetDecimal());
-        Assert.Equal(total, body.GetProperty("totalValue").GetDecimal());
+        Assert.Equal(cash, decimal.Parse(body.GetProperty("cashBalance").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(initialCapital, decimal.Parse(body.GetProperty("initialCapital").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(invested, decimal.Parse(body.GetProperty("investedValue").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(total, decimal.Parse(body.GetProperty("totalValue").GetString()!, System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal(currency, body.GetProperty("currency").GetString());
     }
 
@@ -686,6 +711,7 @@ public sealed class PortfolioApiTests
             modelBuilder.Entity<User>().Property(user => user.Version).ValueGeneratedNever();
             modelBuilder.Entity<Portfolio>().Property(portfolio => portfolio.Version).ValueGeneratedNever();
             modelBuilder.Entity<Transaction>().Property(transaction => transaction.TotalAmount).HasColumnType("TEXT");
+            modelBuilder.Entity<Portfolio>().Property(portfolio => portfolio.CashBalance).HasColumnType("TEXT");
         }
     }
 

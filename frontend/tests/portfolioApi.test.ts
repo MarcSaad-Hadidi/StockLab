@@ -3,10 +3,10 @@ import { test } from 'node:test'
 import { createPortfolioApi, PortfolioApiError } from '../src/api/portfolioApi.ts'
 
 const validPortfolio = {
-  cashBalance: 98_000,
-  investedValue: 2_000,
-  totalValue: 100_000,
-  initialCapital: 100_000,
+  cashBalance: '98000',
+  investedValue: '2000',
+  totalValue: '100000',
+  initialCapital: '100000',
   currency: 'USD',
   positions: [{ symbol: 'AAPL:NASDAQ', quantity: 10, averageCost: 200 }],
 }
@@ -109,6 +109,20 @@ const validHistory = {
   page: 2, pageSize: 10, totalCount: 11, currency: 'CAD',
   summary: { totalTrades: 61, totalInvested: '2000', totalProceeds: '3000' },
 }
+
+test('portfolio preserves exact cash and rejects incompatible numeric money fields', async () => {
+  const cashBalance = '99999.999999999999'
+  const api = createPortfolioApi('', async () => Response.json({ ...validPortfolio, cashBalance }),
+    () => ({ Authorization: 'Bearer token' }))
+  assert.equal((await api.getPortfolio()).cashBalance, cashBalance)
+  for (const field of ['cashBalance', 'initialCapital', 'investedValue', 'totalValue']) {
+    for (const value of [100000, '-1', '1e-12', '0.0000000000001', null]) {
+      const invalid = createPortfolioApi('', async () => Response.json({ ...validPortfolio, [field]: value }),
+        () => ({ Authorization: 'Bearer token' }))
+      await assert.rejects(invalid.getPortfolio(), (error: unknown) => error instanceof PortfolioApiError && error.code === 'invalid_response')
+    }
+  }
+})
 
 test('history and recent activity preserve decimal strings through JSON parsing', async () => {
   const exact = '999999989999999.999900000001'

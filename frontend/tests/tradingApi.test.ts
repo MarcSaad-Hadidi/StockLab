@@ -17,7 +17,7 @@ const result = {
   quantity: 2,
   executionPrice: 125,
   totalAmount: '250',
-  cashBalance: 99_750,
+  cashBalance: '99750',
   holdingQuantity: 2,
   averageCost: 125,
   executedAtUtc: '2026-09-27T12:00:00Z',
@@ -62,6 +62,18 @@ test('executeTrade sends the authenticated paper order contract', async () => {
     quantity: 2,
     orderType: 'market',
   })
+})
+
+test('executed order cash stays exact and lossy or malformed balances are rejected', async () => {
+  const request = { orderId: result.orderId, side: 'BUY' as const, symbol: 'AAPL', quantity: 2, orderType: 'market' as const }
+  for (const cashBalance of ['99999.999999999999', '999999999999999.999899999999', '0']) {
+    const api = createTradingApi('', async () => jsonResponse({ ...result, cashBalance }), () => ({ Authorization: 'Bearer token' }))
+    assert.equal((await api.executeTrade(request)).cashBalance, cashBalance)
+  }
+  for (const cashBalance of [100000, '-1', 'NaN', '1e-12', '0.0000000000001']) {
+    const api = createTradingApi('', async () => jsonResponse({ ...result, cashBalance }), () => ({ Authorization: 'Bearer token' }))
+    await assert.rejects(api.executeTrade(request), (error: unknown) => error instanceof TradingApiError && error.code === 'invalid_response')
+  }
 })
 
 test('limit orders include their limit price and missing sessions are rejected locally', async () => {

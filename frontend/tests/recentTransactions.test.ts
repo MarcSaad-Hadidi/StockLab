@@ -21,7 +21,7 @@ const { i18n } = await import('../src/i18n/i18n.ts')
 const { DashboardPage } = await import('../src/dashboard/DashboardPage.tsx')
 const session = { accessToken: 'token-a', tokenType: 'Bearer' as const, expiresAtUtc: '2099-01-01T00:00:00Z',
   user: { id: 'account-a', displayName: 'Alice Adams', email: 'alice@example.com' } }
-const base = { cashBalance: 1111, initialCapital: 1000, investedValue: 0, totalValue: 1111, currency: 'CAD', positions: [] }
+const base = { cashBalance: '1111', initialCapital: '1000', investedValue: '0', totalValue: '1111', currency: 'CAD', positions: [] }
 const trade = { id: 'trade-a', symbol: 'AAA', side: 'BUY', quantity: 1, executionPrice: 100,
   totalAmount: '100', executedAtUtc: '2026-01-01T00:00:00Z' }
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status })
@@ -120,7 +120,7 @@ test('unauthorized activity explains sign-in and offers no blind retry', async t
 
 for (const responseStatus of [200, 401]) {
   test(`a late retry response (${responseStatus}) cannot replace another account's activity or session`, async t => {
-    t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, cashBalance: getAuthSession()?.user.id === 'account-a' ? 1111 : 2222 }))
+    t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, cashBalance: getAuthSession()?.user.id === 'account-a' ? '1111' : '2222' }))
     const response = deferred<Response>()
     let callsA = 0
     const api = createPortfolioApi('', async (_input, init) => {

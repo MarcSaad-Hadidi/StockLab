@@ -28,13 +28,13 @@ const accountB: AuthSession = { ...accountA, accessToken: 'test-token-b', user: 
 type SentOrder = { authorization: string; order: ExecuteTradeRequest; signal: AbortSignal }
 function result(order: ExecuteTradeRequest, cashBalance = 99000) {
   return Response.json({ transactionId: 'test-transaction', orderId: order.orderId, side: order.side, symbol: order.symbol,
-    quantity: order.quantity, executionPrice: 100, totalAmount: (order.quantity * 100).toFixed(12), cashBalance,
+    quantity: order.quantity, executionPrice: 100, totalAmount: (order.quantity * 100).toFixed(12), cashBalance: String(cashBalance),
     holdingQuantity: order.quantity, averageCost: 100, executedAtUtc: '2026-10-04T12:00:00Z' })
 }
-async function mount(t: TestContext, fetcher?: (sent: SentOrder) => Promise<Response>) {
+async function mount(t: TestContext, fetcher?: (sent: SentOrder) => Promise<Response>, price = 100) {
   window.localStorage.clear(); saveAuthSession(accountA)
   t.mock.method(marketDataApi, 'quote', async (symbol: string) => ({ symbol, name: 'Audit Stock', exchange: 'NASDAQ', currency: 'USD',
-    price: 100, change: null, changePercent: null, volume: null, asOfUtc: '2026-10-04T12:00:00Z', open: null,
+    price, change: null, changePercent: null, volume: null, asOfUtc: '2026-10-04T12:00:00Z', open: null,
     high: null, low: null, previousClose: null, averageVolume: null, isMarketOpen: false, fiftyTwoWeek: null }))
   t.mock.method(marketDataApi, 'history', async () => { throw new Error('test history unavailable') })
   const sent: SentOrder[] = []
@@ -69,6 +69,37 @@ test('an unchanged session sends the prepared order once with its original token
     assert.match(view.container.textContent!, /executed successfully/)
   } finally { await view.close() }
 })
+
+for (const language of ['en', 'fr']) {
+  for (const [price, quantity, total, displayed] of [
+    [1.2345, .5, '0.61725', '0.61725'],
+    [.0001, .00000001, '0.000000000001', '0.000000000001'],
+  ] as const) {
+    test(`ticket, confirmation and returned cash keep fractional amounts in ${language}: ${total}`, async t => {
+      await i18n.changeLanguage(language)
+      const cashBalance = '99999.999999999999'
+      const view = await mount(t, async ({ order }) => Response.json({ transactionId: 'exact-trade',
+        ...order, executionPrice: price, totalAmount: total, cashBalance, holdingQuantity: quantity,
+        averageCost: price, executedAtUtc: '2026-10-07T12:00:00Z' }), price)
+      try {
+        await act(async () => {
+          const input = view.container.querySelector<HTMLInputElement>('#stock-quantity')!
+          Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value')!.set!.call(input, String(quantity))
+          input.dispatchEvent(new dom.window.Event('input', { bubbles: true }))
+        })
+        const expected = language === 'fr' ? displayed.replace('.', ',') : displayed
+        assert.ok(view.container.querySelector('.stock-trade-summary')!.textContent!.includes(expected))
+        await view.prepare()
+        assert.ok(view.dialog()!.textContent!.includes(expected))
+        await act(async () => view.confirm().click())
+        assert.equal(view.sent[0].order.quantity, quantity)
+        assert.equal(view.dialog(), null)
+        const renderedCash = view.container.querySelector('.stock-cash-row')!.textContent!
+        assert.ok(renderedCash.includes(language === 'fr' ? '99\u202f999,999999999999' : '99,999.999999999999'))
+      } finally { await view.close(); await i18n.changeLanguage('en') }
+    })
+  }
+}
 
 for (const trigger of ['same-tab', 'storage', 'focus', 'visibility', 'logout', 'clear', 'token'] as const) {
   test(`a prepared order is cancelled on ${trigger} session changes`, async t => {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { marketDataApi } from '../api/marketDataClient'
 import { PortfolioApiError, portfolioApi, type PortfolioApiPosition, type PortfolioApiTransaction } from '../api/portfolioApi'
 import { getAuthSession } from '../auth/authStorage'
+import { addAmounts, subtractAmounts, tradeProduct, valuationProduct, amountPercent, amountSign } from '../api/decimalMath'
 import { useAuthSession } from '../auth/useAuthUser'
 import { useRecentTransactions, type RecentTransactionsState } from './useRecentTransactions'
 
@@ -12,18 +13,18 @@ export type PortfolioPosition = {
   averagePrice: number
   currentPrice: number | null
   dailyChangePercent: number | null
-  marketValue: number | null
-  pnl: number | null
+  marketValue: string | null
+  pnl: string | null
   pnlPercent: number | null
   weight: number | null
 }
 
 export type PortfolioData = {
-  cashBalance: number
-  investedValue: number
-  totalValue: number | null
-  initialCapital: number
-  pnl: number | null
+  cashBalance: string
+  investedValue: string
+  totalValue: string | null
+  initialCapital: string
+  pnl: string | null
   returnPercent: number | null
   currency: string
   positions: PortfolioPosition[]
@@ -46,7 +47,7 @@ export type PortfolioDataState = Omit<PortfolioLoadState, 'data'> & {
 }
 
 function costValue(position: PortfolioApiPosition) {
-  return position.quantity * position.averageCost
+  return tradeProduct(position.averageCost, position.quantity)
 }
 
 const portfolioQuoteBudget = 20
@@ -105,21 +106,21 @@ export function usePortfolioData(): PortfolioDataState {
 
         const hasCompleteMarketData = enriched.every(({ quote }) => quote !== null)
         const marketInvestedValue = enriched.reduce((total, { position, quote }) =>
-          total + (quote ? position.quantity * quote.price : 0), 0)
+          addAmounts(total, quote ? valuationProduct(quote.price, position.quantity) : '0'), '0')
         const investedValue = portfolio.investedValue
         const totalValue = hasCompleteMarketData
-          ? portfolio.cashBalance + marketInvestedValue
+          ? addAmounts(portfolio.cashBalance, marketInvestedValue)
           : null
         // Total return is measured against starting capital so realized gains
         // remain visible after a position has been fully sold. Missing quotes
         // make aggregate valuation unavailable, but must not hide other prices.
-        const pnl = totalValue === null ? null : totalValue - portfolio.initialCapital
-        const returnPercent = pnl === null || portfolio.initialCapital === 0
+        const pnl = totalValue === null ? null : subtractAmounts(totalValue, portfolio.initialCapital)
+        const returnPercent = pnl === null
           ? null
-          : (pnl / portfolio.initialCapital) * 100
+          : amountPercent(pnl, portfolio.initialCapital)
         const positions = enriched.map(({ position, quote }) => {
-          const marketValue = quote ? position.quantity * quote.price : null
-          const pnl = marketValue === null ? null : marketValue - costValue(position)
+          const marketValue = quote ? valuationProduct(quote.price, position.quantity) : null
+          const pnl = marketValue === null ? null : subtractAmounts(marketValue, costValue(position))
           return {
             symbol: position.symbol,
             name: quote?.name?.trim() || position.symbol,
@@ -129,8 +130,8 @@ export function usePortfolioData(): PortfolioDataState {
             dailyChangePercent: quote?.changePercent ?? null,
             marketValue,
             pnl,
-            pnlPercent: pnl === null || costValue(position) === 0 ? null : (pnl / costValue(position)) * 100,
-            weight: totalValue !== null && totalValue > 0 && marketValue !== null ? (marketValue / totalValue) * 100 : null,
+            pnlPercent: pnl === null ? null : amountPercent(pnl, costValue(position)),
+            weight: totalValue !== null && amountSign(totalValue) > 0 && marketValue !== null ? amountPercent(marketValue, totalValue) : null,
           } satisfies PortfolioPosition
         })
 

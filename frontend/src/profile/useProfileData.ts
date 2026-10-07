@@ -13,7 +13,7 @@ const errorCode = (error: unknown): ProfileErrorCode => error instanceof Profile
 
 export function useProfileData() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [capital, setCapital] = useState<{ initialCapital: number; currency: string } | null>(null)
+  const [capital, setCapital] = useState<{ initialCapital: string; currency: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<ProfileErrorCode | null>(null)
   const [saveError, setSaveError] = useState<ProfileErrorCode | null>(null)

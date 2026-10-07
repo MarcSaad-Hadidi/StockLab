@@ -8,12 +8,12 @@ export type PortfolioApiPosition = {
 }
 
 export type PortfolioApiResponse = {
-  cashBalance: number
-  investedValue: number
-  totalValue: number
+  cashBalance: string
+  investedValue: string
+  totalValue: string
   currency: string
   positions: PortfolioApiPosition[]
-  initialCapital: number
+  initialCapital: string
 }
 
 export type PortfolioApiTransaction = {
@@ -81,16 +81,16 @@ function validPosition(value: unknown): value is PortfolioApiPosition {
 
 function validResponse(value: unknown): value is PortfolioApiResponse {
   if (!record(value)
-    || !finiteNumber(value.cashBalance) || value.cashBalance < 0
-    || !finiteNumber(value.investedValue) || value.investedValue < 0
-    || !finiteNumber(value.totalValue) || value.totalValue < 0
+    || !isNonNegativeAmount(value.cashBalance)
+    || !isNonNegativeAmount(value.investedValue)
+    || !isNonNegativeAmount(value.totalValue)
     || !nonEmptyString(value.currency) || !/^[A-Z]{3}$/.test(value.currency)
     || !Array.isArray(value.positions)
     || !value.positions.every(validPosition)) {
     return false
   }
 
-  return finiteNumber(value.initialCapital) && value.initialCapital > 0
+  return isPositiveAmount(value.initialCapital)
 }
 
 function validTransaction(value: unknown): value is PortfolioApiTransaction {
