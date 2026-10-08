@@ -53,7 +53,82 @@ jobs:
 
       - name: test
         working-directory: backend
-        run: dotnet test StockLab.sln --configuration Release --no-build --no-restore --logger trx --results-directory test-results
+        run: dotnet test StockLab.sln --configuration Release --no-build --no-restore --filter "FullyQualifiedName!~SqlServer" --logger trx --results-directory test-results
+
+  backend-sql-server:
+    name: backend sql server tests
+    runs-on: windows-2022
+    timeout-minutes: 20
+    env:
+      STOCKLAB_TEST_LOCALDB: '1'
+      STOCKLAB_PRICE_ALERTS_SQL_CONNECTION: ''
+      DOTNET_CLI_UI_LANGUAGE: en
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup dotnet
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: test sql result validator
+        run: python -m unittest discover --start-directory .github/scripts/tests --verbose
+
+      - name: start sql server localdb
+        shell: pwsh
+        run: |
+          $instances = @(& SqlLocalDB info)
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect SQL Server LocalDB.' }
+          if ($instances -contains 'MSSQLLocalDB') {
+            & SqlLocalDB start MSSQLLocalDB
+          } else {
+            & SqlLocalDB create MSSQLLocalDB -s
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot start SQL Server LocalDB.' }
+          & SqlLocalDB info MSSQLLocalDB
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot verify the SQL Server LocalDB instance.' }
+
+      - name: restore
+        working-directory: backend
+        run: dotnet restore StockLab.sln
+
+      - name: build
+        working-directory: backend
+        run: dotnet build StockLab.sln --configuration Release --no-restore
+
+      - name: discover sql server cases
+        shell: pwsh
+        run: |
+          $discovery = & dotnet test backend/StockLab.sln --configuration Release --no-build --no-restore --list-tests --filter 'FullyQualifiedName~SqlServer'
+          if ($LASTEXITCODE -ne 0) { throw 'SQL Server test discovery failed.' }
+          $tests = @($discovery | ForEach-Object { $_.Trim() } | Where-Object { $_.StartsWith('StockLab.UnitTests.') })
+          if ($tests.Count -eq 0) { throw 'No SQL Server tests were discovered.' }
+          $directory = Join-Path $env:RUNNER_TEMP 'sql-server-results'
+          New-Item -ItemType Directory -Force -Path $directory | Out-Null
+          $tests | Set-Content -Encoding utf8 -Path (Join-Path $directory 'expected-tests.txt')
+          Write-Output "Discovered $($tests.Count) SQL Server cases."
+
+      - name: test sql server
+        run: dotnet test backend/StockLab.sln --configuration Release --no-build --no-restore --filter "FullyQualifiedName~SqlServer" --logger "trx;LogFileName=sql-server.trx" --results-directory "${{ runner.temp }}/sql-server-results"
+
+      - name: require every sql server case to pass
+        if: always()
+        run: python .github/scripts/verify_sql_test_results.py --trx "${{ runner.temp }}/sql-server-results/sql-server.trx" --expected-tests "${{ runner.temp }}/sql-server-results/expected-tests.txt"
+
+      - name: upload sql server results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-sql-server-results
+          path: ${{ runner.temp }}/sql-server-results
+          if-no-files-found: warn
 
   frontend:
     name: frontend build

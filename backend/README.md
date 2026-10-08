@@ -509,6 +509,53 @@ Cancellation is checked before validation and while constructing results, with
 the caller's token preserved in `OperationCanceledException`. No artificial delay,
 randomness or wall-clock dependency is used.
 
+## Backend test CI
+
+The workflow in `.github/workflows/ci.yml` separates the backend suite:
+
+- `backend build and tests` runs on Ubuntu with
+  `FullyQualifiedName!~SqlServer`, without database-server credentials.
+- `backend sql server tests` runs on `windows-2022`, starts `MSSQLLocalDB` and
+  sets `STOCKLAB_TEST_LOCALDB=1`. SQL Server LocalDB is part of the
+  [Windows runner image](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md)
+  and executes the real SQL Server engine, including generated rowversion and
+  concurrent writes. Tests use Windows integrated authentication and randomly
+  named disposable databases; application/Azure connection settings are not used.
+
+Classes requiring the real engine include `SqlServer` in their fully qualified
+name. The SQL job discovers every case with `FullyQualifiedName~SqlServer` before
+running that same filter. `.github/scripts/verify_sql_test_results.py` compares
+the discovery manifest with the TRX report, including each parameterized case.
+Missing, skipped, failed, duplicated or extra results, empty discovery and
+inconsistent counters fail the job. `dotnet test` failures also fail the job
+directly. Reports and discovery are uploaded as `backend-sql-server-results`,
+including when a test or verification step fails.
+
+Run the two groups locally from the repository root:
+
+```powershell
+dotnet test backend/StockLab.sln --configuration Release --filter 'FullyQualifiedName!~SqlServer'
+
+# Windows with SQL Server LocalDB installed; disposable databases only.
+$env:STOCKLAB_TEST_LOCALDB = '1'
+$env:STOCKLAB_PRICE_ALERTS_SQL_CONNECTION = ''
+dotnet test backend/StockLab.sln --configuration Release --filter 'FullyQualifiedName~SqlServer'
+```
+
+The price-alert SQL tests now share this LocalDB opt-in, applying the repository
+migrations and deleting only their own generated test database. Their existing
+explicit `STOCKLAB_PRICE_ALERTS_SQL_CONNECTION` smoke mode remains available for
+a pre-existing schema: it performs no migrations or database deletion and cleans
+up only rows created by the fixture. CI leaves that variable empty and requires
+no database secret.
+
+The TRX validator uses only the Python standard library. Its failure-path tests
+run in the SQL job with:
+
+```powershell
+python -m unittest discover --start-directory .github/scripts/tests --verbose
+```
+
 ## Restore, build and run
 
 Run from the repository root:
@@ -606,12 +653,14 @@ scoped to #42/#43, with the frontend integration in #57.
 `PriceAlertsApiTests` exercises real JWT authentication and relational SQLite
 persistence, validation, user isolation, lifecycle, application restart, terminal
 states, and stale-token concurrency. Default test runs do not access Azure SQL.
-`PriceAlertsSqlServerApiTests` is opt-in using
-`STOCKLAB_PRICE_ALERTS_SQL_CONNECTION`, supplied securely outside the repository.
-It uses the existing schema without DDL or migrations, creates disposable users,
+`PriceAlertsSqlServerApiTests` runs in CI and locally with
+`STOCKLAB_TEST_LOCALDB=1` on Windows, using an isolated migrated LocalDB database.
+Alternatively, `STOCKLAB_PRICE_ALERTS_SQL_CONNECTION`, supplied securely outside
+the repository, selects an existing schema without DDL or migrations. It creates disposable users,
 logs in through the API, runs create/list/update/disable/restart/list/delete, and
 checks persisted SQL fields and real generated rowversion conflicts. Its cleanup
-removes only the users, portfolios, and alerts created by that test fixture.
+removes only the users, portfolios, and alerts created by that test fixture in
+explicit-connection mode; LocalDB mode deletes only its generated database.
 
 ```powershell
 # Supply STOCKLAB_PRICE_ALERTS_SQL_CONNECTION securely in the local process first.

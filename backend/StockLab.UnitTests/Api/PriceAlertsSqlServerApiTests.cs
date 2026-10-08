@@ -1,18 +1,30 @@
 using System.Net;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using static StockLab.UnitTests.Api.PriceAlertsApiTests;
 
 namespace StockLab.UnitTests.Api;
 
-/// <summary>Opt-in smoke against an explicitly supplied existing SQL Server/Azure SQL schema.</summary>
+/// <summary>SQL Server smoke using disposable LocalDB or an explicitly supplied existing schema.</summary>
 public sealed class PriceAlertsSqlServerApiTests
 {
     private const string ConnectionVariable = "STOCKLAB_PRICE_ALERTS_SQL_CONNECTION";
+    private static bool LocalDbEnabled => OperatingSystem.IsWindows()
+        && Environment.GetEnvironmentVariable("STOCKLAB_TEST_LOCALDB") == "1";
+
+    private static Task<PriceAlertsFixture> CreateSqlFixtureAsync(
+        SaveChangesInterceptor? interceptor = null)
+    {
+        var connection = Environment.GetEnvironmentVariable(ConnectionVariable);
+        return string.IsNullOrWhiteSpace(connection)
+            ? PriceAlertsFixture.CreateAsync(interceptor, localDb: true)
+            : PriceAlertsFixture.CreateAsync(interceptor, sqlConnection: connection);
+    }
 
     [SqlSmokeFact]
     public async Task Sql_login_CRUD_and_disabled_persistence_survive_restart()
     {
-        await using var f = await PriceAlertsFixture.CreateAsync(sqlConnection: Environment.GetEnvironmentVariable(ConnectionVariable)!);
+        await using var f = await CreateSqlFixtureAsync();
         await VerifyPersistentLifecycleAsync(f);
     }
 
@@ -22,8 +34,7 @@ public sealed class PriceAlertsSqlServerApiTests
     [InlineData("DELETE", "")]
     public async Task Sql_generated_rowversion_conflicts_return_409(string method, string suffix)
     {
-        await using var f = await PriceAlertsFixture.CreateAsync(new ChangeAlertVersion(),
-            sqlConnection: Environment.GetEnvironmentVariable(ConnectionVariable)!);
+        await using var f = await CreateSqlFixtureAsync(new ChangeAlertVersion());
         var id = await CreateAlertAsync(f, f.TokenA);
         byte[] originalVersion;
         await using (var db = f.CreateDbContext())
@@ -47,8 +58,8 @@ public sealed class PriceAlertsSqlServerApiTests
     {
         public SqlSmokeFactAttribute()
         {
-            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ConnectionVariable)))
-                Skip = "Explicitly supply STOCKLAB_PRICE_ALERTS_SQL_CONNECTION to run the disposable SQL smoke.";
+            if (!LocalDbEnabled && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ConnectionVariable)))
+                Skip = "Enable STOCKLAB_TEST_LOCALDB=1 on Windows or supply STOCKLAB_PRICE_ALERTS_SQL_CONNECTION.";
         }
     }
 
@@ -56,8 +67,8 @@ public sealed class PriceAlertsSqlServerApiTests
     {
         public SqlSmokeTheoryAttribute()
         {
-            if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ConnectionVariable)))
-                Skip = "Explicitly supply STOCKLAB_PRICE_ALERTS_SQL_CONNECTION to test real SQL rowversion conflicts.";
+            if (!LocalDbEnabled && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ConnectionVariable)))
+                Skip = "Enable STOCKLAB_TEST_LOCALDB=1 on Windows or supply STOCKLAB_PRICE_ALERTS_SQL_CONNECTION.";
         }
     }
 }
