@@ -243,6 +243,45 @@ public sealed class PortfolioApiTests
         Assert.Equal("portfolio_performance_unavailable", await ErrorCodeAsync(response));
     }
 
+    [Theory]
+    [InlineData("0.00004", "0", "-0.000000000001", -100, "0", "99999.999999999998", "-0.000000000002", "-0.000000000000002")]
+    [InlineData("0.00005", "0.000000000001", "0", 0, "0.000000000002", "100000", "0", "0")]
+    [InlineData("0.00006", "0.000000000001", "0", 0, "0.000000000002", "100000", "0", "0")]
+    [InlineData("1.23456789", "0.000000012346", "0.000000012345", 1234500, "0.000000024692", "100000.00000002469", "0.00000002469", "0.00000000002469")]
+    public async Task Performance_rounds_each_position_before_calculating_totals_and_returns(
+        string quotePrice, string marketValue, string positionPnl, int positionPnlPercent,
+        string positionsMarketValue, string totalValue, string totalPnl, string returnPercent)
+    {
+        var provider = new CountingMarketDataProvider(decimal.Parse(quotePrice, CultureInfo.InvariantCulture));
+        await using var fixture = await PortfolioFixture.CreateAsync(provider);
+        var account = await CreateSignedInAccountAsync(fixture, "rounded-performance@example.com");
+        await SeedPortfolioAsync(fixture, account.Id, 99_999.999999999998m, "USD",
+            ("AAPL", 0.00000001m, 0.0001m), ("MSFT", 0.00000001m, 0.0001m));
+
+        using var response = await GetWithTokenAsync(fixture.Client, account.Token,
+            "/api/portfolio/performance");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = body.RootElement;
+        var positions = root.GetProperty("positions").EnumerateArray().ToArray();
+        Assert.Equal(2, positions.Length);
+        Assert.Equal("0.000000000002", root.GetProperty("investedValue").GetString());
+        Assert.Equal(positionsMarketValue, root.GetProperty("positionsMarketValue").GetString());
+        Assert.Equal(totalValue, root.GetProperty("totalValue").GetString());
+        Assert.Equal(totalPnl, root.GetProperty("totalPnl").GetString());
+        Assert.Equal(decimal.Parse(returnPercent, CultureInfo.InvariantCulture), root.GetProperty("returnPercent").GetDecimal());
+        Assert.All(positions, position =>
+        {
+            Assert.Equal(quotePrice, position.GetProperty("currentPrice").GetString());
+            Assert.Equal(marketValue, position.GetProperty("marketValue").GetString());
+            Assert.Equal(positionPnl, position.GetProperty("pnl").GetString());
+            Assert.Equal((decimal)positionPnlPercent, position.GetProperty("pnlPercent").GetDecimal());
+        });
+        Assert.Equal(decimal.Parse(positionsMarketValue, CultureInfo.InvariantCulture),
+            positions.Sum(position => decimal.Parse(position.GetProperty("marketValue").GetString()!, CultureInfo.InvariantCulture)));
+    }
+
     [Fact]
     public async Task Performance_requires_authentication_and_returns_empty_metrics_for_empty_portfolio()
     {
@@ -728,7 +767,7 @@ public sealed class PortfolioApiTests
         }
     }
 
-    private sealed class CountingMarketDataProvider : IMarketDataProvider
+    private sealed class CountingMarketDataProvider(decimal price = 100m) : IMarketDataProvider
     {
         public int QuoteCalls { get; private set; }
 
@@ -737,7 +776,7 @@ public sealed class PortfolioApiTests
             cancellationToken.ThrowIfCancellationRequested();
             QuoteCalls++;
             return Task.FromResult<StockQuote?>(new StockQuote(
-                symbol, "USD", 100m, 0m, 0m, null, DateTimeOffset.UtcNow));
+                symbol, "USD", price, 0m, 0m, null, DateTimeOffset.UtcNow));
         }
 
         public Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(

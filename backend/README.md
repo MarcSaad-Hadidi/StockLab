@@ -779,7 +779,10 @@ Deploy the API and frontend together; numeric financial responses are rejected
 instead of silently accepting already rounded values. Order estimates normalize
 quantity to eight and price to four decimals, then multiply exactly and display
 up to twelve decimals. Live portfolio valuation retains the raw quote precision
-before rounding its product to twelve decimal places.
+and rounds each position's product to twelve decimal places using
+`MidpointRounding.AwayFromZero`, before calculating its P&L and aggregating
+portfolio values and returns. The performance API and frontend share this policy;
+the sum of the returned position market values equals `positionsMarketValue`.
 
 Live quote/holding products and portfolio sums can exceed the stored-ledger
 width. Client arithmetic and currency formatting accept those derived plain
