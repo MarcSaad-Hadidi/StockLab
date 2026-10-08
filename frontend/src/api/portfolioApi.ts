@@ -3,8 +3,8 @@ import { isNonNegativeAmount, isPositiveAmount } from './decimalAmount'
 
 export type PortfolioApiPosition = {
   symbol: string
-  quantity: number
-  averageCost: number
+  quantity: string
+  averageCost: string
 }
 
 export type PortfolioApiResponse = {
@@ -20,8 +20,8 @@ export type PortfolioApiTransaction = {
   id: string
   side: 'BUY' | 'SELL'
   symbol: string
-  quantity: number
-  executionPrice: number
+  quantity: string
+  executionPrice: string
   totalAmount: string
   executedAtUtc: string
 }
@@ -75,8 +75,8 @@ const nonEmptyString = (value: unknown): value is string =>
 function validPosition(value: unknown): value is PortfolioApiPosition {
   return record(value)
     && nonEmptyString(value.symbol)
-    && finiteNumber(value.quantity) && value.quantity > 0
-    && finiteNumber(value.averageCost) && value.averageCost > 0
+    && isPositiveAmount(value.quantity)
+    && isPositiveAmount(value.averageCost)
 }
 
 function validResponse(value: unknown): value is PortfolioApiResponse {
@@ -98,8 +98,8 @@ function validTransaction(value: unknown): value is PortfolioApiTransaction {
     && nonEmptyString(value.id)
     && (value.side === 'BUY' || value.side === 'SELL')
     && nonEmptyString(value.symbol)
-    && finiteNumber(value.quantity) && value.quantity > 0
-    && finiteNumber(value.executionPrice) && value.executionPrice > 0
+    && isPositiveAmount(value.quantity)
+    && isPositiveAmount(value.executionPrice)
     && isPositiveAmount(value.totalAmount)
     && typeof value.executedAtUtc === 'string'
     && Number.isFinite(Date.parse(value.executedAtUtc))

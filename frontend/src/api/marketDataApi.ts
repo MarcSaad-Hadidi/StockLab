@@ -1,3 +1,5 @@
+import { isPositiveOperand } from './decimalAmount'
+
 export type CompanyLogo = {
   symbol: string;
   pngUrl: string | null;
@@ -58,6 +60,7 @@ export type MarketMover = {
 export type StockQuote = {
   symbol: string;
   price: number;
+  priceDecimal: string;
   change: number | null;
   changePercent: number | null;
   volume: number | null;
@@ -130,6 +133,7 @@ function quote(v: unknown): v is StockQuote {
     typeof v.symbol === "string" &&
     number(v.price) &&
     v.price > 0 &&
+    isPositiveOperand(v.priceDecimal) &&
     nullableNumber(v.change) &&
     nullableNumber(v.changePercent) &&
     volume(v.volume) &&

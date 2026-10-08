@@ -1,6 +1,6 @@
 import type { HistoryQuery, StockHistory } from "../api/marketDataApi.ts";
-import { isDecimalAmount } from '../api/decimalAmount';
-import { tradeProduct } from '../api/decimalMath';
+import { isDecimalAmount, isPositiveAmount } from '../api/decimalAmount';
+import { normalizeOperand, tradeProduct } from '../api/decimalMath';
 export const chartRanges = [
   "1D",
   "5D",
@@ -17,7 +17,7 @@ export type TradeOrderType = "market" | "limit";
 export type StockDetails = {
   symbol: string;
   company: string;
-  price: number;
+  price: string;
   currency: string | null;
 };
 export function historyQuery(
@@ -85,29 +85,19 @@ export function money(
     maximumFractionDigits,
   }).format(value as number);
 }
-export function calculateTradeTotal(price: number, quantity: number) {
-  if (
-    !Number.isFinite(price) ||
-    !Number.isFinite(quantity) ||
-    price <= 0 ||
-    quantity <= 0
-  )
-    return '0';
-  return tradeProduct(price, quantity);
+export function calculateTradeTotal(price: string, quantity: string) {
+  const normalizedPrice = normalizeOperand(price, 4);
+  const normalizedQuantity = normalizeOperand(quantity, 8);
+  if (!isPositiveAmount(normalizedPrice) || !isPositiveAmount(normalizedQuantity)) return '0';
+  return tradeProduct(normalizedPrice, normalizedQuantity);
 }
 export function getTradeExecutionPrice(
   orderType: TradeOrderType,
-  marketPrice: number,
-  limitPrice?: number,
+  marketPrice: string,
+  limitPrice?: string,
 ) {
-  if (!Number.isFinite(marketPrice) || marketPrice <= 0) return 0;
-  if (
-    orderType === "limit" &&
-    typeof limitPrice === "number" &&
-    Number.isFinite(limitPrice) &&
-    limitPrice > 0
-  )
-    return limitPrice;
-  if (orderType === "limit") return 0;
-  return marketPrice;
+  const normalizedMarketPrice = normalizeOperand(marketPrice, 4);
+  if (!isPositiveAmount(normalizedMarketPrice)) return '0';
+  if (orderType === 'limit') return normalizeOperand(limitPrice ?? '', 4) ?? '0';
+  return normalizedMarketPrice;
 }

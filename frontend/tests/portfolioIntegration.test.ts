@@ -30,7 +30,7 @@ beforeEach(() => {
 })
 
 const base = { cashBalance: '1000', initialCapital: '1000', investedValue: '0', totalValue: '1000', currency: 'CAD', positions: [] }
-const trade = { id: 'trade-1', side: 'BUY' as const, symbol: 'AAPL', quantity: 0.25, executionPrice: 1.2345,
+const trade = { id: 'trade-1', side: 'BUY' as const, symbol: 'AAPL', quantity: '0.25', executionPrice: '1.2345',
   totalAmount: '0.3086', executedAtUtc: '2026-01-01T23:59:59Z' }
 
 for (const [cashBalance, initialCapital] of [
@@ -40,9 +40,9 @@ for (const [cashBalance, initialCapital] of [
   test(`valuation retains tiny fractions beside ${initialCapital} capital`, async t => {
     t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, cashBalance, initialCapital,
       investedValue: '0.000000000001', totalValue: initialCapital,
-      positions: [{ symbol: 'MSFT', quantity: 0.00000001, averageCost: 0.0001 }] }))
+      positions: [{ symbol: 'MSFT', quantity: '0.00000001', averageCost: '0.0001' }] }))
     t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
-    t.mock.method(marketDataApi, 'quote', async () => ({ symbol: 'MSFT', price: 0.0001, currency: 'CAD' }))
+    t.mock.method(marketDataApi, 'quote', async () => ({ symbol: 'MSFT', price: 0.0001, priceDecimal: '0.0001', currency: 'CAD' }))
     let state: PortfolioDataState | undefined
     function Probe() { state = usePortfolioData(); return null }
     const view = await mount(React.createElement(Probe))
@@ -67,6 +67,30 @@ for (const [cashBalance, initialCapital] of [
   })
 }
 
+test('live portfolio valuation retains maximum price and quantity operands', async t => {
+  t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, cashBalance: '0', currency: 'USD',
+    initialCapital: '999999999999999.9999', investedValue: '999999999999999.9999',
+    positions: [{ symbol: 'NVDA', quantity: '0.99999999', averageCost: '999999999999999.9999' },
+      { symbol: 'MSFT', quantity: '99999999999.99999999', averageCost: '0.0001' }] }))
+  t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
+  t.mock.method(marketDataApi, 'quote', async (symbol: string) => ({ symbol, currency: 'USD',
+    price: symbol === 'NVDA' ? 1000000000000000 : 0.0001,
+    priceDecimal: symbol === 'NVDA' ? '999999999999999.9999' : '0.0001' }))
+  let state: PortfolioDataState | undefined
+  function Probe() { state = usePortfolioData(); return null }
+  const view = await mount(React.createElement(Probe))
+  try {
+    const data = state!.data!
+    assert.equal(data.positions[0].marketValue, '999999989999999.999900000001')
+    assert.equal(data.positions[1].marketValue, '9999999.999999999999')
+    assert.equal(data.positions[1].quantity, '99999999999.99999999')
+    assert.equal(data.totalValue, '999999999999999.9999')
+    assert.equal(data.pnl, '0')
+    assert.equal(data.returnPercent, 0)
+    assert.ok(data.positions.every(position => position.pnl === '0'))
+  } finally { await view.close() }
+})
+
 async function mount(component: React.ReactElement) {
   const container = document.createElement('div')
   document.body.append(container)
@@ -77,14 +101,14 @@ async function mount(component: React.ReactElement) {
 async function settle() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)) }) }
 
 test('more than twenty positions retain available quotes without inventing aggregate valuation', async (t) => {
-  const positions = Array.from({ length: 25 }, (_, i) => ({ symbol: `S${i}`, quantity: 2, averageCost: 100 }))
+  const positions = Array.from({ length: 25 }, (_, i) => ({ symbol: `S${i}`, quantity: '2', averageCost: '100' }))
   t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, positions, investedValue: '5000', totalValue: '6000' }))
   t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
   const calls: string[] = []
   t.mock.method(marketDataApi, 'quote', async (symbol: string) => {
     calls.push(symbol)
     if (symbol === 'S2') throw new Error('quote unavailable')
-    return { symbol, name: symbol, price: 150, changePercent: 3, currency: symbol === 'S1' ? 'USD' : 'CAD' }
+    return { symbol, name: symbol, price: 150, priceDecimal: '150', changePercent: 3, currency: symbol === 'S1' ? 'USD' : 'CAD' }
   })
   let state: PortfolioDataState | undefined
   function Probe() { state = usePortfolioData(); return null }
@@ -94,7 +118,7 @@ test('more than twenty positions retain available quotes without inventing aggre
     const data = state?.data
     assert.ok(data)
     assert.equal(data.positions.length, 25)
-    assert.equal(data.positions[0].currentPrice, 150)
+    assert.equal(data.positions[0].currentPrice, '150')
     assert.equal(data.positions[0].marketValue, '300')
     assert.equal(data.positions[0].pnl, '100')
     assert.equal(data.positions[0].dailyChangePercent, 3)
@@ -122,7 +146,7 @@ test('transactions use server counts, pagination, currency and eight decimal qua
   const calls: TransactionHistoryQuery[] = []
   t.mock.method(portfolioApi, 'getTransactionHistory', async (query: TransactionHistoryQuery): Promise<TransactionHistoryResponse> => {
     calls.push(query)
-    return { items: [{ ...trade, id: `trade-${query.page}`, quantity: query.page === 1 ? 0.00000001 : 1.75 }],
+    return { items: [{ ...trade, id: `trade-${query.page}`, quantity: query.page === 1 ? '0.00000001' : '1.75' }],
       page: query.page, pageSize: 10, totalCount: 61, currency: 'CAD',
       summary: { totalTrades: 61, totalInvested: '12000', totalProceeds: '15000' } }
   })
@@ -176,9 +200,9 @@ for (const language of ['en', 'fr']) {
   const fractional = language === 'fr' ? /0,61725/ : /0\.61725/
   const ordinary = language === 'fr' ? /204,50/ : /204\.50/
   const exactTrades = [
-    { ...trade, id: 'tiny', quantity: 0.00000001, executionPrice: 0.0001, totalAmount: '0.000000000001' },
-    { ...trade, id: 'fractional', side: 'SELL' as const, quantity: 0.5, totalAmount: '0.61725' },
-    { ...trade, id: 'ordinary', quantity: 1, executionPrice: 204.5, totalAmount: '204.5' },
+    { ...trade, id: 'tiny', quantity: '0.00000001', executionPrice: '0.0001', totalAmount: '0.000000000001' },
+    { ...trade, id: 'fractional', side: 'SELL' as const, quantity: '0.5', totalAmount: '0.61725' },
+    { ...trade, id: 'ordinary', quantity: '1', executionPrice: '204.5', totalAmount: '204.5' },
     { ...trade, id: 'large', totalAmount: '999999989999999.999900000001' },
     { ...trade, id: 'last-digit', totalAmount: '10000.000000000001' },
   ]

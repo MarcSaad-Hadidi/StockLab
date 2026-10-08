@@ -14,10 +14,10 @@ import {
 } from "../src/market/stockDetailsData.ts";
 const now = new Date("2026-09-08T12:30:00Z");
 test('estimates preserve the exact normalized eight-by-four decimal product', () => {
-  assert.equal(calculateTradeTotal(1.2345, 0.5), '0.61725');
-  assert.equal(calculateTradeTotal(0.0001, 0.00000001), '0.000000000001');
-  assert.equal(calculateTradeTotal(1.0001, 10000.00000001), '10001.000000010001');
-  assert.equal(calculateTradeTotal(1.23445, 0.500000005), '0.617250012345');
+  assert.equal(calculateTradeTotal('1.2345', '0.5'), '0.61725');
+  assert.equal(calculateTradeTotal('0.0001', '0.00000001'), '0.000000000001');
+  assert.equal(calculateTradeTotal('1.0001', '10000.00000001'), '10001.000000010001');
+  assert.equal(calculateTradeTotal('1.23445', '0.500000005'), '0.617250012345');
 });
 const data: StockHistory = {
   symbol: "AAPL",
@@ -124,16 +124,16 @@ test("currency comes from metadata/history, never assumed USD", () => {
   assert.equal(money(null, "USD", "en-US"), "—");
 });
 test("local trade estimates use supplied market or limit price", () => {
-  assert.equal(calculateTradeTotal(204.5, 10), '2045');
-  assert.equal(calculateTradeTotal(204.5, -1), '0');
-  assert.equal(getTradeExecutionPrice("market", 204.5), 204.5);
-  assert.equal(getTradeExecutionPrice("limit", 204.5, 200), 200);
+  assert.equal(calculateTradeTotal('204.5', '10'), '2045');
+  assert.equal(calculateTradeTotal('204.5', '-1'), '0');
+  assert.equal(getTradeExecutionPrice("market", "204.5"), "204.5");
+  assert.equal(getTradeExecutionPrice("limit", "204.5", "200"), "200");
 });
 
 test("trade estimates and currency formatting preserve four-decimal prices and totals", () => {
-  assert.equal(calculateTradeTotal(0.0001, 1), '0.0001');
-  assert.equal(calculateTradeTotal(1.2345, 1.5), '1.85175');
-  assert.equal(calculateTradeTotal(0.0001, 0.5), '0.00005');
+  assert.equal(calculateTradeTotal('0.0001', '1'), '0.0001');
+  assert.equal(calculateTradeTotal('1.2345', '1.5'), '1.85175');
+  assert.equal(calculateTradeTotal('0.0001', '0.5'), '0.00005');
   assert.equal(money(0.0001, "USD", "en-US", 4), "$0.0001");
   assert.equal(money(1.2345, "USD", "en-US", 4), "$1.2345");
   assert.match(money(1.2345, "USD", "fr-CA", 4), /1,2345/);

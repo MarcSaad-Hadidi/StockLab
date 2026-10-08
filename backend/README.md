@@ -767,11 +767,19 @@ strings through parsing and formatting rather than convert them to JavaScript
 `GET /api/portfolio` and `GET /api/portfolio/performance`. Portfolio monetary
 aggregates (`initialCapital`, `investedValue`, `positionsMarketValue`, `totalValue`,
 `totalPnl`, and performance positions' `marketValue`/`pnl`) are decimal strings too,
-so calculating a small gain beside a large balance remains lossless. Quantities,
-unit prices and percentage fields retain their numeric JSON types. Deploy the API
-and frontend together; numeric money responses are rejected instead of silently
-accepting already rounded values. Order estimates normalize quantity to eight and
-price to four decimals, then multiply exactly and display up to twelve decimals.
+so calculating a small gain beside a large balance remains lossless. Human portfolio,
+trade and transaction responses also preserve `quantity`, `holdingQuantity`,
+`averageCost`, `executionPrice`, `currentPrice` and `limitPrice` as decimal strings.
+Percentages retain their numeric JSON types. Stock quotes expose the original
+upstream decimal as `priceDecimal` (up to 28 fractional digits); `price` remains
+numeric for chart clients. Financial calculations must use `priceDecimal`.
+Order requests accept decimal strings for `quantity` and `limitPrice`, preserving
+input precision before backend normalization; numeric requests remain supported.
+Deploy the API and frontend together; numeric financial responses are rejected
+instead of silently accepting already rounded values. Order estimates normalize
+quantity to eight and price to four decimals, then multiply exactly and display
+up to twelve decimals. Live portfolio valuation retains the raw quote precision
+before rounding its product to twelve decimal places.
 
 `GET /api/portfolio` returns the authenticated user's stored portfolio. Send
 `Authorization: Bearer <token>`, using the access token from
@@ -793,7 +801,7 @@ A newly registered account returns:
 ```
 
 Each position contains only `symbol`, `quantity` and `averageCost`, for example
-`{ "symbol": "AAPL", "quantity": 10, "averageCost": 150 }`.
+`{ "symbol": "AAPL", "quantity": "10", "averageCost": "150" }`.
 Financial values use decimal arithmetic:
 `investedValue = sum(quantity * averageCost)` and
 `totalValue = cashBalance + investedValue`. These are acquisition-cost values,

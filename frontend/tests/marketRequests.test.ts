@@ -105,7 +105,7 @@ test("independent quote and history failures preserve successful price; no polli
     return String(url).endsWith("/quote")
       ? Response.json({
           symbol: "AAPL",
-          price: 204.5,
+          price: 204.5, priceDecimal: '204.5',
           change: 1,
           changePercent: 0.5,
           volume: 100,
@@ -209,7 +209,7 @@ test("Stock Details keeps a real supplied quote when enrichment/history fail and
   marketDataApi.quote = async symbol => {
     quoteCalls++;
     if (symbol === "UNKNOWN") throw new MarketDataError(404);
-    return { symbol, name: "Test Tesla", exchange: "NASDAQ", currency: "USD", price: 321.45, change: 1, changePercent: .3, volume: 100, asOfUtc: "2026-09-04T20:00:00Z", open: null, high: null, low: null, previousClose: null, averageVolume: null, isMarketOpen: false, fiftyTwoWeek: null };
+    return { symbol, name: "Test Tesla", exchange: "NASDAQ", currency: "USD", price: 321.45, priceDecimal: '321.45', change: 1, changePercent: .3, volume: 100, asOfUtc: "2026-09-04T20:00:00Z", open: null, high: null, low: null, previousClose: null, averageVolume: null, isMarketOpen: false, fiftyTwoWeek: null };
   };
   marketDataApi.history = async () => { throw new MarketDataError(503); };
   marketDataApi.logo = async () => { throw new MarketDataError(503); };
@@ -323,7 +323,7 @@ for (const mode of ["partial", "total"] as const) {
     let recovered = false;
     marketDataApi.quote = async symbol => {
       if (!recovered && (mode === "total" || symbol === "NVDA")) throw new MarketDataError(503);
-      return { symbol, name: "Real " + symbol, exchange: "NASDAQ", currency: "USD", price: 123.45,
+      return { symbol, name: "Real " + symbol, exchange: "NASDAQ", currency: "USD", price: 123.45, priceDecimal: '123.45',
         change: null, changePercent: null, volume: null, asOfUtc: "2026-09-04T20:00:00Z",
         open: null, high: null, low: null, previousClose: null, averageVolume: null,
         isMarketOpen: false, fiftyTwoWeek: null };
@@ -407,7 +407,7 @@ test("trade inputs accept supported fractions and enforce the API precision", as
   const { StockDetailsPage } = await import("../src/market/StockDetailsPage.tsx");
   const { marketDataApi } = await import("../src/api/marketDataClient.ts");
   const original = { quote: marketDataApi.quote, history: marketDataApi.history };
-  marketDataApi.quote = async symbol => ({ symbol, name: "Quantity Fixture", exchange: "NASDAQ", currency: "USD", price: 100, change: null, changePercent: null, volume: null, asOfUtc: "2026-09-18T20:00:00Z", open: null, high: null, low: null, previousClose: null, averageVolume: null, isMarketOpen: false, fiftyTwoWeek: null });
+  marketDataApi.quote = async symbol => ({ symbol, name: "Quantity Fixture", exchange: "NASDAQ", currency: "USD", price: 100, priceDecimal: '100', change: null, changePercent: null, volume: null, asOfUtc: "2026-09-18T20:00:00Z", open: null, high: null, low: null, previousClose: null, averageVolume: null, isMarketOpen: false, fiftyTwoWeek: null });
   marketDataApi.history = async () => { throw new Error("fixture unavailable history"); };
   const root = createRoot(document.getElementById("root")!);
   try {
@@ -460,7 +460,7 @@ test("Stock Details tabs show distinct real data, with no duplicate Chart or pre
   const original = { quote: marketDataApi.quote, history: marketDataApi.history, fundamentals: marketDataApi.fundamentals, earnings: marketDataApi.earnings, news: marketDataApi.news };
   let fundamentalCalls = 0;
   let newsCalls = 0;
-  marketDataApi.quote = async symbol => ({ symbol, name: "Fixture Company", exchange: "NASDAQ", currency: "USD", price: 100, change: 2, changePercent: 2, volume: 1000, asOfUtc: "2026-09-18T20:00:00Z", open: 98, high: 101, low: 97, previousClose: 98, averageVolume: 800, isMarketOpen: false, fiftyTwoWeek: null });
+  marketDataApi.quote = async symbol => ({ symbol, name: "Fixture Company", exchange: "NASDAQ", currency: "USD", price: 100, priceDecimal: '100', change: 2, changePercent: 2, volume: 1000, asOfUtc: "2026-09-18T20:00:00Z", open: 98, high: 101, low: 97, previousClose: 98, averageVolume: 800, isMarketOpen: false, fiftyTwoWeek: null });
   marketDataApi.history = async () => { throw new Error("fixture unavailable history"); };
   marketDataApi.fundamentals = async symbol => { fundamentalCalls++; return { symbol, marketCap: 1000000, peRatio: 20, epsTtm: 5, dividendYield: .01, beta: 1.2, analystTargetPrice: 120, revenueTtm: 7654321, profitMargin: .25, analystRatings: { strongBuy: 2, buy: 3, hold: 1, sell: null, strongSell: null } }; };
   marketDataApi.earnings = async symbol => ({ symbol, nextEarningsDate: null });

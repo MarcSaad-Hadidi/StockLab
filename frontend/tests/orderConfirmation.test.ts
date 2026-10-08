@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { JSDOM } from 'jsdom'
 import React, { act } from 'react'
+import { tradeProduct } from '../src/api/decimalMath.ts'
 import { authStorageKey, clearAuthSession, saveAuthSession, type AuthSession } from '../src/auth/authStorage.ts'
 import { marketDataApi } from '../src/api/marketDataClient.ts'
 import { createTradingApi, tradingApi, type ExecuteTradeRequest } from '../src/api/tradingApi.ts'
@@ -28,13 +29,13 @@ const accountB: AuthSession = { ...accountA, accessToken: 'test-token-b', user: 
 type SentOrder = { authorization: string; order: ExecuteTradeRequest; signal: AbortSignal }
 function result(order: ExecuteTradeRequest, cashBalance = 99000) {
   return Response.json({ transactionId: 'test-transaction', orderId: order.orderId, side: order.side, symbol: order.symbol,
-    quantity: order.quantity, executionPrice: 100, totalAmount: (order.quantity * 100).toFixed(12), cashBalance: String(cashBalance),
-    holdingQuantity: order.quantity, averageCost: 100, executedAtUtc: '2026-10-04T12:00:00Z' })
+    quantity: order.quantity, executionPrice: '100', totalAmount: tradeProduct('100', order.quantity), cashBalance: String(cashBalance),
+    holdingQuantity: order.quantity, averageCost: '100', executedAtUtc: '2026-10-04T12:00:00Z' })
 }
-async function mount(t: TestContext, fetcher?: (sent: SentOrder) => Promise<Response>, price = 100) {
+async function mount(t: TestContext, fetcher?: (sent: SentOrder) => Promise<Response>, price = '100') {
   window.localStorage.clear(); saveAuthSession(accountA)
   t.mock.method(marketDataApi, 'quote', async (symbol: string) => ({ symbol, name: 'Audit Stock', exchange: 'NASDAQ', currency: 'USD',
-    price, change: null, changePercent: null, volume: null, asOfUtc: '2026-10-04T12:00:00Z', open: null,
+    price: Number(price), priceDecimal: price, change: null, changePercent: null, volume: null, asOfUtc: '2026-10-04T12:00:00Z', open: null,
     high: null, low: null, previousClose: null, averageVolume: null, isMarketOpen: false, fiftyTwoWeek: null }))
   t.mock.method(marketDataApi, 'history', async () => { throw new Error('test history unavailable') })
   const sent: SentOrder[] = []
@@ -79,8 +80,8 @@ for (const language of ['en', 'fr']) {
       await i18n.changeLanguage(language)
       const cashBalance = '99999.999999999999'
       const view = await mount(t, async ({ order }) => Response.json({ transactionId: 'exact-trade',
-        ...order, executionPrice: price, totalAmount: total, cashBalance, holdingQuantity: quantity,
-        averageCost: price, executedAtUtc: '2026-10-07T12:00:00Z' }), price)
+        ...order, executionPrice: String(price), totalAmount: total, cashBalance, holdingQuantity: order.quantity,
+        averageCost: String(price), executedAtUtc: '2026-10-07T12:00:00Z' }), String(price))
       try {
         await act(async () => {
           const input = view.container.querySelector<HTMLInputElement>('#stock-quantity')!
@@ -92,10 +93,42 @@ for (const language of ['en', 'fr']) {
         await view.prepare()
         assert.ok(view.dialog()!.textContent!.includes(expected))
         await act(async () => view.confirm().click())
-        assert.equal(view.sent[0].order.quantity, quantity)
+        assert.equal(view.sent[0].order.quantity, quantity === .00000001 ? '0.00000001' : String(quantity))
         assert.equal(view.dialog(), null)
         const renderedCash = view.container.querySelector('.stock-cash-row')!.textContent!
         assert.ok(renderedCash.includes(language === 'fr' ? '99\u202f999,999999999999' : '99,999.999999999999'))
+      } finally { await view.close(); await i18n.changeLanguage('en') }
+    })
+  }
+}
+
+for (const language of ['en', 'fr']) {
+  for (const [price, quantity, total] of [
+    ['999999999999999.9999', '0.99999999', '999999989999999.999900000001'],
+    ['0.0001', '99999999999.99999999', '9999999.999999999999'],
+  ]) {
+    test(`maximum decimal operands survive the ticket, confirmation and request in ${language}: ${quantity}`, async t => {
+      await i18n.changeLanguage(language)
+      const view = await mount(t, async ({ order }) => Response.json({ transactionId: 'extreme-trade',
+        ...order, executionPrice: price, totalAmount: total, cashBalance: '0', holdingQuantity: order.quantity,
+        averageCost: price, executedAtUtc: '2026-10-07T12:00:00Z' }), price)
+      try {
+        await act(async () => {
+          const input = view.container.querySelector<HTMLInputElement>('#stock-quantity')!
+          Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value')!.set!.call(input, quantity)
+          input.dispatchEvent(new dom.window.Event('input', { bubbles: true }))
+        })
+        const displayed = new Intl.NumberFormat(language === 'fr' ? 'fr-FR' : 'en-US', {
+          style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 12,
+        }).format(total as unknown as number)
+        assert.ok(view.container.querySelector('.stock-trade-summary')!.textContent!.includes(displayed))
+        await view.prepare()
+        assert.ok(view.dialog()!.textContent!.includes(displayed))
+        await act(async () => view.confirm().click())
+        assert.equal(view.sent.length, 1)
+        assert.equal(view.sent[0].order.quantity, quantity)
+        assert.equal(view.dialog(), null)
+        assert.ok(view.container.querySelector('.stock-toast'))
       } finally { await view.close(); await i18n.changeLanguage('en') }
     })
   }

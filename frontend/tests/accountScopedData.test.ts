@@ -29,7 +29,7 @@ const accountA: AuthSession = { accessToken: 'token-a', tokenType: 'Bearer', exp
 const accountB: AuthSession = { ...accountA, accessToken: 'token-b',
   user: { id: 'account-b', displayName: 'Bob Brown', email: 'bob@example.com' } }
 const base = { cashBalance: '1000', investedValue: '0', totalValue: '1000', initialCapital: '1000', currency: 'CAD', positions: [] }
-const tradeA = { id: 'trade-a', symbol: 'AAA', side: 'BUY', quantity: 1, executionPrice: 100,
+const tradeA = { id: 'trade-a', symbol: 'AAA', side: 'BUY', quantity: '1', executionPrice: '100',
   totalAmount: '100', executedAtUtc: '2026-01-01T00:00:00Z' }
 const tradeB = { ...tradeA, id: 'trade-b', symbol: 'BBB', totalAmount: '200' }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
@@ -130,13 +130,13 @@ test('old-account quote completion cannot republish positions after account repl
   seed()
   const quote = deferred<Awaited<ReturnType<typeof marketDataApi.quote>>>()
   apiFixture(t, async (url, token) => url === '/api/portfolio'
-    ? json(token === 'Bearer token-a' ? { ...base, positions: [{ symbol: 'AAA', quantity: 1, averageCost: 100 }] } : { ...base, cashBalance: '2222' })
+    ? json(token === 'Bearer token-a' ? { ...base, positions: [{ symbol: 'AAA', quantity: '1', averageCost: '100' }] } : { ...base, cashBalance: '2222' })
     : json([token === 'Bearer token-a' ? tradeA : tradeB]))
   t.mock.method(marketDataApi, 'quote', () => quote.promise)
   const view = await mount(React.createElement(PortfolioProbe))
   try {
     await change(accountB)
-    await act(async () => quote.resolve({ symbol: 'AAA', name: 'Alice holding', price: 100, changePercent: 0, currency: 'CAD' }))
+    await act(async () => quote.resolve({ symbol: 'AAA', name: 'Alice holding', price: 100, priceDecimal: '100', changePercent: 0, currency: 'CAD' }))
     assert.match(view.container.querySelector('output')!.textContent!, /2222/)
     assert.doesNotMatch(view.container.querySelector('output')!.textContent!, /AAA|Alice holding|trade-a/)
   } finally { await view.close() }

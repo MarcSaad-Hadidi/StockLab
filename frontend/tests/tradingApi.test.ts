@@ -14,17 +14,17 @@ const result = {
   orderId: '4b7f6c30-8c4f-4fe8-9350-2f6be1f9c2c0',
   side: 'BUY',
   symbol: 'AAPL',
-  quantity: 2,
-  executionPrice: 125,
+  quantity: '2',
+  executionPrice: '125',
   totalAmount: '250',
   cashBalance: '99750',
-  holdingQuantity: 2,
-  averageCost: 125,
+  holdingQuantity: '2',
+  averageCost: '125',
   executedAtUtc: '2026-09-27T12:00:00Z',
 }
 
 test('executed order totals remain exact decimal strings and reject lossy numeric responses', async () => {
-  const request = { orderId: result.orderId, side: 'BUY' as const, symbol: 'AAPL', quantity: 2, orderType: 'market' as const }
+  const request = { orderId: result.orderId, side: 'BUY' as const, symbol: 'AAPL', quantity: '2', orderType: 'market' as const }
   for (const totalAmount of ['999999989999999.999900000001', '10000.000000000001', '0.000000000001']) {
     const api = createTradingApi('', async () => jsonResponse({ ...result, totalAmount }),
       () => ({ Authorization: 'Bearer test-token' }))
@@ -49,7 +49,7 @@ test('executeTrade sends the authenticated paper order contract', async () => {
     orderId: result.orderId,
     side: 'BUY',
     symbol: ' aapl ',
-    quantity: 2,
+    quantity: '2',
     orderType: 'market',
   }), result)
   assert.equal(request?.url, 'http://localhost:5274/api/portfolio/trades')
@@ -59,13 +59,13 @@ test('executeTrade sends the authenticated paper order contract', async () => {
     orderId: result.orderId,
     side: 'BUY',
     symbol: 'AAPL',
-    quantity: 2,
+    quantity: '2',
     orderType: 'market',
   })
 })
 
 test('executed order cash stays exact and lossy or malformed balances are rejected', async () => {
-  const request = { orderId: result.orderId, side: 'BUY' as const, symbol: 'AAPL', quantity: 2, orderType: 'market' as const }
+  const request = { orderId: result.orderId, side: 'BUY' as const, symbol: 'AAPL', quantity: '2', orderType: 'market' as const }
   for (const cashBalance of ['99999.999999999999', '999999999999999.999899999999', '0']) {
     const api = createTradingApi('', async () => jsonResponse({ ...result, cashBalance }), () => ({ Authorization: 'Bearer token' }))
     assert.equal((await api.executeTrade(request)).cashBalance, cashBalance)
@@ -79,44 +79,44 @@ test('executed order cash stays exact and lossy or malformed balances are reject
 test('limit orders include their limit price and missing sessions are rejected locally', async () => {
   const api = createTradingApi('', async () => jsonResponse(result), () => null)
   await assert.rejects(
-    api.executeTrade({ orderId: result.orderId, side: 'SELL', symbol: 'AAPL', quantity: 1, orderType: 'limit', limitPrice: 130 }),
+    api.executeTrade({ orderId: result.orderId, side: 'SELL', symbol: 'AAPL', quantity: '1', orderType: 'limit', limitPrice: '130' }),
     (error: unknown) => error instanceof TradingApiError && error.code === 'unauthorized',
   )
 
   let body: unknown
   const authorizedApi = createTradingApi('', async (_, init) => {
     body = JSON.parse(String(init?.body))
-    return jsonResponse({ ...result, side: 'SELL', executionPrice: 130 })
+    return jsonResponse({ ...result, side: 'SELL', executionPrice: '130' })
   }, () => ({ Authorization: 'Bearer token' }))
-  await authorizedApi.executeTrade({ orderId: result.orderId, side: 'SELL', symbol: 'AAPL', quantity: 1, orderType: 'limit', limitPrice: 130 })
+  await authorizedApi.executeTrade({ orderId: result.orderId, side: 'SELL', symbol: 'AAPL', quantity: '1', orderType: 'limit', limitPrice: '130' })
   assert.deepEqual(body, {
     orderId: result.orderId,
     side: 'SELL',
     symbol: 'AAPL',
-    quantity: 1,
+    quantity: '1',
     orderType: 'limit',
-    limitPrice: 130,
+    limitPrice: '130',
   })
 })
 
 test('maps controlled backend errors and malformed success responses', async () => {
   const api = createTradingApi('', async () => jsonResponse({ error: 'insufficient_cash' }, 422), () => ({ Authorization: 'Bearer token' }))
   await assert.rejects(
-    api.executeTrade({ orderId: result.orderId, side: 'BUY', symbol: 'AAPL', quantity: 2, orderType: 'market' }),
+    api.executeTrade({ orderId: result.orderId, side: 'BUY', symbol: 'AAPL', quantity: '2', orderType: 'market' }),
     (error: unknown) => error instanceof TradingApiError && error.status === 422 && error.code === 'insufficient_cash',
   )
 
   const malformed = createTradingApi('', async () => jsonResponse({ transactionId: '' }), () => ({ Authorization: 'Bearer token' }))
   await assert.rejects(
-    malformed.executeTrade({ orderId: result.orderId, side: 'BUY', symbol: 'AAPL', quantity: 2, orderType: 'market' }),
+    malformed.executeTrade({ orderId: result.orderId, side: 'BUY', symbol: 'AAPL', quantity: '2', orderType: 'market' }),
     (error: unknown) => error instanceof TradingApiError && error.code === 'invalid_response',
   )
 })
 
 test('buy and sell requests preserve fractional quantities and four-decimal limits', async () => {
   for (const side of ['BUY', 'SELL'] as const) {
-    for (const limitPrice of [0.0001, 1.2345]) {
-      const order = { orderId: result.orderId, side, symbol: 'AAPL', quantity: 1.12345678, orderType: 'limit' as const, limitPrice }
+    for (const limitPrice of ['0.0001', '1.2345', '999999999999999.9999']) {
+      const order = { orderId: result.orderId, side, symbol: 'AAPL', quantity: '1.12345678', orderType: 'limit' as const, limitPrice }
       let body: unknown
       const api = createTradingApi('', async (_, init) => {
         body = JSON.parse(String(init.body))
@@ -136,7 +136,7 @@ test('a prepared order refuses a replaced or missing token before fetching', asy
       requests++
       return jsonResponse(result)
     }, () => current)
-    await assert.rejects(api.executeTrade({ orderId: result.orderId, side: 'BUY', symbol: 'AAPL', quantity: 2,
+    await assert.rejects(api.executeTrade({ orderId: result.orderId, side: 'BUY', symbol: 'AAPL', quantity: '2',
       orderType: 'market' }, undefined, 'Bearer account-a', () => { sentNotifications++ }),
     (error: unknown) => error instanceof TradingApiError && error.code === 'session_changed')
     assert.equal(requests, 0)
@@ -154,8 +154,17 @@ test('a prepared order sends its checked token and abort signal', async () => {
     assert.equal(init.signal, controller.signal)
     return jsonResponse(result)
   }, () => ({ Authorization: ++authorizationReads === 1 ? 'Bearer account-a' : 'Bearer account-b' }))
-  await api.executeTrade({ orderId: result.orderId, side: 'BUY', symbol: 'AAPL', quantity: 2,
+  await api.executeTrade({ orderId: result.orderId, side: 'BUY', symbol: 'AAPL', quantity: '2',
     orderType: 'market' }, controller.signal, 'Bearer account-a', () => { sentNotifications++ })
   assert.equal(authorizationReads, 1)
   assert.equal(sentNotifications, 1)
+})
+
+
+test('trade unit responses reject numeric operands instead of accepting rounded values', async () => {
+  const request = { orderId: result.orderId, side: 'BUY' as const, symbol: 'AAPL', quantity: '2', orderType: 'market' as const }
+  for (const field of ['quantity', 'executionPrice', 'holdingQuantity', 'averageCost']) {
+    const api = createTradingApi('', async () => jsonResponse({ ...result, [field]: 1 }), () => ({ Authorization: 'Bearer token' }))
+    await assert.rejects(api.executeTrade(request), (error: unknown) => error instanceof TradingApiError && error.code === 'invalid_response')
+  }
 })

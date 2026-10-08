@@ -1,3 +1,5 @@
+import { normalizeOperand, amountSign, subtractAmounts } from '../api/decimalMath';
+import { isPositiveAmount } from '../api/decimalAmount';
 import { FinancialLineChart } from "../components/charts/FinancialLineChart";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -42,9 +44,9 @@ type PendingTrade = {
   orderId: string;
   side: TradeSide;
   orderType: TradeOrderType;
-  quantity: number;
-  limitPrice?: number;
-  estimatedPrice: number;
+  quantity: string;
+  limitPrice?: string;
+  estimatedPrice: string;
   estimatedTotal: string;
 };
 function sameTradeSession(expected: AuthSession, current: AuthSession | null) {
@@ -111,13 +113,12 @@ function TradeTicket({
   const { t, i18n } = useTranslation();
   const formatCurrency = (value: number | string) =>
     money(value, details.currency, localeForLanguage(i18n.language), typeof value === "string" ? 12 : 4);
-  const parsedQuantity = Number(quantity);
   const estimatedPrice = getTradeExecutionPrice(
     orderType,
     details.price,
-    Number(limitPrice),
+    limitPrice,
   );
-  const estimatedTotal = calculateTradeTotal(estimatedPrice, parsedQuantity);
+  const estimatedTotal = calculateTradeTotal(estimatedPrice, quantity);
   const isBuy = side === "BUY";
 
   return (
@@ -223,13 +224,13 @@ function TradeTicket({
         <div>
           <span>{t("stockDetails.estimatedPriceShort")}</span>
           <strong>
-            {estimatedPrice > 0 ? formatCurrency(estimatedPrice) : "—"}
+            {isPositiveAmount(estimatedPrice) ? formatCurrency(estimatedPrice) : "—"}
           </strong>
         </div>
         <div>
           <span>{t("stockDetails.estimatedTotalShort")}</span>
           <strong>
-            {estimatedPrice > 0 ? formatCurrency(estimatedTotal) : "—"}
+            {isPositiveAmount(estimatedPrice) ? formatCurrency(estimatedTotal) : "—"}
           </strong>
         </div>
       </div>
@@ -374,13 +375,13 @@ export function StockDetailsPage({
   const companyName = quote.data?.name ?? metadata?.companyName ?? fundamentals.data?.name ?? symbol;
   const exchange = quote.data?.exchange ?? metadata?.exchange ?? fundamentals.data?.exchange;
   const currency = quote.data?.currency ?? metadata?.currency ?? history.data?.currency ?? fundamentals.data?.currency ?? null;
-  const formatPrice = (value: number | null | undefined) =>
-    money(value, currency, locale);
+  const formatPrice = (value: number | string | null | undefined) =>
+    money(typeof value === "string" ? normalizeOperand(value, 4) : value, currency, locale, 4);
   const details: StockDetails | null = quote.data
     ? {
         symbol,
         company: companyName,
-        price: quote.data.price,
+        price: quote.data.priceDecimal,
         currency,
       }
     : null;
@@ -393,14 +394,14 @@ export function StockDetailsPage({
       return;
     }
 
-    const parsedQuantity = Number(quantity);
-    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+    const parsedQuantity = normalizeOperand(quantity, 8);
+    if (!isPositiveAmount(parsedQuantity) || amountSign(subtractAmounts(parsedQuantity, "99999999999.99999999")) > 0) {
       setQuantityError("stockDetails.errors.quantity");
       return;
     }
 
-    const parsedLimitPrice = Number(limitPrice);
-    if (orderType === "limit" && (!Number.isFinite(parsedLimitPrice) || parsedLimitPrice <= 0)) {
+    const parsedLimitPrice = normalizeOperand(limitPrice, 4);
+    if (orderType === "limit" && (!isPositiveAmount(parsedLimitPrice) || amountSign(subtractAmounts(parsedLimitPrice, "999999999999999.9999")) > 0)) {
       setLimitPriceError("stockDetails.errors.limitPrice");
       return;
     }
@@ -408,9 +409,9 @@ export function StockDetailsPage({
     const estimatedPrice = getTradeExecutionPrice(
       orderType,
       details.price,
-      parsedLimitPrice,
+      parsedLimitPrice ?? undefined,
     );
-    if (estimatedPrice <= 0) {
+    if (!isPositiveAmount(estimatedPrice)) {
       setLimitPriceError("stockDetails.errors.limitPrice");
       return;
     }
@@ -424,7 +425,7 @@ export function StockDetailsPage({
       side: tradeSide,
       orderType,
       quantity: parsedQuantity,
-      ...(orderType === "limit" ? { limitPrice: parsedLimitPrice } : {}),
+      ...(orderType === "limit" && parsedLimitPrice !== null ? { limitPrice: parsedLimitPrice } : {}),
       estimatedPrice,
       estimatedTotal: calculateTradeTotal(estimatedPrice, parsedQuantity),
     });
@@ -543,7 +544,7 @@ export function StockDetailsPage({
               {quote.data && (
                 <>
                   <div className="stock-price-row">
-                    <strong>{formatPrice(quote.data.price)}</strong>
+                    <strong>{formatPrice(quote.data.priceDecimal)}</strong>
                     <span className={tone}>
                       {quote.data.change == null
                         ? "—"
@@ -781,7 +782,7 @@ export function StockDetailsPage({
                     <h2>{t("stockDetails.tabs.insights")}</h2>
                   </div>
                 </div>
-                <p className="stock-ai-copy">{t("stockPanels.priceFact", { price: formatPrice(quote.data?.price), change: quote.data?.changePercent == null ? "—" : formatSignedPercent(quote.data.changePercent) })}</p>
+                <p className="stock-ai-copy">{t("stockPanels.priceFact", { price: formatPrice(quote.data?.priceDecimal), change: quote.data?.changePercent == null ? "—" : formatSignedPercent(quote.data.changePercent) })}</p>
                 <button className="stock-outline-button" type="button" onClick={() => setActiveTab("insights")}>{t("stockPanels.openInsights")}</button>
               </article>
               {hasUncertainOrder && <p className="stock-form-error" role="alert">{t("stockDetails.submittedOrderUncertain")}</p>}

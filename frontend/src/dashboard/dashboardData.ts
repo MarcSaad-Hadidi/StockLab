@@ -41,10 +41,10 @@ export type PerformanceSeries = {
 export type Position = {
   symbol: string
   company: string
-  shares: number
+  shares: string
   value: number | string | null
   allocation: number | null
-  price: number | null
+  price: string | null
   change: number | null
   tone: 'positive' | 'negative' | 'neutral'
 }
@@ -63,7 +63,7 @@ export type Transaction = {
   symbol: string
   company: string
   type: 'Buy' | 'Sell'
-  shares: number
+  shares: string
   amount: string
   time?: string
   timeKey?: string

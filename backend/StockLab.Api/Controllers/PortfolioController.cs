@@ -46,7 +46,7 @@ public sealed class PortfolioController(
                 portfolio.TotalValue.ToString("0.############", CultureInfo.InvariantCulture),
                 portfolio.Currency,
                 portfolio.Positions.Select(position => new PortfolioPositionResponse(
-                    position.Symbol, position.Quantity, position.AverageCost)).ToArray()));
+                    position.Symbol, position.Quantity.ToString("0.############################", CultureInfo.InvariantCulture), position.AverageCost.ToString("0.############################", CultureInfo.InvariantCulture))).ToArray()));
     }
 
     /// <summary>Gets the authenticated user's portfolio valued with current market quotes.</summary>
@@ -79,9 +79,9 @@ public sealed class PortfolioController(
                 performance.Currency,
                 performance.Positions.Select(position => new PortfolioPerformancePositionResponse(
                     position.Symbol,
-                    position.Quantity,
-                    position.AverageCost,
-                    position.CurrentPrice,
+                    position.Quantity.ToString("0.############################", CultureInfo.InvariantCulture),
+                    position.AverageCost.ToString("0.############################", CultureInfo.InvariantCulture),
+                    position.CurrentPrice.ToString("0.############################", CultureInfo.InvariantCulture),
                     position.MarketValue.ToString("0.############", CultureInfo.InvariantCulture),
                     position.Pnl.ToString("0.############", CultureInfo.InvariantCulture),
                     position.PnlPercent)).ToArray()));
@@ -109,8 +109,8 @@ public sealed class PortfolioController(
                 transaction.Id,
                 transaction.Side,
                 transaction.Symbol,
-                transaction.Quantity,
-                transaction.ExecutionPrice,
+                transaction.Quantity.ToString("0.############################", CultureInfo.InvariantCulture),
+                transaction.ExecutionPrice.ToString("0.############################", CultureInfo.InvariantCulture),
                 transaction.TotalAmount.ToString("0.############", CultureInfo.InvariantCulture),
                 DateTime.SpecifyKind(transaction.ExecutedAtUtc, DateTimeKind.Utc))).ToArray());
     }
@@ -131,7 +131,7 @@ public sealed class PortfolioController(
         return history is null
             ? NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."))
             : Ok(new TransactionHistoryResponse(history.Items.Select(row => new PortfolioTransactionResponse(
-                row.Id, row.Side, row.Symbol, row.Quantity, row.ExecutionPrice,
+                row.Id, row.Side, row.Symbol, row.Quantity.ToString("0.############################", CultureInfo.InvariantCulture), row.ExecutionPrice.ToString("0.############################", CultureInfo.InvariantCulture),
                 row.TotalAmount.ToString("0.############", CultureInfo.InvariantCulture),
                 DateTime.SpecifyKind(row.ExecutedAtUtc, DateTimeKind.Utc))).ToArray(),
                 history.Page, history.PageSize, history.TotalCount, history.Currency,

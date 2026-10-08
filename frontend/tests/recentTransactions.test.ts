@@ -22,7 +22,7 @@ const { DashboardPage } = await import('../src/dashboard/DashboardPage.tsx')
 const session = { accessToken: 'token-a', tokenType: 'Bearer' as const, expiresAtUtc: '2099-01-01T00:00:00Z',
   user: { id: 'account-a', displayName: 'Alice Adams', email: 'alice@example.com' } }
 const base = { cashBalance: '1111', initialCapital: '1000', investedValue: '0', totalValue: '1111', currency: 'CAD', positions: [] }
-const trade = { id: 'trade-a', symbol: 'AAA', side: 'BUY', quantity: 1, executionPrice: 100,
+const trade = { id: 'trade-a', symbol: 'AAA', side: 'BUY', quantity: '1', executionPrice: '100',
   totalAmount: '100', executedAtUtc: '2026-01-01T00:00:00Z' }
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status })
 function deferred<T>() {

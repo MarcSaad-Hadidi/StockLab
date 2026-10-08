@@ -4,7 +4,7 @@ public sealed record PortfolioTransactionResponse(
     Guid Id,
     string Side,
     string Symbol,
-    decimal Quantity,
-    decimal ExecutionPrice,
+    string Quantity,
+    string ExecutionPrice,
     string TotalAmount,
     DateTime ExecutedAtUtc);

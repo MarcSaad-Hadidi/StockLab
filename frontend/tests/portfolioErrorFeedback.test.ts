@@ -23,8 +23,8 @@ const { default: PortfolioPage } = await import('../src/portfolio/PortfolioPage.
 const session = { accessToken: 'token-a', tokenType: 'Bearer' as const, expiresAtUtc: '2099-01-01T00:00:00Z',
   user: { id: 'account-a', displayName: 'Alice Adams', email: 'alice@example.com' } }
 const base = { cashBalance: '1111', initialCapital: '1000', investedValue: '100', totalValue: '1211', currency: 'CAD',
-  positions: [{ symbol: 'AAA', quantity: 1, averageCost: 100 }, { symbol: 'BBB', quantity: 2, averageCost: 50 }] }
-const quote = (symbol: string) => ({ symbol, name: symbol, price: 150, changePercent: 3, currency: 'CAD' })
+  positions: [{ symbol: 'AAA', quantity: '1', averageCost: '100' }, { symbol: 'BBB', quantity: '2', averageCost: '50' }] }
+const quote = (symbol: string) => ({ symbol, name: symbol, price: 150, priceDecimal: '150', changePercent: 3, currency: 'CAD' })
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status })
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -189,7 +189,7 @@ test('quotes in another currency do not produce an invented valuation', async t 
 for (const language of ['en', 'fr']) {
   test(`the quote cap explains incomplete valuation without a futile retry in ${language}`, async t => {
     await i18n.changeLanguage(language)
-    const positions = Array.from({ length: 25 }, (_, i) => ({ symbol: `S${i}`, quantity: 1, averageCost: 100 }))
+    const positions = Array.from({ length: 25 }, (_, i) => ({ symbol: `S${i}`, quantity: '1', averageCost: '100' }))
     t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, positions }))
     t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
     const calls: string[] = []
@@ -209,7 +209,7 @@ for (const language of ['en', 'fr']) {
 }
 
 test('a recoverable quote failure above the cap can retry and then leaves only the limit notice', async t => {
-  const positions = Array.from({ length: 25 }, (_, i) => ({ symbol: `S${i}`, quantity: 1, averageCost: 100 }))
+  const positions = Array.from({ length: 25 }, (_, i) => ({ symbol: `S${i}`, quantity: '1', averageCost: '100' }))
   t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, positions }))
   t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
   let fail = true
@@ -235,7 +235,7 @@ test('a recoverable quote failure above the cap can retry and then leaves only t
 })
 
 test('exactly twenty successfully quoted positions have a complete valuation and no limit notice', async t => {
-  const positions = Array.from({ length: 20 }, (_, i) => ({ symbol: `S${i}`, quantity: 1, averageCost: 100 }))
+  const positions = Array.from({ length: 20 }, (_, i) => ({ symbol: `S${i}`, quantity: '1', averageCost: '100' }))
   t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, positions }))
   t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
   t.mock.method(marketDataApi, 'quote', async symbol => quote(symbol))

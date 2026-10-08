@@ -2,19 +2,23 @@ import { isDecimalAmount } from './decimalAmount'
 
 const scale = 12
 
-/** Round serialized decimal text like decimal.Round(..., AwayFromZero), including exponents. */
-function normalizedUnits(value: number, digits: number): bigint {
-  if (!Number.isFinite(value)) throw new Error('Invalid decimal number')
-  const [coefficient, exponent = '0'] = Math.abs(value).toString().split('e')
-  const [integer, fraction = ''] = coefficient.split('.')
-  const shift = Number(exponent) - fraction.length + digits
-  let units = BigInt(integer + fraction)
+/** Parse the original decimal text, including input exponents, without a numeric operand. */
+function normalizedUnits(value: string, digits: number): bigint {
+  if (typeof value !== 'string' || value.length > 100) throw new Error('Invalid decimal operand')
+  const match = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(value)
+  if (!match || !(match[2] || match[3])) throw new Error('Invalid decimal operand')
+  // Only the decimal-point offset is numeric; all significant digits stay in BigInt.
+  const exponent = Number(match[4] ?? '0')
+  if (!Number.isSafeInteger(exponent) || Math.abs(exponent) > 100) throw new Error('Invalid decimal exponent')
+  const fraction = match[3] ?? ''
+  const shift = exponent - fraction.length + digits
+  let units = BigInt((match[2] || '0') + fraction)
   if (shift >= 0) units *= 10n ** BigInt(shift)
   else {
     const divisor = 10n ** BigInt(-shift)
     units = units / divisor + (units % divisor * 2n >= divisor ? 1n : 0n)
   }
-  return value < 0 ? -units : units
+  return match[1] === '-' ? -units : units
 }
 
 function units(value: string): bigint {
@@ -25,21 +29,25 @@ function units(value: string): bigint {
   return negative ? -result : result
 }
 
-function decimal(value: bigint): string {
+function decimal(value: bigint, digits = scale): string {
   const negative = value < 0n
-  const text = (negative ? -value : value).toString().padStart(scale + 1, '0')
-  const fraction = text.slice(-scale).replace(/0+$/, '')
-  return `${negative ? '-' : ''}${text.slice(0, -scale)}${fraction ? `.${fraction}` : ''}`
+  const text = (negative ? -value : value).toString().padStart(digits + 1, '0')
+  const fraction = text.slice(-digits).replace(/0+$/, '')
+  return `${negative ? '-' : ''}${text.slice(0, -digits)}${fraction ? `.${fraction}` : ''}`
 }
 
-export function tradeProduct(price: number, quantity: number): string {
+export function normalizeOperand(value: string, digits: 4 | 8): string | null {
+  try { return decimal(normalizedUnits(value, digits), digits) } catch { return null }
+}
+
+export function tradeProduct(price: string, quantity: string): string {
   return decimal(normalizedUnits(price, 4) * normalizedUnits(quantity, 8))
 }
 
 /** Live valuation keeps the quote's precision; order execution alone normalizes prices to four decimals. */
-export function valuationProduct(price: number, quantity: number): string {
-  const product = normalizedUnits(price, 12) * normalizedUnits(quantity, 8)
-  const divisor = 100_000_000n
+export function valuationProduct(price: string, quantity: string): string {
+  const product = normalizedUnits(price, 28) * normalizedUnits(quantity, 8)
+  const divisor = 10n ** 24n
   return decimal(product / divisor + (product % divisor * 2n >= divisor ? 1n : 0n))
 }
 

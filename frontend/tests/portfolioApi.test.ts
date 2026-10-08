@@ -8,7 +8,7 @@ const validPortfolio = {
   totalValue: '100000',
   initialCapital: '100000',
   currency: 'USD',
-  positions: [{ symbol: 'AAPL:NASDAQ', quantity: 10, averageCost: 200 }],
+  positions: [{ symbol: 'AAPL:NASDAQ', quantity: '10', averageCost: '200' }],
 }
 
 test('portfolio api sends the bearer token and validates the portfolio contract', async () => {
@@ -61,7 +61,7 @@ test('portfolio requests cannot silently switch away from their captured authori
 test('portfolio api rejects malformed successful responses instead of exposing partial data', async () => {
   const api = createPortfolioApi('', async () => new Response(JSON.stringify({
     ...validPortfolio,
-    positions: [{ symbol: 'AAPL', quantity: 10, averageCost: 0 }],
+    positions: [{ symbol: 'AAPL', quantity: '10', averageCost: '0' }],
   }), { status: 200 }), () => ({ Authorization: 'Bearer test-token' }))
 
   await assert.rejects(api.getPortfolio(), (error: unknown) => {
@@ -90,8 +90,8 @@ test('portfolio api reads the authenticated recent transaction feed', async () =
       id: 'transaction-id',
       side: 'BUY',
       symbol: 'AAPL:NASDAQ',
-      quantity: 2,
-      executionPrice: 200,
+      quantity: '2',
+      executionPrice: '200',
       totalAmount: '400',
       executedAtUtc: '2026-09-28T12:00:00Z',
     }]), { status: 200 })
@@ -104,8 +104,8 @@ test('portfolio api reads the authenticated recent transaction feed', async () =
 })
 
 const validHistory = {
-  items: [{ id: 'old-trade', side: 'SELL', symbol: 'AAPL:NASDAQ', quantity: 0.25,
-    executionPrice: 1.2345, totalAmount: '0.3086', executedAtUtc: '2026-01-01T23:59:59Z' }],
+  items: [{ id: 'old-trade', side: 'SELL', symbol: 'AAPL:NASDAQ', quantity: '0.25',
+    executionPrice: '1.2345', totalAmount: '0.3086', executedAtUtc: '2026-01-01T23:59:59Z' }],
   page: 2, pageSize: 10, totalCount: 11, currency: 'CAD',
   summary: { totalTrades: 61, totalInvested: '2000', totalProceeds: '3000' },
 }
@@ -180,7 +180,7 @@ test('history requests combine filters and preserve server totals and currency',
 test('history rejects missing currency, invalid rows and malformed pagination', async () => {
   for (const body of [
     { ...validHistory, currency: '' },
-    { ...validHistory, items: [{ ...validHistory.items[0], quantity: -1 }] },
+    { ...validHistory, items: [{ ...validHistory.items[0], quantity: '-1' }] },
     { ...validHistory, page: 0 },
     { ...validHistory, totalCount: -1 },
     { ...validHistory, summary: { ...validHistory.summary, totalProceeds: '-1' } },
@@ -188,5 +188,16 @@ test('history rejects missing currency, invalid rows and malformed pagination', 
     const api = createPortfolioApi('', async () => Response.json(body), () => ({ Authorization: 'Bearer test-token' }))
     await assert.rejects(api.getTransactionHistory({ page: 1, pageSize: 10 }),
       (error: unknown) => error instanceof PortfolioApiError && error.code === 'invalid_response')
+  }
+})
+
+
+test('portfolio unit fields retain maximum decimal values and reject numeric operands', async () => {
+  const position = { symbol: 'AAPL', quantity: '99999999999.99999999', averageCost: '999999999999999.9999' }
+  const api = createPortfolioApi('', async () => Response.json({ ...validPortfolio, positions: [position] }), () => ({ Authorization: 'Bearer token' }))
+  assert.deepEqual((await api.getPortfolio()).positions[0], position)
+  for (const field of ['quantity', 'averageCost']) {
+    const bad = createPortfolioApi('', async () => Response.json({ ...validPortfolio, positions: [{ ...position, [field]: 1 }] }), () => ({ Authorization: 'Bearer token' }))
+    await assert.rejects(bad.getPortfolio(), (error: unknown) => error instanceof PortfolioApiError && error.code === 'invalid_response')
   }
 })

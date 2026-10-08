@@ -4,7 +4,7 @@ import { PerformanceLineChart } from '../components/charts/PerformanceLineChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
 import { getTrendClass, getTrendIcon, getTrendTone } from '../components/trend/trend'
-import { formatDate, formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent, formatTradeAmount } from '../i18n/formatters'
+import { formatUnitPrice, formatDate, formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent, formatTradeAmount, formatQuantity } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
 import { usePortfolioData } from '../portfolio/usePortfolioData'
 import { useTranslation } from 'react-i18next'
@@ -127,8 +127,8 @@ function PositionRow({ position, currency }: { position: Position; currency: str
   return (
     <tr>
       <td><div className="asset-cell"><StockMark size="small" symbol={position.symbol} /><span><strong>{position.symbol}</strong><small>{position.company}</small></span></div></td>
-      <td>{t('dashboard.shares', { count: position.shares })}</td>
-      <td><strong>{formatCurrency(position.value, i18n.language, 2, currency)}</strong><small className="muted-line">{formatCurrency(position.price, i18n.language, 2, currency)}</small></td>
+      <td>{t('dashboard.shares', { replace: { count: formatQuantity(position.shares, i18n.language) } })}</td>
+      <td><strong>{formatCurrency(position.value, i18n.language, 2, currency)}</strong><small className="muted-line">{formatUnitPrice(position.price, i18n.language, currency)}</small></td>
       <td><div className="allocation-cell"><AllocationBar allocation={position.allocation} /><small>{formatPercent(position.allocation, undefined, 1)}</small></div></td>
       <td><span className={`change-pill ${position.tone}`}>{formatSignedPercent(position.change)}</span></td>
     </tr>
@@ -159,7 +159,7 @@ function TransactionRow({ transaction, currency }: { transaction: Transaction; c
       <StockMark size="small" symbol={transaction.symbol} />
       <div className="transaction-name"><strong>{transaction.symbol}</strong><small>{transaction.company}</small></div>
       <div className={`transaction-type ${transaction.type.toLowerCase()}`}><span className="transaction-dot" />{t(`common.${transaction.type.toLowerCase()}`)}</div>
-      <div className="transaction-amount"><strong>{formatTradeAmount(transaction.amount, i18n.language, 2, currency)}</strong><small>{t('dashboard.shares', { count: transaction.shares })}</small></div>
+      <div className="transaction-amount"><strong>{formatTradeAmount(transaction.amount, i18n.language, 2, currency)}</strong><small>{t('dashboard.shares', { replace: { count: formatQuantity(transaction.shares, i18n.language) } })}</small></div>
       <small className="transaction-time">{transaction.executedAtUtc ? localizedTime : transaction.timeKey ? t(transaction.timeKey, { time: localizedTime }) : localizedTime}</small>
     </li>
   )

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync, readdirSync } from 'node:fs'
 import ts from 'typescript'
-import { formatCurrency, formatDate, formatNumber, formatPercent, formatTime, formatTradeAmount } from '../src/i18n/formatters.ts'
+import { formatCurrency, formatDate, formatNumber, formatPercent, formatTime, formatTradeAmount, formatQuantity, formatUnitPrice } from '../src/i18n/formatters.ts'
 import { performanceSeries } from '../src/dashboard/dashboardData.ts'
 import { chartRanges } from '../src/market/stockDetailsData.ts'
 
@@ -172,3 +172,12 @@ for (const language of ['en', 'fr']) {
     for (const unavailable of [null, undefined, 'NaN', 'Infinity', '', '1e-12', '0.0000000000001', '1,234']) assert.equal(formatTradeAmount(unavailable, language), '—')
   })
 }
+
+
+test('quantities and unit quotes format original decimal text without float conversion', () => {
+  assert.equal(formatQuantity('99999999999.99999999', 'en'), '99,999,999,999.99999999')
+  assert.equal(formatQuantity('0.00000001', 'en'), '0.00000001')
+  assert.equal(formatUnitPrice('999999999999999.9999', 'en'), '$999,999,999,999,999.9999')
+  assert.equal(formatUnitPrice('0.0000000000000000000000000001', 'en'), '$0.0000000000000000000000000001')
+  assert.equal(formatUnitPrice(null), '—')
+})

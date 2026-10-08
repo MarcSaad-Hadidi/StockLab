@@ -9,9 +9,9 @@ import { useRecentTransactions, type RecentTransactionsState } from './useRecent
 export type PortfolioPosition = {
   symbol: string
   name: string
-  quantity: number
-  averagePrice: number
-  currentPrice: number | null
+  quantity: string
+  averagePrice: string
+  currentPrice: string | null
   dailyChangePercent: number | null
   marketValue: string | null
   pnl: string | null
@@ -106,7 +106,7 @@ export function usePortfolioData(): PortfolioDataState {
 
         const hasCompleteMarketData = enriched.every(({ quote }) => quote !== null)
         const marketInvestedValue = enriched.reduce((total, { position, quote }) =>
-          addAmounts(total, quote ? valuationProduct(quote.price, position.quantity) : '0'), '0')
+          addAmounts(total, quote ? valuationProduct(quote.priceDecimal, position.quantity) : '0'), '0')
         const investedValue = portfolio.investedValue
         const totalValue = hasCompleteMarketData
           ? addAmounts(portfolio.cashBalance, marketInvestedValue)
@@ -119,14 +119,14 @@ export function usePortfolioData(): PortfolioDataState {
           ? null
           : amountPercent(pnl, portfolio.initialCapital)
         const positions = enriched.map(({ position, quote }) => {
-          const marketValue = quote ? valuationProduct(quote.price, position.quantity) : null
+          const marketValue = quote ? valuationProduct(quote.priceDecimal, position.quantity) : null
           const pnl = marketValue === null ? null : subtractAmounts(marketValue, costValue(position))
           return {
             symbol: position.symbol,
             name: quote?.name?.trim() || position.symbol,
             quantity: position.quantity,
             averagePrice: position.averageCost,
-            currentPrice: quote?.price ?? null,
+            currentPrice: quote?.priceDecimal ?? null,
             dailyChangePercent: quote?.changePercent ?? null,
             marketValue,
             pnl,
