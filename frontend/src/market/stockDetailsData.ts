@@ -1,5 +1,5 @@
 import type { HistoryQuery, StockHistory } from "../api/marketDataApi.ts";
-import { isDecimalAmount, isPositiveAmount } from '../api/decimalAmount';
+import { isCalculatedAmount, isPositiveAmount } from '../api/decimalAmount';
 import { normalizeOperand, tradeProduct } from '../api/decimalMath';
 export const chartRanges = [
   "1D",
@@ -76,7 +76,7 @@ export function money(
   locale: string,
   maximumFractionDigits = 2,
 ) {
-  if (value == null || (typeof value === 'string' ? !isDecimalAmount(value) : !Number.isFinite(value))) return "—";
+  if (value == null || (typeof value === 'string' ? !isCalculatedAmount(value) : !Number.isFinite(value))) return "—";
   return new Intl.NumberFormat(locale, {
     ...(currency && /^[A-Z]{3}$/.test(currency)
       ? { style: "currency", currency }

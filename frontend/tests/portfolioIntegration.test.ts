@@ -91,6 +91,63 @@ test('live portfolio valuation retains maximum price and quantity operands', asy
   } finally { await view.close() }
 })
 
+const widePortfolio = { ...base, cashBalance: '0.000000000001', initialCapital: '10000000',
+  investedValue: '9999999.999999999999', totalValue: '10000000', currency: 'USD',
+  positions: [{ symbol: 'MSFT', quantity: '99999999999.99999999', averageCost: '0.0001' }] }
+
+for (const [priceDecimal, marketValue, totalValue, pnl] of [
+  ['9999999999999999999', '999999999999999999800000000000.00000001',
+    '999999999999999999800000000000.000000010001', '999999999999999999799990000000.000000010001'],
+  ['79228162514264337593543950335', '7922816251426433758562113408357356624064.56049665',
+    '7922816251426433758562113408357356624064.560496650001', '7922816251426433758562113408357346624064.560496650001'],
+]) {
+  test(`complete portfolio arithmetic supports derived values beyond ledger width at ${priceDecimal}`, async t => {
+    t.mock.method(portfolioApi, 'getPortfolio', async () => widePortfolio)
+    t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
+    t.mock.method(marketDataApi, 'quote', async () => ({ symbol: 'MSFT', currency: 'USD', price: Number(priceDecimal), priceDecimal }))
+    let state: PortfolioDataState | undefined
+    function Probe() { state = usePortfolioData(); return null }
+    const view = await mount(React.createElement(Probe))
+    try {
+      assert.equal(state!.error, null)
+      const data = state!.data!
+      assert.ok(data)
+      assert.equal(data.positions[0].marketValue, marketValue)
+      assert.equal(data.totalValue, totalValue)
+      assert.equal(data.pnl, pnl)
+      assert.equal(data.positions[0].pnl, pnl)
+      assert.ok(Number.isFinite(data.returnPercent))
+      assert.ok(Number.isFinite(data.positions[0].pnlPercent))
+      assert.equal(data.positions[0].weight, 100)
+      assert.equal(state!.marketDataIncomplete, false)
+    } finally { await view.close() }
+  })
+}
+
+for (const language of ['en', 'fr']) {
+  for (const surface of ['Portfolio', 'Dashboard']) {
+    test(`${surface} displays wide derived market values in ${language}`, async t => {
+      await i18n.changeLanguage(language)
+      t.mock.method(portfolioApi, 'getPortfolio', async () => widePortfolio)
+      t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
+      t.mock.method(marketDataApi, 'quote', async () => ({ symbol: 'MSFT', currency: 'USD', price: 1e19, priceDecimal: '9999999999999999999' }))
+      const Page = surface === 'Portfolio' ? (await import('../src/portfolio/PortfolioPage.tsx')).default
+        : (await import('../src/dashboard/DashboardPage.tsx')).DashboardPage
+      const view = await mount(React.createElement(Page))
+      try {
+        const text = view.container.textContent!
+        const total = language === 'fr' ? '999\u202f999\u202f999\u202f999\u202f999\u202f999\u202f800\u202f000\u202f000\u202f000,000000010001\u00a0$US'
+          : '$999,999,999,999,999,999,800,000,000,000.000000010001'
+        const position = language === 'fr' ? '999\u202f999\u202f999\u202f999\u202f999\u202f999\u202f800\u202f000\u202f000\u202f000,00000001\u00a0$US'
+          : '$999,999,999,999,999,999,800,000,000,000.00000001'
+        assert.ok(text.includes(total), text)
+        assert.ok(text.includes(position), text)
+        assert.doesNotMatch(text, /Unable to load|Impossible de charger/)
+      } finally { await view.close(); await i18n.changeLanguage('en') }
+    })
+  }
+}
+
 async function mount(component: React.ReactElement) {
   const container = document.createElement('div')
   document.body.append(container)

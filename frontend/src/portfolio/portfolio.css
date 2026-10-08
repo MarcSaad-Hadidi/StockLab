@@ -389,6 +389,7 @@ a {
 }
 
 .donut {
+  position: relative;
   display: grid;
   width: 146px;
   height: 146px;
@@ -410,13 +411,17 @@ a {
 .donut > div {
   position: absolute;
   display: grid;
+  width: 70%;
   justify-items: center;
   gap: 4px;
+  text-align: center;
 }
 
 .donut strong {
+  max-width: 100%;
   color: #27314a;
   font-size: 14px;
+  overflow-wrap: anywhere;
 }
 
 .donut span {

@@ -116,7 +116,7 @@ test('portfolio preserves exact cash and rejects incompatible numeric money fiel
     () => ({ Authorization: 'Bearer token' }))
   assert.equal((await api.getPortfolio()).cashBalance, cashBalance)
   for (const field of ['cashBalance', 'initialCapital', 'investedValue', 'totalValue']) {
-    for (const value of [100000, '-1', '1e-12', '0.0000000000001', null]) {
+    for (const value of [100000, '-1', '1e-12', '0.0000000000001', null, '999999999999999999800000000000.00000001']) {
       const invalid = createPortfolioApi('', async () => Response.json({ ...validPortfolio, [field]: value }),
         () => ({ Authorization: 'Bearer token' }))
       await assert.rejects(invalid.getPortfolio(), (error: unknown) => error instanceof PortfolioApiError && error.code === 'invalid_response')
@@ -139,7 +139,7 @@ test('history and recent activity preserve decimal strings through JSON parsing'
 
 test('transaction APIs reject numeric, malformed, zero and negative ledger totals', async () => {
   for (const amount of [1e-12, 999999990000000, null, '', 'NaN', 'Infinity', '1e-12', '1,000',
-    ' 1.25 ', '0.0000000000001', '0', '0.0000', '-0.01']) {
+    ' 1.25 ', '0.0000000000001', '0', '0.0000', '-0.01', '999999999999999999800000000000.00000001']) {
     const history = { ...validHistory, items: [{ ...validHistory.items[0], totalAmount: amount }] }
     const api = createPortfolioApi('', async input => Response.json(String(input).includes('/history') ? history : history.items),
       () => ({ Authorization: 'Bearer test-token' }))

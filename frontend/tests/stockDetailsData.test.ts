@@ -18,6 +18,9 @@ test('estimates preserve the exact normalized eight-by-four decimal product', ()
   assert.equal(calculateTradeTotal('0.0001', '0.00000001'), '0.000000000001');
   assert.equal(calculateTradeTotal('1.0001', '10000.00000001'), '10001.000000010001');
   assert.equal(calculateTradeTotal('1.23445', '0.500000005'), '0.617250012345');
+  const wideTotal = calculateTradeTotal('9999999999999999999', '99999999999.99999999');
+  assert.equal(wideTotal, '999999999999999999800000000000.00000001');
+  assert.equal(money(wideTotal, 'USD', 'en-US', 12), '$999,999,999,999,999,999,800,000,000,000.00000001');
 });
 const data: StockHistory = {
   symbol: "AAPL",

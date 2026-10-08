@@ -73,7 +73,7 @@ h1 span { color: #e4a857; font-size: .75em; margin-left: 2px; }
 .metric-icon-orange { background: #fff3e6; color: #e99a4c; }
 .metric-card p { color: #8895a9; font-size: 11px; margin: 0 0 7px; }
 .metric-card > strong { overflow-wrap: anywhere; color: #192743; display: block; font-family: Manrope, sans-serif; font-size: 21px; letter-spacing: -.6px; line-height: 1.2; }
-.metric-change { align-items: center; display: flex; font-size: 10px; font-weight: 700; gap: 3px; margin-top: 8px; }
+.metric-change { align-items: center; display: flex; font-size: 10px; font-weight: 700; gap: 3px; margin-top: 8px; overflow-wrap: anywhere; }
 .metric-change-positive { color: #25a278; }
 .metric-change-negative { color: #e16e78; }
 .metric-change-neutral { color: #a0aabc; }

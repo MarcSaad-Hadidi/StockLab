@@ -781,6 +781,12 @@ quantity to eight and price to four decimals, then multiply exactly and display
 up to twelve decimals. Live portfolio valuation retains the raw quote precision
 before rounding its product to twelve decimal places.
 
+Live quote/holding products and portfolio sums can exceed the stored-ledger
+width. Client arithmetic and currency formatting accept those derived plain
+decimal strings without limiting their integer digits, retaining the twelve
+fractional digits. API financial fields still undergo the existing bounded
+decimal validation before entering those calculations.
+
 `GET /api/portfolio` returns the authenticated user's stored portfolio. Send
 `Authorization: Bearer <token>`, using the access token from
 `POST /api/auth/login`. The user ID comes exclusively from the JWT `sub` claim;

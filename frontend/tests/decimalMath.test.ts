@@ -8,6 +8,18 @@ test('multiplication retains operands that JSON numbers cannot represent', () =>
   assert.equal(valuationProduct('0.0001', '99999999999.99999999'), '9999999.999999999999')
 })
 
+test('derived market values and their sums are not limited to the stored ledger width', () => {
+  const marketValue = valuationProduct('9999999999999999999', '99999999999.99999999')
+  assert.equal(marketValue, '999999999999999999800000000000.00000001')
+  assert.equal(addAmounts(marketValue, '0.000000000001'), '999999999999999999800000000000.000000010001')
+  assert.equal(addAmounts(marketValue, marketValue), '1999999999999999999600000000000.00000002')
+  assert.equal(subtractAmounts(marketValue, '9999999.999999999999'), '999999999999999999799990000000.000000010001')
+  assert.equal(subtractAmounts('0', marketValue), '-999999999999999999800000000000.00000001')
+  assert.equal(amountSign(marketValue), 1)
+  assert.equal(amountSign(subtractAmounts('0', marketValue)), -1)
+  assert.equal(amountPercent(marketValue, marketValue), 100)
+})
+
 test('decimal arithmetic keeps cash and ledger fractions exact beside large balances', () => {
   assert.equal(subtractAmounts('999999999999999.9999', '0.000000000001'), '999999999999999.999899999999')
   assert.equal(addAmounts('99999.999999999999', '0.000000000001'), '100000')
@@ -45,4 +57,14 @@ test('normalization uses decimal midpoint rounding and rejects invalid or numeri
     assert.throws(() => tradeProduct(input, '1'))
   }
   assert.throws(() => tradeProduct(100 as unknown as string, '1'))
+})
+
+
+test('wide arithmetic still rejects malformed decimal amounts', () => {
+  for (const value of ['1e30', '01', '.1', '1.', '+1', ' 1 ', '1,000', 'NaN', 'Infinity', '1.0000000000001']) {
+    assert.throws(() => addAmounts(value, '0'))
+    assert.throws(() => subtractAmounts('0', value))
+    assert.throws(() => amountSign(value))
+    assert.throws(() => amountPercent(value, '1'))
+  }
 })

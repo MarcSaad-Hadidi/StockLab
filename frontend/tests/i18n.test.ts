@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync, readdirSync } from 'node:fs'
 import ts from 'typescript'
-import { formatCurrency, formatDate, formatNumber, formatPercent, formatTime, formatTradeAmount, formatQuantity, formatUnitPrice } from '../src/i18n/formatters.ts'
+import { formatCurrency, formatDate, formatNumber, formatPercent, formatTime, formatTradeAmount, formatCompactCurrency, formatSignedCurrency, formatQuantity, formatUnitPrice } from '../src/i18n/formatters.ts'
 import { performanceSeries } from '../src/dashboard/dashboardData.ts'
 import { chartRanges } from '../src/market/stockDetailsData.ts'
 
@@ -181,3 +181,17 @@ test('quantities and unit quotes format original decimal text without float conv
   assert.equal(formatUnitPrice('0.0000000000000000000000000001', 'en'), '$0.0000000000000000000000000001')
   assert.equal(formatUnitPrice(null), '—')
 })
+
+
+for (const language of ['en', 'fr']) {
+  test(`derived currency amounts exceed ledger width without losing digits in ${language}`, () => {
+    const value = '999999999999999999800000000000.00000001'
+    const expected = language === 'fr' ? '999\u202f999\u202f999\u202f999\u202f999\u202f999\u202f800\u202f000\u202f000\u202f000,00000001\u00a0$US'
+      : '$999,999,999,999,999,999,800,000,000,000.00000001'
+    assert.equal(formatCurrency(value, language), expected)
+    assert.equal(formatTradeAmount(value, language), expected)
+    assert.equal(formatSignedCurrency(value, language), '+' + expected)
+    assert.equal(formatSignedCurrency('-' + value, language), '-' + expected)
+    assert.notEqual(formatCompactCurrency(value, language), '—')
+  })
+}

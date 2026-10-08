@@ -1,4 +1,4 @@
-import { isDecimalAmount } from './decimalAmount'
+import { isCalculatedAmount } from './decimalAmount'
 
 const scale = 12
 
@@ -22,7 +22,7 @@ function normalizedUnits(value: string, digits: number): bigint {
 }
 
 function units(value: string): bigint {
-  if (!isDecimalAmount(value)) throw new Error('Invalid decimal amount')
+  if (!isCalculatedAmount(value)) throw new Error('Invalid decimal amount')
   const negative = value.startsWith('-')
   const [integer, fraction = ''] = (negative ? value.slice(1) : value).split('.')
   const result = BigInt(integer + fraction.padEnd(scale, '0'))

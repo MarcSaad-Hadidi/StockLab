@@ -1,5 +1,5 @@
 import { i18n } from './i18n.ts'
-import { isDecimalAmount, isPositiveOperand } from '../api/decimalAmount.ts'
+import { isCalculatedAmount, isDecimalAmount, isPositiveOperand } from '../api/decimalAmount.ts'
 
 export function localeForLanguage(language = i18n.language) {
   return language === 'fr' ? 'fr-FR' : 'en-US'
@@ -18,7 +18,7 @@ export function formatCurrency(value: number | string | null | undefined, langua
 
 /** Preserve the twelve-decimal trade amount while keeping each view's usual minimum precision. */
 export function formatTradeAmount(value: string | null | undefined, language = i18n.language, minimumFractionDigits = 2, currency = 'USD') {
-  if (!isDecimalAmount(value)) return '—'
+  if (!isCalculatedAmount(value)) return '—'
   const formatter = new Intl.NumberFormat(localeForLanguage(language), {
     currency, minimumFractionDigits, maximumFractionDigits: 12, style: 'currency',
   })
@@ -27,7 +27,7 @@ export function formatTradeAmount(value: string | null | undefined, language = i
 }
 
 export function formatCompactCurrency(value: number | string | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
-  if (value == null || (typeof value === 'string' ? !isDecimalAmount(value) : !Number.isFinite(value))) return '—'
+  if (value == null || (typeof value === 'string' ? !isCalculatedAmount(value) : !Number.isFinite(value))) return '—'
   return new Intl.NumberFormat(localeForLanguage(language), {
     currency,
     maximumFractionDigits: fractionDigits,
@@ -39,7 +39,7 @@ export function formatCompactCurrency(value: number | string | null | undefined,
 
 export function formatSignedCurrency(value: number | string | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
   if (typeof value === 'string') {
-    if (!isDecimalAmount(value)) return '—'
+    if (!isCalculatedAmount(value)) return '—'
     return `${value.startsWith('-') ? '-' : '+'}${formatTradeAmount(value.replace(/^-/, ''), language, fractionDigits, currency)}`
   }
   if (value === null || value === undefined || !Number.isFinite(value)) return '—'

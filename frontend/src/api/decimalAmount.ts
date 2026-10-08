@@ -3,6 +3,11 @@ export function isDecimalAmount(value: unknown): value is string {
   return typeof value === 'string' && /^-?(?:0|[1-9]\d{0,28})(?:\.\d{1,12})?$/.test(value)
 }
 
+/** Live products and sums may exceed the API's decimal width while retaining twelve-decimal precision. */
+export function isCalculatedAmount(value: unknown): value is string {
+  return typeof value === 'string' && /^-?(?:0|[1-9]\d*)(?:\.\d{1,12})?$/.test(value)
+}
+
 export function isNonNegativeAmount(value: unknown): value is string {
   return isDecimalAmount(value) && !value.startsWith('-')
 }
