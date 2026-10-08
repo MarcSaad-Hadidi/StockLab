@@ -1,4 +1,5 @@
 import { getAuthorizationHeader } from '../auth/authStorage'
+import { isPositiveAmount, isNonNegativeAmount } from './decimalAmount'
 
 export type TradeSide = 'BUY' | 'SELL'
 export type TradeOrderType = 'market' | 'limit'
@@ -7,9 +8,9 @@ export type ExecuteTradeRequest = {
   orderId: string
   side: TradeSide
   symbol: string
-  quantity: number
+  quantity: string
   orderType: TradeOrderType
-  limitPrice?: number
+  limitPrice?: string
 }
 
 export type PaperTradeResponse = {
@@ -17,12 +18,12 @@ export type PaperTradeResponse = {
   orderId: string
   side: TradeSide
   symbol: string
-  quantity: number
-  executionPrice: number
-  totalAmount: number
-  cashBalance: number
-  holdingQuantity: number
-  averageCost: number | null
+  quantity: string
+  executionPrice: string
+  totalAmount: string
+  cashBalance: string
+  holdingQuantity: string
+  averageCost: string | null
   executedAtUtc: string
 }
 
@@ -69,21 +70,18 @@ const record = (value: unknown): value is Record<string, unknown> =>
 const string = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0
 
-const number = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value)
-
 function validResponse(value: unknown): value is PaperTradeResponse {
   return record(value)
     && string(value.transactionId)
     && string(value.orderId)
     && (value.side === 'BUY' || value.side === 'SELL')
     && string(value.symbol)
-    && number(value.quantity) && value.quantity > 0
-    && number(value.executionPrice) && value.executionPrice > 0
-    && number(value.totalAmount) && value.totalAmount > 0
-    && number(value.cashBalance) && value.cashBalance >= 0
-    && number(value.holdingQuantity) && value.holdingQuantity >= 0
-    && (value.averageCost === null || (number(value.averageCost) && value.averageCost > 0))
+    && isPositiveAmount(value.quantity)
+    && isPositiveAmount(value.executionPrice)
+    && isPositiveAmount(value.totalAmount)
+    && isNonNegativeAmount(value.cashBalance)
+    && isNonNegativeAmount(value.holdingQuantity)
+    && (value.averageCost === null || (isPositiveAmount(value.averageCost)))
     && string(value.executedAtUtc)
     && Number.isFinite(Date.parse(value.executedAtUtc))
 }

@@ -25,7 +25,7 @@ await i18n.changeLanguage('en')
 const user = { id: 'd4fd8828-1a30-46f7-86c0-8cbbfa644f66', displayName: 'Samira Martin', email: 'samira@example.com' }
 const session = { accessToken: 'signed-token', tokenType: 'Bearer' as const, expiresAtUtc: '2099-01-01T00:00:00Z', user }
 const profile = { ...user, createdAtUtc: '2026-09-24T23:40:00Z', updatedAtUtc: '2026-09-25T00:15:00Z' }
-const capital = { cashBalance: 20000, initialCapital: 25000, investedValue: 5000, totalValue: 25000, currency: 'CAD', positions: [] }
+const capital = { cashBalance: '20000', initialCapital: '25000', investedValue: '5000', totalValue: '25000', currency: 'CAD', positions: [] }
 async function mount(component: React.ReactElement) {
   const container = document.createElement('div'); document.body.append(container)
   const root = createRoot(container)

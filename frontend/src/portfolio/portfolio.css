@@ -232,6 +232,7 @@ a {
 
 .metric-card {
   display: grid;
+  min-width: 0;
   min-height: 95px;
   align-content: center;
   gap: 7px;
@@ -246,6 +247,7 @@ a {
 }
 
 .metric-card strong {
+  overflow-wrap: anywhere;
   color: #242d45;
   font-size: 18px;
   line-height: 1;
@@ -253,6 +255,7 @@ a {
 }
 
 .metric-card span {
+  overflow-wrap: anywhere;
   color: var(--muted);
   font-size: 9px;
   font-weight: 800;
@@ -386,6 +389,7 @@ a {
 }
 
 .donut {
+  position: relative;
   display: grid;
   width: 146px;
   height: 146px;
@@ -407,13 +411,17 @@ a {
 .donut > div {
   position: absolute;
   display: grid;
+  width: 70%;
   justify-items: center;
   gap: 4px;
+  text-align: center;
 }
 
 .donut strong {
+  max-width: 100%;
   color: #27314a;
   font-size: 14px;
+  overflow-wrap: anywhere;
 }
 
 .donut span {

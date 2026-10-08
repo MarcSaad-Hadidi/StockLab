@@ -17,4 +17,8 @@ public sealed record StockQuoteResponse(
     decimal? PreviousClose,
     long? AverageVolume,
     bool? IsMarketOpen,
-    StockLab.Application.DTOs.MarketData.StockFiftyTwoWeek? FiftyTwoWeek);
+    StockLab.Application.DTOs.MarketData.StockFiftyTwoWeek? FiftyTwoWeek)
+{
+    /// <summary>Lossless price for financial calculations; Price remains compatible with chart clients.</summary>
+    public string PriceDecimal => Price.ToString("0.############################", System.Globalization.CultureInfo.InvariantCulture);
+}

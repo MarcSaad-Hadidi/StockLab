@@ -757,6 +757,39 @@ portfolio data, and they require no database migration.
 
 ## Portfolio API
 
+Human trade responses (`POST /api/portfolio/trades`, recent transactions and
+transaction history) serialize `totalAmount` as a plain decimal **JSON string**,
+for example `"999999989999999.999900000001"`. History summary fields
+`totalInvested` and `totalProceeds` also use decimal strings (including `"0"`).
+These amounts retain up to twelve fractional digits; clients must preserve the
+strings through parsing and formatting rather than convert them to JavaScript
+`number`. `cashBalance` uses the same representation in trade responses and both
+`GET /api/portfolio` and `GET /api/portfolio/performance`. Portfolio monetary
+aggregates (`initialCapital`, `investedValue`, `positionsMarketValue`, `totalValue`,
+`totalPnl`, and performance positions' `marketValue`/`pnl`) are decimal strings too,
+so calculating a small gain beside a large balance remains lossless. Human portfolio,
+trade and transaction responses also preserve `quantity`, `holdingQuantity`,
+`averageCost`, `executionPrice`, `currentPrice` and `limitPrice` as decimal strings.
+Percentages retain their numeric JSON types. Stock quotes expose the original
+upstream decimal as `priceDecimal` (up to 28 fractional digits); `price` remains
+numeric for chart clients. Financial calculations must use `priceDecimal`.
+Order requests accept decimal strings for `quantity` and `limitPrice`, preserving
+input precision before backend normalization; numeric requests remain supported.
+Deploy the API and frontend together; numeric financial responses are rejected
+instead of silently accepting already rounded values. Order estimates normalize
+quantity to eight and price to four decimals, then multiply exactly and display
+up to twelve decimals. Live portfolio valuation retains the raw quote precision
+and rounds each position's product to twelve decimal places using
+`MidpointRounding.AwayFromZero`, before calculating its P&L and aggregating
+portfolio values and returns. The performance API and frontend share this policy;
+the sum of the returned position market values equals `positionsMarketValue`.
+
+Live quote/holding products and portfolio sums can exceed the stored-ledger
+width. Client arithmetic and currency formatting accept those derived plain
+decimal strings without limiting their integer digits, retaining the twelve
+fractional digits. API financial fields still undergo the existing bounded
+decimal validation before entering those calculations.
+
 `GET /api/portfolio` returns the authenticated user's stored portfolio. Send
 `Authorization: Bearer <token>`, using the access token from
 `POST /api/auth/login`. The user ID comes exclusively from the JWT `sub` claim;
@@ -767,16 +800,17 @@ A newly registered account returns:
 
 ```json
 {
-  "cashBalance": 100000,
-  "investedValue": 0,
-  "totalValue": 100000,
+  "cashBalance": "100000",
+  "initialCapital": "100000",
+  "investedValue": "0",
+  "totalValue": "100000",
   "currency": "USD",
   "positions": []
 }
 ```
 
 Each position contains only `symbol`, `quantity` and `averageCost`, for example
-`{ "symbol": "AAPL", "quantity": 10, "averageCost": 150 }`.
+`{ "symbol": "AAPL", "quantity": "10", "averageCost": "150" }`.
 Financial values use decimal arithmetic:
 `investedValue = sum(quantity * averageCost)` and
 `totalValue = cashBalance + investedValue`. These are acquisition-cost values,

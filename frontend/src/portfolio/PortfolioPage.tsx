@@ -2,12 +2,13 @@ import { StockLogo, LogoAttribution } from '../market/StockLogo'
 import { PerformanceLineChart } from '../components/charts/PerformanceLineChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
-import { formatCompactCurrency, formatCurrency, formatNumber, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
+import { formatUnitPrice, formatCompactCurrency, formatCurrency, formatNumber, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { performanceSeries } from './portfolioData'
 import { usePortfolioData, type PortfolioPosition } from './usePortfolioData'
+import { addAmounts, subtractAmounts, amountPercent, amountSign } from '../api/decimalMath'
 import './portfolio.css'
 
 type IconName = 'grid' | 'globe' | 'briefcase' | 'sliders' | 'star' | 'bell' | 'brain' | 'user' | 'logout' | 'search' | 'chevron' | 'download' | 'arrowUp' | 'arrowDown' | 'info' | 'menu'
@@ -40,7 +41,8 @@ function MetricCard({ label, value, detail, tone = 'neutral' }: { label: string;
   return <article className={`metric-card ${tone}`}><p>{label}</p><strong>{value}</strong>{detail && <span>{detail}</span>}</article>
 }
 
-function toneFor(value: number | null | undefined): 'neutral' | 'positive' | 'negative' {
+function toneFor(value: number | string | null | undefined): 'neutral' | 'positive' | 'negative' {
+  if (typeof value === 'string') return amountSign(value) < 0 ? 'negative' : amountSign(value) > 0 ? 'positive' : 'neutral'
   if (value === null || value === undefined || !Number.isFinite(value)) return 'neutral'
   return value < 0 ? 'negative' : value > 0 ? 'positive' : 'neutral'
 }
@@ -64,15 +66,15 @@ function PerformanceChart({ range }: { range: TimeRange }) {
   )
 }
 
-function AllocationPanel({ positions, cashBalance, totalValue, currency }: { positions: PortfolioPosition[]; cashBalance: number | null; totalValue: number | null; currency: string }) {
+function AllocationPanel({ cashBalance, totalValue, currency }: { cashBalance: string | null; totalValue: string | null; currency: string }) {
   const { i18n, t } = useTranslation()
   if (cashBalance === null || totalValue === null) {
     return <section className="panel allocation-panel"><div className="panel-header"><h2>{t('portfolio.assetAllocation')}</h2></div><p className="portfolio-empty">{t('portfolio.valuationUnavailable')}</p></section>
   }
-  const invested = positions.reduce((total, position) => total + (position.marketValue ?? position.quantity * position.averagePrice), 0)
-  const investedPercent = totalValue > 0 ? Math.min(100, (invested / totalValue) * 100) : 0
-  const cashPercent = totalValue > 0 ? Math.max(0, 100 - investedPercent) : 0
-  const background = totalValue > 0
+  const invested = subtractAmounts(totalValue, cashBalance)
+  const investedPercent = Math.min(100, amountPercent(invested, totalValue) ?? 0)
+  const cashPercent = amountSign(totalValue) > 0 ? Math.max(0, 100 - investedPercent) : 0
+  const background = amountSign(totalValue) > 0
     ? `conic-gradient(#4d6ff5 0 ${investedPercent}%, #ff9a63 ${investedPercent}% 100%)`
     : '#e2e8f0'
   return <section className="panel allocation-panel"><div className="panel-header"><h2>{t('portfolio.assetAllocation')}</h2></div><div className="allocation-body"><div className="donut" style={{ background }}><div><strong>{formatCompactCurrency(totalValue, i18n.language, 2, currency)}</strong><span>{t('common.totalValue')}</span></div></div><ul className="allocation-legend"><li><i className="us-stocks" /><span>{t('portfolio.investedCapital')}</span><strong>{formatPercent(investedPercent, i18n.language, 1)}</strong></li><li><i className="cash" /><span>{t('portfolio.cash')}</span><strong>{formatPercent(cashPercent, i18n.language, 1)}</strong></li></ul></div><p className="allocation-caption">{formatCurrency(cashBalance, i18n.language, 2, currency)} {t('portfolio.availableCash').toLowerCase()}</p></section>
@@ -85,9 +87,9 @@ function PositionsTable({ positions, currency }: { positions: PortfolioPosition[
   const [showAll, setShowAll] = useState(true)
   const visiblePositions = showAll ? positions : positions.slice(0, 4)
   const totalMarketValue = positions.length > 0 && positions.every(position => position.marketValue !== null)
-    ? positions.reduce((total, position) => total + (position.marketValue ?? 0), 0)
+    ? positions.reduce((total, position) => addAmounts(total, position.marketValue ?? '0'), '0')
     : null
-  return <section className="panel positions-panel"><div className="panel-header positions-header"><h2>{t('portfolio.positions')} <span>({formatNumber(positions.length, undefined, 0)})</span></h2><div className="table-actions"><button type="button" onClick={() => setShowAll((visible) => !visible)}>{showAll ? t('portfolio.showLess') : t('common.viewAll')}</button><button disabled title={t('businessData.unavailable')} type="button"><Icon name="download" /> {t('common.download')}</button></div></div><div className="table-wrap"><table><thead><tr><th>{t('market.columns.symbol')}</th><th>{t('market.columns.company')}</th><th>{t('common.quantity')}</th><th>{t('portfolio.avgPrice')}</th><th>{t('portfolio.currentPrice')}</th><th>{t('portfolio.marketValue')}</th><th>P&amp;L</th><th>P&amp;L %</th><th>{t('portfolio.weight')}</th></tr></thead><tbody>{visiblePositions.length === 0 && <tr><td colSpan={9}><p className="portfolio-empty" role="status">{t('portfolio.emptyPositions')}</p></td></tr>}{visiblePositions.map((position) => <tr key={position.symbol}><td><div className="symbol-cell"><SymbolBadge position={position} /><strong>{position.symbol}</strong></div></td><td>{position.symbol === 'CASH' ? t('portfolio.cash') : position.name}</td><td>{formatNumber(position.quantity, undefined, 8)}</td><td>{formatCurrency(position.averagePrice, i18n.language, 2, currency)}</td><td>{formatCurrency(position.currentPrice, i18n.language, 2, currency)}</td><td>{formatCurrency(position.marketValue, i18n.language, 2, currency)}</td><td className={position.pnl !== null && position.pnl < 0 ? 'negative' : position.pnl !== null ? 'positive' : ''}>{position.pnl === null ? '—' : formatSignedCurrency(position.pnl, i18n.language, 2, currency)}</td><td className={position.pnlPercent !== null && position.pnlPercent < 0 ? 'negative' : position.pnlPercent !== null ? 'positive' : ''}>{position.pnlPercent === null ? '—' : formatSignedPercent(position.pnlPercent)}</td><td>{formatPercent(position.weight, undefined, 1)}</td></tr>)}</tbody><tfoot><tr><td colSpan={5}>{t('common.total')}</td><td>{formatCurrency(totalMarketValue, i18n.language, 2, currency)}</td><td colSpan={3}> </td></tr></tfoot></table></div></section>
+  return <section className="panel positions-panel"><div className="panel-header positions-header"><h2>{t('portfolio.positions')} <span>({formatNumber(positions.length, undefined, 0)})</span></h2><div className="table-actions"><button type="button" onClick={() => setShowAll((visible) => !visible)}>{showAll ? t('portfolio.showLess') : t('common.viewAll')}</button><button disabled title={t('businessData.unavailable')} type="button"><Icon name="download" /> {t('common.download')}</button></div></div><div className="table-wrap"><table><thead><tr><th>{t('market.columns.symbol')}</th><th>{t('market.columns.company')}</th><th>{t('common.quantity')}</th><th>{t('portfolio.avgPrice')}</th><th>{t('portfolio.currentPrice')}</th><th>{t('portfolio.marketValue')}</th><th>P&amp;L</th><th>P&amp;L %</th><th>{t('portfolio.weight')}</th></tr></thead><tbody>{visiblePositions.length === 0 && <tr><td colSpan={9}><p className="portfolio-empty" role="status">{t('portfolio.emptyPositions')}</p></td></tr>}{visiblePositions.map((position) => <tr key={position.symbol}><td><div className="symbol-cell"><SymbolBadge position={position} /><strong>{position.symbol}</strong></div></td><td>{position.symbol === 'CASH' ? t('portfolio.cash') : position.name}</td><td>{formatNumber(position.quantity, undefined, 8)}</td><td>{formatCurrency(position.averagePrice, i18n.language, 2, currency)}</td><td>{formatUnitPrice(position.currentPrice, i18n.language, currency)}</td><td>{formatCurrency(position.marketValue, i18n.language, 2, currency)}</td><td className={position.pnl !== null && amountSign(position.pnl) < 0 ? 'negative' : position.pnl !== null ? 'positive' : ''}>{position.pnl === null ? '—' : formatSignedCurrency(position.pnl, i18n.language, 2, currency)}</td><td className={position.pnlPercent !== null && position.pnlPercent < 0 ? 'negative' : position.pnlPercent !== null ? 'positive' : ''}>{position.pnlPercent === null ? '—' : formatSignedPercent(position.pnlPercent)}</td><td>{formatPercent(position.weight, undefined, 1)}</td></tr>)}</tbody><tfoot><tr><td colSpan={5}>{t('common.total')}</td><td>{formatCurrency(totalMarketValue, i18n.language, 2, currency)}</td><td colSpan={3}> </td></tr></tfoot></table></div></section>
 }
 
 export default function PortfolioPage() {
@@ -114,7 +116,7 @@ export default function PortfolioPage() {
       {unauthorized ? <a href="/login">{t('login.signIn')}</a>
         : (isLoading || error || quoteLoadFailed) && <button type="button" data-retry-portfolio disabled={isLoading} onClick={retry}>{t('watchlist.retry')}</button>}
     </div>}
-    <section className="metrics-grid"><MetricCard label={t('portfolio.totalPortfolioValue')} value={formatCurrency(data?.totalValue, i18n.language, 2, currency)} detail={data?.pnl === null || data?.pnl === undefined ? undefined : formatSignedCurrency(data.pnl, i18n.language, 2, currency)} tone={pnlTone} /><MetricCard label={t('portfolio.availableCash')} value={formatCurrency(data?.cashBalance, i18n.language, 2, currency)} /><MetricCard label={t('portfolio.investedCapital')} value={formatCurrency(data?.investedValue, i18n.language, 2, currency)} /><MetricCard label={t('portfolio.totalReturnAllTime')} value={formatSignedPercent(data?.returnPercent, i18n.language)} detail={data?.initialCapital === null || data?.initialCapital === undefined ? undefined : t('portfolio.sinceInitialCapital')} tone={returnTone} /></section><section className="overview-grid"><section className="panel performance-panel"><div className="panel-header"><h2>{t('portfolio.performanceTitle')} <Icon name="info" /></h2></div><div className="range-tabs" role="tablist" aria-label={t('common.performanceTimeRange')}>{(Object.keys(performanceSeries) as TimeRange[]).map((option) => <button key={option} type="button" className={range === option ? 'selected' : ''} aria-selected={range === option} onClick={() => setRange(option)} role="tab">{t(`common.timeRanges.${option}`)}</button>)}</div><PerformanceChart key={range} range={range} /></section><AllocationPanel positions={positions} cashBalance={data?.cashBalance ?? null} totalValue={data?.totalValue ?? null} currency={currency} /></section>{data ? <PositionsTable positions={positions} currency={currency} />
+    <section className="metrics-grid"><MetricCard label={t('portfolio.totalPortfolioValue')} value={formatCurrency(data?.totalValue, i18n.language, 2, currency)} detail={data?.pnl === null || data?.pnl === undefined ? undefined : formatSignedCurrency(data.pnl, i18n.language, 2, currency)} tone={pnlTone} /><MetricCard label={t('portfolio.availableCash')} value={formatCurrency(data?.cashBalance, i18n.language, 2, currency)} /><MetricCard label={t('portfolio.investedCapital')} value={formatCurrency(data?.investedValue, i18n.language, 2, currency)} /><MetricCard label={t('portfolio.totalReturnAllTime')} value={formatSignedPercent(data?.returnPercent, i18n.language)} detail={data?.initialCapital === null || data?.initialCapital === undefined ? undefined : t('portfolio.sinceInitialCapital')} tone={returnTone} /></section><section className="overview-grid"><section className="panel performance-panel"><div className="panel-header"><h2>{t('portfolio.performanceTitle')} <Icon name="info" /></h2></div><div className="range-tabs" role="tablist" aria-label={t('common.performanceTimeRange')}>{(Object.keys(performanceSeries) as TimeRange[]).map((option) => <button key={option} type="button" className={range === option ? 'selected' : ''} aria-selected={range === option} onClick={() => setRange(option)} role="tab">{t(`common.timeRanges.${option}`)}</button>)}</div><PerformanceChart key={range} range={range} /></section><AllocationPanel cashBalance={data?.cashBalance ?? null} totalValue={data?.totalValue ?? null} currency={currency} /></section>{data ? <PositionsTable positions={positions} currency={currency} />
       : <section className="panel positions-panel"><div className="panel-header"><h2>{t('portfolio.positions')}</h2></div>
         <p className="portfolio-empty">{t(isLoading ? 'portfolio.loading' : 'portfolio.positionsUnavailable')}</p></section>}<LogoAttribution /></main></div></div>
 }

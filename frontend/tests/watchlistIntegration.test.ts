@@ -27,7 +27,7 @@ const session = { accessToken: 'test-token', tokenType: 'Bearer' as const, expir
   user: { id: 'user-a', displayName: 'User A', email: 'a@example.test' } }
 const aapl = { symbol: 'AAPL', createdAtUtc: '2026-10-04T12:00:00Z' }
 const msft = { symbol: 'MSFT', createdAtUtc: '2026-10-03T12:00:00Z' }
-const quote = { symbol: 'AAPL', price: 200, change: 4, changePercent: 2, volume: null, currency: 'CAD',
+const quote = { symbol: 'AAPL', price: 200, priceDecimal: '200', change: 4, changePercent: 2, volume: null, currency: 'CAD',
   asOfUtc: '2026-10-04T12:00:00Z', name: 'Apple Inc.', exchange: 'NASDAQ', open: null, high: null, low: null,
   previousClose: null, averageVolume: null, isMarketOpen: null, fiftyTwoWeek: null }
 function seed() { window.localStorage.clear(); saveAuthSession(session) }

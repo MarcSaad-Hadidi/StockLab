@@ -1,4 +1,6 @@
 import type { HistoryQuery, StockHistory } from "../api/marketDataApi.ts";
+import { isCalculatedAmount, isPositiveAmount } from '../api/decimalAmount';
+import { normalizeOperand, tradeProduct } from '../api/decimalMath';
 export const chartRanges = [
   "1D",
   "5D",
@@ -15,7 +17,7 @@ export type TradeOrderType = "market" | "limit";
 export type StockDetails = {
   symbol: string;
   company: string;
-  price: number;
+  price: string;
   currency: string | null;
 };
 export function historyQuery(
@@ -69,43 +71,33 @@ export function historyPoints(history: StockHistory, locale: string) {
   }));
 }
 export function money(
-  value: number | null | undefined,
+  value: number | string | null | undefined,
   currency: string | null,
   locale: string,
   maximumFractionDigits = 2,
 ) {
-  if (value == null || !Number.isFinite(value)) return "—";
+  if (value == null || (typeof value === 'string' ? !isCalculatedAmount(value) : !Number.isFinite(value))) return "—";
   return new Intl.NumberFormat(locale, {
     ...(currency && /^[A-Z]{3}$/.test(currency)
       ? { style: "currency", currency }
       : {}),
     minimumFractionDigits: 2,
     maximumFractionDigits,
-  }).format(value);
+  }).format(value as number);
 }
-export function calculateTradeTotal(price: number, quantity: number) {
-  if (
-    !Number.isFinite(price) ||
-    !Number.isFinite(quantity) ||
-    price <= 0 ||
-    quantity <= 0
-  )
-    return 0;
-  return Math.round(price * quantity * 10_000) / 10_000;
+export function calculateTradeTotal(price: string, quantity: string) {
+  const normalizedPrice = normalizeOperand(price, 4);
+  const normalizedQuantity = normalizeOperand(quantity, 8);
+  if (!isPositiveAmount(normalizedPrice) || !isPositiveAmount(normalizedQuantity)) return '0';
+  return tradeProduct(normalizedPrice, normalizedQuantity);
 }
 export function getTradeExecutionPrice(
   orderType: TradeOrderType,
-  marketPrice: number,
-  limitPrice?: number,
+  marketPrice: string,
+  limitPrice?: string,
 ) {
-  if (!Number.isFinite(marketPrice) || marketPrice <= 0) return 0;
-  if (
-    orderType === "limit" &&
-    typeof limitPrice === "number" &&
-    Number.isFinite(limitPrice) &&
-    limitPrice > 0
-  )
-    return limitPrice;
-  if (orderType === "limit") return 0;
-  return marketPrice;
+  const normalizedMarketPrice = normalizeOperand(marketPrice, 4);
+  if (!isPositiveAmount(normalizedMarketPrice)) return '0';
+  if (orderType === 'limit') return normalizeOperand(limitPrice ?? '', 4) ?? '0';
+  return normalizedMarketPrice;
 }

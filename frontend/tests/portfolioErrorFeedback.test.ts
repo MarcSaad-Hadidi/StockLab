@@ -22,9 +22,9 @@ const { i18n } = await import('../src/i18n/i18n.ts')
 const { default: PortfolioPage } = await import('../src/portfolio/PortfolioPage.tsx')
 const session = { accessToken: 'token-a', tokenType: 'Bearer' as const, expiresAtUtc: '2099-01-01T00:00:00Z',
   user: { id: 'account-a', displayName: 'Alice Adams', email: 'alice@example.com' } }
-const base = { cashBalance: 1111, initialCapital: 1000, investedValue: 100, totalValue: 1211, currency: 'CAD',
-  positions: [{ symbol: 'AAA', quantity: 1, averageCost: 100 }, { symbol: 'BBB', quantity: 2, averageCost: 50 }] }
-const quote = (symbol: string) => ({ symbol, name: symbol, price: 150, changePercent: 3, currency: 'CAD' })
+const base = { cashBalance: '1111', initialCapital: '1000', investedValue: '100', totalValue: '1211', currency: 'CAD',
+  positions: [{ symbol: 'AAA', quantity: '1', averageCost: '100' }, { symbol: 'BBB', quantity: '2', averageCost: '50' }] }
+const quote = (symbol: string) => ({ symbol, name: symbol, price: 150, priceDecimal: '150', changePercent: 3, currency: 'CAD' })
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status })
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -50,7 +50,7 @@ for (const failure of ['server', 'network', 'invalid-json', 'invalid-data', 'inv
     const api = createPortfolioApi('', async () => {
       if (failure === 'network') throw new TypeError('unreachable')
       if (failure === 'invalid-json') return new Response('not-json')
-      if (failure === 'invalid-data') return json({ cashBalance: 999999 })
+      if (failure === 'invalid-data') return json({ cashBalance: '999999' })
       if (failure === 'invalid-currency') return json({ ...base, currency: 'invalid' })
       return json({ error: 'private backend detail' }, failure === 'not-found' ? 404 : 503)
     })
@@ -74,7 +74,7 @@ test('loading stays distinct from a confirmed empty portfolio', async t => {
   try {
     assert.match(view.feedback().textContent!, /Loading your portfolio/)
     assert.doesNotMatch(view.container.textContent!, /No positions yet|Positions \(0\)/)
-    await act(async () => response.resolve(json({ ...base, positions: [], investedValue: 0 })))
+    await act(async () => response.resolve(json({ ...base, positions: [], investedValue: '0' })))
     assert.match(view.container.textContent!, /No positions yet/)
     assert.match(view.metrics().textContent!, /CA\$1,111\.00/)
     assert.equal(view.container.querySelector('.portfolio-feedback'), null)
@@ -189,7 +189,7 @@ test('quotes in another currency do not produce an invented valuation', async t 
 for (const language of ['en', 'fr']) {
   test(`the quote cap explains incomplete valuation without a futile retry in ${language}`, async t => {
     await i18n.changeLanguage(language)
-    const positions = Array.from({ length: 25 }, (_, i) => ({ symbol: `S${i}`, quantity: 1, averageCost: 100 }))
+    const positions = Array.from({ length: 25 }, (_, i) => ({ symbol: `S${i}`, quantity: '1', averageCost: '100' }))
     t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, positions }))
     t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
     const calls: string[] = []
@@ -209,7 +209,7 @@ for (const language of ['en', 'fr']) {
 }
 
 test('a recoverable quote failure above the cap can retry and then leaves only the limit notice', async t => {
-  const positions = Array.from({ length: 25 }, (_, i) => ({ symbol: `S${i}`, quantity: 1, averageCost: 100 }))
+  const positions = Array.from({ length: 25 }, (_, i) => ({ symbol: `S${i}`, quantity: '1', averageCost: '100' }))
   t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, positions }))
   t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
   let fail = true
@@ -235,7 +235,7 @@ test('a recoverable quote failure above the cap can retry and then leaves only t
 })
 
 test('exactly twenty successfully quoted positions have a complete valuation and no limit notice', async t => {
-  const positions = Array.from({ length: 20 }, (_, i) => ({ symbol: `S${i}`, quantity: 1, averageCost: 100 }))
+  const positions = Array.from({ length: 20 }, (_, i) => ({ symbol: `S${i}`, quantity: '1', averageCost: '100' }))
   t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, positions }))
   t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
   t.mock.method(marketDataApi, 'quote', async symbol => quote(symbol))
@@ -250,7 +250,7 @@ test('late retry responses cannot expose the previous account data or errors', a
   const response = deferred<Response>()
   let calls = 0
   const api = createPortfolioApi('', async () => ++calls === 1 ? json({}, 503) : calls === 2 ? response.promise
-    : json({ ...base, cashBalance: 2222, positions: [], investedValue: 0 }))
+    : json({ ...base, cashBalance: '2222', positions: [], investedValue: '0' }))
   t.mock.method(portfolioApi, 'getPortfolio', api.getPortfolio)
   t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
   const view = await mount()

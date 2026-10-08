@@ -16,7 +16,7 @@ public sealed class PortfolioConfiguration : IEntityTypeConfiguration<Portfolio>
         builder.HasKey(portfolio => portfolio.Id);
         builder.Property(portfolio => portfolio.Currency).HasColumnType("char(3)").IsRequired().HasDefaultValue("USD");
         builder.Property(portfolio => portfolio.InitialCapital).HasColumnType("decimal(19,4)").HasDefaultValue(100000m);
-        builder.Property(portfolio => portfolio.CashBalance).HasColumnType("decimal(19,4)").HasDefaultValue(100000m);
+        builder.Property(portfolio => portfolio.CashBalance).HasColumnType("decimal(27,12)").HasDefaultValue(100000m);
         builder.Property(portfolio => portfolio.CreatedAtUtc).HasColumnType("datetime2(7)");
         builder.Property(portfolio => portfolio.Version).IsRowVersion().HasColumnType("rowversion");
         builder.HasOne(portfolio => portfolio.User)

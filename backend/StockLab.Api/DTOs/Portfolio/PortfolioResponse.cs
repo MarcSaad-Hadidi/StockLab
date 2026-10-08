@@ -1,9 +1,9 @@
 namespace StockLab.Api.DTOs.Portfolio;
 
 public sealed record PortfolioResponse(
-    decimal CashBalance,
-    decimal InitialCapital,
-    decimal InvestedValue,
-    decimal TotalValue,
+    string CashBalance,
+    string InitialCapital,
+    string InvestedValue,
+    string TotalValue,
     string Currency,
     PortfolioPositionResponse[] Positions);

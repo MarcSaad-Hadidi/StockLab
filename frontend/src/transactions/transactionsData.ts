@@ -8,9 +8,9 @@ export type Transaction = {
   company: string
   assetType: TransactionAssetType
   action: TransactionAction
-  quantity: number
-  executionPrice: number
-  totalAmount: number
+  quantity: string
+  executionPrice: string
+  totalAmount: string
   date: string
 }
 

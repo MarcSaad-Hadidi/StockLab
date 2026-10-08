@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace StockLab.Api.DTOs.Portfolio;
 
@@ -28,6 +29,7 @@ public sealed class PlacePaperTradeRequest : IValidatableObject
     }
 
     [Range(typeof(decimal), "0.00000001", "99999999999.99999999")]
+    [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
     public decimal Quantity { get; init; }
 
     [Required]
@@ -38,6 +40,7 @@ public sealed class PlacePaperTradeRequest : IValidatableObject
     }
 
     [Range(typeof(decimal), "0.0001", "999999999999999.9999")]
+    [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
     public decimal? LimitPrice { get; init; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)

@@ -1,4 +1,5 @@
 using StockLab.Application.DTOs.Trading;
+using System.Globalization;
 
 namespace StockLab.Api.DTOs.Portfolio;
 
@@ -8,28 +9,28 @@ public sealed record PaperTradeResponse(
     Guid OrderId,
     string Side,
     string Symbol,
-    decimal Quantity,
-    decimal ExecutionPrice,
-    decimal TotalAmount,
-    decimal CashBalance,
-    decimal HoldingQuantity,
-    decimal? AverageCost,
+    string Quantity,
+    string ExecutionPrice,
+    string TotalAmount,
+    string CashBalance,
+    string HoldingQuantity,
+    string? AverageCost,
     DateTime ExecutedAtUtc,
     string OrderType,
-    decimal? LimitPrice)
+    string? LimitPrice)
 {
     public static PaperTradeResponse From(PaperTradeResult result) => new(
         result.TransactionId,
         result.OrderId,
         result.Side,
         result.Symbol,
-        result.Quantity,
-        result.ExecutionPrice,
-        result.TotalAmount,
-        result.CashBalance,
-        result.HoldingQuantity,
-        result.AverageCost,
+        result.Quantity.ToString("0.############################", CultureInfo.InvariantCulture),
+        result.ExecutionPrice.ToString("0.############################", CultureInfo.InvariantCulture),
+        result.TotalAmount.ToString("0.############", CultureInfo.InvariantCulture),
+        result.CashBalance.ToString("0.############", CultureInfo.InvariantCulture),
+        result.HoldingQuantity.ToString("0.############################", CultureInfo.InvariantCulture),
+        result.AverageCost?.ToString("0.############################", CultureInfo.InvariantCulture),
         DateTime.SpecifyKind(result.ExecutedAtUtc, DateTimeKind.Utc),
         result.OrderType,
-        result.LimitPrice);
+        result.LimitPrice?.ToString("0.############################", CultureInfo.InvariantCulture));
 }

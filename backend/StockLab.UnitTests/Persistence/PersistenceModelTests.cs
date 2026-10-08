@@ -36,13 +36,13 @@ public sealed class PersistenceModelTests
         using var context = CreateContext();
 
         Assert.Equal("char(3)", Property<Portfolio>(context, nameof(Portfolio.Currency)).GetColumnType());
-        Assert.Equal("decimal(19,4)", Property<Portfolio>(context, nameof(Portfolio.CashBalance)).GetColumnType());
+        Assert.Equal("decimal(27,12)", Property<Portfolio>(context, nameof(Portfolio.CashBalance)).GetColumnType());
         Assert.Equal("decimal(19,4)", Property<Portfolio>(context, nameof(Portfolio.InitialCapital)).GetColumnType());
         Assert.Equal("decimal(19,8)", Property<Holding>(context, nameof(Holding.Quantity)).GetColumnType());
         Assert.Equal("decimal(19,4)", Property<Holding>(context, nameof(Holding.AverageCost)).GetColumnType());
         Assert.Equal("decimal(19,8)", Property<Transaction>(context, nameof(Transaction.Quantity)).GetColumnType());
         Assert.Equal("decimal(19,4)", Property<Transaction>(context, nameof(Transaction.ExecutionPrice)).GetColumnType());
-        Assert.Equal("decimal(19,4)", Property<Transaction>(context, nameof(Transaction.TotalAmount)).GetColumnType());
+        Assert.Equal("decimal(27,12)", Property<Transaction>(context, nameof(Transaction.TotalAmount)).GetColumnType());
         Assert.Equal("decimal(19,4)", Property<PriceAlert>(context, nameof(PriceAlert.TargetPrice)).GetColumnType());
         Assert.Equal("decimal(19,4)", Property<PriceAlert>(context, nameof(PriceAlert.TriggeredPrice)).GetColumnType());
     }

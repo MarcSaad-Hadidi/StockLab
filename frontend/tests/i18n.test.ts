@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFileSync, readdirSync } from 'node:fs'
 import ts from 'typescript'
-import { formatCurrency, formatDate, formatNumber, formatPercent, formatTime } from '../src/i18n/formatters.ts'
+import { formatCurrency, formatDate, formatNumber, formatPercent, formatTime, formatTradeAmount, formatCompactCurrency, formatSignedCurrency, formatQuantity, formatUnitPrice } from '../src/i18n/formatters.ts'
 import { performanceSeries } from '../src/dashboard/dashboardData.ts'
 import { chartRanges } from '../src/market/stockDetailsData.ts'
 
@@ -152,3 +152,46 @@ test('formats the same financial values and dates for each locale', () => {
   assert.equal(formatTime('15:18', 'en'), '3:18 PM')
   assert.equal(formatTime('15:18', 'fr'), '15:18')
 })
+
+for (const language of ['en', 'fr']) {
+  test(`decimal strings preserve every ledger digit before formatting in ${language}`, () => {
+    const amount = (en: string, fr: string) => language === 'fr' ? fr : en
+    assert.equal(formatTradeAmount('999999989999999.999900000001', language), amount('$999,999,989,999,999.999900000001', '999\u202f999\u202f989\u202f999\u202f999,999900000001\u00a0$US'))
+    assert.equal(formatTradeAmount('10000.000000000001', language), amount('$10,000.000000000001', '10\u202f000,000000000001\u00a0$US'))
+  })
+  test(`trade amounts retain twelve-decimal precision and ordinary currency formatting in ${language}`, () => {
+    const amount = (en: string, fr: string) => language === 'fr' ? fr : en
+    assert.equal(formatTradeAmount('0.000000000001', language), amount('$0.000000000001', '0,000000000001\u00a0$US'))
+    assert.equal(formatTradeAmount('-0.000000000001', language), amount('-$0.000000000001', '-0,000000000001\u00a0$US'))
+    assert.equal(formatTradeAmount('0.61725', language), amount('$0.61725', '0,61725\u00a0$US'))
+    assert.equal(formatTradeAmount('0.152407394910', language), amount('$0.15240739491', '0,15240739491\u00a0$US'))
+    assert.equal(formatTradeAmount('204.5', language), amount('$204.50', '204,50\u00a0$US'))
+    assert.equal(formatTradeAmount('204.5', language, 4), amount('$204.5000', '204,5000\u00a0$US'))
+    assert.equal(formatTradeAmount('0.000000000001', language, 2, 'CAD'), amount('CA$0.000000000001', '0,000000000001\u00a0$CA'))
+    assert.equal(formatTradeAmount('0', language), amount('$0.00', '0,00\u00a0$US'))
+    for (const unavailable of [null, undefined, 'NaN', 'Infinity', '', '1e-12', '0.0000000000001', '1,234']) assert.equal(formatTradeAmount(unavailable, language), '—')
+  })
+}
+
+
+test('quantities and unit quotes format original decimal text without float conversion', () => {
+  assert.equal(formatQuantity('99999999999.99999999', 'en'), '99,999,999,999.99999999')
+  assert.equal(formatQuantity('0.00000001', 'en'), '0.00000001')
+  assert.equal(formatUnitPrice('999999999999999.9999', 'en'), '$999,999,999,999,999.9999')
+  assert.equal(formatUnitPrice('0.0000000000000000000000000001', 'en'), '$0.0000000000000000000000000001')
+  assert.equal(formatUnitPrice(null), '—')
+})
+
+
+for (const language of ['en', 'fr']) {
+  test(`derived currency amounts exceed ledger width without losing digits in ${language}`, () => {
+    const value = '999999999999999999800000000000.00000001'
+    const expected = language === 'fr' ? '999\u202f999\u202f999\u202f999\u202f999\u202f999\u202f800\u202f000\u202f000\u202f000,00000001\u00a0$US'
+      : '$999,999,999,999,999,999,800,000,000,000.00000001'
+    assert.equal(formatCurrency(value, language), expected)
+    assert.equal(formatTradeAmount(value, language), expected)
+    assert.equal(formatSignedCurrency(value, language), '+' + expected)
+    assert.equal(formatSignedCurrency('-' + value, language), '-' + expected)
+    assert.notEqual(formatCompactCurrency(value, language), '—')
+  })
+}

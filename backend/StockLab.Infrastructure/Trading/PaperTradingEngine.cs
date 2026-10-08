@@ -98,8 +98,7 @@ public sealed class PaperTradingEngine(
                         throw new PaperTradingException(PaperTradingFailure.InvalidOrder);
                     }
 
-                    portfolio.CashBalance = decimal.Round(
-                        portfolio.CashBalance - order.TotalAmount, 4, MidpointRounding.AwayFromZero);
+                    portfolio.CashBalance -= order.TotalAmount;
                     if (holding is null)
                     {
                         holding = new Holding
@@ -133,14 +132,13 @@ public sealed class PaperTradingEngine(
                         throw new PaperTradingException(PaperTradingFailure.InsufficientHoldings);
                     }
 
-                    // The order total may fit decimal(19,4) while the resulting cash balance does not.
+                    // Preserve the supported cash limit even when an order has sub-four-decimal value.
                     if (portfolio.CashBalance > MaxMoney - order.TotalAmount)
                     {
                         throw new PaperTradingException(PaperTradingFailure.InvalidOrder);
                     }
 
-                    portfolio.CashBalance = decimal.Round(
-                        portfolio.CashBalance + order.TotalAmount, 4, MidpointRounding.AwayFromZero);
+                    portfolio.CashBalance += order.TotalAmount;
                     holding.Quantity -= order.Quantity;
                     if (holding.Quantity == 0m)
                     {
@@ -342,7 +340,9 @@ public sealed class PaperTradingEngine(
             throw new PaperTradingException(PaperTradingFailure.InvalidOrder);
         }
 
-        var totalAmount = decimal.Round(quantity * executionPrice, 4, MidpointRounding.AwayFromZero);
+        // Eight quantity decimals times four price decimals require twelve amount decimals.
+        // Rounding each order independently would create or destroy cash when trades are split.
+        var totalAmount = quantity * executionPrice;
         if (totalAmount <= 0m)
         {
             throw new ArgumentException("The order total must be positive.");

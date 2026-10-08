@@ -291,6 +291,7 @@ select:focus-visible {
 
 .summary-card > strong {
   display: block;
+  overflow-wrap: anywhere;
   color: #24314a;
   font-family: Manrope, sans-serif;
   font-size: 17px;
@@ -686,6 +687,12 @@ select:focus-visible {
 .money-cell strong {
   color: #3d4a62;
   font-weight: 800;
+}
+
+.transactions-table td.money-cell,
+.transactions-table td.number-cell {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .table-footer {

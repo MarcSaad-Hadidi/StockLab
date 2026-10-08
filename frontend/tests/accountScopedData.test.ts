@@ -28,10 +28,10 @@ const accountA: AuthSession = { accessToken: 'token-a', tokenType: 'Bearer', exp
   user: { id: 'account-a', displayName: 'Alice Adams', email: 'alice@example.com' } }
 const accountB: AuthSession = { ...accountA, accessToken: 'token-b',
   user: { id: 'account-b', displayName: 'Bob Brown', email: 'bob@example.com' } }
-const base = { cashBalance: 1000, investedValue: 0, totalValue: 1000, initialCapital: 1000, currency: 'CAD', positions: [] }
-const tradeA = { id: 'trade-a', symbol: 'AAA', side: 'BUY', quantity: 1, executionPrice: 100,
-  totalAmount: 100, executedAtUtc: '2026-01-01T00:00:00Z' }
-const tradeB = { ...tradeA, id: 'trade-b', symbol: 'BBB', totalAmount: 200 }
+const base = { cashBalance: '1000', investedValue: '0', totalValue: '1000', initialCapital: '1000', currency: 'CAD', positions: [] }
+const tradeA = { id: 'trade-a', symbol: 'AAA', side: 'BUY', quantity: '1', executionPrice: '100',
+  totalAmount: '100', executedAtUtc: '2026-01-01T00:00:00Z' }
+const tradeB = { ...tradeA, id: 'trade-b', symbol: 'BBB', totalAmount: '200' }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -46,11 +46,11 @@ function apiFixture(t: TestContext, handler?: (url: string, token: string, init?
     calls.push({ url, token, signal: init?.signal })
     if (handler) return handler(url, token, init)
     const isA = token === 'Bearer token-a'
-    if (url === '/api/portfolio') return json({ ...base, cashBalance: isA ? 1111 : 2222 })
+    if (url === '/api/portfolio') return json({ ...base, cashBalance: isA ? '1111' : '2222' })
     if (url.includes('/history')) {
       const page = Number(new URL(url, 'http://localhost').searchParams.get('page'))
       return json({ items: [isA ? tradeA : tradeB], page, pageSize: 10, totalCount: 21, currency: 'CAD',
-        summary: { totalTrades: 21, totalInvested: isA ? 1111 : 2222, totalProceeds: 0 } })
+        summary: { totalTrades: 21, totalInvested: isA ? '1111' : '2222', totalProceeds: '0' } })
     }
     return json([isA ? tradeA : tradeB])
   })
@@ -92,7 +92,7 @@ for (const trigger of ['storage', 'focus', 'visibility', 'same-tab']) {
     seed()
     const pending = deferred<Response>()
     apiFixture(t, async (url, token) => {
-      if (url === '/api/portfolio') return token === 'Bearer token-a' ? json({ ...base, cashBalance: 1111 }) : pending.promise
+      if (url === '/api/portfolio') return token === 'Bearer token-a' ? json({ ...base, cashBalance: '1111' }) : pending.promise
       return json([token === 'Bearer token-a' ? tradeA : tradeB])
     })
     const view = await mount(React.createElement(PortfolioProbe))
@@ -102,7 +102,7 @@ for (const trigger of ['storage', 'focus', 'visibility', 'same-tab']) {
       assert.equal(view.container.querySelector('.app-topbar-avatar')!.textContent, 'BB')
       assert.equal(view.container.querySelector('output')!.textContent, 'null')
       assert.equal(view.container.querySelector('[data-loading]')!.getAttribute('data-loading'), 'true')
-      await act(async () => pending.resolve(json({ ...base, cashBalance: 2222 })))
+      await act(async () => pending.resolve(json({ ...base, cashBalance: '2222' })))
       assert.match(view.container.querySelector('output')!.textContent!, /2222.*trade-b/)
       assert.doesNotMatch(view.container.querySelector('output')!.textContent!, /1111|trade-a/)
     } finally { await view.close() }
@@ -113,13 +113,13 @@ test('late old-account portfolio responses cannot fetch activity with the new ac
   seed()
   const old = deferred<Response>()
   const calls = apiFixture(t, async (url, token) => {
-    if (url === '/api/portfolio') return token === 'Bearer token-a' ? old.promise : json({ ...base, cashBalance: 2222 })
+    if (url === '/api/portfolio') return token === 'Bearer token-a' ? old.promise : json({ ...base, cashBalance: '2222' })
     return json([token === 'Bearer token-a' ? tradeA : tradeB])
   })
   const view = await mount(React.createElement(PortfolioProbe))
   try {
     await change(accountB)
-    await act(async () => old.resolve(json({ ...base, cashBalance: 1111 })))
+    await act(async () => old.resolve(json({ ...base, cashBalance: '1111' })))
     assert.match(view.container.querySelector('output')!.textContent!, /2222.*trade-b/)
     assert.equal(calls.filter(call => call.url.includes('/transactions')).length, 1)
     assert.equal(calls[0].signal?.aborted, true)
@@ -130,13 +130,13 @@ test('old-account quote completion cannot republish positions after account repl
   seed()
   const quote = deferred<Awaited<ReturnType<typeof marketDataApi.quote>>>()
   apiFixture(t, async (url, token) => url === '/api/portfolio'
-    ? json(token === 'Bearer token-a' ? { ...base, positions: [{ symbol: 'AAA', quantity: 1, averageCost: 100 }] } : { ...base, cashBalance: 2222 })
+    ? json(token === 'Bearer token-a' ? { ...base, positions: [{ symbol: 'AAA', quantity: '1', averageCost: '100' }] } : { ...base, cashBalance: '2222' })
     : json([token === 'Bearer token-a' ? tradeA : tradeB]))
   t.mock.method(marketDataApi, 'quote', () => quote.promise)
   const view = await mount(React.createElement(PortfolioProbe))
   try {
     await change(accountB)
-    await act(async () => quote.resolve({ symbol: 'AAA', name: 'Alice holding', price: 100, changePercent: 0, currency: 'CAD' }))
+    await act(async () => quote.resolve({ symbol: 'AAA', name: 'Alice holding', price: 100, priceDecimal: '100', changePercent: 0, currency: 'CAD' }))
     assert.match(view.container.querySelector('output')!.textContent!, /2222/)
     assert.doesNotMatch(view.container.querySelector('output')!.textContent!, /AAA|Alice holding|trade-a/)
   } finally { await view.close() }
@@ -151,7 +151,7 @@ test('transactions clear old rows and totals immediately, reset pagination and i
     if (token === 'Bearer token-b') return next.promise
     if (page === 2) return old.promise
     return json({ items: [tradeA], page: 1, pageSize: 10, totalCount: 21, currency: 'CAD',
-      summary: { totalTrades: 21, totalInvested: 1111, totalProceeds: 0 } })
+      summary: { totalTrades: 21, totalInvested: '1111', totalProceeds: '0' } })
   })
   const view = await mount(React.createElement(TransactionsPage))
   try {
@@ -167,7 +167,7 @@ test('transactions clear old rows and totals immediately, reset pagination and i
     await settle()
     assert.match(calls.at(-1)!.url, /page=1&/)
     await act(async () => next.resolve(json({ items: [tradeB], page: 1, pageSize: 10, totalCount: 1, currency: 'CAD',
-      summary: { totalTrades: 1, totalInvested: 2222, totalProceeds: 0 } })))
+      summary: { totalTrades: 1, totalInvested: '2222', totalProceeds: '0' } })))
     await act(async () => old.resolve(json({ error: 'unauthorized' }, 401)))
     assert.match(view.container.querySelector('tbody')!.textContent!, /BBB/)
     assert.match(view.container.querySelector('.summary-grid')!.textContent!, /2,222/)
@@ -249,14 +249,14 @@ test('late old-account history success cannot overwrite the current account tota
   const old = deferred<Response>()
   apiFixture(t, async (_url, token) => token === 'Bearer token-a' ? old.promise : json({
     items: [tradeB], page: 1, pageSize: 10, totalCount: 1, currency: 'CAD',
-    summary: { totalTrades: 1, totalInvested: 2222, totalProceeds: 0 } }))
+    summary: { totalTrades: 1, totalInvested: '2222', totalProceeds: '0' } }))
   const view = await mount(React.createElement(TransactionsPage))
   try {
     await settle()
     await change(accountB)
     await settle()
     await act(async () => old.resolve(json({ items: [tradeA], page: 1, pageSize: 10, totalCount: 1, currency: 'CAD',
-      summary: { totalTrades: 1, totalInvested: 1111, totalProceeds: 0 } })))
+      summary: { totalTrades: 1, totalInvested: '1111', totalProceeds: '0' } })))
     assert.match(view.container.querySelector('tbody')!.textContent!, /BBB/)
     assert.doesNotMatch(view.container.querySelector('tbody')!.textContent!, /AAA/)
     assert.match(view.container.querySelector('.summary-grid')!.textContent!, /2,222/)

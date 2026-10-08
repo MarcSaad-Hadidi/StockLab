@@ -14,6 +14,95 @@ namespace StockLab.UnitTests.Trading;
 
 public sealed class PaperTradingEngineTests
 {
+    [Theory]
+    [InlineData("1.2345", "1", "0.5")]
+    [InlineData("1.2345", "0.5", "1")]
+    [InlineData("0.0001", "1", "0.5")]
+    [InlineData("0.0001", "0.00000003", "0.00000001")]
+    [InlineData("204.5", "0.12345678", "0.06172839")]
+    public async Task Fractional_orders_conserve_cash_and_position_value_at_constant_price(
+        string priceText, string buySizeText, string sellSizeText)
+    {
+        var price = decimal.Parse(priceText, CultureInfo.InvariantCulture);
+        var buySize = decimal.Parse(buySizeText, CultureInfo.InvariantCulture);
+        var sellSize = decimal.Parse(sellSizeText, CultureInfo.InvariantCulture);
+        var quantity = Math.Max(buySize, sellSize);
+        await using var fixture = await TradingFixture.CreateAsync(initialCapital: 100m);
+        var engine = fixture.CreateEngine();
+
+        foreach (var side in new[] { "BUY", "SELL" })
+        {
+            var size = side == "BUY" ? buySize : sellSize;
+            for (var remaining = quantity; remaining > 0; remaining -= size)
+            {
+                var result = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId,
+                    new PaperTradeRequest(Guid.NewGuid(), side, "AAPL:NASDAQ", Math.Min(size, remaining), price));
+                Assert.Equal(100m, result.CashBalance + result.HoldingQuantity * price);
+                var portfolio = await fixture.Context.Portfolios.AsNoTracking().Include(row => row.Holdings).SingleAsync();
+                Assert.Equal(100m, portfolio.CashBalance + portfolio.Holdings.Sum(row => row.Quantity * price));
+            }
+        }
+
+        Assert.Empty(await fixture.Context.Holdings.AsNoTracking().ToListAsync());
+        var transactions = await fixture.Context.Transactions.AsNoTracking().ToListAsync();
+        Assert.Equal(transactions.Where(row => row.Side == "BUY").Sum(row => row.TotalAmount),
+            transactions.Where(row => row.Side == "SELL").Sum(row => row.TotalAmount));
+    }
+
+    [Theory]
+    [InlineData("0.5", "1.2345", "0.61725", "99.38275")]
+    [InlineData("0.12345678", "1.2345", "0.152407394910", "99.847592605090")]
+    [InlineData("0.00000001", "0.0001", "0.000000000001", "99.999999999999")]
+    public async Task Fractional_trade_amounts_persist_and_replay_without_rounding_or_a_second_debit(
+        string quantityText, string priceText, string amountText, string balanceText)
+    {
+        await using var fixture = await TradingFixture.CreateAsync(initialCapital: 100m);
+        var request = new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL:NASDAQ",
+            decimal.Parse(quantityText, CultureInfo.InvariantCulture), decimal.Parse(priceText, CultureInfo.InvariantCulture));
+        var engine = fixture.CreateEngine();
+        var result = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request);
+        var replay = await engine.ExecuteAsync(fixture.UserId, fixture.PortfolioId, request with { ExecutionPrice = 2m });
+        var stored = Assert.Single(await fixture.Context.Transactions.AsNoTracking().ToListAsync());
+        var expectedAmount = decimal.Parse(amountText, CultureInfo.InvariantCulture);
+        var expectedBalance = decimal.Parse(balanceText, CultureInfo.InvariantCulture);
+
+        Assert.Equal(expectedAmount, result.TotalAmount);
+        Assert.Equal(expectedAmount, stored.TotalAmount);
+        Assert.Equal(expectedAmount, replay.TotalAmount);
+        Assert.Equal(expectedBalance, result.CashBalance);
+        Assert.Equal(expectedBalance, replay.CashBalance);
+        Assert.Equal(expectedBalance, await fixture.Context.Portfolios.AsNoTracking().Select(row => row.CashBalance).SingleAsync());
+        Assert.Equal(result.TransactionId, replay.TransactionId);
+    }
+
+    [Fact]
+    public async Task Buy_rejects_an_exact_cost_above_cash_even_if_four_decimal_rounding_would_fit()
+    {
+        await using var fixture = await TradingFixture.CreateAsync(initialCapital: 0.0001m);
+        var error = await Assert.ThrowsAsync<PaperTradingException>(() => fixture.CreateEngine().ExecuteAsync(
+            fixture.UserId, fixture.PortfolioId,
+            new PaperTradeRequest(Guid.NewGuid(), "BUY", "AAPL:NASDAQ", 0.00000051m, 200m)));
+        Assert.Equal(PaperTradingFailure.InsufficientCash, error.Category);
+        Assert.Empty(await fixture.Context.Transactions.AsNoTracking().ToListAsync());
+        Assert.Empty(await fixture.Context.Holdings.AsNoTracking().ToListAsync());
+        Assert.Equal(0.0001m, await fixture.Context.Portfolios.AsNoTracking().Select(row => row.CashBalance).SingleAsync());
+    }
+
+    [Fact]
+    public async Task Sell_rejects_exact_proceeds_above_the_cash_limit_before_mutating_the_position()
+    {
+        const decimal cash = 999_999_999_999_999.9998m;
+        await using var fixture = await TradingFixture.CreateAsync(initialCapital: cash);
+        await fixture.AddHoldingAsync("AAPL:NASDAQ", 1m, 1000m);
+        var error = await Assert.ThrowsAsync<PaperTradingException>(() => fixture.CreateEngine().ExecuteAsync(
+            fixture.UserId, fixture.PortfolioId,
+            new PaperTradeRequest(Guid.NewGuid(), "SELL", "AAPL:NASDAQ", 0.00000011m, 1000m)));
+        Assert.Equal(PaperTradingFailure.InvalidOrder, error.Category);
+        Assert.Empty(await fixture.Context.Transactions.AsNoTracking().ToListAsync());
+        Assert.Equal(1m, (await fixture.Context.Holdings.AsNoTracking().SingleAsync()).Quantity);
+        Assert.Equal(cash, await fixture.Context.Portfolios.AsNoTracking().Select(row => row.CashBalance).SingleAsync());
+    }
+
     [Fact]
     public async Task Retry_reads_matching_transaction_and_position_after_concurrent_reconciliation()
     {
@@ -903,6 +992,7 @@ public sealed class PaperTradingEngineTests
             // SQLite NUMERIC affinity rounds these decimal boundaries through floating point.
             modelBuilder.Entity<Portfolio>().Property(portfolio => portfolio.CashBalance).HasColumnType("TEXT");
             modelBuilder.Entity<Holding>().Property(holding => holding.Quantity).HasColumnType("TEXT");
+            modelBuilder.Entity<Transaction>().Property(transaction => transaction.TotalAmount).HasColumnType("TEXT");
             modelBuilder.Entity<Transaction>().HasQueryFilter(transaction => !HideTransactions);
         }
 

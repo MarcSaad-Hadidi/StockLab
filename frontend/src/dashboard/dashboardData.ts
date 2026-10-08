@@ -22,7 +22,7 @@ export type IconName =
 
 export type Metric = {
   label: string
-  value: number | null
+  value: number | string | null
   change: number | null
   detail: string
   icon: IconName
@@ -41,10 +41,10 @@ export type PerformanceSeries = {
 export type Position = {
   symbol: string
   company: string
-  shares: number
-  value: number | null
+  shares: string
+  value: number | string | null
   allocation: number | null
-  price: number | null
+  price: string | null
   change: number | null
   tone: 'positive' | 'negative' | 'neutral'
 }
@@ -63,8 +63,8 @@ export type Transaction = {
   symbol: string
   company: string
   type: 'Buy' | 'Sell'
-  shares: number
-  amount: number
+  shares: string
+  amount: string
   time?: string
   timeKey?: string
   executedAtUtc?: string

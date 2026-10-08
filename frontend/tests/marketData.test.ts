@@ -13,7 +13,7 @@ import { stockDetailsRoute } from "../src/market/marketRoutes.ts";
 const signal = () => new AbortController().signal;
 const quote = {
   symbol: "AAPL",
-  price: 204.5,
+  price: 204.5, priceDecimal: '204.5',
   change: null,
   changePercent: null,
   volume: null,
@@ -29,6 +29,18 @@ const quote = {
   isMarketOpen: null,
   fiftyTwoWeek: null,
 };
+
+test('quote parsing retains the original decimal operand beside an approximate chart price', async () => {
+  const priceDecimal = '999999999999999.9999';
+  const api = createMarketDataApi('', async () => Response.json({ ...quote, price: Number(priceDecimal), priceDecimal }));
+  const result = await api.quote('AAPL', signal());
+  assert.equal(result.priceDecimal, priceDecimal);
+  assert.equal(result.price, 1000000000000000);
+  for (const invalid of [undefined, 204.5, '', '0', '-1', '1e3', 'Infinity', '0.00000000000000000000000000001']) {
+    const bad = createMarketDataApi('', async () => Response.json({ ...quote, priceDecimal: invalid }));
+    await assert.rejects(bad.quote('AAPL', signal()), (error: unknown) => error instanceof MarketDataError && error.status === 502);
+  }
+});
 test("curated list has only five identifiers; routes preserve exchange suffixes", () => {
   assert.deepEqual(featuredSymbols, ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"]);
   assert.equal(
@@ -110,7 +122,7 @@ test("malformed numeric quote rejected; null optional fields retained", async ()
   for (const bad of [
     { ...quote, price: "204" },
     { ...quote, volume: -1 },
-    { ...quote, price: 0 },
+    { ...quote, price: 0, priceDecimal: '0' },
   ]) {
     const api = createMarketDataApi("", async () => Response.json(bad));
     await assert.rejects(
@@ -263,7 +275,7 @@ test("featured retry recovers from total failure without fake prices", async () 
   let available = false;
   const load = async (symbol: string) => {
     if (!available) throw new MarketDataError(503);
-    return { ...quote, symbol, price: 123.45 };
+    return { ...quote, symbol, price: 123.45, priceDecimal: '123.45' };
   };
   await assert.rejects(loadFeaturedQuotes(load, signal()));
   available = true;

@@ -25,7 +25,7 @@ test('password form waits for the server and reports failure without a success m
   const { profileApi } = await import('../src/api/profileApi.ts')
   const { portfolioApi } = await import('../src/api/portfolioApi.ts')
   t.mock.method(profileApi, 'getProfile', async () => ({ ...session.user, createdAtUtc: '2026-10-01T00:00:00Z', updatedAtUtc: '2026-10-01T00:00:00Z' }))
-  t.mock.method(portfolioApi, 'getPortfolio', async () => ({ cashBalance: 10000, initialCapital: 10000, investedValue: 0, totalValue: 10000, currency: 'CAD', positions: [] }))
+  t.mock.method(portfolioApi, 'getPortfolio', async () => ({ cashBalance: '10000', initialCapital: '10000', investedValue: '0', totalValue: '10000', currency: 'CAD', positions: [] }))
   let resolve!: (value: Response) => void
   const requests: { url: string; options?: RequestInit }[] = []
   t.mock.method(globalThis, 'fetch', (url: string, options?: RequestInit) => {

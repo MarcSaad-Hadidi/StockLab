@@ -1,7 +1,7 @@
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
 import { portfolioApi, type PortfolioApiTransaction, type TransactionHistoryResponse } from '../api/portfolioApi'
-import { formatCurrency, formatNumber, formatSignedCurrency } from '../i18n/formatters'
+import { formatCurrency, formatNumber, formatSignedCurrency, formatTradeAmount } from '../i18n/formatters'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState, type ReactNode } from 'react'
 import {
@@ -121,7 +121,7 @@ function toTransaction(transaction: PortfolioApiTransaction): Transaction {
 function TransactionRow({ transaction, currency }: { transaction: Transaction; currency: string }) {
   const { i18n, t } = useTranslation()
   const dateParts = formatDateParts(transaction.date, i18n.language)
-  return <tr><td><time className="date-cell" dateTime={transaction.date}><span>{dateParts.day}</span><small>{dateParts.time}</small></time></td><td><strong className="symbol-cell">{transaction.symbol}</strong></td><td className="company-cell">{transaction.company}</td><td><span className={`action-pill action-${transaction.action.toLowerCase()}`}>{t(`common.${transaction.action === 'BUY' ? 'buy' : 'sell'}`)}</span></td><td className="number-cell">{formatNumber(transaction.quantity, i18n.language, 8)}</td><td className="money-cell">{formatCurrency(transaction.executionPrice, i18n.language, 4, currency)}</td><td className="money-cell"><strong>{formatCurrency(transaction.totalAmount, i18n.language, 4, currency)}</strong></td></tr>
+  return <tr><td><time className="date-cell" dateTime={transaction.date}><span>{dateParts.day}</span><small>{dateParts.time}</small></time></td><td><strong className="symbol-cell">{transaction.symbol}</strong></td><td className="company-cell">{transaction.company}</td><td><span className={`action-pill action-${transaction.action.toLowerCase()}`}>{t(`common.${transaction.action === 'BUY' ? 'buy' : 'sell'}`)}</span></td><td className="number-cell">{formatNumber(transaction.quantity, i18n.language, 8)}</td><td className="money-cell">{formatCurrency(transaction.executionPrice, i18n.language, 4, currency)}</td><td className="money-cell"><strong>{formatTradeAmount(transaction.totalAmount, i18n.language, 4, currency)}</strong></td></tr>
 }
 
 const defaultFilters: TransactionFilters = {
@@ -297,8 +297,8 @@ function AccountTransactionsPage({ session }: { session: AuthSession | null }) {
 
           <section aria-label={t('transactions.summaryLabel')} className="summary-grid">
             <SummaryCard detail={t('transactions.allTime')} icon="activity" label={t('transactions.totalTrades')} tone="blue" value={formatNumber(liveSummary?.totalTrades, undefined, 0)} />
-            <SummaryCard detail={t('transactions.allTime')} icon="wallet" label={t('transactions.totalInvested')} tone="purple" value={formatCurrency(liveSummary?.totalInvested, i18n.language, 2, currency)} />
-            <SummaryCard detail={t('transactions.allTime')} icon="chart" label={t('transactions.totalProceeds')} tone="orange" value={formatCurrency(liveSummary?.totalProceeds, i18n.language, 2, currency)} />
+            <SummaryCard detail={t('transactions.allTime')} icon="wallet" label={t('transactions.totalInvested')} tone="purple" value={formatTradeAmount(liveSummary?.totalInvested, i18n.language, 2, currency)} />
+            <SummaryCard detail={t('transactions.allTime')} icon="chart" label={t('transactions.totalProceeds')} tone="orange" value={formatTradeAmount(liveSummary?.totalProceeds, i18n.language, 2, currency)} />
             <SummaryCard detail={'—'} icon="activity" label={t('transactions.netPnl')} tone="green" value={formatSignedCurrency(null)} />
           </section>
 

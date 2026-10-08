@@ -83,7 +83,9 @@ public sealed class PortfolioService(
             }
 
             var investedValue = holding.Quantity * holding.AverageCost;
-            var marketValue = holding.Quantity * quote.Price;
+            // Round each live position once before deriving P&L and portfolio totals,
+            // matching the twelve-decimal valuation used by the frontend.
+            var marketValue = decimal.Round(holding.Quantity * quote.Price, 12, MidpointRounding.AwayFromZero);
             var pnl = marketValue - investedValue;
             positions.Add(new PortfolioPerformancePosition(
                 holding.Symbol,
