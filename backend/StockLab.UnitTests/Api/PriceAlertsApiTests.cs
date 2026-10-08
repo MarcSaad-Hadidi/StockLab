@@ -530,6 +530,7 @@ internal sealed class PriceAlertsFixture : IAsyncDisposable
     private readonly string? path;
     private readonly bool ownsDatabase;
     private readonly bool sqlServer;
+    private readonly bool ownsSqlDatabase;
     private bool sqlRowsCreated;
     public HttpClient Client { get; private set; }
     public TestClock Clock { get; }
@@ -539,12 +540,13 @@ internal sealed class PriceAlertsFixture : IAsyncDisposable
     public string TokenA => SignedToken(UserA.ToString());
     public string TokenB => SignedToken(UserB.ToString());
 
-    private PriceAlertsFixture(DbContextOptions<StockLabDbContext> options, TestClock clock, string? path, bool ownsDatabase, bool sqlServer)
+    private PriceAlertsFixture(DbContextOptions<StockLabDbContext> options, TestClock clock, string? path, bool ownsDatabase, bool sqlServer, bool ownsSqlDatabase)
     {
         this.options = options;
         this.path = path;
         this.ownsDatabase = ownsDatabase;
         this.sqlServer = sqlServer;
+        this.ownsSqlDatabase = ownsSqlDatabase;
         Clock = clock;
         application = CreateApplication();
         Client = application.CreateClient();
@@ -581,21 +583,29 @@ internal sealed class PriceAlertsFixture : IAsyncDisposable
         Client = application.CreateClient();
     }
 
-    public StockLabDbContext CreateDbContext() => sqlServer ? new(options) : new SqliteAlertsDbContext(options);
+    public StockLabDbContext CreateDbContext() => sqlServer ? new StockLabDbContext(options) : new SqliteAlertsDbContext(options);
 
-    public static async Task<PriceAlertsFixture> CreateAsync(SaveChangesInterceptor? interceptor = null, string? databasePath = null, string? sqlConnection = null)
+    public static async Task<PriceAlertsFixture> CreateAsync(SaveChangesInterceptor? interceptor = null, string? databasePath = null, string? sqlConnection = null, bool localDb = false)
     {
+        if (localDb)
+        {
+            if (!OperatingSystem.IsWindows() || Environment.GetEnvironmentVariable("STOCKLAB_TEST_LOCALDB") != "1"
+                || sqlConnection is not null || databasePath is not null)
+                throw new InvalidOperationException("Disposable LocalDB requires explicit opt-in and no external database.");
+            sqlConnection = $"Server=(localdb)\\MSSQLLocalDB;Database=StockLabPriceAlertsTests_{Guid.NewGuid():N};Integrated Security=true;TrustServerCertificate=true";
+        }
         var path = sqlConnection is null ? databasePath ?? Path.Combine(Path.GetTempPath(), $"stocklab-alerts-{Guid.NewGuid():N}.db") : null;
         var builder = new DbContextOptionsBuilder<StockLabDbContext>();
         if (sqlConnection is null) builder.UseSqlite($"Data Source={path};Pooling=False");
         else builder.UseSqlServer(sqlConnection);
         if (interceptor is not null) builder.AddInterceptors(interceptor);
-        var f = new PriceAlertsFixture(builder.Options, new TestClock(), path, databasePath is null, sqlConnection is not null);
+        var f = new PriceAlertsFixture(builder.Options, new TestClock(), path, databasePath is null, sqlConnection is not null, localDb);
         try
         {
             await using var db = f.CreateDbContext();
             // The opt-in SQL smoke uses the existing schema, with no migrations or DDL.
             if (sqlConnection is null) await db.Database.EnsureCreatedAsync();
+            else if (localDb) await db.Database.MigrateAsync();
             foreach (var id in new[] { f.UserA, f.UserB })
             {
                 var email = $"price-alert-test-{id:N}@example.com";
@@ -619,7 +629,13 @@ internal sealed class PriceAlertsFixture : IAsyncDisposable
     {
         Client.Dispose();
         await application.DisposeAsync();
-        if (sqlServer && sqlRowsCreated)
+        if (ownsSqlDatabase)
+        {
+            await using var db = CreateDbContext();
+            // Only the generated database owned by this fixture can be dropped.
+            await db.Database.EnsureDeletedAsync();
+        }
+        else if (sqlServer && sqlRowsCreated)
         {
             await using var db = CreateDbContext();
             // Only delete rows created and owned by this fixture.
