@@ -15,7 +15,7 @@ from stocklab_ml.data.validation import SYMBOL_PATTERN
 from stocklab_ml.signals.confidence import _validate_confidence_result
 from stocklab_ml.signals.contracts import ConfidenceScoreError, ConfidenceSignalsResult, TradingSignalError
 from stocklab_ml.signals.validation import _validate_policy
-from .accounting import _add_buy, _finite_sum, _product
+from .accounting import _add_buy, _buy_limits, _finite_sum, _opening_value, _product
 from .contracts import (
     BacktestConfig, BacktestError, BacktestReport, BacktestResult, EXECUTION_TIMING,
     EQUITY_COLUMNS, POSITION_COLUMNS, TRADE_COLUMNS,
@@ -155,19 +155,16 @@ def validate_result(result: BacktestResult) -> None:
                 amount = _product(trade.quantity, trade.execution_price)
                 if not set(positions).issubset(opening_marks):
                     raise BacktestError("Opening marks must cover every held position.")
-                opening_value = _finite_sum([cash, *(_product(qty, opening_marks[symbol])
-                                                    for symbol, (qty, _, _) in positions.items())])
-                if trade.portfolio_value_before != opening_value:
+                opening_value = _opening_value(cash, positions, opening_marks)
+                if trade.portfolio_value_before != _finite_sum((opening_value,)):
                     raise BacktestError("Opening portfolio value does not reconcile with all held positions.")
                 if trade.signal == "BUY":
                     if not pd.isna(trade.realized_pnl):
                         raise BacktestError("BUY cannot have realized P&L.")
                     if round(trade.quantity, cfg.quantity_decimals) != trade.quantity:
                         raise BacktestError("BUY quantity exceeds configured precision.")
-                    remaining = _finite_sum((_product(trade.portfolio_value_before, cfg.max_symbol_exposure),
-                                             -_product(old_quantity, trade.execution_price)))
-                    budget = min(cash, _product(trade.portfolio_value_before, cfg.max_trade_allocation), remaining)
-                    if amount > budget:
+                    _, budget = _buy_limits(cash, opening_value, old_quantity, trade.execution_price, cfg)
+                    if Fraction(str(amount)) > budget:
                         raise BacktestError("BUY amount exceeds reported cash, allocation, or exposure policy.")
                     new_quantity, average = _add_buy(old_quantity, old_cost, trade.quantity, trade.execution_price)
                     cash = _finite_sum((cash, -amount))

@@ -450,8 +450,9 @@ def test_representable_large_quantity_increment_is_preserved():
 def test_backtest_rejects_unrepresentable_additional_buy():
     api = import_module("stocklab_ml.backtesting")
     source = decisions([("2024-01-05", "AAPL", .8), ("2024-01-08", "AAPL", .8)])
+    # Leave exact exposure for one share, then exercise the accumulation guard.
     prices = market([("2024-01-05", "AAPL", 1, 1), ("2024-01-08", "AAPL", 1, 1),
-                     ("2024-01-09", "AAPL", .9999999999999998, .9999999999999998)])
+                     ("2024-01-09", "AAPL", .9999999999999996, .9999999999999996)])
     cfg = config(initial_capital=18014398509481984.0, max_trade_allocation=.5,
                  max_symbol_exposure=.5, quantity_decimals=0)
     with pytest.raises(api.BacktestError, match="quantity|precision"):

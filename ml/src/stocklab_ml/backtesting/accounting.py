@@ -4,7 +4,7 @@ from decimal import Context, Decimal, localcontext
 from fractions import Fraction
 import math
 
-from .contracts import BacktestError
+from .contracts import BacktestConfig, BacktestError
 
 
 def _add_buy(old_quantity: float, old_cost: float, quantity: float, price: float) -> tuple[float, float]:
@@ -37,7 +37,19 @@ def _product(left: float, right: float) -> float:
         raise BacktestError("Portfolio product exceeds finite float64 precision.") from None
 
 
-def _size_buy(budget: float, price: float, decimals: int) -> tuple[float, float]:
+def _opening_value(cash: float, positions: dict, marks: dict) -> Fraction:
+    return Fraction(str(cash)) + sum((Fraction(str(state[0])) * Fraction(str(marks[symbol]))
+                                      for symbol, state in positions.items()), Fraction(0))
+
+
+def _buy_limits(cash: float, total: Fraction, quantity: float, price: float,
+                config: BacktestConfig) -> tuple[Fraction, Fraction]:
+    remaining = total * Fraction(str(config.max_symbol_exposure)) - Fraction(str(quantity)) * Fraction(str(price))
+    budget = min(Fraction(str(cash)), total * Fraction(str(config.max_trade_allocation)), remaining)
+    return remaining, budget
+
+
+def _size_buy(budget: float | Fraction, price: float, decimals: int) -> tuple[float, float]:
     available, opening_price = Fraction(str(budget)), Fraction(str(price))
     scale = 10 ** decimals
     scaled = available / opening_price * scale
@@ -50,7 +62,7 @@ def _size_buy(budget: float, price: float, decimals: int) -> tuple[float, float]
     quantity = float(Fraction(units, scale))
     amount = Fraction(str(quantity)) * opening_price
     # Move by representable floats; one grid unit may round to the same float.
-    while amount > available:
+    while amount > available or Fraction(str(float(amount))) > available:
         lower = Fraction(str(math.nextafter(quantity, 0.0))) * scale
         units = lower.numerator // lower.denominator
         quantity = float(Fraction(units, scale))

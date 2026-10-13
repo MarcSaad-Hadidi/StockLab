@@ -9,7 +9,7 @@ import pandas as pd
 
 from stocklab_ml.data.models import CleanedDatasetResult
 from stocklab_ml.signals.contracts import ConfidenceSignalsResult
-from .accounting import _add_buy, _finite_sum, _product, _size_buy
+from .accounting import _add_buy, _buy_limits, _finite_sum, _opening_value, _product, _size_buy
 from .contracts import (
     BacktestConfig, BacktestError, BacktestReport, BacktestResult,
     EQUITY_COLUMNS, POSITION_COLUMNS, TRADE_COLUMNS,
@@ -71,8 +71,9 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
             if row.signal == "BUY" and symbol not in positions and len(positions) >= config.max_open_positions:
                 skipped["skipped_max_positions"] += 1
                 continue
-            total = _finite_sum([cash, *(_product(qty, open_marks[sym]) for sym, (qty, _, _) in positions.items())])
-            if not math.isfinite(total) or total <= 0:
+            total = _opening_value(cash, positions, open_marks)
+            total_before = _finite_sum((total,))
+            if total <= 0:
                 raise BacktestError("Portfolio arithmetic exceeds finite float64 precision.")
             pnl = np.nan
             if row.signal == "SELL":
@@ -83,15 +84,12 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
                 new_quantity, average_cost = 0.0, 0.0
                 del positions[symbol]
             else:
-                remaining = _finite_sum((_product(total, config.max_symbol_exposure), -_product(old_quantity, price)))
-                if not math.isfinite(remaining):
-                    raise BacktestError("Portfolio arithmetic exceeds finite float64 precision.")
+                remaining, budget = _buy_limits(cash, total, old_quantity, price, config)
                 if remaining <= 0:
                     skipped["skipped_exposure"] += 1
                     continue
-                budget = min(cash, _product(total, config.max_trade_allocation), remaining)
                 quantity, amount = _size_buy(budget, price, config.quantity_decimals)
-                if quantity <= 0 or amount <= 0 or amount > budget:
+                if quantity <= 0 or amount <= 0 or Fraction(str(amount)) > budget:
                     skipped["skipped_buying_power"] += 1
                     continue
                 new_quantity, average_cost = _add_buy(old_quantity, old_cost, quantity, price)
@@ -100,7 +98,7 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
             if not all(math.isfinite(v) for v in [cash, new_quantity, average_cost, amount]) or cash < 0:
                 raise BacktestError("Nonfinite or negative portfolio accounting.")
             trades.append((row.date, day, symbol, row.model_name, row.signal, row.confidence,
-                           quantity, price, amount, cash, new_quantity, average_cost, pnl, total))
+                           quantity, price, amount, cash, new_quantity, average_cost, pnl, total_before))
 
         close_marks.update(zip(bars.symbol, bars.close))
         values = []

@@ -2,6 +2,7 @@
 
 from dataclasses import asdict, replace
 from importlib import import_module
+from fractions import Fraction
 import json
 import math
 import os
@@ -355,4 +356,57 @@ def test_pnl_preserves_accounted_cost_basis_across_weighted_buys(tmp_path):
     assert result.trades.realized_pnl.iloc[-1] == -1e-15
     assert result.positions_history.unrealized_pnl.iloc[-1] == -1.66
     assert result.report.win_rate == 0
+    save(result, output_dir=tmp_path)
+
+
+def test_exact_exposure_subtraction_does_not_invent_buying_power(tmp_path):
+    from test_backtesting import config
+
+    source = decisions([("2024-01-05", "AAPL", .8), ("2024-01-08", "AAPL", .8)])
+    prices = market([("2024-01-05", "AAPL", 1, 1), ("2024-01-08", "AAPL", 1, 1),
+                     ("2024-01-09", "AAPL", .9999999999999999, .9999999999999999)])
+    cfg = config(initial_capital=1e16, max_symbol_exposure=.7, max_trade_allocation=.7, quantity_decimals=0)
+    result = run(source, prices, config=cfg)
+    assert result.trades.quantity.tolist() == [7000000000000000.0]
+    assert result.report.skipped_buying_power == 1
+    assert result.report.final_cash == 3000000000000000.0
+    save(result, output_dir=tmp_path)
+
+
+def test_replay_rejects_exposure_breach_hidden_by_rounded_operands(tmp_path):
+    from test_backtesting import config
+
+    api = import_module("stocklab_ml.backtesting")
+    source = decisions([("2024-01-05", "AAPL", .8)])
+    prices = market([("2024-01-05", "AAPL", 1, 1), ("2024-01-08", "AAPL", 1, 1),
+                     ("2024-01-09", "AAPL", .9999999999999999, .9999999999999999)])
+    cfg = config(initial_capital=1e16, max_symbol_exposure=.7, max_trade_allocation=.7, quantity_decimals=0)
+    result = run(source, prices, config=cfg)
+    extra = result.trades.iloc[:1].copy(deep=True)
+    extra.loc[0, "decision_date"] = pd.Timestamp("2024-01-08")
+    extra.loc[0, "execution_date"] = pd.Timestamp("2024-01-09")
+    extra.loc[0, ["quantity", "execution_price", "total_amount", "cash_after", "position_quantity_after"]] = [1, .9999999999999999, .9999999999999999, 2999999999999999.0, 7000000000000001.0]
+    result = replace(result, trades=pd.concat([result.trades, extra], ignore_index=True))
+    result.equity_curve.loc[2, ["cash", "positions_value"]] = [2999999999999999.0, 7000000000000000.0]
+    result.positions_history.loc[1, ["quantity", "market_value", "unrealized_pnl"]] = [7000000000000001.0, 7000000000000000.0, -.9999999999999999]
+    result = replace(result, report=replace(result.report, decision_count=2, buy_decisions=2,
+                    executed_trades=2, executed_buys=2, final_cash=2999999999999999.0,
+                    final_positions_value=7000000000000000.0))
+    destination = tmp_path / "outputs"
+    with pytest.raises(api.BacktestError, match="policy"):
+        save(result, output_dir=destination)
+    assert not destination.exists()
+
+
+def test_published_notional_stays_within_exact_allocation_budget(tmp_path):
+    from test_backtesting import config
+
+    source = decisions([("2024-01-05", "AAPL", .8)])
+    prices = market([(day, "AAPL", .12345678901234568, .12345678901234568)
+                     for day in ["2024-01-05", "2024-01-08"]])
+    cfg = config(initial_capital=.12345678, max_symbol_exposure=1, max_trade_allocation=.12345678901234568)
+    result = run(source, prices, config=cfg)
+    assert result.trades.quantity.tolist() == [.12345677]
+    budget = Fraction("0.12345678") * Fraction("0.12345678901234568")
+    assert Fraction(str(result.trades.total_amount.iloc[0])) <= budget
     save(result, output_dir=tmp_path)

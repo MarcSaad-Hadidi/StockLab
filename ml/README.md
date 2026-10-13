@@ -1261,8 +1261,11 @@ Quantity accumulation and weighted average use standard-library decimal
 arithmetic before returning float64, so binary rounding does not classify the
 covered equal-price or weighted break-even cases as wins. No arbitrary P&L
 tolerance removes small positive gains.
-Trade notionals, allocation/exposure products, cash balances, and portfolio sums
-also use exact decimal ratios before returning float64. For example, 0.30 cash
+Opening portfolio sums, risk products, remaining-exposure subtraction, and the
+budget/price quotient retain exact decimal ratios through sizing and replay.
+Only output values convert to float64, with published notional checked against
+the exact budget. Trade notionals and cash balances also use exact decimal
+ratios before returning float64. For example, 0.30 cash
 buys exactly three shares at 0.10, leaving zero cash; replay uses the same rules.
 An accumulated quantity that cannot preserve the exact decimal sum in float64
 raises `BacktestError` before cash is debited, rather than losing or inventing shares.
