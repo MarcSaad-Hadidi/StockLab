@@ -227,6 +227,7 @@ def test_asynchronous_calendars_open_sizing_and_eod_asof_marks():
     assert result.trades.total_amount.tolist() == [10000, 11000]
     aapl = result.positions_history[result.positions_history.symbol.eq("AAPL")]
     assert aapl.mark_price.tolist() == [200, 200, 5000]
+    assert aapl.opening_mark_price.tolist() == [100, 200, 1000]
     assert result.equity_curve.total_value.tolist() == [100000, 110000, 110000, 590000]
     assert result.report.final_cash == 79000
     assert result.report.final_positions_value == 511000

@@ -132,7 +132,8 @@ def validate_result(result: BacktestResult) -> None:
             or not trades.signal.isin(["BUY", "SELL"]).all()
             or not trades.confidence.between(cfg.minimum_confidence, 1).all()
             or not trades.quantity.gt(0).all() or not trades.execution_price.gt(0).all()
-            or not trades.total_amount.gt(0).all() or not trades.portfolio_value_before.gt(0).all()):
+            or not trades.total_amount.gt(0).all() or not trades.portfolio_value_before.gt(0).all()
+            or not history.opening_mark_price.gt(0).all()):
         raise BacktestError("Invalid backtest timing, policy, or initial state.")
 
     trades_by_day = {day: group for day, group in trades.groupby("execution_date", sort=False)}
@@ -140,15 +141,23 @@ def validate_result(result: BacktestResult) -> None:
     cash, peak = cfg.initial_capital, cfg.initial_capital
     positions = {}
     for eod in equity.itertuples(index=False):
+        snapshots = history_by_day.get(eod.date)
+        opening_marks = {} if snapshots is None else dict(zip(snapshots.symbol, snapshots.opening_mark_price))
         orders = trades_by_day.get(eod.date)
         if orders is not None:
             for trade in orders.itertuples(index=False):
+                if opening_marks.get(trade.symbol, trade.execution_price) != trade.execution_price:
+                    raise BacktestError("Opening mark must match the same-day execution price.")
+                opening_marks[trade.symbol] = trade.execution_price
+            for trade in orders.itertuples(index=False):
                 old_quantity, old_cost = positions.get(trade.symbol, (0.0, 0.0))
                 amount = _product(trade.quantity, trade.execution_price)
-                known_value = _finite_sum((cash, _product(old_quantity, trade.execution_price)))
-                if (trade.portfolio_value_before < known_value
-                        or (set(positions).issubset({trade.symbol}) and trade.portfolio_value_before != known_value)):
-                    raise BacktestError("Opening portfolio value does not reconcile with known holdings.")
+                if not set(positions).issubset(opening_marks):
+                    raise BacktestError("Opening marks must cover every held position.")
+                opening_value = _finite_sum([cash, *(_product(qty, opening_marks[symbol])
+                                                    for symbol, (qty, _) in positions.items())])
+                if trade.portfolio_value_before != opening_value:
+                    raise BacktestError("Opening portfolio value does not reconcile with all held positions.")
                 if trade.signal == "BUY":
                     if not pd.isna(trade.realized_pnl):
                         raise BacktestError("BUY cannot have realized P&L.")
@@ -175,7 +184,6 @@ def validate_result(result: BacktestResult) -> None:
                         or trade.total_amount != amount or trade.cash_after != cash
                         or trade.position_quantity_after != new_quantity or trade.average_cost_after != average):
                     raise BacktestError("Trade ledger accounting does not reconcile.")
-        snapshots = history_by_day.get(eod.date)
         snapshot_symbols = set() if snapshots is None else set(snapshots.symbol)
         if snapshot_symbols != set(positions):
             raise BacktestError("Historical snapshots must contain every open position only.")

@@ -109,7 +109,7 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
             if not math.isfinite(value) or not math.isfinite(unrealized):
                 raise BacktestError("Nonfinite end-of-day position valuation.")
             values.append(value)
-            history.append((day, symbol, quantity, average_cost, mark, value, unrealized))
+            history.append((day, symbol, quantity, average_cost, mark, value, unrealized, open_marks[symbol]))
         positions_value = _finite_sum(values)
         total_value = _finite_sum((cash, positions_value))
         if not math.isfinite(total_value) or total_value <= 0:

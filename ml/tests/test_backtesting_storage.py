@@ -99,7 +99,7 @@ def test_atomic_report_failure_leaves_complete_csvs_and_no_temporary_files(tmp_p
     "ledger_amount", "ledger_cash", "ledger_quantity", "ledger_cost", "ledger_pnl", "buy_pnl",
     "same_day", "duplicate_decision", "opening_value", "hold_trade", "model", "confidence", "trade_order", "trade_schema", "trade_dtype",
     "equity_cash", "equity_value", "equity_drawdown", "equity_order", "equity_empty",
-    "position_quantity", "position_cost", "position_mark", "position_value", "position_pnl",
+    "position_quantity", "position_cost", "position_mark", "position_value", "position_pnl", "opening_mark",
     "missing_position", "position_schema", "nan", "infinite",
 ])
 def test_tampered_result_fails_before_creating_output_directory(tmp_path, bad):
@@ -130,6 +130,7 @@ def test_tampered_result_fails_before_creating_output_directory(tmp_path, bad):
     elif bad == "hold_trade": result.trades.loc[0, "signal"] = "HOLD"
     elif bad == "model": result.trades.loc[0, "model_name"] = "other"
     elif bad == "confidence": result.trades.loc[0, "confidence"] = .5
+    elif bad == "opening_mark": result.positions_history["opening_mark_price"] = 1.0
     elif bad == "trade_order": result = replace(result, trades=result.trades.iloc[::-1].reset_index(drop=True))
     elif bad == "trade_schema": result = replace(result, trades=result.trades.drop(columns="quantity"))
     elif bad == "trade_dtype": result = replace(result, trades=result.trades.astype({"quantity": "float32"}))
@@ -286,3 +287,34 @@ def test_storage_overflow_is_a_backtest_error_before_writing(tmp_path):
     with pytest.raises(api.BacktestError, match="finite|precision"):
         save(result, output_dir=destination)
     assert not destination.exists()
+
+
+def test_inflated_opening_value_with_consistently_rewritten_outputs_is_rejected(tmp_path):
+    api = import_module("stocklab_ml.backtesting")
+    source = decisions([("2024-01-05", "AAPL", .8), ("2024-01-08", "MSFT", .8)])
+    prices = market([("2024-01-05", "AAPL", 100, 100), ("2024-01-08", "AAPL", 100, 100),
+                     ("2024-01-09", "AAPL", 100, 100), ("2024-01-08", "MSFT", 100, 100),
+                     ("2024-01-09", "MSFT", 100, 100)])
+    result = run(source, prices)
+    result.trades.loc[1, ["portfolio_value_before", "quantity", "total_amount", "cash_after", "position_quantity_after"]] = [1000000, 500, 50000, 40000, 500]
+    result.equity_curve.loc[2, ["cash", "positions_value"]] = [40000, 60000]
+    result.positions_history.loc[result.positions_history.symbol.eq("MSFT"), ["quantity", "market_value"]] = [500, 50000]
+    result = replace(result, report=replace(result.report, final_cash=40000, final_positions_value=60000))
+    destination = tmp_path / "outputs"
+    with pytest.raises(api.BacktestError, match="Opening|opening"):
+        save(result, output_dir=destination)
+    assert not destination.exists()
+
+
+def test_opening_valuation_includes_holdings_sold_later_that_day(tmp_path):
+    source = decisions([("2024-01-05", "MSFT", .8), ("2024-01-08", "AAPL", .8),
+                        ("2024-01-08", "MSFT", .2)])
+    prices = market([(day, symbol, 100, 100) for symbol in ["AAPL", "MSFT"]
+                     for day in ["2024-01-05", "2024-01-08", "2024-01-09"]])
+    result = run(source, prices)
+    assert result.trades.symbol.tolist() == ["MSFT", "AAPL", "MSFT"]
+    assert result.trades.portfolio_value_before.tolist() == [100000, 100000, 100000]
+    final = result.positions_history[result.positions_history.date.eq(pd.Timestamp("2024-01-09"))]
+    assert final.symbol.tolist() == ["AAPL"]
+    saved = save(result, output_dir=tmp_path)
+    assert json.loads(saved.report_path.read_text())["final_cash"] == 90000

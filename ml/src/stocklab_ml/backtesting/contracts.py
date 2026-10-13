@@ -11,7 +11,7 @@ EXECUTION_TIMING = "decision after close[t]; next observed session open for the 
 TRADE_COLUMNS = ["decision_date", "execution_date", "symbol", "model_name", "signal", "confidence",
                  "quantity", "execution_price", "total_amount", "cash_after", "position_quantity_after",
                  "average_cost_after", "realized_pnl", "portfolio_value_before"]
-POSITION_COLUMNS = ["date", "symbol", "quantity", "average_cost", "mark_price", "market_value", "unrealized_pnl"]
+POSITION_COLUMNS = ["date", "symbol", "quantity", "average_cost", "mark_price", "market_value", "unrealized_pnl", "opening_mark_price"]
 EQUITY_COLUMNS = ["date", "cash", "positions_value", "total_value", "drawdown"]
 
 

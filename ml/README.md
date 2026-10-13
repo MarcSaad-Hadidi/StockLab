@@ -1271,7 +1271,7 @@ independent pandas DataFrames with stable columns/dtypes, including empty tables
 | Table | Columns, in order |
 | --- | --- |
 | `trades` | `decision_date, execution_date, symbol, model_name, signal, confidence, quantity, execution_price, total_amount, cash_after, position_quantity_after, average_cost_after, realized_pnl, portfolio_value_before` |
-| `positions_history` | `date, symbol, quantity, average_cost, mark_price, market_value, unrealized_pnl` |
+| `positions_history` | `date, symbol, quantity, average_cost, mark_price, market_value, unrealized_pnl, opening_mark_price` |
 | `equity_curve` | `date, cash, positions_value, total_value, drawdown` |
 
 Historical positions contain EOD snapshots of every open holding, without rows
@@ -1279,6 +1279,11 @@ for dates with no holdings. The equity curve separately records those cash-only
 dates and anchors drawdown to initial capital before the first execution.
 The ledger's `portfolio_value_before` records the opening/as-of value used for
 risk limits, so storage can check BUY allocation/exposure against reported policy.
+Each position snapshot also retains `opening_mark_price`, the same day's open
+or strictly earlier as-of close used for risk. Storage replays opening value
+from every held position; holdings sold that day use their ledger execution
+price. This prevents a self-declared opening portfolio value from bypassing
+allocation/exposure checks while preserving the separate EOD close mark.
 
 - Final value = final cash + final marked positions value.
 - Total return = `(final_value / initial_capital) - 1`, as a decimal fraction.
