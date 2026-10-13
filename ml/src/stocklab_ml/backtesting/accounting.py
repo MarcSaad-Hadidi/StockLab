@@ -8,12 +8,16 @@ from .contracts import BacktestError
 
 
 def _add_buy(old_quantity: float, old_cost: float, quantity: float, price: float) -> tuple[float, float]:
+    exact_quantity = Fraction(str(old_quantity)) + Fraction(str(quantity))
+    new_quantity = _finite_sum((old_quantity, quantity))
+    if Fraction(str(new_quantity)) != exact_quantity:
+        raise BacktestError("Accumulated quantity cannot be preserved at float64 precision.")
     # Decimal weights avoid binary cancellation creating break-even trade wins.
     with localcontext(Context(prec=40)):
         old, bought = Decimal(str(old_quantity)), Decimal(str(quantity))
-        total = old + bought
+        total = Decimal(str(new_quantity))
         average = (old * Decimal(str(old_cost)) + bought * Decimal(str(price))) / total
-        return float(total), float(average)
+        return new_quantity, float(average)
 
 
 def _finite_sum(values) -> float:

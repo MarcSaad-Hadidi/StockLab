@@ -427,3 +427,31 @@ def test_multiple_finite_positions_overflowing_equity_raise_backtest_error():
     source = decisions([("2024-01-05", symbol, .8) for symbol in ["AAPL", "MSFT"]])
     with pytest.raises(api.BacktestError, match="finite|precision"):
         run(source, prices)
+
+
+@pytest.mark.parametrize("old_quantity,bought", [(2 ** 53, 1), (2 ** 53, 3), (1e50, 1)])
+def test_accumulated_quantity_rejects_lost_or_invented_shares(old_quantity, bought):
+    api = import_module("stocklab_ml.backtesting")
+    from stocklab_ml.backtesting.accounting import _add_buy
+
+    with pytest.raises(api.BacktestError, match="quantity|precision"):
+        _add_buy(float(old_quantity), 1.0, float(bought), 1.0)
+
+
+def test_representable_large_quantity_increment_is_preserved():
+    from stocklab_ml.backtesting.accounting import _add_buy
+
+    quantity, average_cost = _add_buy(9007199254740992.0, 1.0, 2.0, 1.0)
+    assert quantity == 9007199254740994.0
+    assert average_cost == 1.0
+
+
+def test_backtest_rejects_unrepresentable_additional_buy():
+    api = import_module("stocklab_ml.backtesting")
+    source = decisions([("2024-01-05", "AAPL", .8), ("2024-01-08", "AAPL", .8)])
+    prices = market([("2024-01-05", "AAPL", 1, 1), ("2024-01-08", "AAPL", 1, 1),
+                     ("2024-01-09", "AAPL", .9999999999999998, .9999999999999998)])
+    cfg = config(initial_capital=18014398509481984.0, max_trade_allocation=.5,
+                 max_symbol_exposure=.5, quantity_decimals=0)
+    with pytest.raises(api.BacktestError, match="quantity|precision"):
+        run(source, prices, config=cfg)

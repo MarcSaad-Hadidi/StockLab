@@ -1260,6 +1260,8 @@ tolerance removes small positive gains.
 Trade notionals, allocation/exposure products, cash balances, and portfolio sums
 also use exact decimal ratios before returning float64. For example, 0.30 cash
 buys exactly three shares at 0.10, leaving zero cash; replay uses the same rules.
+An accumulated quantity that cannot preserve the exact decimal sum in float64
+raises `BacktestError` before cash is debited, rather than losing or inventing shares.
 
 ### Results and metrics
 
