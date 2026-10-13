@@ -1,6 +1,7 @@
 """Chronological, shared-cash simulation; opens execute, closes mark holdings."""
 
 from collections import defaultdict
+from fractions import Fraction
 import math
 
 import numpy as np
@@ -63,21 +64,21 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
         open_marks = close_marks | opens
         for row in sorted(scheduled[day], key=lambda row: row.symbol):
             symbol, price = row.symbol, opens[row.symbol]
-            old_quantity, old_cost = positions.get(symbol, (0.0, 0.0))
+            old_quantity, old_cost, old_basis = positions.get(symbol, (0.0, 0.0, Fraction(0)))
             if row.signal == "SELL" and symbol not in positions:
                 skipped["skipped_no_position"] += 1
                 continue
             if row.signal == "BUY" and symbol not in positions and len(positions) >= config.max_open_positions:
                 skipped["skipped_max_positions"] += 1
                 continue
-            total = _finite_sum([cash, *(_product(qty, open_marks[sym]) for sym, (qty, _) in positions.items())])
+            total = _finite_sum([cash, *(_product(qty, open_marks[sym]) for sym, (qty, _, _) in positions.items())])
             if not math.isfinite(total) or total <= 0:
                 raise BacktestError("Portfolio arithmetic exceeds finite float64 precision.")
             pnl = np.nan
             if row.signal == "SELL":
                 quantity = old_quantity
                 amount = _product(quantity, price)
-                pnl = (price - old_cost) * quantity
+                pnl = _finite_sum((amount, -old_basis))
                 cash = _finite_sum((cash, amount))
                 new_quantity, average_cost = 0.0, 0.0
                 del positions[symbol]
@@ -95,7 +96,7 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
                     continue
                 new_quantity, average_cost = _add_buy(old_quantity, old_cost, quantity, price)
                 cash = _finite_sum((cash, -amount))
-                positions[symbol] = (new_quantity, average_cost)
+                positions[symbol] = (new_quantity, average_cost, old_basis + Fraction(str(amount)))
             if not all(math.isfinite(v) for v in [cash, new_quantity, average_cost, amount]) or cash < 0:
                 raise BacktestError("Nonfinite or negative portfolio accounting.")
             trades.append((row.date, day, symbol, row.model_name, row.signal, row.confidence,
@@ -103,9 +104,10 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
 
         close_marks.update(zip(bars.symbol, bars.close))
         values = []
-        for symbol, (quantity, average_cost) in sorted(positions.items()):
+        for symbol, (quantity, average_cost, cost_basis) in sorted(positions.items()):
             mark = close_marks[symbol]
-            value, unrealized = _product(quantity, mark), (mark - average_cost) * quantity
+            value = _product(quantity, mark)
+            unrealized = _finite_sum((value, -cost_basis))
             if not math.isfinite(value) or not math.isfinite(unrealized):
                 raise BacktestError("Nonfinite end-of-day position valuation.")
             values.append(value)

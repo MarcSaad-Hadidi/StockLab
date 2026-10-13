@@ -3,6 +3,7 @@
 from dataclasses import asdict, replace
 from importlib import import_module
 import json
+import math
 import os
 
 import numpy as np
@@ -318,3 +319,40 @@ def test_opening_valuation_includes_holdings_sold_later_that_day(tmp_path):
     assert final.symbol.tolist() == ["AAPL"]
     saved = save(result, output_dir=tmp_path)
     assert json.loads(saved.report_path.read_text())["final_cash"] == 90000
+
+
+@pytest.mark.parametrize("opening,closing,capital,pnl,win", [
+    (1e-300, math.nextafter(1e-300, math.inf), 1e-308, 5e-324, 1),
+    (math.nextafter(1e-300, math.inf), 1e-300, 1.0000000000000004e-308, -5e-324, 0),
+])
+def test_subnormal_accounted_gain_and_loss_are_not_flat(tmp_path, opening, closing, capital, pnl, win):
+    from test_backtesting import config
+
+    source = decisions([("2024-01-05", "AAPL", .8), ("2024-01-08", "AAPL", .2)])
+    prices = market([("2024-01-05", "AAPL", opening, opening),
+                     ("2024-01-08", "AAPL", opening, closing), ("2024-01-09", "AAPL", closing, closing)])
+    cfg = config(initial_capital=capital, max_symbol_exposure=1, max_trade_allocation=1)
+    result = run(source, prices, config=cfg)
+    assert result.trades.quantity.tolist() == [1e-8, 1e-8]
+    assert result.trades.realized_pnl.iloc[-1] == pnl
+    assert result.positions_history.unrealized_pnl.iloc[-1] == pnl
+    assert result.report.win_rate == win
+    assert result.report.final_cash - capital == pnl
+    save(result, output_dir=tmp_path)
+
+
+def test_pnl_preserves_accounted_cost_basis_across_weighted_buys(tmp_path):
+    from test_backtesting import config
+
+    source = decisions([("2024-01-05", "AAPL", .8), ("2024-01-08", "AAPL", .8),
+                        ("2024-01-09", "AAPL", .2)])
+    prices = market([("2024-01-05", "AAPL", 5.01, 5.01), ("2024-01-08", "AAPL", 5.01, 5.01),
+                     ("2024-01-09", "AAPL", 3.35, 3.35),
+                     ("2024-01-10", "AAPL", 3.9033333333333333, 3.9033333333333333)])
+    result = run(source, prices, config=config(initial_capital=1000, max_trade_allocation=.01, quantity_decimals=0))
+    assert result.trades.quantity.tolist() == [1, 2, 3]
+    assert result.trades.total_amount.tolist() == [5.01, 6.7, 11.709999999999999]
+    assert result.trades.realized_pnl.iloc[-1] == -1e-15
+    assert result.positions_history.unrealized_pnl.iloc[-1] == -1.66
+    assert result.report.win_rate == 0
+    save(result, output_dir=tmp_path)

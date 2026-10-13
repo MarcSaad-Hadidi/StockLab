@@ -1,6 +1,7 @@
 """Reuse upstream contracts without cleaning, repairing, or consulting a clock."""
 
 from dataclasses import asdict
+from fractions import Fraction
 import math
 from numbers import Integral, Real
 import re
@@ -150,12 +151,12 @@ def validate_result(result: BacktestResult) -> None:
                     raise BacktestError("Opening mark must match the same-day execution price.")
                 opening_marks[trade.symbol] = trade.execution_price
             for trade in orders.itertuples(index=False):
-                old_quantity, old_cost = positions.get(trade.symbol, (0.0, 0.0))
+                old_quantity, old_cost, old_basis = positions.get(trade.symbol, (0.0, 0.0, Fraction(0)))
                 amount = _product(trade.quantity, trade.execution_price)
                 if not set(positions).issubset(opening_marks):
                     raise BacktestError("Opening marks must cover every held position.")
                 opening_value = _finite_sum([cash, *(_product(qty, opening_marks[symbol])
-                                                    for symbol, (qty, _) in positions.items())])
+                                                    for symbol, (qty, _, _) in positions.items())])
                 if trade.portfolio_value_before != opening_value:
                     raise BacktestError("Opening portfolio value does not reconcile with all held positions.")
                 if trade.signal == "BUY":
@@ -170,13 +171,13 @@ def validate_result(result: BacktestResult) -> None:
                         raise BacktestError("BUY amount exceeds reported cash, allocation, or exposure policy.")
                     new_quantity, average = _add_buy(old_quantity, old_cost, trade.quantity, trade.execution_price)
                     cash = _finite_sum((cash, -amount))
-                    positions[trade.symbol] = (new_quantity, average)
+                    positions[trade.symbol] = (new_quantity, average, old_basis + Fraction(str(amount)))
                 else:
                     if trade.symbol not in positions or trade.quantity != old_quantity:
                         raise BacktestError("SELL must close one entire existing position.")
-                    pnl = (trade.execution_price - old_cost) * old_quantity
+                    pnl = _finite_sum((amount, -old_basis))
                     if trade.realized_pnl != pnl:
-                        raise BacktestError("SELL realized P&L does not match average cost.")
+                        raise BacktestError("SELL realized P&L does not match accounted cost basis.")
                     cash = _finite_sum((cash, amount))
                     new_quantity, average = 0.0, 0.0
                     del positions[trade.symbol]
@@ -190,11 +191,11 @@ def validate_result(result: BacktestResult) -> None:
         values = []
         if snapshots is not None:
             for snapshot in snapshots.itertuples(index=False):
-                quantity, cost = positions[snapshot.symbol]
+                quantity, cost, cost_basis = positions[snapshot.symbol]
                 value = _product(quantity, snapshot.mark_price)
                 if (snapshot.quantity != quantity or snapshot.average_cost != cost or snapshot.mark_price <= 0
                         or snapshot.market_value != value
-                        or snapshot.unrealized_pnl != (snapshot.mark_price - cost) * quantity):
+                        or snapshot.unrealized_pnl != _finite_sum((value, -cost_basis))):
                     raise BacktestError("Historical position accounting does not reconcile.")
                 values.append(value)
         positions_value = _finite_sum(values)

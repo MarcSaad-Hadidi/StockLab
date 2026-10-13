@@ -1249,8 +1249,12 @@ BUYs without forcing a rebalance or SELL.
 New holdings use execution open as average cost. Additional BUYs use
 `(old_quantity * old_average_cost + buy_quantity * execution_price) /
 (old_quantity + buy_quantity)`. SELL requires an existing position and closes
-its entire quantity. Realized P&L is `(sell_price - average_cost) * quantity`;
-BUY has nullable/NaN realized P&L. There are no shorts, synthetic sales, spread,
+its entire quantity. Realized P&L is sale notional minus the exact sum of the
+position's accounted BUY notionals; unrealized P&L is marked value minus that
+cost basis. This implements the algebraic `(sell_price - average_cost) * quantity`
+definition using accounted amounts, preserving even representable subnormal
+cash gains/losses and avoiding a premature price-delta underflow. BUY has
+nullable/NaN realized P&L. There are no shorts, synthetic sales, spread,
 commissions, slippage, or forced final liquidation. Open positions remain marked
 at the last as-of close. Arithmetic that cannot remain finite raises clearly.
 Quantity accumulation and weighted average use standard-library decimal
