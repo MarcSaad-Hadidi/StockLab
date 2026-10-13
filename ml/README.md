@@ -1240,6 +1240,8 @@ to the configured precision, never rounded upward. The budget/price ratio uses
 exact rational arithmetic on decimal representations before flooring, so an
 affordable grid unit is not lost to binary rounding. Actual notional is checked
 against the budget again after conversion to float64.
+If conversion exceeds the budget, sizing moves to the next lower representable
+float and reapplies the quantity grid until the amount is affordable.
 Zero/too-small quantities are skipped. There is no borrowing or leverage.
 Price appreciation can move a holding above its exposure cap; this blocks further
 BUYs without forcing a rebalance or SELL.

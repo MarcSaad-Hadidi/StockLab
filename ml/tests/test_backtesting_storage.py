@@ -257,6 +257,22 @@ def test_repeated_decimal_cash_debits_leave_the_last_affordable_share(tmp_path):
     save(result, output_dir=tmp_path)
 
 
+def test_large_quantity_uses_next_affordable_float_instead_of_skipping(tmp_path):
+    from test_backtesting import config
+
+    source = decisions([("2024-01-05", "AAPL", .8)])
+    prices = market([(day, "AAPL", .1, .1) for day in ["2024-01-05", "2024-01-08"]])
+    cfg = config(initial_capital=3602879701896397.5, max_symbol_exposure=1,
+                 max_trade_allocation=1, quantity_decimals=0)
+    result = run(source, prices, config=cfg)
+    assert result.trades.quantity.tolist() == [3.602879701896397e16]
+    assert result.trades.total_amount.tolist() == [3602879701896397.0]
+    assert result.trades.cash_after.tolist() == [.5]
+    assert result.report.skipped_buying_power == 0
+    assert result.report.final_value == cfg.initial_capital
+    save(result, output_dir=tmp_path)
+
+
 def test_storage_overflow_is_a_backtest_error_before_writing(tmp_path):
     api = import_module("stocklab_ml.backtesting")
     source = decisions([("2024-01-05", symbol, .8) for symbol in ["AAPL", "MSFT"]])

@@ -45,10 +45,10 @@ def _size_buy(budget: float, price: float, decimals: int) -> tuple[float, float]
     units = scaled.numerator // scaled.denominator
     quantity = float(Fraction(units, scale))
     amount = Fraction(str(quantity)) * opening_price
-    # A float64 output may represent a large grid quantity above its budget.
-    if amount > available:
-        quantity = float(Fraction(max(0, units - 1), scale))
+    # Move by representable floats; one grid unit may round to the same float.
+    while amount > available:
+        lower = Fraction(str(math.nextafter(quantity, 0.0))) * scale
+        units = lower.numerator // lower.denominator
+        quantity = float(Fraction(units, scale))
         amount = Fraction(str(quantity)) * opening_price
-    if amount > available:
-        return 0.0, 0.0
     return quantity, float(amount)
