@@ -8,7 +8,7 @@ import pandas as pd
 
 from stocklab_ml.data.models import CleanedDatasetResult
 from stocklab_ml.signals.contracts import ConfidenceSignalsResult
-from .accounting import _add_buy, _finite_sum
+from .accounting import _add_buy, _finite_sum, _product, _size_buy
 from .contracts import (
     BacktestConfig, BacktestError, BacktestReport, BacktestResult,
     EQUITY_COLUMNS, POSITION_COLUMNS, TRADE_COLUMNS,
@@ -57,7 +57,6 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
     positions, close_marks = {}, {}
     trades, history, equity = [], [], []
     start = signals.date.min()
-    scale = 10 ** config.quantity_decimals
     for day, bars in prices[prices.date >= start].groupby("date", sort=True):
         opens = dict(zip(bars.symbol, bars.open))
         # All today's opens are known at this phase; today's closes are not.
@@ -71,40 +70,31 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
             if row.signal == "BUY" and symbol not in positions and len(positions) >= config.max_open_positions:
                 skipped["skipped_max_positions"] += 1
                 continue
-            total = cash + _finite_sum(qty * open_marks[sym] for sym, (qty, _) in positions.items())
+            total = _finite_sum([cash, *(_product(qty, open_marks[sym]) for sym, (qty, _) in positions.items())])
             if not math.isfinite(total) or total <= 0:
                 raise BacktestError("Portfolio arithmetic exceeds finite float64 precision.")
             pnl = np.nan
             if row.signal == "SELL":
                 quantity = old_quantity
-                amount = quantity * price
+                amount = _product(quantity, price)
                 pnl = (price - old_cost) * quantity
-                cash += amount
+                cash = _finite_sum((cash, amount))
                 new_quantity, average_cost = 0.0, 0.0
                 del positions[symbol]
             else:
-                remaining = total * config.max_symbol_exposure - old_quantity * price
+                remaining = _finite_sum((_product(total, config.max_symbol_exposure), -_product(old_quantity, price)))
                 if not math.isfinite(remaining):
                     raise BacktestError("Portfolio arithmetic exceeds finite float64 precision.")
                 if remaining <= 0:
                     skipped["skipped_exposure"] += 1
                     continue
-                budget = min(cash, total * config.max_trade_allocation, remaining)
-                raw = budget / price * scale
-                if not math.isfinite(raw):
-                    raise BacktestError("Quantity exceeds finite float64 precision.")
-                units = math.floor(raw)
-                quantity = units / scale
-                amount = quantity * price
-                # Binary multiplication may cross a limit even after flooring.
-                if amount > budget:
-                    quantity = max(0, units - 1) / scale
-                    amount = quantity * price
+                budget = min(cash, _product(total, config.max_trade_allocation), remaining)
+                quantity, amount = _size_buy(budget, price, config.quantity_decimals)
                 if quantity <= 0 or amount <= 0 or amount > budget:
                     skipped["skipped_buying_power"] += 1
                     continue
                 new_quantity, average_cost = _add_buy(old_quantity, old_cost, quantity, price)
-                cash -= amount
+                cash = _finite_sum((cash, -amount))
                 positions[symbol] = (new_quantity, average_cost)
             if not all(math.isfinite(v) for v in [cash, new_quantity, average_cost, amount]) or cash < 0:
                 raise BacktestError("Nonfinite or negative portfolio accounting.")
@@ -115,13 +105,13 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
         values = []
         for symbol, (quantity, average_cost) in sorted(positions.items()):
             mark = close_marks[symbol]
-            value, unrealized = quantity * mark, (mark - average_cost) * quantity
+            value, unrealized = _product(quantity, mark), (mark - average_cost) * quantity
             if not math.isfinite(value) or not math.isfinite(unrealized):
                 raise BacktestError("Nonfinite end-of-day position valuation.")
             values.append(value)
             history.append((day, symbol, quantity, average_cost, mark, value, unrealized))
         positions_value = _finite_sum(values)
-        total_value = cash + positions_value
+        total_value = _finite_sum((cash, positions_value))
         if not math.isfinite(total_value) or total_value <= 0:
             raise BacktestError("Nonfinite or nonpositive portfolio equity.")
         peak = max(peak, total_value)

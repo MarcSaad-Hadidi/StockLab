@@ -14,7 +14,7 @@ from stocklab_ml.data.validation import SYMBOL_PATTERN
 from stocklab_ml.signals.confidence import _validate_confidence_result
 from stocklab_ml.signals.contracts import ConfidenceScoreError, ConfidenceSignalsResult, TradingSignalError
 from stocklab_ml.signals.validation import _validate_policy
-from .accounting import _add_buy, _finite_sum
+from .accounting import _add_buy, _finite_sum, _product
 from .contracts import (
     BacktestConfig, BacktestError, BacktestReport, BacktestResult, EXECUTION_TIMING,
     EQUITY_COLUMNS, POSITION_COLUMNS, TRADE_COLUMNS,
@@ -144,8 +144,8 @@ def validate_result(result: BacktestResult) -> None:
         if orders is not None:
             for trade in orders.itertuples(index=False):
                 old_quantity, old_cost = positions.get(trade.symbol, (0.0, 0.0))
-                amount = trade.quantity * trade.execution_price
-                known_value = cash + old_quantity * trade.execution_price
+                amount = _product(trade.quantity, trade.execution_price)
+                known_value = _finite_sum((cash, _product(old_quantity, trade.execution_price)))
                 if (trade.portfolio_value_before < known_value
                         or (set(positions).issubset({trade.symbol}) and trade.portfolio_value_before != known_value)):
                     raise BacktestError("Opening portfolio value does not reconcile with known holdings.")
@@ -154,12 +154,13 @@ def validate_result(result: BacktestResult) -> None:
                         raise BacktestError("BUY cannot have realized P&L.")
                     if round(trade.quantity, cfg.quantity_decimals) != trade.quantity:
                         raise BacktestError("BUY quantity exceeds configured precision.")
-                    budget = min(cash, trade.portfolio_value_before * cfg.max_trade_allocation,
-                                 trade.portfolio_value_before * cfg.max_symbol_exposure - old_quantity * trade.execution_price)
+                    remaining = _finite_sum((_product(trade.portfolio_value_before, cfg.max_symbol_exposure),
+                                             -_product(old_quantity, trade.execution_price)))
+                    budget = min(cash, _product(trade.portfolio_value_before, cfg.max_trade_allocation), remaining)
                     if amount > budget:
                         raise BacktestError("BUY amount exceeds reported cash, allocation, or exposure policy.")
                     new_quantity, average = _add_buy(old_quantity, old_cost, trade.quantity, trade.execution_price)
-                    cash -= amount
+                    cash = _finite_sum((cash, -amount))
                     positions[trade.symbol] = (new_quantity, average)
                 else:
                     if trade.symbol not in positions or trade.quantity != old_quantity:
@@ -167,7 +168,7 @@ def validate_result(result: BacktestResult) -> None:
                     pnl = (trade.execution_price - old_cost) * old_quantity
                     if trade.realized_pnl != pnl:
                         raise BacktestError("SELL realized P&L does not match average cost.")
-                    cash += amount
+                    cash = _finite_sum((cash, amount))
                     new_quantity, average = 0.0, 0.0
                     del positions[trade.symbol]
                 if (cash < 0 or len(positions) > cfg.max_open_positions
@@ -182,14 +183,14 @@ def validate_result(result: BacktestResult) -> None:
         if snapshots is not None:
             for snapshot in snapshots.itertuples(index=False):
                 quantity, cost = positions[snapshot.symbol]
-                value = quantity * snapshot.mark_price
+                value = _product(quantity, snapshot.mark_price)
                 if (snapshot.quantity != quantity or snapshot.average_cost != cost or snapshot.mark_price <= 0
                         or snapshot.market_value != value
                         or snapshot.unrealized_pnl != (snapshot.mark_price - cost) * quantity):
                     raise BacktestError("Historical position accounting does not reconcile.")
                 values.append(value)
         positions_value = _finite_sum(values)
-        total = cash + positions_value
+        total = _finite_sum((cash, positions_value))
         peak = max(peak, total)
         if (total <= 0 or eod.cash != cash or eod.positions_value != positions_value or eod.total_value != total
                 or eod.drawdown != (peak - total) / peak):

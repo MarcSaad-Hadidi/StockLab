@@ -203,14 +203,57 @@ def test_valid_floored_fractional_shares_are_storable(tmp_path, price):
     assert len(pd.read_csv(saved.trades_path)) == 1
 
 
-def test_binary_cash_budget_correction_preserves_quantity_grid(tmp_path):
+def test_exact_decimal_cash_budget_preserves_quantity_grid(tmp_path):
     from test_backtesting import config
 
     source = decisions([("2024-01-05", "AAPL", .8)])
     prices = market([("2024-01-05", "AAPL", 3, 3), ("2024-01-08", "AAPL", 3, 3)])
     result = run(source, prices, config=config(initial_capital=.3, max_symbol_exposure=1, max_trade_allocation=1))
-    assert result.trades.quantity.iloc[0] == .09999999
-    assert result.trades.total_amount.iloc[0] <= .3 and result.report.final_cash >= 0
+    assert result.trades.quantity.iloc[0] == .1
+    assert result.trades.total_amount.iloc[0] == .3 and result.report.final_cash == 0
+    save(result, output_dir=tmp_path)
+
+
+@pytest.mark.parametrize("precision", [0, 2, 8])
+def test_decimal_grid_boundary_does_not_drop_affordable_shares(tmp_path, precision):
+    from test_backtesting import config
+
+    source = decisions([("2024-01-05", "AAPL", .8), ("2024-01-08", "AAPL", .2)])
+    prices = market([(day, "AAPL", .1, .1) for day in ["2024-01-05", "2024-01-08", "2024-01-09"]])
+    result = run(source, prices, config=config(initial_capital=.3, max_symbol_exposure=1,
+                                              max_trade_allocation=1, quantity_decimals=precision))
+    assert result.trades.quantity.tolist() == [3, 3]
+    assert result.trades.total_amount.tolist() == [.3, .3]
+    assert result.trades.cash_after.tolist() == [0, .3]
+    assert result.equity_curve.total_value.tolist() == [.3, .3, .3]
+    assert result.report.total_return == result.report.win_rate == result.report.max_drawdown == 0
+    save(result, output_dir=tmp_path)
+
+
+def test_decimal_allocation_cap_does_not_drop_an_affordable_unit(tmp_path):
+    from test_backtesting import config
+
+    source = decisions([("2024-01-05", "AAPL", .8)])
+    prices = market([(day, "AAPL", .01, .01) for day in ["2024-01-05", "2024-01-08"]])
+    result = run(source, prices, config=config(initial_capital=.7, quantity_decimals=0))
+    assert result.trades.quantity.tolist() == [7]
+    assert result.trades.total_amount.tolist() == [.07]
+    assert result.report.final_cash == .63 and result.report.final_value == .7
+    assert result.report.total_return == 0
+    save(result, output_dir=tmp_path)
+
+
+def test_repeated_decimal_cash_debits_leave_the_last_affordable_share(tmp_path):
+    from test_backtesting import config
+
+    days = ["2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10", "2024-01-11"]
+    source = decisions([(day, "AAPL", p) for day, p in zip(days[:-1], [.8, .8, .8, .2])])
+    prices = market([(day, "AAPL", .1, .1) for day in days])
+    result = run(source, prices, config=config(initial_capital=.3, max_symbol_exposure=1,
+                                              max_trade_allocation=.5, quantity_decimals=0))
+    assert result.trades.quantity.tolist() == [1, 1, 1, 3]
+    assert result.trades.cash_after.tolist() == [.2, .1, 0, .3]
+    assert result.report.final_value == .3 and result.report.total_return == 0
     save(result, output_dir=tmp_path)
 
 

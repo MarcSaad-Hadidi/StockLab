@@ -1236,8 +1236,10 @@ BUY notional is `min(cash, open_portfolio_value * max_trade_allocation,
 open_portfolio_value * max_symbol_exposure - held_quantity * execution_open)`.
 An existing holding can receive another BUY if exposure/cash permit it. A new
 symbol cannot exceed the position-count limit. Fractional quantity is floored
-to the configured precision, never rounded upward; actual notional is checked
-against the budget again to protect cash and risk limits from binary rounding.
+to the configured precision, never rounded upward. The budget/price ratio uses
+exact rational arithmetic on decimal representations before flooring, so an
+affordable grid unit is not lost to binary rounding. Actual notional is checked
+against the budget again after conversion to float64.
 Zero/too-small quantities are skipped. There is no borrowing or leverage.
 Price appreciation can move a holding above its exposure cap; this blocks further
 BUYs without forcing a rebalance or SELL.
@@ -1253,6 +1255,9 @@ Quantity accumulation and weighted average use standard-library decimal
 arithmetic before returning float64, so binary rounding does not classify the
 covered equal-price or weighted break-even cases as wins. No arbitrary P&L
 tolerance removes small positive gains.
+Trade notionals, allocation/exposure products, cash balances, and portfolio sums
+also use exact decimal ratios before returning float64. For example, 0.30 cash
+buys exactly three shares at 0.10, leaving zero cash; replay uses the same rules.
 
 ### Results and metrics
 
