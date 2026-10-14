@@ -1,23 +1,21 @@
 """Shared numeric accounting for simulation and persistence validation."""
 
-from decimal import Context, Decimal, localcontext
 from fractions import Fraction
 import math
 
 from .contracts import BacktestConfig, BacktestError
 
 
-def _add_buy(old_quantity: float, old_cost: float, quantity: float, price: float) -> tuple[float, float]:
+def _add_buy(old_quantity: float, old_cost: float, quantity: float, price: float,
+             *, old_basis: Fraction | None = None) -> tuple[float, float]:
     exact_quantity = Fraction(str(old_quantity)) + Fraction(str(quantity))
-    new_quantity = _finite_sum((old_quantity, quantity))
+    new_quantity = _finite_sum((exact_quantity,))
     if Fraction(str(new_quantity)) != exact_quantity:
         raise BacktestError("Accumulated quantity cannot be preserved at float64 precision.")
-    # Decimal weights avoid binary cancellation creating break-even trade wins.
-    with localcontext(Context(prec=40)):
-        old, bought = Decimal(str(old_quantity)), Decimal(str(quantity))
-        total = Decimal(str(new_quantity))
-        average = (old * Decimal(str(old_cost)) + bought * Decimal(str(price))) / total
-        return new_quantity, float(average)
+    if old_basis is None:
+        old_basis = _product(old_quantity, old_cost)
+    basis = old_basis + _product(quantity, price)
+    return new_quantity, _finite_sum((basis / exact_quantity,))
 
 
 def _finite_sum(values) -> float:
@@ -30,11 +28,16 @@ def _finite_sum(values) -> float:
     return total
 
 
-def _product(left: float, right: float) -> float:
-    try:
-        return float(Fraction(str(left)) * Fraction(str(right)))
-    except (OverflowError, ValueError):
-        raise BacktestError("Portfolio product exceeds finite float64 precision.") from None
+def _product(left: float, right: float) -> Fraction:
+    return Fraction(str(left)) * Fraction(str(right))
+
+
+def _pnl(proceeds: Fraction, basis: Fraction) -> float:
+    exact = proceeds - basis
+    published = _finite_sum((exact,))
+    if exact and published == 0:
+        raise BacktestError("Nonzero P&L cannot be preserved at float64 precision.")
+    return published
 
 
 def _opening_value(cash: float | Fraction, positions: dict, marks: dict) -> Fraction:
@@ -49,7 +52,7 @@ def _buy_limits(cash: float | Fraction, total: Fraction, quantity: float, price:
     return remaining, budget
 
 
-def _size_buy(budget: float | Fraction, price: float, decimals: int) -> tuple[float, float]:
+def _size_buy(budget: float | Fraction, price: float, decimals: int) -> tuple[float, Fraction]:
     available, opening_price = Fraction(str(budget)), Fraction(str(price))
     scale = 10 ** decimals
     scaled = available / opening_price * scale
@@ -67,4 +70,4 @@ def _size_buy(budget: float | Fraction, price: float, decimals: int) -> tuple[fl
         units = lower.numerator // lower.denominator
         quantity = float(Fraction(units, scale))
         amount = Fraction(str(quantity)) * opening_price
-    return quantity, float(amount)
+    return quantity, amount

@@ -323,10 +323,10 @@ def test_opening_valuation_includes_holdings_sold_later_that_day(tmp_path):
 
 
 @pytest.mark.parametrize("opening,closing,capital,pnl,win", [
-    (1e-300, math.nextafter(1e-300, math.inf), 1e-308, 5e-324, 1),
-    (math.nextafter(1e-300, math.inf), 1e-300, 1.0000000000000004e-308, -5e-324, 0),
+    (1e-300, math.nextafter(1e-300, math.inf, steps=2), 1e-308, 5e-324, 1),
+    (math.nextafter(1e-300, math.inf, steps=2), 1e-300, 1.0000000000000004e-308, -5e-324, 0),
 ])
-def test_subnormal_accounted_gain_and_loss_are_not_flat(tmp_path, opening, closing, capital, pnl, win):
+def test_subnormal_exact_gain_and_loss_are_not_flat(tmp_path, opening, closing, capital, pnl, win):
     from test_backtesting import config
 
     source = decisions([("2024-01-05", "AAPL", .8), ("2024-01-08", "AAPL", .2)])
@@ -342,7 +342,7 @@ def test_subnormal_accounted_gain_and_loss_are_not_flat(tmp_path, opening, closi
     save(result, output_dir=tmp_path)
 
 
-def test_pnl_preserves_accounted_cost_basis_across_weighted_buys(tmp_path):
+def test_pnl_preserves_exact_cost_basis_across_weighted_buys(tmp_path):
     from test_backtesting import config
 
     source = decisions([("2024-01-05", "AAPL", .8), ("2024-01-08", "AAPL", .8),
@@ -353,7 +353,8 @@ def test_pnl_preserves_accounted_cost_basis_across_weighted_buys(tmp_path):
     result = run(source, prices, config=config(initial_capital=1000, max_trade_allocation=.01, quantity_decimals=0))
     assert result.trades.quantity.tolist() == [1, 2, 3]
     assert result.trades.total_amount.tolist() == [5.01, 6.7, 11.709999999999999]
-    assert result.trades.realized_pnl.iloc[-1] == -1e-15
+    # Exact proceeds are 11.7099999999999999, versus basis 11.71.
+    assert result.trades.realized_pnl.iloc[-1] == -1e-16
     assert result.positions_history.unrealized_pnl.iloc[-1] == -1.66
     assert result.report.win_rate == 0
     save(result, output_dir=tmp_path)
@@ -447,5 +448,70 @@ def test_replay_rejects_phantom_gain_from_rounded_cash(tmp_path):
     result = replace(result, report=replace(result.report, final_value=forged_value,
                                            total_return=forged_value / capital - 1))
     with pytest.raises(api.BacktestError, match="equity"):
+        save(result, output_dir=tmp_path / "forged")
+    assert not (tmp_path / "forged").exists()
+
+
+def test_unequal_flat_lots_preserve_exact_notionals(tmp_path):
+    from test_backtesting import config
+
+    capital, price = 1.8096242103229042e-06, 0.03698729415137326
+    source = decisions([("2024-01-05", "AAPL", .8), ("2024-01-08", "AAPL", .8),
+                        ("2024-01-09", "AAPL", .2)])
+    prices = market([(day, "AAPL", price, price) for day in
+                     ["2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10"]])
+    result = run(source, prices, config=config(initial_capital=capital,
+                 max_trade_allocation=.4, max_symbol_exposure=.5))
+    assert result.trades.quantity.tolist() == [1.957e-05, 4.89e-06, 2.446e-05]
+    assert result.trades.realized_pnl.iloc[-1] == 0
+    assert result.positions_history.unrealized_pnl.eq(0).all()
+    assert result.report.final_cash == capital
+    assert result.equity_curve.total_value.eq(capital).all()
+    assert result.report.win_rate == result.report.total_return == result.report.max_drawdown == 0
+    save(result, output_dir=tmp_path)
+
+
+@pytest.mark.parametrize("direction", [-1, 1])
+def test_nonzero_unrepresentable_pnl_is_rejected(direction):
+    from test_backtesting import config
+
+    api = import_module("stocklab_ml.backtesting")
+    opening = 1e-300
+    closing = math.nextafter(opening, math.inf if direction > 0 else 0)
+    source = decisions([("2024-01-05", "AAPL", .8), ("2024-01-08", "AAPL", .2)])
+    prices = market([("2024-01-05", "AAPL", opening, opening),
+                     ("2024-01-08", "AAPL", opening, closing),
+                     ("2024-01-09", "AAPL", closing, closing)])
+    with pytest.raises(api.BacktestError, match="P&L.*precision"):
+        run(source, prices, config=config(initial_capital=1e-308,
+                                         max_symbol_exposure=1, max_trade_allocation=1))
+
+
+@pytest.mark.parametrize("direction", [-1, 0, 1])
+def test_multi_symbol_exact_equity_and_pnl_replay(tmp_path, direction):
+    from test_backtesting import config
+
+    capital, price = 1.8096242103229042e-06, 0.03698729415137326
+    closing = price if not direction else math.nextafter(price, math.inf if direction > 0 else 0)
+    symbols = ["AAPL", "MSFT", "NVDA"]
+    source = decisions([(day, symbol, probability) for symbol in symbols
+                        for day, probability in [("2024-01-05", .8), ("2024-01-08", .2)]])
+    prices = market([(day, symbol, value, value) for symbol in symbols
+                     for day, value in [("2024-01-05", price), ("2024-01-08", price),
+                                        ("2024-01-09", closing)]])
+    result = run(source, prices, config=config(initial_capital=capital,
+                 max_trade_allocation=.3, max_symbol_exposure=.5))
+    buys = result.trades[result.trades.signal.eq("BUY")]
+    sells = result.trades[result.trades.signal.eq("SELL")]
+    expected_pnls = [Fraction(str(q)) * (Fraction(str(closing)) - Fraction(str(price)))
+                     for q in buys.quantity]
+    assert sells.realized_pnl.tolist() == [float(pnl) for pnl in expected_pnls]
+    assert result.report.win_rate == (1 if direction > 0 else 0)
+    assert result.equity_curve.total_value.iloc[1] == capital
+    assert result.report.final_value == float(Fraction(str(capital)) + sum(expected_pnls))
+    save(result, output_dir=tmp_path / "valid")
+    result.trades.loc[sells.index[0], "realized_pnl"] = 7e-23
+    api = import_module("stocklab_ml.backtesting")
+    with pytest.raises(api.BacktestError, match="P&L"):
         save(result, output_dir=tmp_path / "forged")
     assert not (tmp_path / "forged").exists()

@@ -1247,31 +1247,42 @@ Price appreciation can move a holding above its exposure cap; this blocks furthe
 BUYs without forcing a rebalance or SELL.
 
 New holdings use execution open as average cost. Additional BUYs use
-`(old_quantity * old_average_cost + buy_quantity * execution_price) /
+`(exact_old_cost_basis + buy_quantity * execution_price) /
 (old_quantity + buy_quantity)`. SELL requires an existing position and closes
 its entire quantity. Realized P&L is sale notional minus the exact sum of the
-position's accounted BUY notionals; unrealized P&L is marked value minus that
+position's exact BUY quantity-price products; unrealized P&L is marked value minus that
 cost basis. This implements the algebraic `(sell_price - average_cost) * quantity`
-definition using accounted amounts, preserving even representable subnormal
+definition using exact products, preserving even representable subnormal
 cash gains/losses and avoiding a premature price-delta underflow. BUY has
 nullable/NaN realized P&L. There are no shorts, synthetic sales, spread,
 commissions, slippage, or forced final liquidation. Open positions remain marked
 at the last as-of close. Arithmetic that cannot remain finite raises clearly.
-Quantity accumulation and weighted average use standard-library decimal
-arithmetic before returning float64, so binary rounding does not classify the
-covered equal-price or weighted break-even cases as wins. No arbitrary P&L
-tolerance removes small positive gains.
-Opening portfolio sums, risk products, remaining-exposure subtraction, and the
-budget/price quotient retain exact decimal ratios through sizing and replay.
-Only output values convert to float64, with published notional checked against
-the exact budget. Trade notionals use exact decimal ratios before returning
-float64. Cash retains the exact sum of those accounted notionals internally
-through every BUY, SELL, risk calculation, and equity valuation; only published
-cash fields are rounded to float64. Replay reconstructs this exact balance from
-the ledger rather than feeding rounded cash outputs back into accounting. For example, 0.30 cash
-buys exactly three shares at 0.10, leaving zero cash; replay uses the same rules.
-An accumulated quantity that cannot preserve the exact decimal sum in float64
-raises `BacktestError` before cash is debited, rather than losing or inventing shares.
+Quantity accumulation uses exact decimal ratios and rejects any sum that
+cannot be preserved in the published float64 quantity. Average cost is derived
+from the exact accumulated cost basis divided by that quantity; a rounded
+previous average never feeds the next calculation.
+
+Quantity-price products, cash, cost basis, holding marks, opening portfolio
+sums, risk products, remaining-exposure subtraction, and the budget/price
+quotient retain exact rational values throughout simulation and replay.
+Realized P&L is exact sale proceeds minus exact cost basis; unrealized P&L is
+exact marked value minus that basis. Multiple lots at one unchanged price
+therefore remain flat. Only presentation fields convert to float64, with both
+exact and published trade notionals checked against the exact BUY budget.
+Equity aggregates exact cash and all exact position values before rounding;
+adding independently rounded output columns can differ at precision limits.
+Replay reconstructs exact products from ledger quantities/prices and snapshot
+marks, never feeding rounded amount, cash, market-value, or average-cost fields
+back into accounting. For example, 0.30 cash buys exactly three shares at 0.10,
+leaving zero cash; replay uses the same rules.
+
+Representable tiny gains/losses remain nonzero, including subnormal values.
+If nonzero exact realized or unrealized P&L would round to zero, the engine
+raises `BacktestError` rather than silently classifying it as flat. Overflow and
+unrepresentable accumulated quantities or positive SELL notionals that round to
+zero also raise `BacktestError`. Return and
+drawdown are reporting metrics derived from the published equity curve; changes
+smaller than its float64 resolution may not appear in those metrics.
 
 ### Results and metrics
 

@@ -457,3 +457,26 @@ def test_backtest_rejects_unrepresentable_additional_buy():
                  max_symbol_exposure=.5, quantity_decimals=0)
     with pytest.raises(api.BacktestError, match="quantity|precision"):
         run(source, prices, config=cfg)
+
+
+def test_average_cost_uses_exact_accumulated_basis():
+    from fractions import Fraction
+    from stocklab_ml.backtesting.accounting import _add_buy
+
+    quantity, average, basis = 0.0, 0.0, Fraction(0)
+    for bought, price in [(3., 13.39), (2., .71), (5., 10.04), (3., 1.56), (2., 19.51)]:
+        quantity, average = _add_buy(quantity, average, bought, price, old_basis=basis)
+        basis += Fraction(str(bought)) * Fraction(str(price))
+        assert average == float(basis / Fraction(str(quantity)))
+    assert average == 9.032666666666668
+
+
+def test_unrepresentable_sell_notional_raises_before_returning_invalid_ledger():
+    api = import_module("stocklab_ml.backtesting")
+    prices = market([("2024-01-05", "AAPL", 1., 1.),
+                     ("2024-01-08", "AAPL", 1., 1.),
+                     ("2024-01-09", "AAPL", 1e-320, 1e-320)])
+    source = decisions([("2024-01-05", "AAPL", .8), ("2024-01-08", "AAPL", .2)])
+    with pytest.raises(api.BacktestError, match="notional.*precision"):
+        run(source, prices, config=config(initial_capital=2e-8, max_symbol_exposure=.5,
+                                         max_trade_allocation=.5))

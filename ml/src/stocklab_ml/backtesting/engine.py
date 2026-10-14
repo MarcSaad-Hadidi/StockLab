@@ -9,7 +9,7 @@ import pandas as pd
 
 from stocklab_ml.data.models import CleanedDatasetResult
 from stocklab_ml.signals.contracts import ConfidenceSignalsResult
-from .accounting import _add_buy, _buy_limits, _finite_sum, _opening_value, _product, _size_buy
+from .accounting import _add_buy, _buy_limits, _finite_sum, _opening_value, _pnl, _product, _size_buy
 from .contracts import (
     BacktestConfig, BacktestError, BacktestReport, BacktestResult,
     EQUITY_COLUMNS, POSITION_COLUMNS, TRADE_COLUMNS,
@@ -80,8 +80,8 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
             if row.signal == "SELL":
                 quantity = old_quantity
                 amount = _product(quantity, price)
-                pnl = _finite_sum((amount, -old_basis))
-                cash += Fraction(str(amount))
+                pnl = _pnl(amount, old_basis)
+                cash += amount
                 new_quantity, average_cost = 0.0, 0.0
                 del positions[symbol]
             else:
@@ -90,30 +90,35 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
                     skipped["skipped_exposure"] += 1
                     continue
                 quantity, amount = _size_buy(budget, price, config.quantity_decimals)
-                if quantity <= 0 or amount <= 0 or Fraction(str(amount)) > budget:
+                if quantity <= 0 or _finite_sum((amount,)) <= 0 or amount > budget:
                     skipped["skipped_buying_power"] += 1
                     continue
-                new_quantity, average_cost = _add_buy(old_quantity, old_cost, quantity, price)
-                cash -= Fraction(str(amount))
-                positions[symbol] = (new_quantity, average_cost, old_basis + Fraction(str(amount)))
+                new_quantity, average_cost = _add_buy(old_quantity, old_cost, quantity, price, old_basis=old_basis)
+                cash -= amount
+                positions[symbol] = (new_quantity, average_cost, old_basis + amount)
             published_cash = _finite_sum((cash,))
-            if not all(math.isfinite(v) for v in [published_cash, new_quantity, average_cost, amount]) or cash < 0:
+            published_amount = _finite_sum((amount,))
+            if published_amount <= 0:
+                raise BacktestError("Trade notional cannot be preserved at float64 precision.")
+            if not all(math.isfinite(v) for v in [published_cash, new_quantity, average_cost, published_amount]) or cash < 0:
                 raise BacktestError("Nonfinite or negative portfolio accounting.")
             trades.append((row.date, day, symbol, row.model_name, row.signal, row.confidence,
-                           quantity, price, amount, published_cash, new_quantity, average_cost, pnl, total_before))
+                           quantity, price, published_amount, published_cash, new_quantity, average_cost, pnl, total_before))
 
         close_marks.update(zip(bars.symbol, bars.close))
         values = []
         for symbol, (quantity, average_cost, cost_basis) in sorted(positions.items()):
             mark = close_marks[symbol]
             value = _product(quantity, mark)
-            unrealized = _finite_sum((value, -cost_basis))
-            if not math.isfinite(value) or not math.isfinite(unrealized):
+            unrealized = _pnl(value, cost_basis)
+            published_value = _finite_sum((value,))
+            if not math.isfinite(published_value) or not math.isfinite(unrealized):
                 raise BacktestError("Nonfinite end-of-day position valuation.")
             values.append(value)
-            history.append((day, symbol, quantity, average_cost, mark, value, unrealized, open_marks[symbol]))
-        positions_value = _finite_sum(values)
-        total_value = _finite_sum((cash, positions_value))
+            history.append((day, symbol, quantity, average_cost, mark, published_value, unrealized, open_marks[symbol]))
+        exact_positions_value = sum(values, Fraction(0))
+        positions_value = _finite_sum((exact_positions_value,))
+        total_value = _finite_sum((cash, exact_positions_value))
         if not math.isfinite(total_value) or total_value <= 0:
             raise BacktestError("Nonfinite or nonpositive portfolio equity.")
         peak = max(peak, total_value)

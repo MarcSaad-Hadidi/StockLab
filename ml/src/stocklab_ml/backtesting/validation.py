@@ -15,7 +15,7 @@ from stocklab_ml.data.validation import SYMBOL_PATTERN
 from stocklab_ml.signals.confidence import _validate_confidence_result
 from stocklab_ml.signals.contracts import ConfidenceScoreError, ConfidenceSignalsResult, TradingSignalError
 from stocklab_ml.signals.validation import _validate_policy
-from .accounting import _add_buy, _buy_limits, _finite_sum, _opening_value, _product
+from .accounting import _add_buy, _buy_limits, _finite_sum, _opening_value, _pnl, _product
 from .contracts import (
     BacktestConfig, BacktestError, BacktestReport, BacktestResult, EXECUTION_TIMING,
     EQUITY_COLUMNS, POSITION_COLUMNS, TRADE_COLUMNS,
@@ -165,22 +165,22 @@ def validate_result(result: BacktestResult) -> None:
                     if round(trade.quantity, cfg.quantity_decimals) != trade.quantity:
                         raise BacktestError("BUY quantity exceeds configured precision.")
                     _, budget = _buy_limits(cash, opening_value, old_quantity, trade.execution_price, cfg)
-                    if Fraction(str(amount)) > budget:
+                    if amount > budget or Fraction(str(_finite_sum((amount,)))) > budget:
                         raise BacktestError("BUY amount exceeds reported cash, allocation, or exposure policy.")
-                    new_quantity, average = _add_buy(old_quantity, old_cost, trade.quantity, trade.execution_price)
-                    cash -= Fraction(str(amount))
-                    positions[trade.symbol] = (new_quantity, average, old_basis + Fraction(str(amount)))
+                    new_quantity, average = _add_buy(old_quantity, old_cost, trade.quantity, trade.execution_price, old_basis=old_basis)
+                    cash -= amount
+                    positions[trade.symbol] = (new_quantity, average, old_basis + amount)
                 else:
                     if trade.symbol not in positions or trade.quantity != old_quantity:
                         raise BacktestError("SELL must close one entire existing position.")
-                    pnl = _finite_sum((amount, -old_basis))
+                    pnl = _pnl(amount, old_basis)
                     if trade.realized_pnl != pnl:
                         raise BacktestError("SELL realized P&L does not match accounted cost basis.")
-                    cash += Fraction(str(amount))
+                    cash += amount
                     new_quantity, average = 0.0, 0.0
                     del positions[trade.symbol]
                 if (cash < 0 or len(positions) > cfg.max_open_positions
-                        or trade.total_amount != amount or trade.cash_after != _finite_sum((cash,))
+                        or trade.total_amount != _finite_sum((amount,)) or trade.cash_after != _finite_sum((cash,))
                         or trade.position_quantity_after != new_quantity or trade.average_cost_after != average):
                     raise BacktestError("Trade ledger accounting does not reconcile.")
         snapshot_symbols = set() if snapshots is None else set(snapshots.symbol)
@@ -192,12 +192,13 @@ def validate_result(result: BacktestResult) -> None:
                 quantity, cost, cost_basis = positions[snapshot.symbol]
                 value = _product(quantity, snapshot.mark_price)
                 if (snapshot.quantity != quantity or snapshot.average_cost != cost or snapshot.mark_price <= 0
-                        or snapshot.market_value != value
-                        or snapshot.unrealized_pnl != _finite_sum((value, -cost_basis))):
+                        or snapshot.market_value != _finite_sum((value,))
+                        or snapshot.unrealized_pnl != _pnl(value, cost_basis)):
                     raise BacktestError("Historical position accounting does not reconcile.")
                 values.append(value)
-        positions_value = _finite_sum(values)
-        total = _finite_sum((cash, positions_value))
+        exact_positions_value = sum(values, Fraction(0))
+        positions_value = _finite_sum((exact_positions_value,))
+        total = _finite_sum((cash, exact_positions_value))
         peak = max(peak, total)
         if (total <= 0 or eod.cash != _finite_sum((cash,)) or eod.positions_value != positions_value or eod.total_value != total
                 or eod.drawdown != (peak - total) / peak):
