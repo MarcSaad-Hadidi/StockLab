@@ -410,3 +410,42 @@ def test_published_notional_stays_within_exact_allocation_budget(tmp_path):
     budget = Fraction("0.12345678") * Fraction("0.12345678901234568")
     assert Fraction(str(result.trades.total_amount.iloc[0])) <= budget
     save(result, output_dir=tmp_path)
+
+
+@pytest.mark.parametrize("close_position", [False, True])
+def test_exact_cash_preserves_flat_large_balance_equity(tmp_path, close_position):
+    from test_backtesting import config
+
+    capital, price = 9994156765551810.0, 695361500203047.0
+    source = decisions([("2024-01-05", "AAPL", .8),
+                        ("2024-01-08", "AAPL", .2 if close_position else .5)])
+    prices = market([(day, "AAPL", price, price) for day in
+                     ["2024-01-05", "2024-01-08", "2024-01-09"]])
+    cfg = config(initial_capital=capital, max_symbol_exposure=.07,
+                 max_trade_allocation=.07, quantity_decimals=0)
+    result = run(source, prices, config=cfg)
+    assert result.trades.quantity.tolist() == ([1, 1] if close_position else [1])
+    assert result.equity_curve.total_value.tolist() == [capital] * 3
+    assert result.report.total_return == result.report.max_drawdown == 0
+    if close_position:
+        assert result.report.final_cash == capital
+        assert result.trades.realized_pnl.iloc[-1] == 0
+    save(result, output_dir=tmp_path)
+
+
+def test_replay_rejects_phantom_gain_from_rounded_cash(tmp_path):
+    from test_backtesting import config
+
+    api = import_module("stocklab_ml.backtesting")
+    capital, price = 9994156765551810.0, 695361500203047.0
+    prices = market([(day, "AAPL", price, price) for day in ["2024-01-05", "2024-01-08"]])
+    result = run(decisions([("2024-01-05", "AAPL", .8)]), prices,
+                 config=config(initial_capital=capital, max_symbol_exposure=.07,
+                               max_trade_allocation=.07, quantity_decimals=0))
+    forged_value = 9994156765551812.0
+    result.equity_curve.loc[1, "total_value"] = forged_value
+    result = replace(result, report=replace(result.report, final_value=forged_value,
+                                           total_return=forged_value / capital - 1))
+    with pytest.raises(api.BacktestError, match="equity"):
+        save(result, output_dir=tmp_path / "forged")
+    assert not (tmp_path / "forged").exists()

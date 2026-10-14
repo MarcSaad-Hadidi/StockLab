@@ -54,7 +54,8 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
         else:
             scheduled[next_session[row.date, row.symbol]].append(row)
 
-    cash, peak = config.initial_capital, config.initial_capital
+    # Published cash is rounded; never reuse it as an accounting operand.
+    cash, peak = Fraction(str(config.initial_capital)), config.initial_capital
     positions, close_marks = {}, {}
     trades, history, equity = [], [], []
     start = signals.date.min()
@@ -80,7 +81,7 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
                 quantity = old_quantity
                 amount = _product(quantity, price)
                 pnl = _finite_sum((amount, -old_basis))
-                cash = _finite_sum((cash, amount))
+                cash += Fraction(str(amount))
                 new_quantity, average_cost = 0.0, 0.0
                 del positions[symbol]
             else:
@@ -93,12 +94,13 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
                     skipped["skipped_buying_power"] += 1
                     continue
                 new_quantity, average_cost = _add_buy(old_quantity, old_cost, quantity, price)
-                cash = _finite_sum((cash, -amount))
+                cash -= Fraction(str(amount))
                 positions[symbol] = (new_quantity, average_cost, old_basis + Fraction(str(amount)))
-            if not all(math.isfinite(v) for v in [cash, new_quantity, average_cost, amount]) or cash < 0:
+            published_cash = _finite_sum((cash,))
+            if not all(math.isfinite(v) for v in [published_cash, new_quantity, average_cost, amount]) or cash < 0:
                 raise BacktestError("Nonfinite or negative portfolio accounting.")
             trades.append((row.date, day, symbol, row.model_name, row.signal, row.confidence,
-                           quantity, price, amount, cash, new_quantity, average_cost, pnl, total_before))
+                           quantity, price, amount, published_cash, new_quantity, average_cost, pnl, total_before))
 
         close_marks.update(zip(bars.symbol, bars.close))
         values = []
@@ -115,7 +117,7 @@ def run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDataset
         if not math.isfinite(total_value) or total_value <= 0:
             raise BacktestError("Nonfinite or nonpositive portfolio equity.")
         peak = max(peak, total_value)
-        equity.append((day, cash, positions_value, total_value, (peak - total_value) / peak))
+        equity.append((day, _finite_sum((cash,)), positions_value, total_value, (peak - total_value) / peak))
 
     trade_frame = _table(trades, TRADE_COLUMNS, ("decision_date", "execution_date"), ("symbol", "model_name", "signal"))
     position_frame = _table(history, POSITION_COLUMNS, ("date",), ("symbol",))

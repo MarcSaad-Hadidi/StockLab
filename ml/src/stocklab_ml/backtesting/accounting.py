@@ -37,12 +37,12 @@ def _product(left: float, right: float) -> float:
         raise BacktestError("Portfolio product exceeds finite float64 precision.") from None
 
 
-def _opening_value(cash: float, positions: dict, marks: dict) -> Fraction:
+def _opening_value(cash: float | Fraction, positions: dict, marks: dict) -> Fraction:
     return Fraction(str(cash)) + sum((Fraction(str(state[0])) * Fraction(str(marks[symbol]))
                                       for symbol, state in positions.items()), Fraction(0))
 
 
-def _buy_limits(cash: float, total: Fraction, quantity: float, price: float,
+def _buy_limits(cash: float | Fraction, total: Fraction, quantity: float, price: float,
                 config: BacktestConfig) -> tuple[Fraction, Fraction]:
     remaining = total * Fraction(str(config.max_symbol_exposure)) - Fraction(str(quantity)) * Fraction(str(price))
     budget = min(Fraction(str(cash)), total * Fraction(str(config.max_trade_allocation)), remaining)

@@ -1264,8 +1264,11 @@ tolerance removes small positive gains.
 Opening portfolio sums, risk products, remaining-exposure subtraction, and the
 budget/price quotient retain exact decimal ratios through sizing and replay.
 Only output values convert to float64, with published notional checked against
-the exact budget. Trade notionals and cash balances also use exact decimal
-ratios before returning float64. For example, 0.30 cash
+the exact budget. Trade notionals use exact decimal ratios before returning
+float64. Cash retains the exact sum of those accounted notionals internally
+through every BUY, SELL, risk calculation, and equity valuation; only published
+cash fields are rounded to float64. Replay reconstructs this exact balance from
+the ledger rather than feeding rounded cash outputs back into accounting. For example, 0.30 cash
 buys exactly three shares at 0.10, leaving zero cash; replay uses the same rules.
 An accumulated quantity that cannot preserve the exact decimal sum in float64
 raises `BacktestError` before cash is debited, rather than losing or inventing shares.

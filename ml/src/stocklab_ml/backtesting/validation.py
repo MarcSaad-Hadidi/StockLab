@@ -139,7 +139,8 @@ def validate_result(result: BacktestResult) -> None:
 
     trades_by_day = {day: group for day, group in trades.groupby("execution_date", sort=False)}
     history_by_day = {day: group for day, group in history.groupby("date", sort=False)}
-    cash, peak = cfg.initial_capital, cfg.initial_capital
+    # Published cash is rounded; never reuse it as an accounting operand.
+    cash, peak = Fraction(str(cfg.initial_capital)), cfg.initial_capital
     positions = {}
     for eod in equity.itertuples(index=False):
         snapshots = history_by_day.get(eod.date)
@@ -167,7 +168,7 @@ def validate_result(result: BacktestResult) -> None:
                     if Fraction(str(amount)) > budget:
                         raise BacktestError("BUY amount exceeds reported cash, allocation, or exposure policy.")
                     new_quantity, average = _add_buy(old_quantity, old_cost, trade.quantity, trade.execution_price)
-                    cash = _finite_sum((cash, -amount))
+                    cash -= Fraction(str(amount))
                     positions[trade.symbol] = (new_quantity, average, old_basis + Fraction(str(amount)))
                 else:
                     if trade.symbol not in positions or trade.quantity != old_quantity:
@@ -175,11 +176,11 @@ def validate_result(result: BacktestResult) -> None:
                     pnl = _finite_sum((amount, -old_basis))
                     if trade.realized_pnl != pnl:
                         raise BacktestError("SELL realized P&L does not match accounted cost basis.")
-                    cash = _finite_sum((cash, amount))
+                    cash += Fraction(str(amount))
                     new_quantity, average = 0.0, 0.0
                     del positions[trade.symbol]
                 if (cash < 0 or len(positions) > cfg.max_open_positions
-                        or trade.total_amount != amount or trade.cash_after != cash
+                        or trade.total_amount != amount or trade.cash_after != _finite_sum((cash,))
                         or trade.position_quantity_after != new_quantity or trade.average_cost_after != average):
                     raise BacktestError("Trade ledger accounting does not reconcile.")
         snapshot_symbols = set() if snapshots is None else set(snapshots.symbol)
@@ -198,7 +199,7 @@ def validate_result(result: BacktestResult) -> None:
         positions_value = _finite_sum(values)
         total = _finite_sum((cash, positions_value))
         peak = max(peak, total)
-        if (total <= 0 or eod.cash != cash or eod.positions_value != positions_value or eod.total_value != total
+        if (total <= 0 or eod.cash != _finite_sum((cash,)) or eod.positions_value != positions_value or eod.total_value != total
                 or eod.drawdown != (peak - total) / peak):
             raise BacktestError("End-of-day equity or drawdown does not reconcile.")
 
