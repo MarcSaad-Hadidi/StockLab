@@ -1166,3 +1166,197 @@ NVDA 0.20 → SELL/0.80, checks immutability and finite bounds, then saves the i
 CSV/report with explicit overwrite. Automated tests also cover both real estimators
 fitted on synthetic data and their target-free inference outputs, with model calls
 forbidden during confidence scoring.
+
+## ML backtesting engine (#73)
+
+`run_backtest(decisions: ConfidenceSignalsResult, market_data: CleanedDatasetResult,
+config=None) -> BacktestResult` simulates one supplied model's historical ML
+decisions in one shared fictitious portfolio. It validates the existing seven
+decision columns (`date, symbol, model_name, predicted_class, probability_up,
+signal, confidence`) and cleaned OHLCV (`date, symbol, open, high, low, close,
+volume`) without repairing either input. Every decision must match an observed
+session of the same symbol, including HOLD and low-confidence decisions. Missing
+symbols/sessions, duplicate keys, invalid schemas/dtypes, and tampered upstream
+reports raise `BacktestError`. Confidence validation reuses #65, including its
+formula check; execution consumes the supplied signal/confidence unchanged.
+Clean OHLCV must retain its sorted symbol/date order and RangeIndex. Decisions
+may preserve arbitrary upstream order/index; output is deterministic.
+
+### Timing and period
+
+**A decision using close[t] is available only after close[t]. It cannot execute
+at open[t] or close[t]. BUY/SELL execute at the OPEN of the next observed cleaned
+session for that same symbol, strictly after the decision date.** Friday's
+decision executes Monday open, or Tuesday open if that is the next observed row.
+No sessions or prices are synthesized. A terminal BUY/SELL with no next session
+is skipped and counted, never executed at its decision close.
+
+The period starts on the earliest decision date, with initial cash at EOD, and
+continues through the last observed session among decision symbols. Equity uses
+the union of those observed dates in the period; unrelated market symbols do
+not extend it. Multiple executions use date ascending, then symbol ascending.
+This daily V1 treats observed opens on a calendar date as one opening phase;
+intraday sequencing across exchanges/timezones is outside this daily contract.
+
+At the opening phase, held positions use that day's observed OPEN, or their
+latest CLOSE strictly before that date if no open exists. Today's high/low/close
+and future rows cannot influence sizing. Only after executions does EOD valuation
+use the latest observed close <= that date. These carried valuation marks are
+as-of prices, without filling or mutating source OHLCV. `actual_class`,
+`target_date`, prediction accuracy, future returns, model objects, training,
+network, random numbers, and the current clock are never consulted by execution.
+Target-free and historical Logistic Regression/Random Forest decisions use the
+same engine. Upstream labels are discarded by #64 before confidence/backtesting.
+The caller remains responsible for supplying decisions generated causally;
+execution timing cannot repair leakage in upstream model training.
+
+### Portfolio policy
+
+`BacktestConfig` is frozen and records explicit Python parameters; it imports
+no backend policy or runtime. Defaults mirror the specified paper-risk numbers:
+
+| Parameter | Default |
+| --- | --- |
+| `initial_capital` | 100000.0 USD-equivalent fictitious capital |
+| `minimum_confidence` | 0.70, inclusive for BUY/SELL |
+| `max_symbol_exposure` | 0.20 |
+| `max_open_positions` | 10 |
+| `max_trade_allocation` | 0.10 |
+| `allow_short_selling` | False; True is rejected in V1 |
+| `quantity_decimals` | 8; configurable integer 0..8 |
+| Commission / slippage | 0 / 0 |
+
+Capital must be finite, positive, real and non-boolean. Confidence is in [0,1],
+allocation/exposure in (0,1], and the position limit is a positive integer.
+HOLD never trades, regardless of confidence. BUY/SELL below minimum confidence
+are skipped. Skip priority is HOLD, low confidence, no next session, then the
+applicable execution risk checks; each decision has one outcome.
+
+BUY notional is `min(cash, open_portfolio_value * max_trade_allocation,
+open_portfolio_value * max_symbol_exposure - held_quantity * execution_open)`.
+An existing holding can receive another BUY if exposure/cash permit it. A new
+symbol cannot exceed the position-count limit. Fractional quantity is floored
+to the configured precision, never rounded upward. The budget/price ratio uses
+exact rational arithmetic on decimal representations before flooring, so an
+affordable grid unit is not lost to binary rounding. Actual notional is checked
+against the budget again after conversion to float64.
+If conversion exceeds the budget, sizing moves to the next lower representable
+float and reapplies the quantity grid until the amount is affordable.
+Zero/too-small quantities are skipped. There is no borrowing or leverage.
+Price appreciation can move a holding above its exposure cap; this blocks further
+BUYs without forcing a rebalance or SELL.
+
+New holdings use execution open as average cost. Additional BUYs use
+`(exact_old_cost_basis + buy_quantity * execution_price) /
+(old_quantity + buy_quantity)`. SELL requires an existing position and closes
+its entire quantity. Realized P&L is sale notional minus the exact sum of the
+position's exact BUY quantity-price products; unrealized P&L is marked value minus that
+cost basis. This implements the algebraic `(sell_price - average_cost) * quantity`
+definition using exact products, preserving even representable subnormal
+cash gains/losses and avoiding a premature price-delta underflow. BUY has
+nullable/NaN realized P&L. There are no shorts, synthetic sales, spread,
+commissions, slippage, or forced final liquidation. Open positions remain marked
+at the last as-of close. Arithmetic that cannot remain finite raises clearly.
+Quantity accumulation uses exact decimal ratios and rejects any sum that
+cannot be preserved in the published float64 quantity. Average cost is derived
+from the exact accumulated cost basis divided by that quantity; a rounded
+previous average never feeds the next calculation.
+
+Quantity-price products, cash, cost basis, holding marks, opening portfolio
+sums, risk products, remaining-exposure subtraction, and the budget/price
+quotient retain exact rational values throughout simulation and replay.
+Realized P&L is exact sale proceeds minus exact cost basis; unrealized P&L is
+exact marked value minus that basis. Multiple lots at one unchanged price
+therefore remain flat. Only presentation fields convert to float64, with both
+exact and published trade notionals checked against the exact BUY budget.
+Equity aggregates exact cash and all exact position values before rounding;
+adding independently rounded output columns can differ at precision limits.
+Replay reconstructs exact products from ledger quantities/prices and snapshot
+marks, never feeding rounded amount, cash, market-value, or average-cost fields
+back into accounting. For example, 0.30 cash buys exactly three shares at 0.10,
+leaving zero cash; replay uses the same rules.
+
+Representable tiny gains/losses remain nonzero, including subnormal values.
+If nonzero exact realized or unrealized P&L would round to zero, the engine
+raises `BacktestError` rather than silently classifying it as flat. Overflow and
+unrepresentable accumulated quantities or positive SELL notionals that round to
+zero also raise `BacktestError`. Return and
+drawdown are reporting metrics derived from the published equity curve; changes
+smaller than its float64 resolution may not appear in those metrics.
+
+### Results and metrics
+
+`BacktestResult` and `BacktestReport` are frozen dataclasses. Output tables are
+independent pandas DataFrames with stable columns/dtypes, including empty tables:
+
+| Table | Columns, in order |
+| --- | --- |
+| `trades` | `decision_date, execution_date, symbol, model_name, signal, confidence, quantity, execution_price, total_amount, cash_after, position_quantity_after, average_cost_after, realized_pnl, portfolio_value_before` |
+| `positions_history` | `date, symbol, quantity, average_cost, mark_price, market_value, unrealized_pnl, opening_mark_price` |
+| `equity_curve` | `date, cash, positions_value, total_value, drawdown` |
+
+Historical positions contain EOD snapshots of every open holding, without rows
+for dates with no holdings. The equity curve separately records those cash-only
+dates and anchors drawdown to initial capital before the first execution.
+The ledger's `portfolio_value_before` records the opening/as-of value used for
+risk limits, so storage can check BUY allocation/exposure against reported policy.
+Each position snapshot also retains `opening_mark_price`, the same day's open
+or strictly earlier as-of close used for risk. Storage replays opening value
+from every held position; holdings sold that day use their ledger execution
+price. This prevents a self-declared opening portfolio value from bypassing
+allocation/exposure checks while preserving the separate EOD close mark.
+
+- Final value = final cash + final marked positions value.
+- Total return = `(final_value / initial_capital) - 1`, as a decimal fraction.
+- Win rate = SELL closes with realized P&L > 0 / executed SELL closes; 0.0 when
+  none closed. Break-even is not a win. BUYs and still-open positions are excluded.
+- Drawdown = `(running_equity_peak - total_value) / running_equity_peak`, a
+  nonnegative magnitude. Max drawdown is its maximum over portfolio EOD equity,
+  including the initial capital reference; it is not a prediction metric.
+
+The JSON-compatible report includes these metrics, model identity, symbols,
+period, full configuration, signal thresholds, execution timing, zero costs,
+decision/trade/win/loss counts, final open-position count, and skip counts:
+`skipped_low_confidence`, `skipped_no_position`, `skipped_max_positions`,
+`skipped_exposure`, `skipped_buying_power`, `no_next_session`.
+
+### Usage and safe local storage
+
+```python
+from stocklab_ml.backtesting import BacktestConfig, run_backtest, save_backtest_result
+
+# Existing validated #65 decisions and #58 clean data, one model per run:
+result = run_backtest(decisions, market_data, config=BacktestConfig())
+print(result.report.final_value, result.report.total_return)
+saved = save_backtest_result(result)  # overwrite=False
+```
+
+`save_backtest_result(result, output_dir=None, source_paths=(), overwrite=False)`
+writes ignored `ml/results/backtesting/{trades.csv,equity_curve.csv,positions.csv,
+report.json}`, independent of the working directory. CSV has no artificial
+index; JSON uses plain scalars with no NaN, timestamp, secret, model, or raw input
+dataset. Before any write, storage validates schemas, timing, ledger cash/cost/P&L,
+historical position accounting, EOD equity/drawdown, report metrics, and decision
+count reconciliation. This checks internal accounting consistency; verifying
+price/decision authenticity still requires the original sources.
+
+All destination collisions are checked first. Replacing outputs requires
+`overwrite=True`. Pass all input CSV/JSON `source_paths` when using disk inputs
+to protect them from output aliasing, including symlinks and hard links. Writes
+reuse the existing atomic writer and clean temporary files: publication is
+atomic **per file, not across the four files**. Failure on a later file may leave
+earlier complete artifacts and never returns a successful `SavedBacktest`.
+
+Run the assert-based smoke from `ml/` using Python 3.12 and the existing venv:
+
+```powershell
+$env:PYTHONPATH = "src"
+python examples/backtesting_smoke.py
+```
+
+It blocks network connections, exercises BUY/HOLD/SELL over four observed sessions,
+checks accounting/determinism/immutability, saves ignored outputs with explicit
+overwrite, and prints metrics. Synthetic returns validate mechanics only and
+provide no evidence of real profitability. No dependencies or API credits are
+added. No backend/frontend/cloud is involved. Benchmark comparison (#74), model
+versioning (#75), and the separate expanded test issue (#92) are deferred.
