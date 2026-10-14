@@ -31,6 +31,15 @@ def validate_inputs(decisions: ConfidenceSignalsResult, market_data: CleanedData
         _validate_confidence_result(decisions)
     except ConfidenceScoreError as error:
         raise BacktestError(str(error)) from error
+    validate_market_data(market_data)
+    observed = set(zip(market_data.dataframe.date, market_data.dataframe.symbol))
+    for row in decisions.signals.itertuples(index=False):
+        if (row.date, row.symbol) not in observed:
+            raise BacktestError(f"Decision session missing from market data: {row.symbol} {row.date.date()}.")
+
+
+def validate_market_data(market_data: CleanedDatasetResult) -> None:
+    """Shared #73 daily OHLCV and cleaning-report checks, without a clock."""
     if (not isinstance(market_data, CleanedDatasetResult)
             or not isinstance(market_data.dataframe, pd.DataFrame)
             or not isinstance(market_data.report, DataCleaningReport)):
@@ -55,10 +64,6 @@ def validate_inputs(decisions: ConfidenceSignalsResult, market_data: CleanedData
             or report.date_min != frame.date.min().date().isoformat()
             or report.date_max != frame.date.max().date().isoformat()):
         raise BacktestError("Market report must match the cleaned OHLCV dataset.")
-    observed = set(zip(frame.date, frame.symbol))
-    for row in decisions.signals.itertuples(index=False):
-        if (row.date, row.symbol) not in observed:
-            raise BacktestError(f"Decision session missing from market data: {row.symbol} {row.date.date()}.")
 
 
 def _validate_table(frame: pd.DataFrame, columns: list[str], dates: tuple[str, ...],
@@ -70,7 +75,7 @@ def _validate_table(frame: pd.DataFrame, columns: list[str], dates: tuple[str, .
         dtype = "datetime64[ns]" if name in dates else "string" if name in strings else "float64"
         if str(values.dtype) != dtype or (name not in nullable and values.isna().any()):
             raise BacktestError(f"Invalid backtest table dtype or nulls: {name}.")
-        if name in dates and not values.eq(values.dt.normalize()).all():
+        if name in dates and not values.dropna().eq(values.dropna().dt.normalize()).all():
             raise BacktestError("Daily timezone-naive backtest dates required.")
         if name not in dates + strings and not np.isfinite(values.dropna().to_numpy()).all():
             raise BacktestError(f"Nonfinite backtest values: {name}.")

@@ -1358,5 +1358,131 @@ It blocks network connections, exercises BUY/HOLD/SELL over four observed sessio
 checks accounting/determinism/immutability, saves ignored outputs with explicit
 overwrite, and prints metrics. Synthetic returns validate mechanics only and
 provide no evidence of real profitability. No dependencies or API credits are
-added. No backend/frontend/cloud is involved. Benchmark comparison (#74), model
-versioning (#75), and the separate expanded test issue (#92) are deferred.
+added. No backend/frontend/cloud is involved. Model versioning (#75) and the
+separate expanded test issue (#92) are deferred.
+
+## Buy & Hold benchmark comparison (#74)
+
+`compare_to_buy_and_hold(backtest, market_data)` consumes an existing validated
+`BacktestResult` from #73 and the **same supplied `CleanedDatasetResult`**. It
+never reruns the AI strategy, trains a model, infers predictions, downloads data,
+or accesses a clock. Logistic Regression and Random Forest use the same API;
+model identity is metadata. Both inputs remain unchanged.
+
+The comparison preserves `backtest.report.initial_capital`, `start_date`,
+`end_date`, and the complete `symbols` universe exactly, including symbols the
+AI never traded. Benchmark equity dates equal `backtest.equity_curve.date` in
+count, order, and endpoints. Additional source symbols and observations outside
+the comparison period are ignored. Every report symbol must exist in the input;
+missing symbols fail. Daily OHLCV and the cleaning report use #73's validators.
+Within-period sessions must match AI equity dates; recorded AI execution opens
+and historical opening/EOD marks must agree with supplied prices. #73 does not
+retain all original OHLCV: these checks reconcile its observable price evidence,
+not a cryptographic proof that unrecorded source observations are identical.
+Callers remain responsible for supplying the original cleaned dataset.
+
+### Reference strategy and causal timing
+
+- One shared capital pool, with a fixed **equal-weight** tranche
+  `initial_capital / N` for each report symbol. Tranches are computed as exact
+  rational values; published float64 targets can round when N does not divide
+  the capital evenly. Accounting continues to use exact tranches and notionals.
+  Published amounts and metrics follow float64 resolution; extremely small
+  subnormal tranche amounts can round to zero without changing exact cash accounting.
+- Capital begins entirely in cash. Each symbol buys at most once, at its first
+  observed session **OPEN strictly after `start_date` and <= `end_date`**.
+  A decision available after the start day's close cannot execute at that day's
+  open. Friday-to-Monday and other gaps follow observed sessions, with no
+  synthetic calendar or start-day opening advantage.
+- Fractional shares are floored to **8 decimal places**, using #73's sizing
+  helper. Neither exact nor published invested amounts may exceed the tranche.
+  A tranche too small for one quantity unit remains cash with a null entry.
+- A symbol with no eligible next session stays uninvested. Its full tranche is
+  retained as cash and **never redistributed**. Quantity-rounding residuals stay
+  cash too. Cash earns zero interest, and nothing is reinvested.
+- Hold the initial quantities without rebalancing, tactical SELLs, stops,
+  confidence filters, AI trade/exposure limits, or final forced liquidation.
+- EOD value is cash plus holdings at each symbol's latest observed **CLOSE <=
+  equity date**. Entry-day EOD uses that day's close. Missing sessions use the
+  earlier as-of close without modifying/imputing source OHLCV. No future close
+  enters historical marks; final holdings use the latest close <= `end_date`.
+- Commission and slippage are zero, matching #73. No spread, fees, taxes, or
+  dividend payments are added. `dividends_included=False`: this is a
+  **price-return** benchmark, not a dividend total-return series. Split handling
+  is inherited from supplied cleaned prices; there is no second adjustment.
+
+### Outputs and metrics
+
+The frozen `BenchmarkComparisonResult` contains independent tables and frozen
+`BuyAndHoldReport` / `BenchmarkComparisonReport` dataclasses:
+
+| Table | Columns, in order |
+| --- | --- |
+| `benchmark_allocations` | `symbol, target_allocation, entry_date, entry_price, quantity, invested_amount, residual_cash, final_mark_date, final_mark_price, final_market_value, component_final_value, component_return` |
+| `benchmark_equity_curve` | `date, cash, positions_value, total_value, drawdown` |
+| `benchmark_positions_history` | `date, symbol, quantity, mark_date, mark_price, market_value` |
+
+The position history records every held symbol on each equity date, including
+the source date of each as-of mark. It allows daily equity reconciliation before
+storage. Uninvested allocation rows have null entry/final-mark fields, zero
+quantity/investment/market value/return, and their whole tranche as residual cash.
+
+- Benchmark final value = exact remaining cash + exact marked holdings,
+  published once as float64. Benchmark return = `final_value / initial_capital - 1`.
+- Component final value = tranche residual + final market value; component return
+  = `component_final_value / target_allocation - 1`, computed with exact tranches.
+  Portfolio return uses the shared portfolio capital, never invested capital.
+- AI final value, total return, and max drawdown come directly from #73's validated
+  report. `return_delta = ai_total_return - benchmark_total_return` and
+  `final_value_delta = ai_final_value - benchmark_final_value`. Returns/deltas are
+  decimal fractions: 0.04 means four percentage points.
+- Benchmark drawdown uses #73's nonnegative `(running_peak - total_value) /
+  running_peak` convention, anchored to initial capital. Maximum drawdown is the
+  maximum over benchmark equity. No Sharpe, Sortino, alpha/beta, winner, ranking,
+  or promotion decision is produced. #75 model versioning and #78 model promotion
+  remain separate future work. These mechanics make no profitability claim.
+
+### Local storage and offline smoke
+
+```python
+from stocklab_ml.backtesting import compare_to_buy_and_hold, save_benchmark_comparison
+
+comparison = compare_to_buy_and_hold(backtest, market_data)
+print(comparison.comparison_report.return_delta)
+saved = save_benchmark_comparison(comparison, source_paths=(cleaned_csv, ai_report_json))
+```
+
+`save_benchmark_comparison(result, output_dir=None, source_paths=(), overwrite=False)`
+defaults to Git-ignored `ml/results/benchmark/`, independently of working directory:
+
+- `buy_and_hold_allocations.csv`
+- `buy_and_hold_equity_curve.csv`
+- `buy_and_hold_positions.csv` (daily reconciliation audit)
+- `comparison.json`, containing both reports and their timing/cost/dividend assumptions
+
+CSV has no index and stable columns. JSON contains plain finite JSON types.
+Before writing, `validate_benchmark_comparison` checks allocations and fractional
+floor, cash conservation, every historical holding/mark, equity/drawdown, report
+metrics, exact dates/universe/capital, and comparison deltas. As with #73,
+persistence validation checks internal consistency; source-price authenticity
+requires original inputs. DataFrames remain mutable even inside frozen results,
+so validation runs again on each save.
+
+All output collisions are checked before publication. Explicit `overwrite=True`
+is required to replace outputs. Pass every input artifact path in `source_paths`
+to protect sources from direct, symlink, and hardlink aliases. Existing atomic
+writers publish **per file**; the four-file set is not transactional. A late
+failure may leave earlier complete files and returns no successful saved result.
+
+From `ml/`, with the existing Python 3.12 environment:
+
+```powershell
+$env:PYTHONPATH = "src"
+python examples/benchmark_comparison_smoke.py
+```
+
+This deterministic two-symbol synthetic smoke runs actual #73 backtesting, then
+compares equal-weight Buy & Hold with the same 100000 capital, verifies causal
+entries, accounting, immutability, and repeated results, and saves local outputs.
+It blocks network connections and uses zero market API calls or credits.
+Synthetic returns demonstrate mechanics only, not real market outperformance.
