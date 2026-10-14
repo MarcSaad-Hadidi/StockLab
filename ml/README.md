@@ -633,7 +633,8 @@ CSV has `date,target_date,symbol,actual_class,predicted_class,probability_up`,
 ISO dates and no index. The results directory ignores generated files; custom
 destinations should also be kept in ignored local storage. The fitted pipeline
 stays in memory: no pickle, joblib artifact, model version, registry or cloud
-storage is created. Model persistence/versioning belongs to later issues (#75).
+storage is created by #61. Explicit metadata versioning is provided by #75 below;
+binary model persistence remains #76.
 
 The offline tests cover per-symbol labeling, equal/down prices, last-row
 removal, sparse multi-symbol dates, boundary purging, single-class/empty
@@ -770,7 +771,8 @@ File-based training records the source for overwrite protection; callers who
 load their own DataFrame should pass `source_path` when saving.
 
 Outputs are Git-ignored. The estimator stays in memory: no pickle, joblib, ONNX,
-model registry/version or cloud storage is added; #75/#76 own persistence.
+model registry/version or cloud storage is added by #62; #75 below provides
+metadata versioning and #76 will provide binary persistence.
 There are no BUY/SELL/HOLD signals, confidence score, risk/position decisions,
 trading operations, external provider calls, API keys or API credits. No new
 dependencies are required. #63 is not implemented here.
@@ -896,7 +898,7 @@ The existing per-model prediction CSVs remain available through their storage AP
 
 There is no new model, dependency, network request, API key or API credit.
 There is no tuning, threshold search, winner promotion (#78), model versioning
-or binary persistence (#75/#76), BUY/SELL/HOLD (#64), confidence conversion
+or binary persistence in #63 (see #75 below and future #76), BUY/SELL/HOLD (#64), confidence conversion
 (#65), trading, risk management, backtest metrics (#73), benchmark (#74), cloud
 integration or frontend/API work. Classification measurements do not establish
 profitability or justify model promotion.
@@ -1358,8 +1360,8 @@ It blocks network connections, exercises BUY/HOLD/SELL over four observed sessio
 checks accounting/determinism/immutability, saves ignored outputs with explicit
 overwrite, and prints metrics. Synthetic returns validate mechanics only and
 provide no evidence of real profitability. No dependencies or API credits are
-added. No backend/frontend/cloud is involved. Model versioning (#75) and the
-separate expanded test issue (#92) are deferred.
+added. No backend/frontend/cloud is involved. Model versioning is a separate
+explicit stage (#75 below); the expanded test issue (#92) remains deferred.
 
 ## Buy & Hold benchmark comparison (#74)
 
@@ -1439,8 +1441,8 @@ quantity/investment/market value/return, and their whole tranche as residual cas
 - Benchmark drawdown uses #73's nonnegative `(running_peak - total_value) /
   running_peak` convention, anchored to initial capital. Maximum drawdown is the
   maximum over benchmark equity. No Sharpe, Sortino, alpha/beta, winner, ranking,
-  or promotion decision is produced. #75 model versioning and #78 model promotion
-  remain separate future work. These mechanics make no profitability claim.
+  or promotion decision is produced. #75 model versioning is a separate explicit
+  stage below; #78 model promotion remains future work. These mechanics make no profitability claim.
 
 ### Local storage and offline smoke
 
@@ -1486,3 +1488,242 @@ compares equal-weight Buy & Hold with the same 100000 capital, verifies causal
 entries, accounting, immutability, and repeated results, and saves local outputs.
 It blocks network connections and uses zero market API calls or credits.
 Synthetic returns demonstrate mechanics only, not real market outperformance.
+
+## Model version registry (#75)
+
+`stocklab_ml.versioning` records existing `LogisticRegressionResult` and
+`RandomForestResult` objects in one local `ModelVersionRegistry`. Registration
+never calls fit, changes training/splits/features, registers RF's Logistic
+comparator implicitly, or selects a winner. Existing #61–#65 DataFrame schemas
+and #73/#74 APIs remain unchanged and work without versioning.
+
+### Identity and immutable training metadata
+
+The permanent key is **(ModelName, ModelVersion)**. `model_name` comes from the
+real training report: currently `logistic_regression_baseline` or
+`random_forest_baseline`. ModelName is distinct from the version and follows
+#64's case-sensitive 1–128 ASCII-character convention: initial letter/digit,
+then letters/digits/underscores/dots/hyphens, with no whitespace or path separators.
+The current training reports must retain their canonical family names and types.
+
+Each family has its own positive `version_number`, allocated as max + 1:
+`1 -> v000001`, `2 -> v000002`. The representation is `v` followed by at least
+six decimal digits, padded only as necessary (`1000000 -> v1000000`). Exact
+canonical versions are required; `latest`, `current`, padded input and unknown
+versions never resolve to an Active or newer version. Archived numbers remain
+reserved. There is no delete, counter reset, or repair API.
+
+`register_version(result, training_run_id=..., trained_at_utc=...)` returns a
+deeply immutable `ModelVersionRecord`. The caller supplies a nonzero canonical
+lowercase UUID **TrainingRunId for each real training run** and retains it for
+retries. Identical canonical metadata and the same UUID return the existing
+record, including its current status, without a write or counter increment.
+Changed metadata with the same UUID raises `TrainingRunConflictError`; a new
+UUID creates a new version even when all metrics/configuration/timestamps match.
+The SHA-256 of the ordered historical predictions also detects changed holdout
+rows/probabilities on a retry; it is not an estimator/artifact fingerprint.
+
+`trained_at_utc` is an explicit timezone-aware UTC `datetime` declaring actual
+training completion. It is never inferred from the current date or `train_end`.
+`registered_at_utc` is the registry's creation time; `ModelVersionRegistry(...,
+clock=...)` permits deterministic injection. Registration cannot precede declared
+training completion. `record.training_date` derives its UTC calendar date.
+
+The JSON record stores the **entire real training report** under `training_report`,
+without a binary estimator, source path or secrets. It retains:
+
+- Ordered `feature_columns`: `return_1d, ma_5, ma_20, rsi_14, volume,
+  momentum_10, volatility_20`.
+- `target_name=target_up_1d`, `target_definition`, `prediction_timing`, `split_rule`.
+- Original dataset counts and split metadata (`train_start`, `train_end`,
+  `test_start`, `test_end`, `split_date`, fraction, purge counts, class rates,
+  and per-symbol row counts), without creating a new partition.
+- Actual JSON-safe `hyperparameters` from the report, checked against the supplied
+  estimator; original convergence/scaler or RF importances/comparison metadata.
+- `model_type`: `logistic_regression` or `random_forest`, consistently with the
+  result/report/estimator and family. One ModelName cannot change model type.
+
+Record properties expose `feature_columns` as a tuple, `hyperparameters` as a
+read-only mapping, `target_name`, `train_start`, `train_end`, `test_start`,
+`test_end`, and `split_date`. `to_dict()` returns a detached JSON-safe snapshot.
+Nested reports and metrics cannot be updated through the public contract.
+
+Metrics are the existing #63 `ModelEvaluationMetrics`, obtained by
+`evaluate_predictions(model_name=..., predictions=result.predictions)` on the
+original historical holdout only: accuracy, precision, recall, F1, TP/TN/FP/FN,
+positive/negative support and total rows. Finite [0,1] metrics, integer counts,
+support/count reconciliation, holdout boundaries and exact training-report
+`test_accuracy` are validated. Persisted metrics are also checked against their
+confusion counts with sklearn's weighted metric functions, without new formulas.
+No future labels, ranking, tuning or performance-based activation is introduced.
+
+### Status and exact reads
+
+`ModelStatus` has exactly `Active` and `Archived`. New records are **Archived**:
+in V1 this means *registered and non-active*, not deleted or necessarily poor.
+Registration never replaces an Active version, even with better metrics.
+
+`list_versions(model_name)` returns immutable records by `version_number ASC`.
+`get_version(model_name, model_version)` returns an exact record or raises
+`ModelVersionNotFoundError`. `get_active_version(model_name)` returns the one
+Active version or `None`, never the latest registered version as a fallback.
+
+`set_active_version(model_name, model_version)` explicitly activates an existing
+version and archives the old Active version in one atomic registry transaction.
+At most one version is Active **per family**; Logistic and RF statuses are
+independent. This is an administrative primitive, not a global production model
+selection policy. `archive_version(...)` preserves the record and may leave the
+family with zero Active versions; it does not choose a replacement. Only status
+changes: training date/configuration/features/metrics/identity remain immutable.
+Active describes metadata status; it does not mean a binary model is deployed or
+available after restart.
+
+### Persistence, concurrency and failures
+
+Default metadata path: **`ml/models/registry.json`**, independent of working
+directory. JSON has exactly `schema_version: 1` and `models: [...]`. A new
+instance reloads metadata, statuses and version counters without retraining.
+The absent file starts an empty registry; an existing invalid/unreadable file
+raises `ModelVersionError` and is never silently reset or repaired. Duplicate
+JSON keys, model/version keys or TrainingRunIds, gaps in version history, invalid
+dates/metrics/statuses and multiple Active versions in a family are rejected.
+
+Every mutation holds a sibling **`registry.json.lock`** created exclusively
+across the complete read/validate/modify/write operation. Contention waits up to
+five seconds, then raises `RegistryBusyError`; the caller can retry explicitly.
+Resolved paths share a lock; hard-linked registry aliases are rejected. This is
+a local filesystem guarantee, not a distributed/cloud lock.
+
+The existing atomic writer creates a temporary sibling, flushes, fsyncs and uses
+`os.replace`. Failed publication leaves the previous registry intact and returns
+no successful record. Status transitions use the same transaction. A crash after
+publication but before the caller receives success can be retried with the same
+TrainingRunId. A killed process can leave a temporary file or lock: **verify that
+no writer is alive before manually removing its stale lock**. There is no timeout
+based lock stealing or automatic repair. Filesystem/power-loss durability follows
+the local filesystem; there is no cloud or distributed transaction guarantee.
+
+### Versioned predictions and confidence decisions
+
+`registry.bind_version(result, model_name=..., model_version=...)` returns a
+`RegisteredModel` context only after matching the existing result/report/type,
+hyperparameters, metrics and holdout digest to that exact registered record.
+Wrong families, changed results and unknown versions fail; no Active lookup is
+used to assign historical lineage. `context.historical_predictions()` returns
+`VersionedPredictions` with all original holdout rows. `context.predict(features)`
+calls the existing appropriate inference API on the supplied in-memory estimator,
+requiring no `actual_class`, `target_date`, future close or future label.
+
+`VersionedPredictions.predictions` returns a deep copy in the unchanged #61/#62
+schema, preserving values, dates, order and original index. `to_dataframe()` adds
+explicit `model_name,model_version` after `symbol`; historical `target_date` and
+`actual_class` remain when present. Pass `.predictions` to #64, which discards
+outcome columns as before. Thresholds stay BUY >= .60, SELL <= .40, HOLD between.
+
+`version_confidence_decisions(confidence_result, predictions=versioned_predictions)`
+returns `VersionedConfidenceDecisions`, after validating #65 and matching every
+decision's date/symbol/class/probability and model name to the bound batch. It
+neither regenerates signals nor changes probabilities/confidence. `.result`
+returns a detached unchanged seven-column `ConfidenceSignalsResult` suitable
+for existing consumers; `.to_dataframe()` adds `model_version` after `model_name`.
+BUY uses p, SELL uses 1-p, HOLD uses 1-2*abs(p-.5), as before. Row order and index
+of the supplied decision result remain unchanged.
+
+Each exported row includes exact explicit `model_name` and `model_version`, ready
+for later mapping to backend #69 `AiDecision.ModelName/ModelVersion`. No backend
+code changes. Activating v2 never relabels predictions/decisions produced by v1;
+Archived versions and their historical exports remain available.
+
+**V1 provenance limit:** this is a controlled local association with an in-memory
+result, not cryptographic proof of the estimator's fitted weights. Metadata and
+holdout checks cannot detect every in-memory estimator mutation or establish a
+binary artifact's origin. #76 must add verified artifact storage/fingerprints;
+no artifact is serialized/loaded here. Registry and wrappers should be used
+through their public APIs, not by modifying private Python fields or JSON files.
+
+`save_versioned_predictions(..., batch_id=...)` and
+`save_versioned_decisions(..., batch_id=...)` use a caller-supplied canonical UUID
+per output batch. Defaults (`overwrite=False`) are:
+
+```text
+ml/results/versioned_predictions/<model_name>/<model_version>/<batch_id>/predictions.csv
+ml/results/versioned_predictions/<model_name>/<model_version>/<batch_id>/metadata.json
+ml/results/versioned_decisions/<model_name>/<model_version>/<batch_id>/decisions.csv
+ml/results/versioned_decisions/<model_name>/<model_version>/<batch_id>/metadata.json
+```
+
+Different batches of one version get different UUIDs; existing batches are not
+automatically overwritten. CSV omits an artificial index, as existing storage
+does. Both CSV and JSON retain exact model identity. JSON includes schema, batch
+UUID, row counts, dates, symbols, data SHA-256, immutable model metadata snapshot
+and the original confidence report for decisions. Snapshot status is historical,
+not a query for current Active status. Before writing, storage revalidates the
+registered reference, schemas, nulls, dates, counts, reports and batch integrity.
+Registry and known feature-file sources are protected against output aliasing.
+Explicit custom `output_dir` must be controlled, local and Git-ignored.
+
+Exports reuse atomic **per-file** publication; CSV/JSON are not a two-file
+transaction. A metadata failure may leave a complete CSV and returns no success.
+For interrupted exports, inspect both files and their data SHA-256 before an
+explicit `overwrite=True` retry, or use a new batch UUID. Only a successful
+`SavedVersionedOutput` denotes completion. Existing #64/#65 output files are not
+rewritten. Default registry, lock, results, temporary files and smoke outputs are
+already Git-ignored. Never put credentials in model metadata.
+
+### Minimal local workflow
+
+From the Python session launched in `ml/src/` as in the existing model examples,
+using an already prepared #60 feature CSV:
+
+```python
+from datetime import UTC, datetime
+from uuid import uuid4
+from stocklab_ml.modeling import load_feature_csv, train_random_forest
+from stocklab_ml.signals import generate_trading_signals, add_confidence_scores
+from stocklab_ml.versioning import (
+    ModelVersionRegistry, save_versioned_predictions, save_versioned_decisions,
+    version_confidence_decisions,
+)
+
+features = load_feature_csv("../data/processed/features/AAPL_1day_2016-01-01_2026-09-18.csv")
+forest = train_random_forest(features)
+trained_at = datetime.now(UTC)  # Capture actual completion here, not during a later retry.
+training_run_id = str(uuid4())  # Retain this UUID and trained_at for retries of this run.
+registry = ModelVersionRegistry()
+record = registry.register_version(
+    forest, training_run_id=training_run_id, trained_at_utc=trained_at,
+)
+context = registry.bind_version(
+    forest, model_name=record.model_name, model_version=record.model_version,
+)
+predictions = context.historical_predictions()
+signals = generate_trading_signals(predictions.predictions, model_name=record.model_name)
+confidence = add_confidence_scores(signals)
+decisions = version_confidence_decisions(confidence, predictions=predictions)
+batch_id = str(uuid4())
+saved_predictions = save_versioned_predictions(predictions, batch_id=batch_id)
+saved_decisions = save_versioned_decisions(decisions, batch_id=batch_id)
+inference = context.predict(features.tail(1))  # Target-free, same exact registered identity.
+print(inference.to_dataframe())
+print(ModelVersionRegistry().get_version(record.model_name, record.model_version).metrics)
+registry.set_active_version(record.model_name, record.model_version)  # Explicit administrative choice.
+```
+
+For an illustrative identity only: `random_forest_baseline / v000001`, trained
+`2026-10-14T14:00:00Z`, initial status `Archived`. An illustrative decision row
+could be `2026-10-14,AAPL,random_forest_baseline,v000001,BUY,0.82` (selected
+date/symbol/name/version/signal/confidence fields). These are **not measured
+StockLab performance**.
+
+An executable assert-based synthetic workflow requires no local market dataset:
+from `ml/`, set `PYTHONPATH=src` and run `python examples/model_versioning_smoke.py`.
+It blocks network connections, trains both real estimators, registers only the
+explicit runs, checks restart/idempotency/history and saves ignored batches.
+Offline tests use only synthetic/local data: zero Twelve Data, Alpha Vantage,
+AWS or Azure calls and zero API credits. No dependencies are added.
+
+#75 is metadata/versioning/traceability only. **#76** owns binary artifact storage
+and AWS S3 upload/download; **#77** owns automatic retraining; **#78** owns
+performance-based promotion. No pickle/joblib/ONNX, artifact loading, scheduler,
+automatic refresh, global model selection or automatic performance decision is
+implemented. The separate #92 work is not started.
