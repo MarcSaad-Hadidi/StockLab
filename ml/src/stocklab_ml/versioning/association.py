@@ -15,12 +15,16 @@ from stocklab_ml.signals.contracts import ConfidenceScoreError, TradingSignalErr
 from stocklab_ml.signals.validation import REQUIRED_COLUMNS, _prediction_rows
 from .contracts import ModelVersionError, ModelVersionRecord
 from .registry import ModelVersionRegistry
-from .validation import canonical, frame_digest, training_payload
+from .validation import canonical, decode_record, frame_digest, training_payload
 
 
-def _validate_reference(record: ModelVersionRecord, registry_path: Path) -> None:
+def _validate_reference(record: ModelVersionRecord, registry_path: Path | None) -> None:
     if not isinstance(record, ModelVersionRecord):
         raise ModelVersionError("A registered ModelVersionRecord is required.")
+    if registry_path is None:
+        # Only explicitly trusted #76 cold-start contexts omit a local registry.
+        decode_record(record.to_dict())
+        return
     current = ModelVersionRegistry(registry_path).get_version(record.model_name, record.model_version)
     stored, supplied = current.to_dict(), record.to_dict()
     # Status is administrative and may change after a historical association.
@@ -39,6 +43,8 @@ class RegisteredModel:
     _registry_path: Path
 
     def _validate(self) -> None:
+        if self._registry_path is None:
+            raise ModelVersionError("RegisteredModel requires its local registry.")
         _validate_reference(self.record, self._registry_path)
         payload = training_payload(self._result)
         stored = self.record.to_dict()
@@ -62,25 +68,35 @@ class VersionedPredictions:
 
     _frame: pd.DataFrame
     record: ModelVersionRecord
-    _registry_path: Path
+    _registry_path: Path | None
     _source_paths: tuple[Path, ...]
     _digest: str
 
     def __init__(self, context: RegisteredModel, *, feature_dataframe: pd.DataFrame | None = None):
-        if not isinstance(context, RegisteredModel):
-            raise ModelVersionError("A RegisteredModel context is required for versioned predictions.")
+        from stocklab_ml.artifacts.serialization import LoadedModel
+        if not isinstance(context, (RegisteredModel, LoadedModel)):
+            raise ModelVersionError("A RegisteredModel or verified LoadedModel is required for versioned predictions.")
         context._validate()
-        if feature_dataframe is None:
+        if isinstance(context, LoadedModel):
+            if feature_dataframe is None:
+                raise ModelVersionError("Loaded models require actual target-free feature rows.")
+            estimator = context.estimator
+            frame = (predict_direction(estimator, feature_dataframe) if context.record.model_type == "logistic_regression"
+                     else predict_random_forest_direction(estimator, feature_dataframe))
+            sources = (context.artifact_reference.artifact_path, context.artifact_reference.manifest_path)
+        elif feature_dataframe is None:
             frame = context._result.predictions
         elif context.record.model_type == "logistic_regression":
             frame = predict_direction(context._result.pipeline, feature_dataframe)
         else:
             frame = predict_random_forest_direction(context._result.model, feature_dataframe)
-        source = context._result.source_path
+        if isinstance(context, RegisteredModel):
+            source = context._result.source_path
+            sources = (Path(source),) if source is not None else ()
         object.__setattr__(self, "_frame", frame.copy(deep=True))
         object.__setattr__(self, "record", context.record)
         object.__setattr__(self, "_registry_path", context._registry_path)
-        object.__setattr__(self, "_source_paths", (Path(source),) if source is not None else ())
+        object.__setattr__(self, "_source_paths", sources)
         object.__setattr__(self, "_digest", frame_digest(frame, include_index=True))
         self._validate()
 
@@ -118,7 +134,7 @@ class VersionedConfidenceDecisions:
     _frame: pd.DataFrame
     _report: object
     record: ModelVersionRecord
-    _registry_path: Path
+    _registry_path: Path | None
     _source_paths: tuple[Path, ...]
     _digest: str
 

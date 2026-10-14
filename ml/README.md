@@ -57,7 +57,8 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-The direct dependencies are NumPy, pandas, scikit-learn, pytest, and requests.
+The direct dependencies are NumPy, pandas, scikit-learn, pytest, requests,
+joblib and boto3.
 The version ranges start at verified stable releases and allow patch updates
 within their minor release lines. Transitive dependencies are resolved by pip;
 this is a bounded development setup, not an exact environment lock.
@@ -1722,8 +1723,232 @@ explicit runs, checks restart/idempotency/history and saves ignored batches.
 Offline tests use only synthetic/local data: zero Twelve Data, Alpha Vantage,
 AWS or Azure calls and zero API credits. No dependencies are added.
 
-#75 is metadata/versioning/traceability only. **#76** owns binary artifact storage
-and AWS S3 upload/download; **#77** owns automatic retraining; **#78** owns
-performance-based promotion. No pickle/joblib/ONNX, artifact loading, scheduler,
-automatic refresh, global model selection or automatic performance decision is
-implemented. The separate #92 work is not started.
+#75 remains metadata/versioning/traceability only; binary persistence is owned
+by #76 below. **#77** owns automatic retraining and **#78** owns promotion.
+Neither those issues nor the separate #92 work are implemented here.
+
+## Model artifact storage / AWS S3 (#76)
+
+`stocklab_ml.artifacts` saves the complete fitted Logistic Regression
+`Pipeline(StandardScaler, LogisticRegression)` or `RandomForestClassifier`
+(including its 300 trees). It reuses #75's `RegisteredModel`, permanent
+`(model_name, model_version)` identity and `training_run_id`. Save requires
+`registry.bind_version(...)`; the result/report/holdout, estimator family,
+features, classes and parameters are validated before serialization. There is
+one registry: its schema and training metadata are unchanged. Storage neither
+trains nor activates, archives, promotes or executes a trade.
+
+### Manifest, integrity and compatibility
+
+Format: joblib, pickle protocol 5, no compression. Direct dependencies
+[joblib 1.6.0](https://pypi.org/project/joblib/1.6.0/) and
+[boto3 1.43.113](https://pypi.org/project/boto3/1.43.113/) are explicitly declared;
+boto3 requires Python >=3.10 and supports our Python 3.12 environment.
+
+Each schema-v1 `manifest.json` contains `model_name`, `model_version`,
+`training_run_id`, `model_type`, `serialization_format`, `artifact_filename`,
+`artifact_sha256`, `artifact_size_bytes`, `environment`, a complete
+`model_record` snapshot and `metadata_sha256`. The latter hashes #75's canonical
+immutable record fields, excluding only administrative `status`. Snapshot status
+is historical; it never changes current registry status. `holdout_sha256`
+identifies historical predictions and is **not** the binary artifact hash.
+
+The artifact digest covers its exact serialized bytes. Size and SHA-256 are
+verified before every load; loading uses those same in-memory bytes to avoid
+reopening a changed file. The S3 ETag is never used as a SHA-256 substitute.
+Malformed/duplicate JSON keys, extra/missing fields, inconsistent identities,
+metadata, filenames, digests and sizes fail. S3 keys are derived internally;
+manifests cannot supply arbitrary object keys. Download/load defaults to a
+configurable **100 MiB** artifact limit and a **1 MiB** manifest limit. Reads
+are bounded, close response bodies, and reject partial content. This V1 uses
+single `PutObject` requests, not multipart upload.
+
+`environment` records Python, scikit-learn, NumPy, SciPy and joblib versions.
+Loading requires the recorded Python major/minor and **exact** package versions;
+Python patch differences are allowed. sklearn's inconsistent-version warning
+becomes a controlled compatibility error. After load, fitted state, exact
+feature/class order, hyperparameters, scaler statistics, iterations, tree count
+and feature importances are checked. Nothing is refitted to repair a mismatch.
+See the official [scikit-learn persistence guidance](https://scikit-learn.org/stable/model_persistence.html).
+
+### Trusted loading and registry availability
+
+**joblib/pickle can execute arbitrary code.** `trusted_source=True` must be
+supplied to `load_model_artifact` after independently approving the private
+source and local directory. No user URL or public artifact-loading API exists.
+SHA-256 detects a mismatch with the manifest; it does **not** authenticate an
+attacker who can replace both files. IAM, bucket policies and controlled local
+write access are the provenance boundary. This V1 does not implement signing,
+authenticate fitted weights against #75's metadata, or sandbox deserialization.
+
+With a local registry, all immutable metadata must match `get_version` exactly;
+only current status can differ. A missing version, corrupt registry or metadata
+conflict cannot be bypassed with cold-start opt-in. By default the usual local
+registry is used. On a new machine with **no default local registry**, callers
+can explicitly choose `allow_without_registry=True` for download and load from
+an approved source. The fully validated manifest record is then a historical
+snapshot, including its original status; no registry/history or Active status
+is created. If a registry is explicitly passed, it must contain that version.
+Cold start relies on the trusted source, not independent local provenance.
+
+### Local publication and recovery
+
+Default paths, already Git-ignored:
+
+```text
+ml/models/artifacts/<model_name>/<model_version>/model.joblib
+ml/models/artifacts/<model_name>/<model_version>/manifest.json
+```
+
+Paths use #75's exact name/version validators and remain inside the selected
+directory. Registry and known training-file aliases are protected. Each file
+uses temporary sibling / flush / fsync / atomic no-clobber publication on
+NTFS/POSIX. The binary is published first, the manifest last. **The pair is not
+a transaction.** A late failure returns no successful artifact and can leave
+an orphan binary; a missing manifest never authorizes a load. Inspect interrupted
+files before retrying `save_model_artifact(..., overwrite=True)`: this flag only
+permits reuse of identical verified content or completion of an identical orphan.
+It never replaces a version's different binary or manifest. Corrupt existing
+files fail without automatic deletion/repair. A killed process can leave an
+ignored temporary sibling; remove it manually only after confirming no writer
+is alive. Unsupported filesystems fail safely without a weaker fallback.
+
+`overwrite=False` rejects any existing output. Download may reuse a complete
+cache only after comparing its validated manifest and recomputing binary size
+and SHA-256. Different versions have distinct directories. Keep any custom
+output directories controlled and Git-ignored; never commit binary models or
+generated registries.
+
+### Private S3 configuration, publication and recovery
+
+Use an **existing, explicitly approved DEV general-purpose bucket** and region:
+
+```powershell
+$env:STOCKLAB_ML_S3_BUCKET = "your-existing-private-dev-bucket"
+$env:STOCKLAB_ML_AWS_REGION = "ca-central-1"
+$env:STOCKLAB_ML_S3_PREFIX = "dev/stocklab"
+```
+
+All three variables are required by `S3ArtifactConfig.from_environment`.
+Bucket names, region syntax and relative prefix segments are validated; no
+slashes/traversal in identities, empty prefix segments, absolute keys or URLs.
+`trusted_private_source=True` is an explicit caller acknowledgment that this
+bucket/prefix is approved and private. The code does not inspect or change bucket
+policies. An injected S3 client is for controlled offline tests (or equivalent
+trusted SDK usage); no endpoint URL option is exposed. The real SDK client uses
+HTTPS, signed requests, ignores configured endpoint overrides, and has bounded
+standard retries (three total attempts), five-second connect and 30-second read
+timeouts. Missing/invalid configuration fails; there is no alternate bucket.
+
+Credentials use the official [boto3 provider chain](https://docs.aws.amazon.com/boto3/latest/guide/credentials.html):
+AWS profile / environment / IAM role / temporary credentials. No AWS keys are
+hardcoded, printed, stored in manifests or required for offline tests. No
+credentials or AWS connection is needed when using an injected fake client.
+The code never creates buckets, access keys, IAM policies or AWS services.
+
+```text
+<prefix>/models/logistic_regression_baseline/<version>/artifacts/<sha256>.joblib
+<prefix>/models/random_forest_baseline/<version>/artifacts/<sha256>.joblib
+<prefix>/models/<model_name>/<version>/manifest.json
+```
+
+Upload validates the registered local manifest and exact binary bytes. If a
+manifest already exists, an identical canonical manifest and verified remote
+binary return the same reference; different content conflicts. Otherwise it
+uploads the content-addressed binary with `IfNoneMatch="*"`, downloads it to
+verify size/SHA-256, then conditionally publishes the manifest **last** and reads
+it back. [S3 conditional writes](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html)
+protect concurrent writers: 412 reads/verifies the winner; different manifests
+conflict. A 409 returns a typed conflict for explicit retry; no infinite retry
+or HEAD/PUT pseudo-lock. A failed manifest upload leaves an unpublished orphan
+binary. An identical retry verifies that binary and can finish publication.
+Concurrent different uploads can leave a losing orphan, but only one manifest
+publishes a version. No cleanup deletes or changes other versions.
+
+Download requests the exact manifest from the approved bucket/prefix, validates
+identity/metadata/runtime, derives the digest key, retrieves bounded bytes,
+checks size/SHA-256 and publishes the local cache. It never unpickles during
+download. There is no `latest`/Active fallback or implicit new version.
+Administrative deletion/overwrite outside this API can break immutability;
+prevent it through separately managed bucket policy and writer permissions.
+
+Enable S3 Block Public Access separately; no public ACLs or unauthenticated URLs
+are emitted. Grant only `s3:GetObject` and `s3:PutObject` on the exact artifact
+prefix. `HeadObject` uses `s3:GetObject`; this implementation uses no HEAD or LIST
+and requires no `s3:ListBucket`, delete or ACL permission. Without ListBucket,
+[AWS returns 403 for an absent key](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html).
+Initial upload treats this discovery result as unknown and proceeds only through
+conditional creation; it never overwrites an unreadable existing manifest.
+Successful binary and final-manifest reads remain mandatory. Actual read/write
+denial still returns a controlled error; a missing download may therefore report
+AccessDenied rather than NotFound when listing is not permitted.
+Uploads inherit the bucket's server-side encryption (SSE-S3 or SSE-KMS). For
+[SSE-KMS](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingKMSEncryption.html),
+grant `kms:GenerateDataKey` for writes and `kms:Decrypt` for reads on the selected
+key, including its key policy. No IAM or encryption policy is modified here.
+S3 storage, requests, transfer and KMS can incur costs; remote upload verification
+adds a GET. No cost is claimed without a live measurement.
+
+Errors are controlled: `ModelArtifactError`, `ArtifactNotFoundError`,
+`ArtifactConflictError`, `ArtifactIntegrityError`, `ArtifactCompatibilityError`,
+`ArtifactStorageError`. Missing credentials, AccessDenied, missing bucket/key,
+wrong region, timeout, throttling and connection failure never report success
+or fallback. Public error messages omit raw AWS responses and secrets; technical
+causes are retained internally. Avoid logging full chained tracebacks containing
+SDK response/connection details.
+
+### Save, upload, download, load and predict
+
+Using the existing trained result and registry (training itself is unchanged):
+
+```python
+from stocklab_ml.artifacts import (
+    S3ArtifactConfig, S3ModelArtifactStore, save_model_artifact, load_model_artifact,
+)
+
+context = registry.bind_version(result, model_name=record.model_name, model_version=record.model_version)
+local = save_model_artifact(context)
+store = S3ModelArtifactStore(S3ArtifactConfig.from_environment(trusted_private_source=True))
+reference = store.upload_model_artifact(local, registry=registry)
+del context, result  # The trained estimator is no longer needed.
+downloaded = store.download_model_artifact(record.model_name, record.model_version, registry=registry)
+loaded = load_model_artifact(downloaded, registry=registry, trusted_source=True)
+versioned = loaded.predict(new_feature_rows)  # No actual_class, target_date or fit required.
+predictions = versioned.predictions  # Unchanged #61/#62 columns for #64 signals.
+export_rows = versioned.to_dataframe()  # Exact model_name and model_version.
+```
+
+`LoadedModel` exposes the fitted `estimator`, exact `record`, `artifact_sha256`
+and local `artifact_reference`; it is not a fabricated `RegisteredModel` training
+result. `.predict()` reuses existing inference and returns #75
+`VersionedPredictions`. Existing `version_confidence_decisions`, versioned
+prediction/decision exports and #64/#65 thresholds/confidence formulas work
+unchanged. Archived versions remain usable without promotion.
+
+### Offline verification and live AWS limitation
+
+```powershell
+# Repository root, Python 3.12 environment:
+.\ml\.venv\Scripts\python.exe -m pip check
+.\ml\.venv\Scripts\python.exe -m pytest ml -q
+# From ml/, with its venv active:
+python -m pytest -q
+$env:PYTHONPATH = "src"
+python examples/model_artifact_storage_smoke.py
+```
+
+The assert-based smoke trains both real synthetic baselines, registers/saves,
+uploads into fake S3, discards the original estimators, disables fit/training,
+downloads/loads and compares exact target-free predictions and versioned
+decisions. It blocks sockets and uses zero live AWS/market API calls. Tests
+exercise tampering, runtime conflicts, cache separation, duplicate/concurrent/
+partial publication, AWS failures and the real SDK request model via Stubber.
+Synthetic data demonstrates mechanics, never profitability.
+
+Live AWS validation is optional and requires an existing approved DEV bucket,
+isolated DEV prefix, region and credentials. No such configuration is provided
+by tests or created automatically. Without it report:
+**Live AWS validation not performed — secure configuration unavailable.**
+Automatic retraining #77, promotion #78, metrics #79, API #80, frontend #59 and
+#92 remain deferred. ML = WHAT; Risk Manager = WHETHER + HOW MUCH; Paper Trading
+Engine = EXECUTE. Storage performs none of the latter two responsibilities.

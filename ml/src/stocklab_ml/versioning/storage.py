@@ -30,7 +30,8 @@ def _save(result, *, batch_id, output_dir, kind, overwrite):
         raise StorageError("Versioned output must remain inside the selected local results directory.")
     data, metadata = directory / f"{kind}.csv", directory / "metadata.json"
     for source in (result._registry_path,) + result._source_paths:
-        cleaning_paths(Path(source), data, metadata)
+        if source is not None:
+            cleaning_paths(Path(source), data, metadata)
     check_collisions((data, metadata), overwrite)
     payload = {
         "schema_version": 1, "kind": kind, "batch_id": batch_id,
