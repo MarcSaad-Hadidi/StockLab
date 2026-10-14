@@ -75,7 +75,7 @@ The smoke tests import `numpy`, `pandas`, `sklearn`, and `stocklab_ml` without
 network calls. `pytest.ini` adds `src/` using pytest's built-in `pythonpath`
 setting, relative to that configuration file. No per-file path changes or
 packaging dependencies are needed. The package is currently importable in tests;
-it is not installed as a distribution or exposed as a command-line application.
+it is not installed as a distribution. The #77 one-shot CLI below uses `PYTHONPATH=src`.
 From the repository root, `python -m pytest ml` also works with this environment.
 
 ## Project structure
@@ -1725,7 +1725,7 @@ AWS or Azure calls and zero API credits. No dependencies are added.
 
 #75 remains metadata/versioning/traceability only; binary persistence is owned
 by #76 below. **#77** owns automatic retraining and **#78** owns promotion.
-Neither those issues nor the separate #92 work are implemented here.
+#77 is implemented below; #78 and the separate #92 work remain deferred.
 
 ## Model artifact storage / AWS S3 (#76)
 
@@ -1949,6 +1949,319 @@ Live AWS validation is optional and requires an existing approved DEV bucket,
 isolated DEV prefix, region and credentials. No such configuration is provided
 by tests or created automatically. Without it report:
 **Live AWS validation not performed — secure configuration unavailable.**
-Automatic retraining #77, promotion #78, metrics #79, API #80, frontend #59 and
-#92 remain deferred. ML = WHAT; Risk Manager = WHETHER + HOW MUCH; Paper Trading
+Automatic retraining #77 is documented below; promotion #78, metrics #79, API #80,
+frontend #59 and #92 remain deferred. ML = WHAT; Risk Manager = WHETHER + HOW MUCH; Paper Trading
 Engine = EXECUTE. Storage performs none of the latter two responsibilities.
+
+## Automatic model retraining (#77)
+
+`stocklab_ml.retraining.run_retraining_check(config, *, dependencies, now_utc=None,
+retry_run_id=None, trigger_source="manual")` performs **one check**. It has no loop,
+background thread, import-time training or trading integration. An external scheduler
+invokes it approximately every three days. This refreshes the training sample as new
+observed sessions arrive; it makes no claim that a candidate is better than Active.
+Every new #75 version is **Archived**. The runner never calls `set_active_version`
+or `archive_version`, compares candidates with Active, selects a winner, backtests,
+changes thresholds or executes trades. Promotion belongs exclusively to **#78**.
+
+### Configuration and explicit bootstrap
+
+`RetrainingConfig` is frozen. Explicit `symbols` and `dataset_path` are required;
+there is no inferred example ticker. `model_families` selects `logistic_regression`,
+`random_forest`, or both. Defaults: `enabled=True`, `check_interval_days=3`,
+`minimum_new_sessions=1`, `test_fraction=0.20`, `overlap_days=7`,
+`maximum_refresh_days=90`, `aws_enabled=False`, `upload_to_s3=False`, `dry_run=False`.
+The minimum counts actual new sessions in **at least one configured symbol**, not
+elapsed calendar days. Other symbols can have unchanged or missing sessions; none
+are fabricated. The shared pooled model retains each row's actual symbol identity.
+
+Default outputs: `ml/models/retraining/state.json`, the existing
+`ml/models/registry.json`, and `ml/models/artifacts/`. Symbols/families, flags,
+fractions, intervals, canonical UUIDs, timestamps and paths are validated.
+Data/journal/registry/lock aliases, hard-linked input files and output traversal
+fail. All generated default models, state and processed data are already ignored.
+Keep custom output directories private and Git-ignored as well.
+
+Bootstrap is deliberate: first prepare sufficient historical OHLCV with #56 using
+explicit dates, then #58 cleaning, and supply the resulting clean CSV containing
+**exactly** the configured symbols. The runner neither downloads a full history nor
+initializes training from a few recent days. A missing, reordered, dirty or incomplete
+bootstrap fails. An insufficient snapshot returns `SKIPPED_INSUFFICIENT_DATA` without
+a version. Existing registry history is retained. On the first local check, the
+prepared dataset's last dates become an explicit bootstrap reference, **not a claim
+about an undocumented previous training run**; subsequent watermarks come from
+each family's successfully published candidate snapshot. Preserve the matching
+registry, dataset and journal when moving an existing scope to another machine.
+
+For example, create an ignored `ml/models/retraining/config.json` at repository root:
+
+```json
+{
+  "symbols": ["AAPL", "MSFT", "NVDA"],
+  "model_families": ["logistic_regression", "random_forest"],
+  "dataset_path": "ml/data/processed/retraining-clean.csv",
+  "state_path": "ml/models/retraining/state.json",
+  "registry_path": "ml/models/registry.json",
+  "artifacts_path": "ml/models/artifacts",
+  "check_interval_days": 3,
+  "minimum_new_sessions": 1,
+  "test_fraction": 0.20
+}
+```
+
+Choose your own explicit symbols and bootstrap file. Relative configuration paths
+are resolved against the worker's current directory. From repository root:
+
+```powershell
+$env:PYTHONPATH = "ml/src"
+# Read-only decision from supplied local rows; no network, fit, lock or output writes.
+& ml/.venv/Scripts/python.exe -m stocklab_ml.retraining.cli --once --config ml/models/retraining/config.json --local-data ml/data/processed/incoming.csv --dry-run
+# Actual local publication, still without a provider or AWS call.
+& ml/.venv/Scripts/python.exe -m stocklab_ml.retraining.cli --once --config ml/models/retraining/config.json --local-data ml/data/processed/incoming.csv
+# Explicit provider check; only TWELVE_DATA_ML_API_KEY is consumed.
+& ml/.venv/Scripts/python.exe -m stocklab_ml.retraining.cli --once --config ml/models/retraining/config.json
+```
+
+The CLI requires `--once`; it emits one JSON result to stdout and small structured
+checkpoint logs to stderr. Exit codes: **0** completion/normal skip/dry-run,
+**1** retraining failure or partial publication, **2** configuration/state/storage
+preflight failure. `--now-utc` injects a canonical timezone-aware UTC test clock;
+`--retry-run-id` replays a known durable run. No raw error causes or credentials are
+printed. Reports include UUIDs, dates, family metrics, version, artifact SHA-256,
+local/remote references, session counts, request count, duration and Active before/after.
+
+### New observations, incremental refresh and credit budget
+
+The cadence gate uses the last completed check; D+1 returns `SKIPPED_NOT_DUE`,
+D+3 permits a check. A pending failure resumes before this gate so the same run
+can recover explicitly. Each eligible check compares validated per-symbol dates
+with the last successful family watermarks (or bootstrap reference), then counts
+observations strictly after those dates. An identical refresh returns
+`SKIPPED_NO_NEW_DATA`: no features, fit, version, artifact or S3 operation.
+Weekends and holidays have exactly this behavior when no new sessions are returned;
+there is no assumed exchange calendar. A minimum greater than one accumulates new
+sessions across checks even when the mutable clean dataset has already been refreshed.
+
+Only #56 `prepare_historical_dataset` calls Twelve Data, once per configured symbol
+per check, shared across families. The window starts seven calendar days before that
+symbol's latest observation (bounded by its first observation) and ends at the
+conservative cutoff. It is limited to 90 inclusive calendar days by default and
+always below #56's single-request limit. A longer outage requires explicit bounded
+catch-up; no hidden full-history fetch or extra check-then-fetch is performed.
+There is no Twelve Data retry, polling, backend/frontend key fallback or alternate
+provider. The API counter is checkpointed before each attempted request, including
+failed attempts; explicit retries add their attempted calls. #56's `1day`, `splits`,
+envelope validation and request safeguards remain unchanged.
+
+The cutoff excludes the current **UTC-12 calendar day** and is additionally bounded
+by the execution host's yesterday to satisfy #56. This deliberately conservative
+choice can delay availability by an additional day around UTC noon; it prevents
+using a partial session even on a UTC-configured AWS host. New local/provider rows
+are cleaned with #58's explicit cutoff. Invalid/future local rows are removed by
+that existing contract; conflicting valid duplicate keys return
+`DATA_REVISION_CONFLICT`. Exact duplicates collapse deterministically. An adjusted
+price revision in the overlap is never silently merged: the old dataset is left
+intact and no training version is published. Reconciliation after splits/corporate
+actions requires a deliberate separate historical rebuild. Revisions outside the
+bounded overlap cannot be detected by this incremental check.
+
+### Immutable training, evaluation and publication
+
+Each run saves a no-clobber `snapshots/<run_uuid>/dataset.csv` beside the journal.
+Its journal metadata records symbols, first/last dates, row count, canonical #75
+CSV fingerprint, per-symbol dates, cutoff and preparation rules. A retry verifies
+the snapshot and uses it even if newly supplied rows differ. The mutable clean CSV
+is replaced atomically only after the immutable snapshot and journal checkpoint
+exist; recovery permits the previous or new fingerprint, never arbitrary edited data.
+
+#60 `engineer_features` runs on the full clean snapshot: the seven official features,
+Wilder RSI and warm-up rules are unchanged. #61/#62 keep their exact parameters,
+train-only `StandardScaler` for Logistic, 300-tree RF with `random_state=42`, and
+the shared purged chronological 20% holdout. No targets extend past observed data;
+train feature **and target dates** precede the holdout boundary. Holdout observations
+are never refitted after evaluation. With both families selected, RF's retained
+`baseline_result` supplies Logistic, avoiding a second Logistic fit. RF alone does
+not register its unselected baseline; if RF fails, Logistic can still publish independently.
+
+#75's `training_payload` reuses #63 `evaluate_predictions` and validates the fitted
+estimator, classes/features, report, actual holdout predictions and finite metrics
+before registration. Accuracy, precision, recall, F1, confusion counts and supports
+are the calculated metrics, not invented improvements. The existing registry schema
+is unchanged: dataset lineage is journaled under its stable `TrainingRunId` rather
+than creating a second version registry. #75 allocates the next per-family version,
+defaults to Archived, and binds the exact training result. #76 saves/validates the
+binary and manifest, then optionally uploads through `S3ModelArtifactStore`.
+
+S3 uses only the existing #76 variables `STOCKLAB_ML_S3_BUCKET`,
+`STOCKLAB_ML_AWS_REGION`, `STOCKLAB_ML_S3_PREFIX`. Configure an independently approved
+private source, set `upload_to_s3=true`, and pass **`--approve-private-s3`**.
+Only then does the CLI call `S3ArtifactConfig.from_environment(trusted_private_source=True)`.
+No bucket, key or policy is created; local-only success has `s3_reference=null`.
+The bucket/region/prefix/size limit are frozen in the run, so a retry cannot silently
+publish into another destination. #76's conditional PUT, binary verification,
+manifest-last commit marker and idempotent retry remain authoritative. No untrusted
+joblib is loaded by the retraining runner; artifact recovery verifies bytes/manifest
+through #76 without deserialization.
+
+### Durable state, failures, locks and recovery
+
+The bounded schema-v1 JSON journal tracks all checks and family checkpoints:
+`CHECKING -> DATA_READY -> TRAINING -> EVALUATED -> VERSION_REGISTERED ->
+ARTIFACT_SAVED -> ARTIFACT_UPLOADED (when requested) -> COMPLETED`.
+`SKIPPED_NO_NEW_DATA`, `SKIPPED_INSUFFICIENT_NEW_SESSIONS` and
+`SKIPPED_INSUFFICIENT_DATA` finish a check without publishing an invalid model.
+`FAILED` or `PARTIAL_PUBLICATION` retains each family's last verified phase,
+payload, trained timestamp, UUID/version and local/S3 result. A multi-family run is
+not a global transaction: a successful family's version remains verifiable when
+another family fails. It is never reported as all-completed.
+
+A run UUID and deterministic family UUIDs are persisted **before fit/publication**.
+Evaluated immutable metadata and training time are checkpointed before #75 registration.
+After a crash, the runner finds the same registry UUID even if journaling its version
+was interrupted. A complete verified local artifact resumes publication without fit.
+Otherwise it reproduces training from the same snapshot/config and requires exactly
+matching #75 metadata/holdout before re-registering that same UUID; #75 rejects conflicts.
+Existing orphan binaries are reused only through #76's identical-content retry.
+Completed families are verified locally and kept completed. `--retry-run-id` on a
+finished check returns `SKIPPED_ALREADY_PROCESSED` without another version or state write.
+
+Writes reuse the existing temporary sibling / flush / fsync / atomic replace writer.
+On POSIX, #77 additionally fsyncs publication directories and their parents for
+the journal, snapshots, mutable dataset and local artifact completion.
+Duplicate JSON keys, invalid identity/phase/metrics, dropped pending work, missing
+registry history, changed dataset/config/destination and corrupt snapshots fail closed;
+no registry counter, journal or dataset is silently reset. The journal read limit is
+8 MiB; preserve/export lineage and deliberately upgrade storage before reaching it.
+Files/versions are not automatically pruned. Process-crash recovery is tested; power-loss
+and real network filesystem behavior still require deployment validation.
+
+One canonical journal path coordinates a scope. `state.json.lock` uses a nonblocking
+kernel lock (`msvcrt` byte lock on Windows, `flock` on Linux); a second process returns
+`SKIPPED_ALREADY_RUNNING`. The stable lock file is never deleted based on age; the
+kernel releases ownership when the process dies. #75 retains its own separate
+exclusive-create registry lock. A killed #75 writer can leave that lock file: verify
+all writers have stopped and inspect registry integrity before manual removal.
+Do not treat a local registry lock or copied journals as universal coordination.
+
+### Dry-run and offline verification
+
+Dry-run reads validated configuration, registry/journal, cadence and the clean
+bootstrap, then computes a theoretical refresh/session decision **only from an
+explicit local frame/CSV**. It never creates a lock, journal, snapshot, version,
+model, dataset write or S3 client, and performs no external calls. Without local
+new rows it returns `DRY_RUN_NEEDS_LOCAL_DATA`; pending work returns
+`DRY_RUN_PENDING_RETRY`. It does not fit or promise valid training metrics.
+
+From `ml/`, with Python 3.12 and `PYTHONPATH=src`:
+
+```shell
+python examples/automatic_retraining_smoke.py
+python -m pytest -q
+python -m pip check
+```
+
+The assert-based smoke blocks sockets, creates synthetic OHLCV, trains the real
+initial Logistic/RF models and explicitly activates v000001 **only for setup**.
+Three synthetic new sessions produce v000002 Archived, verified artifacts and fake
+S3 publication. An interrupted manifest upload resumes with no fit, replay creates
+no additional version, and a due identical refresh skips. Old Active records remain
+exactly unchanged. Metrics demonstrate mechanics on synthetic data, not real market
+performance. All tests remain offline, including a two-process killed-owner lock
+test, crash after registration, partial multi-model failure and SDK-backed fake S3.
+
+On Windows in the managed sandbox, existing atomic no-clobber writers require
+NTFS hard-link permissions. Use the approved unrestricted test runner and dedicated
+ignored temporary/cache directories rather than weakening storage semantics:
+
+```powershell
+# From repository root (use a fresh basetemp for each command).
+& ml/.venv/Scripts/python.exe -m pytest ml -q --basetemp=ml/results/pytest-77-root -o cache_dir=ml/results/pytest-cache-77-root
+# From ml/:
+& .venv/Scripts/python.exe -m pytest -q --basetemp=results/pytest-77-ml -o cache_dir=results/pytest-cache-77-ml
+```
+
+### AWS execution and persistent prerequisites (not deployed)
+
+The prepared integration is [EventBridge Scheduler's ECS RunTask target](https://docs.aws.amazon.com/scheduler/latest/UserGuide/managing-targets-templated.html)
+using `rate(3 days)`, one Linux Fargate task, and a shared EFS access point.
+`ml/aws/automatic-retraining.template.json` is parameterized CloudFormation for
+**only** the task definition and a **DISABLED** schedule. All cluster, roles, EFS,
+access point, subnets/security groups, private ECR image, log group, ML secret and
+approved S3 bucket/prefix must already exist. It creates nothing unless separately
+reviewed and manually deployed. No deployment command is run by this code.
+
+Build the scientific Python container explicitly when DEV is ready:
+`docker build -f ml/aws/Dockerfile -t stocklab-ml-retraining:dev ml`.
+Publish/pin its private ECR digest separately. The image runs as UID/GID 1000,
+with Python 3.12 and the existing requirements. The template starts with 2 vCPU /
+4 GiB, single-thread numerical libraries and a two-hour `timeout` (TERM, then KILL
+after 60 seconds); container `StopTimeout` is 120 seconds. These are configuration
+starting points, **not measured adequate resources**. Profile actual symbols/history,
+training duration, memory and artifacts before enabling. #76's default artifact limit
+is 100 MiB. A standard Lambda zip is not assumed to fit this native scientific stack.
+
+[Fargate Linux 1.4.0+ supports EFS volumes](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/efs-volumes.html).
+Use transit encryption, IAM authorization, an access point enforcing UID/GID 1000,
+and root directory `/` or omitted as in the template. Permit NFS/2049 from the task's
+security group to EFS mount targets. Private subnets need approved egress for Twelve
+Data and appropriate ECR/Secrets Manager/CloudWatch/S3 endpoints or routing.
+The read-only container root uses an explicitly prepared EFS `/mnt/stocklab/tmp`.
+
+Before the first AWS worker, provision the same persistent root with:
+
+```text
+/mnt/stocklab/.stocklab-retraining-volume.json
+/mnt/stocklab/data/clean.csv
+/mnt/stocklab/models/registry.json (+ its lock when held)
+/mnt/stocklab/models/artifacts/
+/mnt/stocklab/retraining/config.json
+/mnt/stocklab/retraining/state.json (+ snapshots/ingestion/lock)
+/mnt/stocklab/tmp/
+```
+
+Copy `ml/aws/retraining.config.example.json`, choose your symbols and a fresh
+canonical volume UUID, and create the marker as
+`{"schema_version":1,"volume_id":"<the same UUID>"}`. Provision the existing trained
+registry/history and clean dataset deliberately; never use an empty per-task copy.
+For a new retraining journal, perform an explicit offline no-new-data local check
+outside ECS using the same mounted paths and the bootstrap as local input, initially
+with `aws_enabled=false` and `upload_to_s3=false`; this seeds checked baseline dates
+without fitting/registering. Then save the approved AWS configuration on the volume.
+For an existing scope, migrate its whole journal, registry and snapshots together,
+with no pending run/config-path changes; inspect/approve the migration first.
+
+AWS preflight requires the configured root to be an actual Linux NFSv4 mount,
+matching marker UUID, and verified pre-existing dataset, **nonempty registry** and
+journal. All state and artifacts must remain below that root. ECS ambient context
+also requires `aws_enabled=true`; a local-mode misconfiguration cannot bypass the
+guard. An absent/unmounted/unrecognized/corrupt persistent state fails before provider
+calls or registration, never manufactures a first version. EFS supports NFSv4.1
+[advisory locks](https://aws.amazon.com/efs/faq/); test overlap, cancellation/restart,
+atomic publication and lock recovery with two actual DEV tasks before enabling.
+Mount detection/marker checks do not independently authenticate a volume or prove
+all distributed failure modes. Restrict write access and retain reliable backups.
+
+Use distinct least-privilege existing roles, never `AdministratorAccess` or `s3:*`:
+
+- Scheduler: trust `scheduler.amazonaws.com`, allow `ecs:RunTask` on this task
+  definition restricted to the cluster, and `iam:PassRole` on the exact execution/task
+  roles with `iam:PassedToService=ecs-tasks.amazonaws.com`.
+- Task execution: trust `ecs-tasks.amazonaws.com`; approved ECR read, log stream/events
+  on the existing log group, `secretsmanager:GetSecretValue` on the ML-only secret,
+  and KMS decrypt on its chosen key when required.
+- Task: `elasticfilesystem:ClientMount` and `ClientWrite` on this filesystem/access
+  point; `s3:GetObject` and `PutObject` on only `<prefix>/models/*`; selected KMS
+  `GenerateDataKey`/`Decrypt` if SSE-KMS is used. No delete, ACL or bucket creation.
+
+The [ECS IAM role requirements](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/CWE_IAM_role.html)
+include passing the task/execution roles. Scheduler delivery retries are bounded;
+successful `RunTask` submission does **not** mean the training process succeeded.
+Monitor task exit codes/stopped reasons and structured logs separately, and recover
+pending publication from the journal. Scheduler, Fargate runtime, EFS storage,
+S3 requests/storage (including verification GETs), logging, egress/KMS and provider
+credits may incur costs; no live cost or resource adequacy is claimed here.
+
+**AWS scheduler not deployed — secure DEV configuration unavailable.**
+No real credentials/bucket/EFS/scheduler/worker, live retraining or S3 upload have
+been configured or validated for #77. No cloud resources are created/modified by
+offline tests. #78 promotion and #92 remain outside this implementation.
