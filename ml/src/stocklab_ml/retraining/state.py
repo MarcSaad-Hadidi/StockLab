@@ -193,7 +193,8 @@ def read_state(path: Path):
         if state["runs"] and state["baseline_dates"] != state["runs"][0]["previous_data_dates"]:
             raise ValueError
         terminal = [run for run in state["runs"] if run["status"] == "COMPLETED" or run["status"].startswith("SKIPPED_")]
-        if state["last_check_at_utc"] != (terminal[-1]["completed_at_utc"] if terminal else None):
+        if (any(run["completed_at_utc"] is None for run in terminal)
+                or state["last_check_at_utc"] != (terminal[-1]["completed_at_utc"] if terminal else None)):
             raise ValueError
         pending_runs = [run["run_id"] for run in state["runs"]
                         if run["status"] in {"CHECKING", "DATA_READY", "FAILED", "PARTIAL_PUBLICATION"}]

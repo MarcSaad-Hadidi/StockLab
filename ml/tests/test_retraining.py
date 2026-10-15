@@ -523,6 +523,43 @@ def test_journal_cadence_and_bootstrap_reference_cannot_be_reset(config, field, 
         run(config)
 
 
+@pytest.mark.parametrize("status", ["COMPLETED", "SKIPPED_NO_NEW_DATA",
+    "SKIPPED_INSUFFICIENT_NEW_SESSIONS", "SKIPPED_INSUFFICIENT_DATA"])
+def test_terminal_run_cannot_erase_both_cadence_timestamps(config, status):
+    selected = replace(config, model_families=("logistic_regression",),
+        minimum_new_sessions=4 if status == "SKIPPED_INSUFFICIENT_NEW_SESSIONS" else 1)
+    clock, incoming = NOW, history(103)
+    if status == "SKIPPED_NO_NEW_DATA":
+        incoming = history()
+    elif status == "SKIPPED_INSUFFICIENT_DATA":
+        save_processed(selected.dataset_path, history(21), overwrite=True)
+        clock, incoming = datetime(2024, 3, 1, 16, tzinfo=UTC), history(22)
+    first = api().run_retraining_check(selected,
+        dependencies=api().RetrainingDependencies(incoming), now_utc=clock)
+    assert first.status == status
+    state = json.loads(selected.state_path.read_text())
+    state["runs"][-1]["completed_at_utc"] = state["last_check_at_utc"] = None
+    selected.state_path.write_text(json.dumps(state))
+    before = selected.state_path.read_bytes(), selected.dataset_path.read_bytes(), (
+        selected.registry_path.read_bytes() if selected.registry_path.exists() else None)
+    with pytest.raises(api().RetrainingStateError):
+        api().run_retraining_check(selected,
+            dependencies=api().RetrainingDependencies(incoming), now_utc=clock + timedelta(days=1))
+    assert before == (selected.state_path.read_bytes(), selected.dataset_path.read_bytes(),
+        selected.registry_path.read_bytes() if selected.registry_path.exists() else None)
+
+
+def test_older_terminal_run_also_requires_completion_timestamp(config):
+    assert run(config, history()).status == "SKIPPED_NO_NEW_DATA"
+    assert api().run_retraining_check(config, dependencies=api().RetrainingDependencies(history()),
+        now_utc=NOW + timedelta(days=3)).status == "SKIPPED_NO_NEW_DATA"
+    state = json.loads(config.state_path.read_text())
+    state["runs"][0]["completed_at_utc"] = None
+    config.state_path.write_text(json.dumps(state))
+    with pytest.raises(api().RetrainingStateError):
+        import_module("stocklab_ml.retraining.state").read_state(config.state_path)
+
+
 def test_completed_s3_reference_cannot_change_identity(config):
     from test_s3_model_artifacts import FakeS3, store
     selected = replace(config, upload_to_s3=True, model_families=("logistic_regression",))
