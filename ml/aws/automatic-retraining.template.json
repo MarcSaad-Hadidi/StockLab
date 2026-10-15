@@ -1,0 +1,78 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "StockLab #77: disabled three-day schedule and one-shot Fargate worker; existing infrastructure only. Do not deploy automatically.",
+  "Parameters": {
+    "ClusterArn": {"Type": "String", "AllowedPattern": "arn:aws[a-z-]*:ecs:[a-z0-9-]+:[0-9]{12}:cluster/.+"},
+    "SchedulerRoleArn": {"Type": "String", "AllowedPattern": "arn:aws[a-z-]*:iam::[0-9]{12}:role/.+"},
+    "ExecutionRoleArn": {"Type": "String", "AllowedPattern": "arn:aws[a-z-]*:iam::[0-9]{12}:role/.+"},
+    "TaskRoleArn": {"Type": "String", "AllowedPattern": "arn:aws[a-z-]*:iam::[0-9]{12}:role/.+"},
+    "ImageUri": {"Type": "String", "Description": "Approved private ECR image pinned by digest", "AllowedPattern": "[0-9]{12}\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com(\\.cn)?/[A-Za-z0-9_./-]+@sha256:[0-9a-f]{64}"},
+    "FileSystemId": {"Type": "String", "AllowedPattern": "fs-[0-9a-f]+"},
+    "AccessPointId": {"Type": "String", "AllowedPattern": "fsap-[0-9a-f]+"},
+    "SubnetIds": {"Type": "List<AWS::EC2::Subnet::Id>"},
+    "SecurityGroupIds": {"Type": "List<AWS::EC2::SecurityGroup::Id>"},
+    "LogGroupName": {"Type": "String", "Description": "Existing CloudWatch log group", "AllowedPattern": "[A-Za-z0-9_./-]+"},
+    "TwelveDataSecretArn": {"Type": "String", "Description": "Existing Secrets Manager secret containing the ML key only", "AllowedPattern": "arn:aws[a-z-]*:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+"},
+    "S3Bucket": {"Type": "String", "Description": "Independently approved existing private #76 bucket", "AllowedPattern": "[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]"},
+    "S3Prefix": {"Type": "String", "Description": "Approved #76 object prefix", "AllowedPattern": "[A-Za-z0-9][A-Za-z0-9_.-]{0,127}(/[A-Za-z0-9][A-Za-z0-9_.-]{0,127})*"}
+  },
+  "Resources": {
+    "RetrainingWorker": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "RequiresCompatibilities": ["FARGATE"],
+        "NetworkMode": "awsvpc",
+        "Cpu": "2048",
+        "Memory": "4096",
+        "RuntimePlatform": {"CpuArchitecture": "X86_64", "OperatingSystemFamily": "LINUX"},
+        "ExecutionRoleArn": {"Ref": "ExecutionRoleArn"},
+        "TaskRoleArn": {"Ref": "TaskRoleArn"},
+        "Volumes": [{"Name": "persistent", "EFSVolumeConfiguration": {
+          "FilesystemId": {"Ref": "FileSystemId"}, "TransitEncryption": "ENABLED",
+          "AuthorizationConfig": {"AccessPointId": {"Ref": "AccessPointId"}, "IAM": "ENABLED"}
+        }}],
+        "ContainerDefinitions": [{
+          "Name": "retraining", "Image": {"Ref": "ImageUri"}, "Essential": true,
+          "User": "1000:1000", "ReadonlyRootFilesystem": true,
+          "MountPoints": [{"SourceVolume": "persistent", "ContainerPath": "/mnt/stocklab", "ReadOnly": false}],
+          "Environment": [
+            {"Name": "STOCKLAB_ML_S3_BUCKET", "Value": {"Ref": "S3Bucket"}},
+            {"Name": "STOCKLAB_ML_AWS_REGION", "Value": {"Ref": "AWS::Region"}},
+            {"Name": "STOCKLAB_ML_S3_PREFIX", "Value": {"Ref": "S3Prefix"}},
+            {"Name": "PYTHONDONTWRITEBYTECODE", "Value": "1"},
+            {"Name": "TMPDIR", "Value": "/mnt/stocklab/tmp"},
+            {"Name": "OMP_NUM_THREADS", "Value": "1"},
+            {"Name": "OPENBLAS_NUM_THREADS", "Value": "1"}
+          ],
+          "Secrets": [{"Name": "TWELVE_DATA_ML_API_KEY", "ValueFrom": {"Ref": "TwelveDataSecretArn"}}],
+          "LogConfiguration": {"LogDriver": "awslogs", "Options": {
+            "awslogs-group": {"Ref": "LogGroupName"}, "awslogs-region": {"Ref": "AWS::Region"},
+            "awslogs-stream-prefix": "retraining"
+          }},
+          "StopTimeout": 120
+        }]
+      }
+    },
+    "RetrainingSchedule": {
+      "Type": "AWS::Scheduler::Schedule",
+      "Properties": {
+        "State": "DISABLED",
+        "ScheduleExpression": "rate(3 days)",
+        "ScheduleExpressionTimezone": "UTC",
+        "FlexibleTimeWindow": {"Mode": "OFF"},
+        "Target": {
+          "Arn": {"Ref": "ClusterArn"}, "RoleArn": {"Ref": "SchedulerRoleArn"},
+          "RetryPolicy": {"MaximumRetryAttempts": 1, "MaximumEventAgeInSeconds": 3600},
+          "EcsParameters": {
+            "TaskDefinitionArn": {"Ref": "RetrainingWorker"}, "TaskCount": 1,
+            "LaunchType": "FARGATE", "PlatformVersion": "1.4.0",
+            "NetworkConfiguration": {"AwsvpcConfiguration": {
+              "Subnets": {"Ref": "SubnetIds"}, "SecurityGroups": {"Ref": "SecurityGroupIds"},
+              "AssignPublicIp": "DISABLED"
+            }}
+          }
+        }
+      }
+    }
+  }
+}

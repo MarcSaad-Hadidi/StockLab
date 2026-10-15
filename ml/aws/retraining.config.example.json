@@ -1,0 +1,19 @@
+{
+  "symbols": ["AAPL", "MSFT", "NVDA"],
+  "model_families": ["logistic_regression", "random_forest"],
+  "enabled": true,
+  "check_interval_days": 3,
+  "minimum_new_sessions": 1,
+  "test_fraction": 0.2,
+  "overlap_days": 7,
+  "maximum_refresh_days": 90,
+  "dataset_path": "/mnt/stocklab/data/clean.csv",
+  "state_path": "/mnt/stocklab/retraining/state.json",
+  "registry_path": "/mnt/stocklab/models/registry.json",
+  "artifacts_path": "/mnt/stocklab/models/artifacts",
+  "aws_enabled": true,
+  "upload_to_s3": true,
+  "dry_run": false,
+  "persistent_root": "/mnt/stocklab",
+  "persistent_volume_id": "11111111-1111-4111-8111-111111111111"
+}
