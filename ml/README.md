@@ -2029,6 +2029,7 @@ preflight failure. `--now-utc` injects a canonical timezone-aware UTC test clock
 `--retry-run-id` replays a known durable run. No raw error causes or credentials are
 printed. Reports include UUIDs, dates, family metrics, version, artifact SHA-256,
 local/remote references, session counts, request count, duration and Active before/after.
+Reports without a run retain the invocation's trigger source; replayed runs keep their original source.
 
 ### New observations, incremental refresh and credit budget
 

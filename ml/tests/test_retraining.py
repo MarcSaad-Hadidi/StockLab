@@ -95,6 +95,40 @@ def test_three_day_cadence_and_weekend_are_observation_based(config):
     assert first.status == weekend.status == "SKIPPED_NO_NEW_DATA"
 
 
+@pytest.mark.parametrize("trigger", ["manual", "scheduler", "offline_smoke"])
+@pytest.mark.parametrize("status", ["SKIPPED_DISABLED", "SKIPPED_NOT_DUE",
+    "SKIPPED_ALREADY_RUNNING", "DRY_RUN_NEEDS_LOCAL_DATA"])
+def test_runless_reports_preserve_invocation_trigger(config, status, trigger):
+    from contextlib import nullcontext
+    from stocklab_ml.retraining.state import retraining_lock
+    selected, lock = config, nullcontext()
+    if status == "SKIPPED_DISABLED":
+        selected = replace(config, enabled=False)
+    elif status == "SKIPPED_NOT_DUE":
+        assert run(config, history()).status == "SKIPPED_NO_NEW_DATA"
+    elif status == "SKIPPED_ALREADY_RUNNING":
+        lock = retraining_lock(config.state_path)
+    else:
+        selected = replace(config, dry_run=True)
+    before = config.dataset_path.read_bytes(), config.state_path.read_bytes() if config.state_path.exists() else None
+    with lock:
+        result = api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(),
+            now_utc=NOW, trigger_source=trigger)
+    assert result.status == status and result.run_id is None
+    assert result.report["trigger_source"] == trigger
+    assert before == (config.dataset_path.read_bytes(), config.state_path.read_bytes() if config.state_path.exists() else None)
+    assert not config.registry_path.exists() and not config.artifacts_path.exists()
+
+
+def test_replayed_run_report_preserves_original_trigger(config):
+    first = run(config, history(), trigger_source="offline_smoke")
+    before = config.state_path.read_bytes()
+    replay = run(config, history(), retry_run_id=first.run_id, trigger_source="scheduler")
+    assert replay.status == "SKIPPED_ALREADY_PROCESSED"
+    assert first.report["trigger_source"] == replay.report["trigger_source"] == "offline_smoke"
+    assert config.state_path.read_bytes() == before
+
+
 def test_new_sessions_train_both_once_and_keep_existing_active(config, monkeypatch):
     initial = train_random_forest(engineer_features(history()).dataframe)
     registry = ModelVersionRegistry(config.registry_path, clock=lambda: NOW)

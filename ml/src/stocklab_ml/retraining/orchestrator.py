@@ -73,7 +73,7 @@ def _checkpoint(config, state, run):
         for name, model in run["models"].items()}}))
 
 
-def _result(config, status, now, run=None, *, active=None, state=None):
+def _result(config, status, now, run=None, *, active=None, state=None, trigger_source="manual"):
     models = {}
     if run:
         for family, model in run["models"].items():
@@ -87,7 +87,7 @@ def _result(config, status, now, run=None, *, active=None, state=None):
     snapshot = run["snapshot"] if run else None
     report = {"started_at_utc": run["started_at_utc"] if run else now.isoformat(),
         "completed_at_utc": now.isoformat(), "status": status,
-        "trigger_source": run["trigger_source"] if run else "manual", "symbols": list(config.symbols),
+        "trigger_source": run["trigger_source"] if run else trigger_source, "symbols": list(config.symbols),
         "model_families": list(config.model_families),
         "previous_data_dates": run["previous_data_dates"] if run else {},
         "new_data_dates": snapshot["data_dates"] if snapshot else {},
@@ -289,7 +289,7 @@ def _execute(config, dependencies, now, cutoff, clock, retry_run_id, trigger_sou
         if selected != state["pending_run_id"]:
             raise RetrainingStateError("Another run is pending; recover it first.")
     elif state and state["last_check_at_utc"] and now - timestamp(state["last_check_at_utc"]) < timedelta(days=config.check_interval_days):
-        return _result(config, "SKIPPED_NOT_DUE", now, active=active, state=state)
+        return _result(config, "SKIPPED_NOT_DUE", now, active=active, state=state, trigger_source=trigger_source)
     frame = load_dataset(config.dataset_path, config.symbols, date.fromisoformat(run["cutoff"]) if run else cutoff)
     if state is None:
         state = {"schema_version": 1, "symbols": list(config.symbols), "baseline_dates": data_dates(frame),
@@ -298,7 +298,7 @@ def _execute(config, dependencies, now, cutoff, clock, retry_run_id, trigger_sou
         if run:
             return _result(config, "DRY_RUN_PENDING_RETRY", now, run, state=state)
         if dependencies.local_data is None:
-            return _result(config, "DRY_RUN_NEEDS_LOCAL_DATA", now, active=active, state=state)
+            return _result(config, "DRY_RUN_NEEDS_LOCAL_DATA", now, active=active, state=state, trigger_source=trigger_source)
         run = _new_run(config, frame, now, cutoff, active, trigger_source, dependencies)
         refreshed = refresh_dataset(config, frame, cutoff=cutoff, local_data=dependencies.local_data,
             run_dir=config.state_path.parent, before_request=lambda: None)
@@ -400,7 +400,7 @@ def run_retraining_check(config: RetrainingConfig, *, dependencies: RetrainingDe
     cutoff = min((now - timedelta(hours=12)).date(), date.today()) - timedelta(days=1)
     validate_execution_context(config)
     if not config.enabled:
-        return _result(config, "SKIPPED_DISABLED", now)
+        return _result(config, "SKIPPED_DISABLED", now, trigger_source=trigger_source)
     if config.upload_to_s3 and not config.dry_run and not isinstance(dependencies.s3_store, S3ModelArtifactStore):
         raise RetrainingConfigurationError("S3 publication requires an explicitly approved #76 artifact store.")
     if config.dry_run:
@@ -409,4 +409,4 @@ def run_retraining_check(config: RetrainingConfig, *, dependencies: RetrainingDe
         with retraining_lock(config.state_path):
             return _execute(config, dependencies, now, cutoff, clock, retry_run_id, trigger_source)
     except RetrainingBusyError:
-        return _result(config, "SKIPPED_ALREADY_RUNNING", now)
+        return _result(config, "SKIPPED_ALREADY_RUNNING", now, trigger_source=trigger_source)
