@@ -560,6 +560,42 @@ def test_older_terminal_run_also_requires_completion_timestamp(config):
         import_module("stocklab_ml.retraining.state").read_state(config.state_path)
 
 
+@pytest.mark.parametrize("invalid_order", ["backdated", "overlapping", "unfinished_predecessor"])
+def test_journal_rejects_runs_out_of_chronological_order(config, invalid_order):
+    assert run(config, history()).status == "SKIPPED_NO_NEW_DATA"
+    assert api().run_retraining_check(config, dependencies=api().RetrainingDependencies(history()),
+        now_utc=NOW + timedelta(days=3)).status == "SKIPPED_NO_NEW_DATA"
+    state = json.loads(config.state_path.read_text())
+    first, latest = state["runs"]
+    if invalid_order == "backdated":
+        latest["started_at_utc"] = latest["completed_at_utc"] = (NOW - timedelta(days=3)).isoformat()
+        state["last_check_at_utc"] = latest["completed_at_utc"]
+    elif invalid_order == "overlapping":
+        latest["started_at_utc"] = (NOW - timedelta(seconds=1)).isoformat()
+    else:
+        first.update(status="CHECKING", completed_at_utc=None)
+        state["pending_run_id"] = first["run_id"]
+    config.state_path.write_text(json.dumps(state))
+    before = config.state_path.read_bytes(), config.dataset_path.read_bytes()
+    with pytest.raises(api().RetrainingStateError):
+        api().run_retraining_check(config, dependencies=api().RetrainingDependencies(history(103)),
+                                  now_utc=NOW + timedelta(days=4))
+    assert before == (config.state_path.read_bytes(), config.dataset_path.read_bytes())
+    assert not config.registry_path.exists()
+
+
+def test_pending_run_cannot_precede_a_later_completed_run(config):
+    assert run(config, history()).status == "SKIPPED_NO_NEW_DATA"
+    assert api().run_retraining_check(config, dependencies=api().RetrainingDependencies(history()),
+        now_utc=NOW + timedelta(days=3)).status == "SKIPPED_NO_NEW_DATA"
+    state = json.loads(config.state_path.read_text())
+    state["runs"][0]["status"] = "FAILED"
+    state["pending_run_id"] = state["runs"][0]["run_id"]
+    config.state_path.write_text(json.dumps(state))
+    with pytest.raises(api().RetrainingStateError):
+        import_module("stocklab_ml.retraining.state").read_state(config.state_path)
+
+
 def test_completed_s3_reference_cannot_change_identity(config):
     from test_s3_model_artifacts import FakeS3, store
     selected = replace(config, upload_to_s3=True, model_families=("logistic_regression",))

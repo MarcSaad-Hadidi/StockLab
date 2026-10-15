@@ -190,6 +190,10 @@ def read_state(path: Path):
             if run["status"] == "COMPLETED" and (not run["models"] or run["snapshot"] is None
                     or any(model["status"] != "COMPLETED" for model in run["models"].values())):
                 raise ValueError
+        for previous, current in zip(state["runs"], state["runs"][1:]):
+            if (previous["completed_at_utc"] is None
+                    or timestamp(current["started_at_utc"]) < timestamp(previous["completed_at_utc"])):
+                raise ValueError
         if state["runs"] and state["baseline_dates"] != state["runs"][0]["previous_data_dates"]:
             raise ValueError
         terminal = [run for run in state["runs"] if run["status"] == "COMPLETED" or run["status"].startswith("SKIPPED_")]
@@ -202,7 +206,8 @@ def read_state(path: Path):
             raise ValueError
         if state["pending_run_id"] is not None:
             pending = next(run for run in state["runs"] if run["run_id"] == state["pending_run_id"])
-            if pending["status"] not in {"CHECKING", "DATA_READY", "FAILED", "PARTIAL_PUBLICATION"}:
+            if (pending["status"] not in {"CHECKING", "DATA_READY", "FAILED", "PARTIAL_PUBLICATION"}
+                    or pending["run_id"] != state["runs"][-1]["run_id"]):
                 raise ValueError
         expected_successful = {family: {"run_id": run["run_id"], "data_dates": run["snapshot"]["data_dates"],
                                         "fingerprint": run["snapshot"]["fingerprint"]}
