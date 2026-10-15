@@ -202,6 +202,53 @@ def test_corrupt_journal_fails_closed(config):
     assert not config.registry_path.exists()
 
 
+@pytest.mark.parametrize("symbol,watermark", [("AAPL", "2099-01-01"), ("AAPL", "2023-12-31"),
+    ("AAPL", "2024-05-16"), ("MSFT", "2024-05-28")])
+def test_snapshot_watermarks_must_describe_the_recorded_range(config, symbol, watermark):
+    baseline = pd.concat([history(), history(105, "MSFT")], ignore_index=True)
+    save_processed(config.dataset_path, baseline, overwrite=True)
+    selected = replace(config, symbols=("AAPL", "MSFT"), model_families=("logistic_regression",))
+    incoming = pd.concat([history(103), history(108, "MSFT")], ignore_index=True)
+    assert run(selected, incoming).status == "COMPLETED"
+    state = json.loads(config.state_path.read_text())
+    state["runs"][-1]["snapshot"]["data_dates"][symbol] = watermark
+    state["successful"]["logistic_regression"]["data_dates"][symbol] = watermark
+    config.state_path.write_text(json.dumps(state))
+    before = config.state_path.read_bytes(), config.dataset_path.read_bytes(), config.registry_path.read_bytes()
+    with pytest.raises(api().RetrainingStateError):
+        api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(incoming),
+                                  now_utc=NOW + timedelta(days=3))
+    assert before == (config.state_path.read_bytes(), config.dataset_path.read_bytes(), config.registry_path.read_bytes())
+
+
+@pytest.mark.parametrize("older_entry", [False, True])
+@pytest.mark.parametrize("checkpoint", ["training", "registration", "before_start"])
+def test_terminal_history_must_enclose_publication_timestamps(config, checkpoint, older_entry):
+    selected = replace(config, model_families=("logistic_regression",))
+    assert run(selected).status == "COMPLETED"
+    if older_entry:
+        assert api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(history(103)),
+            now_utc=NOW + timedelta(days=3)).status == "SKIPPED_NO_NEW_DATA"
+    state = json.loads(config.state_path.read_text())
+    registry = json.loads(config.registry_path.read_text())
+    record = registry["models"][0]
+    if checkpoint == "before_start":
+        record["trained_at_utc"] = (NOW - timedelta(days=1)).isoformat()
+    else:
+        record["registered_at_utc"] = (NOW + timedelta(days=9)).isoformat()
+        if checkpoint == "training":
+            record["trained_at_utc"] = record["registered_at_utc"]
+    state["runs"][0]["models"]["logistic_regression"]["trained_at_utc"] = record["trained_at_utc"]
+    config.state_path.write_text(json.dumps(state))
+    config.registry_path.write_text(json.dumps(registry))
+    assert len(ModelVersionRegistry(config.registry_path).list_versions(record["model_name"])) == 1
+    before = config.state_path.read_bytes(), config.dataset_path.read_bytes(), config.registry_path.read_bytes()
+    with pytest.raises(api().RetrainingStateError):
+        api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(history(104)),
+                                  now_utc=NOW + timedelta(days=6))
+    assert before == (config.state_path.read_bytes(), config.dataset_path.read_bytes(), config.registry_path.read_bytes())
+
+
 def test_missing_bootstrap_fails_before_fetch(config):
     config.dataset_path.unlink()
     with pytest.raises(api().RetrainingDataError):

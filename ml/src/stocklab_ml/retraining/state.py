@@ -139,7 +139,11 @@ def read_state(path: Path):
                 _dates(snap["data_dates"], symbols)
                 if (type(snap["rows"]) is not int or snap["rows"] < 1
                         or not calendar_date(snap["date_min"]) <= calendar_date(snap["date_max"]) <= cutoff
-                        or snap["cutoff"] != run["cutoff"]):
+                        or snap["cutoff"] != run["cutoff"]
+                        or max(snap["data_dates"].values()) != snap["date_max"]
+                        or any(not snap["date_min"] <= value <= snap["date_max"]
+                               or value < run["previous_data_dates"][symbol]
+                               for symbol, value in snap["data_dates"].items())):
                     raise ValueError
             if not set(run["models"]).issubset(run["config"]["model_families"]):
                 raise ValueError
@@ -157,7 +161,11 @@ def read_state(path: Path):
                     raise ValueError
                 training_ids.add(model["training_run_id"])
                 if model["trained_at_utc"] is not None:
-                    timestamp(model["trained_at_utc"])
+                    trained = timestamp(model["trained_at_utc"])
+                    if (trained < timestamp(run["started_at_utc"])
+                            or (run["status"] == "COMPLETED" or run["status"].startswith("SKIPPED_"))
+                            and (run["completed_at_utc"] is None or trained > timestamp(run["completed_at_utc"]))):
+                        raise ValueError
                 if model["model_version"] is not None:
                     validate_version(model["model_version"])
                 if model["artifact_sha256"] is not None:

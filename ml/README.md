@@ -2133,6 +2133,9 @@ Completed families are verified locally and kept completed. `--retry-run-id` on 
 finished check returns `SKIPPED_ALREADY_PROCESSED` without another version or state write.
 Retries retain the previous attempt's completion timestamp until the next completion.
 Retry and completion clocks cannot precede durable run, training or registration times.
+Historical terminal runs must also enclose their training and registration times.
+Snapshot watermarks stay within the recorded date range, never precede the same
+symbol's previous date, and their maximum must equal the snapshot's final date.
 
 Writes reuse the existing temporary sibling / flush / fsync / atomic replace writer.
 On POSIX, #77 additionally fsyncs publication directories and their parents for

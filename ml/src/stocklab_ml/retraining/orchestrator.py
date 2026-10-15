@@ -45,6 +45,9 @@ def _verify_history(state, registry):
                     or record.trained_at_utc.isoformat() != model["trained_at_utc"]
                     or canonical(model["payload"]) != canonical({key: record.to_dict()[key] for key in model["payload"]})):
                 raise RetrainingStateError("Published registry history is missing or changed; never restart version numbering.")
+            if ((run["status"] == "COMPLETED" or run["status"].startswith("SKIPPED_"))
+                    and timestamp(run["completed_at_utc"]) < record.registered_at_utc):
+                raise RetrainingStateError("Terminal run completion precedes its durable publication checkpoint.")
 
 
 def _validate_run_clock(now, run, registry):
