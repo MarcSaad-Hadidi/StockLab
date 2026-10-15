@@ -28,6 +28,12 @@ RUN_STATUSES = {"CHECKING", "DATA_READY", "FAILED", "PARTIAL_PUBLICATION", "COMP
 MODEL_STATUSES = {"PENDING", "FAILED", "COMPLETED"}
 
 
+def is_terminal_run(run):
+    return (run["status"] == "COMPLETED" or run["status"].startswith("SKIPPED_")
+            or run["status"] == "FAILED" and run["failure_category"] == "DATA_REVISION_CONFLICT"
+            and run["snapshot"] is None)
+
+
 def read_json(path: Path, limit=8 * 1024 * 1024):
     # shortcut: journal reads cap at 8 MiB; migrate preserved lineage before reaching that limit.
     try:
@@ -163,7 +169,7 @@ def read_state(path: Path):
                 if model["trained_at_utc"] is not None:
                     trained = timestamp(model["trained_at_utc"])
                     if (trained < timestamp(run["started_at_utc"])
-                            or (run["status"] == "COMPLETED" or run["status"].startswith("SKIPPED_"))
+                            or is_terminal_run(run)
                             and (run["completed_at_utc"] is None or trained > timestamp(run["completed_at_utc"]))):
                         raise ValueError
                 if model["model_version"] is not None:
@@ -198,24 +204,28 @@ def read_state(path: Path):
             if run["status"] == "COMPLETED" and (not run["models"] or run["snapshot"] is None
                     or any(model["status"] != "COMPLETED" for model in run["models"].values())):
                 raise ValueError
+            if (run["status"] == "FAILED" and is_terminal_run(run)
+                    and any(model["phase"] != "DATA_READY" or model["status"] != "PENDING"
+                            or any(model[key] is not None for key in ("trained_at_utc", "model_version", "payload",
+                                "metrics", "artifact_sha256", "s3_reference", "failure_category"))
+                            for model in run["models"].values())):
+                raise ValueError
         for previous, current in zip(state["runs"], state["runs"][1:]):
             if (previous["completed_at_utc"] is None
                     or timestamp(current["started_at_utc"]) < timestamp(previous["completed_at_utc"])):
                 raise ValueError
         if state["runs"] and state["baseline_dates"] != state["runs"][0]["previous_data_dates"]:
             raise ValueError
-        terminal = [run for run in state["runs"] if run["status"] == "COMPLETED" or run["status"].startswith("SKIPPED_")]
+        terminal = [run for run in state["runs"] if is_terminal_run(run)]
         if (any(run["completed_at_utc"] is None for run in terminal)
                 or state["last_check_at_utc"] != (terminal[-1]["completed_at_utc"] if terminal else None)):
             raise ValueError
-        pending_runs = [run["run_id"] for run in state["runs"]
-                        if run["status"] in {"CHECKING", "DATA_READY", "FAILED", "PARTIAL_PUBLICATION"}]
+        pending_runs = [run["run_id"] for run in state["runs"] if not is_terminal_run(run)]
         if pending_runs != ([state["pending_run_id"]] if state["pending_run_id"] is not None else []):
             raise ValueError
         if state["pending_run_id"] is not None:
             pending = next(run for run in state["runs"] if run["run_id"] == state["pending_run_id"])
-            if (pending["status"] not in {"CHECKING", "DATA_READY", "FAILED", "PARTIAL_PUBLICATION"}
-                    or pending["run_id"] != state["runs"][-1]["run_id"]):
+            if is_terminal_run(pending) or pending["run_id"] != state["runs"][-1]["run_id"]:
                 raise ValueError
         expected_successful = {family: {"run_id": run["run_id"], "data_dates": run["snapshot"]["data_dates"],
                                         "fingerprint": run["snapshot"]["fingerprint"]}

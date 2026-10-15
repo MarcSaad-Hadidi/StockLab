@@ -168,6 +168,60 @@ def test_revision_conflict_does_not_change_dataset_or_registry(config):
     assert config.dataset_path.read_bytes() == before and not config.registry_path.exists()
 
 
+def test_revision_conflict_closes_run_and_preserves_lineage_during_reconciliation(config):
+    from stocklab_ml.modeling import train_logistic_regression
+    selected = replace(config, model_families=("logistic_regression",))
+    registry = ModelVersionRegistry(config.registry_path, clock=lambda: NOW)
+    initial = train_logistic_regression(engineer_features(history()).dataframe)
+    record = registry.register_version(initial, training_run_id=str(uuid4()), trained_at_utc=NOW)
+    registry.set_active_version(record.model_name, record.model_version)
+    active_before = registry.get_active_version(record.model_name).to_dict()
+    assert run(selected, history()).status == "SKIPPED_NO_NEW_DATA"
+    incoming = history(103)
+    incoming.loc[99, ["open", "close"]] += .1
+    old_dataset, old_registry = config.dataset_path.read_bytes(), config.registry_path.read_bytes()
+    conflict = api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(incoming),
+                                         now_utc=NOW + timedelta(days=3))
+    assert conflict.status == "FAILED" and conflict.report["failure_category"] == "DATA_REVISION_CONFLICT"
+    state = import_module("stocklab_ml.retraining.state").read_state(config.state_path)
+    assert state["pending_run_id"] is None and state["last_check_at_utc"] == (NOW + timedelta(days=3)).isoformat()
+    old_journal = config.state_path.read_bytes()
+    replay = api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(incoming),
+        now_utc=NOW + timedelta(days=3), retry_run_id=conflict.run_id)
+    assert replay.status == "SKIPPED_ALREADY_PROCESSED" and config.state_path.read_bytes() == old_journal
+    reconciled = replace(selected, dataset_path=config.dataset_path.parent / "reconciled.csv",
+                         state_path=config.state_path.parent / "reconciled" / "state.json")
+    save_processed(reconciled.dataset_path, incoming.iloc[:100].copy())
+    result = api().run_retraining_check(reconciled, dependencies=api().RetrainingDependencies(incoming),
+                                       now_utc=NOW + timedelta(days=3))
+    assert result.status == "COMPLETED"
+    assert result.report["model_results"]["logistic_regression"]["model_version"] == "v000002"
+    assert registry.get_version(record.model_name, "v000002").status == ModelStatus.ARCHIVED
+    assert registry.get_active_version(record.model_name).to_dict() == active_before
+    assert config.state_path.read_bytes() == old_journal and config.dataset_path.read_bytes() == old_dataset
+    assert old_registry != config.registry_path.read_bytes() and len(registry.list_versions(record.model_name)) == 2
+
+
+@pytest.mark.parametrize("erase_snapshot", [False, True])
+def test_revision_conflict_cannot_discard_published_pending_work(config, erase_snapshot):
+    from test_s3_model_artifacts import FakeS3, store
+    client = FakeS3()
+    client.fail_manifest = True
+    selected = replace(config, model_families=("logistic_regression",), upload_to_s3=True)
+    dependencies = api().RetrainingDependencies(history(103), store(client))
+    assert api().run_retraining_check(selected, dependencies=dependencies, now_utc=NOW).status == "PARTIAL_PUBLICATION"
+    state = json.loads(config.state_path.read_text())
+    state["runs"][-1].update(status="FAILED", failure_category="DATA_REVISION_CONFLICT")
+    if erase_snapshot:
+        state["runs"][-1]["snapshot"] = None
+    state.update(pending_run_id=None, last_check_at_utc=NOW.isoformat())
+    config.state_path.write_text(json.dumps(state))
+    before = config.state_path.read_bytes(), config.registry_path.read_bytes()
+    with pytest.raises(api().RetrainingStateError):
+        api().run_retraining_check(selected, dependencies=dependencies, now_utc=NOW + timedelta(days=3))
+    assert before == (config.state_path.read_bytes(), config.registry_path.read_bytes())
+
+
 def test_minimum_sessions_accumulates_against_training_watermark(config):
     config = replace(config, minimum_new_sessions=4)
     first = run(config, history(103))
@@ -203,7 +257,7 @@ def test_corrupt_journal_fails_closed(config):
 
 
 @pytest.mark.parametrize("symbol,watermark", [("AAPL", "2099-01-01"), ("AAPL", "2023-12-31"),
-    ("AAPL", "2024-05-16"), ("MSFT", "2024-05-28")])
+    ("AAPL", "2024-05-16"), ("MSFT", "2024-05-28"), ("AAPL", "2024-05-21"), ("AAPL", "2024-05-23")])
 def test_snapshot_watermarks_must_describe_the_recorded_range(config, symbol, watermark):
     baseline = pd.concat([history(), history(105, "MSFT")], ignore_index=True)
     save_processed(config.dataset_path, baseline, overwrite=True)
@@ -219,6 +273,38 @@ def test_snapshot_watermarks_must_describe_the_recorded_range(config, symbol, wa
         api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(incoming),
                                   now_utc=NOW + timedelta(days=3))
     assert before == (config.state_path.read_bytes(), config.dataset_path.read_bytes(), config.registry_path.read_bytes())
+
+
+def test_older_snapshot_watermarks_are_verified_from_the_snapshot(config):
+    baseline = pd.concat([history(), history(105, "MSFT")], ignore_index=True)
+    save_processed(config.dataset_path, baseline, overwrite=True)
+    selected = replace(config, symbols=("AAPL", "MSFT"), model_families=("logistic_regression",))
+    assert run(selected, pd.concat([history(103), history(108, "MSFT")], ignore_index=True)).status == "COMPLETED"
+    incoming = pd.concat([history(104), history(109, "MSFT")], ignore_index=True)
+    assert api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(incoming),
+                                     now_utc=NOW + timedelta(days=3)).status == "COMPLETED"
+    state = json.loads(config.state_path.read_text())
+    state["runs"][0]["snapshot"]["data_dates"]["AAPL"] = "2024-05-21"
+    config.state_path.write_text(json.dumps(state))
+    before = config.state_path.read_bytes(), config.registry_path.read_bytes()
+    with pytest.raises(api().RetrainingStateError):
+        api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(incoming),
+                                  now_utc=NOW + timedelta(days=6))
+    assert before == (config.state_path.read_bytes(), config.registry_path.read_bytes())
+
+
+def test_completed_snapshot_bytes_must_match_the_recorded_fingerprint(config):
+    selected = replace(config, model_families=("logistic_regression",))
+    result = run(selected)
+    path = config.state_path.parent / "snapshots" / result.run_id / "dataset.csv"
+    changed = history(103)
+    changed.loc[99, "volume"] += 1
+    save_processed(path, changed, overwrite=True)
+    before = config.state_path.read_bytes(), config.registry_path.read_bytes()
+    with pytest.raises(api().RetrainingStateError):
+        api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(history(103)),
+                                  now_utc=NOW + timedelta(days=3))
+    assert before == (config.state_path.read_bytes(), config.registry_path.read_bytes())
 
 
 @pytest.mark.parametrize("has_run", [False, True])

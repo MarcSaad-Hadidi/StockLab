@@ -2069,15 +2069,29 @@ that existing contract; conflicting valid duplicate keys return
 `DATA_REVISION_CONFLICT`. Exact duplicates collapse deterministically. An adjusted
 price revision in the overlap is never silently merged: the old dataset is left
 intact and no training version is published. Reconciliation after splits/corporate
-actions requires a deliberate separate historical rebuild. Revisions outside the
-bounded overlap cannot be detected by this incremental check.
+actions requires a deliberate separate historical rebuild. A revision conflict
+remains `FAILED` (CLI exit 1) but closes its run and cadence checkpoint; replaying
+that UUID cannot publish or repeatedly retry the same conflict.
+
+Pause scheduling the conflicted scope during reconciliation. Preserve its dataset
+and journal, and use #56/#58 to build a corrected bootstrap at a **new CSV path**.
+Create an explicit new config with that `dataset_path` and a **new `state_path`**,
+keeping the same `registry_path` and `artifacts_path`. Choose the rebuilt bootstrap
+reference date deliberately and pass later observed sessions with `--local-data`.
+The new scope resumes training when its session threshold is met, keeps version
+numbering and existing Active records, and leaves the old scope's audit history
+intact. Do not overwrite a dataset already identified by the old journal.
+Revisions outside the bounded overlap cannot be detected by this incremental check.
 
 ### Immutable training, evaluation and publication
 
 Each run saves a no-clobber `snapshots/<run_uuid>/dataset.csv` beside the journal.
 Its journal metadata records symbols, first/last dates, row count, canonical #75
-CSV fingerprint, per-symbol dates, cutoff and preparation rules. A retry verifies
-the snapshot and uses it even if newly supplied rows differ. The mutable clean CSV
+CSV fingerprint, per-symbol dates, cutoff and preparation rules. Every check verifies
+all referenced snapshots against their complete metadata, including per-symbol
+final dates and fingerprints; keep historical snapshots available with their
+journal. A retry uses its frozen snapshot even if newly supplied rows differ.
+The mutable clean CSV
 is replaced atomically only after the immutable snapshot and journal checkpoint
 exist; recovery permits the previous or new fingerprint, never arbitrary edited data.
 

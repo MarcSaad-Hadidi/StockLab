@@ -19,7 +19,7 @@ from stocklab_ml.versioning.validation import canonical, frame_digest, training_
 from .contracts import (MODEL_NAMES, RetrainingBusyError, RetrainingConfig, RetrainingConfigurationError,
     RetrainingDataError, RetrainingDependencies, RetrainingRunResult, RetrainingStateError)
 from .data_refresh import data_dates, load_dataset, refresh_dataset, refresh_windows, session_counts, snapshot_metadata
-from .state import (config_identity, identity_digest, read_state, retraining_lock, run_path,
+from .state import (config_identity, identity_digest, is_terminal_run, read_state, retraining_lock, run_path,
                     sync_directory, timestamp, write_state)
 
 logger = logging.getLogger(__name__)
@@ -33,11 +33,20 @@ def _active(registry, families):
         raise RetrainingStateError("Registry is corrupt; never initialize replacement history.") from None
 
 
-def _verify_history(state, registry):
+def _verify_history(config, state, registry):
     records = {record.training_run_id: record for name in MODEL_NAMES.values()
                for record in registry.list_versions(name)}
     for run in state["runs"]:
-        terminal = run["status"] == "COMPLETED" or run["status"].startswith("SKIPPED_")
+        terminal = is_terminal_run(run)
+        if run["snapshot"] is not None:
+            cutoff = date.fromisoformat(run["cutoff"])
+            try:
+                frame = load_dataset(run_path(config, run["run_id"], "snapshots") / "dataset.csv",
+                                     state["symbols"], cutoff)
+            except RetrainingDataError:
+                raise RetrainingStateError("Historical snapshot is missing or corrupt.") from None
+            if snapshot_metadata(frame, cutoff) != run["snapshot"]:
+                raise RetrainingStateError("Historical snapshot differs from its recorded metadata.")
         for family in MODEL_NAMES:
             model = run["models"].get(family)
             if (str(uuid5(UUID(run["run_id"]), family)) in records
@@ -281,7 +290,7 @@ def _execute(config, dependencies, now, cutoff, clock, retry_run_id, trigger_sou
     active = _active(registry, config.model_families)
     state = read_state(config.state_path)
     if state:
-        _verify_history(state, registry)
+        _verify_history(config, state, registry)
     if state and state["symbols"] != list(config.symbols):
         raise RetrainingStateError("Journal symbol scope cannot change; initialize a separate explicit scope.")
     if state and state["last_check_at_utc"] and timestamp(state["last_check_at_utc"]) > now:
@@ -391,7 +400,7 @@ def _execute(config, dependencies, now, cutoff, clock, retry_run_id, trigger_sou
     completed = clock()
     _validate_run_clock(completed, run, registry)
     run["completed_at_utc"] = completed.isoformat()
-    if run["status"] == "COMPLETED" or run["status"].startswith("SKIPPED_"):
+    if is_terminal_run(run):
         state.update(pending_run_id=None, last_check_at_utc=completed.isoformat())
     _checkpoint(config, state, run)
     return _result(config, run["status"], completed, run, state=state)
