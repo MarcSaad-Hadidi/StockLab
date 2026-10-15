@@ -31,6 +31,17 @@ function serverFieldErrors(fieldErrors: Record<string, string[]>): FieldErrors {
   return mapped
 }
 
+function withoutEmailErrors(errors: FieldErrors, serverError: string | undefined) {
+  const remaining = { ...errors }
+  delete remaining.email
+  return {
+    errors: remaining,
+    serverError: serverError === 'register.errors.emailTaken'
+      || (serverError === 'register.errors.invalidRequest' && errors.email && Object.keys(remaining).length === 0)
+      ? undefined : serverError,
+  }
+}
+
 function Icon({ name }: { name: 'user' | 'mail' | 'lock' | 'eye' | 'eyeOff' | 'gift' | 'google' }) {
   if (name === 'google') {
     return (
@@ -70,9 +81,16 @@ export default function RegisterPage() {
   const [serverError, setServerError] = useState<string>()
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  function handleEmailChange() {
+    const next = withoutEmailErrors(errors, serverError)
+    setErrors(next.errors)
+    setServerError(next.serverError)
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const form = new FormData(event.currentTarget)
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
     const name = String(form.get('name') ?? '').trim()
     const email = String(form.get('email') ?? '').trim()
     const password = String(form.get('password') ?? '')
@@ -97,8 +115,12 @@ export default function RegisterPage() {
       window.location.assign(`${routeFor('login')}?registered=1`)
     } catch (error) {
       if (error instanceof AuthApiError) {
-        setServerError(registerErrorKey(error.code))
-        setErrors(serverFieldErrors(error.fieldErrors))
+        const responseErrors = { errors: serverFieldErrors(error.fieldErrors), serverError: registerErrorKey(error.code) }
+        // The user can edit email while the request is pending; that response belongs to the submitted address.
+        const currentEmail = String(new FormData(formElement).get('email') ?? '').trim()
+        const next = currentEmail === email ? responseErrors : withoutEmailErrors(responseErrors.errors, responseErrors.serverError)
+        setServerError(next.serverError)
+        setErrors(next.errors)
       } else {
         setServerError('register.errors.server')
       }
@@ -129,7 +151,7 @@ export default function RegisterPage() {
           <form aria-busy={isSubmitting} className="register-form" onSubmit={handleSubmit} noValidate>
             {serverError && <p className="form-error" role="alert">{t(serverError)}</p>}
             <div className="field-group"><label htmlFor="name">{t('register.nameLabel')}</label><div className={`input-wrap ${errors.name ? 'has-error' : ''}`}><Icon name="user" /><input id="name" name="name" type="text" placeholder={t('register.namePlaceholder')} autoComplete="name" aria-invalid={Boolean(errors.name)} /></div>{errors.name && <p className="field-error">{t(errors.name)}</p>}</div>
-            <div className="field-group"><label htmlFor="email">{t('register.emailLabel')}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={t('register.emailPlaceholder')} autoComplete="email" aria-invalid={Boolean(errors.email)} /></div>{errors.email && <p className="field-error">{t(errors.email)}</p>}</div>
+            <div className="field-group"><label htmlFor="email">{t('register.emailLabel')}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={t('register.emailPlaceholder')} autoComplete="email" aria-invalid={Boolean(errors.email)} onChange={handleEmailChange} /></div>{errors.email && <p className="field-error">{t(errors.email)}</p>}</div>
             <div className="field-group"><label htmlFor="password">{t('register.passwordLabel')}</label><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={t('register.passwordPlaceholder')} autoComplete="new-password" aria-invalid={Boolean(errors.password)} /><button className="visibility-button" type="button" aria-label={showPassword ? t('register.hidePassword') : t('register.showPassword')} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{t(errors.password)}</p>}</div>
             <div className="field-group"><label htmlFor="confirmPassword">{t('register.confirmLabel')}</label><div className={`input-wrap ${errors.confirmPassword ? 'has-error' : ''}`}><Icon name="lock" /><input id="confirmPassword" name="confirmPassword" type={showConfirmation ? 'text' : 'password'} placeholder={t('register.confirmPlaceholder')} autoComplete="new-password" aria-invalid={Boolean(errors.confirmPassword)} /><button className="visibility-button" type="button" aria-label={showConfirmation ? t('register.hideConfirmation') : t('register.showConfirmation')} onClick={() => setShowConfirmation((visible) => !visible)}><Icon name={showConfirmation ? 'eyeOff' : 'eye'} /></button></div>{errors.confirmPassword && <p className="field-error">{t(errors.confirmPassword)}</p>}</div>
             <div className="capital-note"><span className="capital-icon"><Icon name="gift" /></span><div className="capital-copy"><strong>{t('register.capitalTitle')}</strong><p>{t('register.capitalLine')}</p></div></div>
