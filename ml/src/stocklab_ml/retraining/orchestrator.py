@@ -47,6 +47,16 @@ def _verify_history(state, registry):
                 raise RetrainingStateError("Published registry history is missing or changed; never restart version numbering.")
 
 
+def _validate_run_clock(now, run, registry):
+    checkpoints = [run["started_at_utc"], run["completed_at_utc"]] + [
+        model["trained_at_utc"] for model in run["models"].values()]
+    if (any(value is not None and now < timestamp(value) for value in checkpoints)
+            or any(now < record.registered_at_utc for model in run["models"].values()
+                   for record in registry.list_versions(model["model_name"])
+                   if record.training_run_id == model["training_run_id"])):
+        raise RetrainingStateError("Run clock precedes a durable training/publication checkpoint.")
+
+
 def _s3_target(dependencies):
     if dependencies.s3_store is None:
         return None
@@ -269,8 +279,7 @@ def _execute(config, dependencies, now, cutoff, clock, retry_run_id, trigger_sou
         run = next((r for r in state["runs"] if r["run_id"] == selected), None) if state else None
         if run is None:
             raise RetrainingStateError("Unknown retry run UUID.")
-        if now < timestamp(run["started_at_utc"]) or run["completed_at_utc"] and now < timestamp(run["completed_at_utc"]):
-            raise RetrainingStateError("Retry clock precedes a durable run checkpoint.")
+        _validate_run_clock(now, run, registry)
         if run["config"] != config_identity(config):
             raise RetrainingStateError("Retry configuration differs from the frozen run.")
         if not config.dry_run and run["s3_target"] != (_s3_target(dependencies) if config.upload_to_s3 else None):
@@ -295,7 +304,12 @@ def _execute(config, dependencies, now, cutoff, clock, retry_run_id, trigger_sou
             run_dir=config.state_path.parent, before_request=lambda: None)
         run["new_session_counts"], eligible = _counts(config, state, refreshed)
         run["snapshot"] = snapshot_metadata(refreshed, cutoff)
-        status = "DRY_RUN_READY" if eligible else "DRY_RUN_NO_NEW_DATA"
+        if eligible:
+            status = "DRY_RUN_READY"
+        elif any(run["new_session_counts"].values()):
+            status = "DRY_RUN_INSUFFICIENT_NEW_SESSIONS"
+        else:
+            status = "DRY_RUN_NO_NEW_DATA"
         return _result(config, status, now, run, state=state)
     if run is None:
         if state["runs"]:
@@ -308,8 +322,7 @@ def _execute(config, dependencies, now, cutoff, clock, retry_run_id, trigger_sou
         state["pending_run_id"] = run["run_id"]
         _checkpoint(config, state, run)
     try:
-        run.update(status="DATA_READY" if run["snapshot"] else "CHECKING", failure_category=None,
-                   completed_at_utc=None)
+        run.update(status="DATA_READY" if run["snapshot"] else "CHECKING", failure_category=None)
         _checkpoint(config, state, run)
         frozen, skip = _snapshot(config, state, run, frame, dependencies)
         if skip:
@@ -357,6 +370,7 @@ def _execute(config, dependencies, now, cutoff, clock, retry_run_id, trigger_sou
     if run["active_versions_after"] != run["active_versions_before"]:
         run.update(status="FAILED", failure_category="ACTIVE_CHANGED_EXTERNALLY")
     completed = clock()
+    _validate_run_clock(completed, run, registry)
     run["completed_at_utc"] = completed.isoformat()
     if run["status"] == "COMPLETED" or run["status"].startswith("SKIPPED_"):
         state.update(pending_run_id=None, last_check_at_utc=completed.isoformat())

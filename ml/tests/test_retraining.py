@@ -596,6 +596,99 @@ def test_pending_run_cannot_precede_a_later_completed_run(config):
         import_module("stocklab_ml.retraining.state").read_state(config.state_path)
 
 
+def test_interrupted_retry_preserves_last_attempt_completion(config, monkeypatch):
+    from test_s3_model_artifacts import FakeS3, store
+    selected = replace(config, model_families=("logistic_regression",), upload_to_s3=True)
+    client = FakeS3()
+    client.fail_manifest = True
+    dependencies = api().RetrainingDependencies(history(103), store(client))
+    for day in [0, 3]:
+        assert api().run_retraining_check(selected, dependencies=dependencies,
+            now_utc=NOW + timedelta(days=day)).status == "PARTIAL_PUBLICATION"
+    module = import_module("stocklab_ml.retraining.orchestrator")
+    with monkeypatch.context() as interrupted:
+        interrupted.setattr(module, "_existing_artifact", lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt()))
+        with pytest.raises(KeyboardInterrupt):
+            api().run_retraining_check(selected, dependencies=dependencies, now_utc=NOW + timedelta(days=4))
+    before = selected.state_path.read_bytes(), selected.registry_path.read_bytes()
+    client.fail_manifest = False
+    with pytest.raises(api().RetrainingStateError):
+        api().run_retraining_check(selected, dependencies=dependencies, now_utc=NOW + timedelta(days=2))
+    assert before == (selected.state_path.read_bytes(), selected.registry_path.read_bytes())
+    state = json.loads(before[0])
+    assert state["runs"][-1]["completed_at_utc"] == (NOW + timedelta(days=3)).isoformat()
+
+
+def test_retry_clock_cannot_precede_checkpointed_model_training(config, monkeypatch):
+    from stocklab_ml.modeling.contracts import ModelTrainingError
+    selected = replace(config, model_families=("logistic_regression",))
+    module = import_module("stocklab_ml.retraining.orchestrator")
+    with monkeypatch.context() as failed:
+        failed.setattr(module, "train_logistic_regression", lambda *a, **k: (_ for _ in ()).throw(ModelTrainingError()))
+        assert run(selected).status == "FAILED"
+    original_save = module.save_model_artifact
+    def saved_then_interrupted(*args, **kwargs):
+        original_save(*args, **kwargs)
+        raise KeyboardInterrupt
+    with monkeypatch.context() as interrupted:
+        interrupted.setattr(module, "save_model_artifact", saved_then_interrupted)
+        with pytest.raises(KeyboardInterrupt):
+            api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(history(103)),
+                                      now_utc=NOW + timedelta(days=3))
+    before = selected.state_path.read_bytes(), selected.registry_path.read_bytes()
+    with pytest.raises(api().RetrainingStateError):
+        api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(history(103)),
+                                  now_utc=NOW + timedelta(days=2))
+    assert before == (selected.state_path.read_bytes(), selected.registry_path.read_bytes())
+
+
+def test_system_clock_cannot_backdate_terminal_completion(config, monkeypatch):
+    from types import SimpleNamespace
+    selected = replace(config, model_families=("logistic_regression",))
+    module = import_module("stocklab_ml.retraining.orchestrator")
+    times = iter([NOW, NOW + timedelta(seconds=2), NOW + timedelta(seconds=3), NOW + timedelta(seconds=1)])
+    with monkeypatch.context() as shifted:
+        shifted.setattr(module, "datetime", SimpleNamespace(now=lambda tz: next(times)))
+        with pytest.raises(api().RetrainingStateError):
+            api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(history(103)))
+    assert api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(history(103)),
+        now_utc=NOW + timedelta(seconds=5)).status == "COMPLETED"
+    assert len(ModelVersionRegistry(selected.registry_path).list_versions("logistic_regression_baseline")) == 1
+
+
+def test_retry_clock_cannot_precede_unjournaled_registration(config, monkeypatch):
+    from stocklab_ml.versioning import ModelVersionError
+    selected = replace(config, model_families=("logistic_regression",))
+    original_register = ModelVersionRegistry.register_version
+    with monkeypatch.context() as failed:
+        failed.setattr(ModelVersionRegistry, "register_version", lambda *a, **k: (_ for _ in ()).throw(ModelVersionError()))
+        assert run(selected).status == "FAILED"
+    def registered_then_interrupted(*args, **kwargs):
+        original_register(*args, **kwargs)
+        raise KeyboardInterrupt
+    with monkeypatch.context() as interrupted:
+        interrupted.setattr(ModelVersionRegistry, "register_version", registered_then_interrupted)
+        with pytest.raises(KeyboardInterrupt):
+            api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(history(103)),
+                                      now_utc=NOW + timedelta(days=3))
+    before = selected.state_path.read_bytes(), selected.registry_path.read_bytes()
+    with pytest.raises(api().RetrainingStateError):
+        api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(history(103)),
+                                  now_utc=NOW + timedelta(days=2))
+    assert before == (selected.state_path.read_bytes(), selected.registry_path.read_bytes())
+
+
+@pytest.mark.parametrize("new_sessions,expected", [(0, "DRY_RUN_NO_NEW_DATA"),
+    (3, "DRY_RUN_INSUFFICIENT_NEW_SESSIONS"), (4, "DRY_RUN_READY")])
+def test_dry_run_distinguishes_session_threshold_without_writes(config, new_sessions, expected):
+    before = config.dataset_path.read_bytes()
+    result = run(replace(config, dry_run=True, minimum_new_sessions=4), history(100 + new_sessions))
+    assert result.status == expected and result.report["new_session_counts"] == {"AAPL": new_sessions}
+    assert result.report["api_request_count"] == 0 and config.dataset_path.read_bytes() == before
+    assert not config.state_path.parent.exists() and not config.registry_path.exists()
+    assert not config.artifacts_path.exists()
+
+
 def test_completed_s3_reference_cannot_change_identity(config):
     from test_s3_model_artifacts import FakeS3, store
     selected = replace(config, upload_to_s3=True, model_families=("logistic_regression",))

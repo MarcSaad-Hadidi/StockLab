@@ -2124,6 +2124,8 @@ matching #75 metadata/holdout before re-registering that same UUID; #75 rejects 
 Existing orphan binaries are reused only through #76's identical-content retry.
 Completed families are verified locally and kept completed. `--retry-run-id` on a
 finished check returns `SKIPPED_ALREADY_PROCESSED` without another version or state write.
+Retries retain the previous attempt's completion timestamp until the next completion.
+Retry and completion clocks cannot precede durable run, training or registration times.
 
 Writes reuse the existing temporary sibling / flush / fsync / atomic replace writer.
 On POSIX, #77 additionally fsyncs publication directories and their parents for
@@ -2150,7 +2152,10 @@ bootstrap, then computes a theoretical refresh/session decision **only from an
 explicit local frame/CSV**. It never creates a lock, journal, snapshot, version,
 model, dataset write or S3 client, and performs no external calls. Without local
 new rows it returns `DRY_RUN_NEEDS_LOCAL_DATA`; pending work returns
-`DRY_RUN_PENDING_RETRY`. It does not fit or promise valid training metrics.
+`DRY_RUN_PENDING_RETRY`. A local refresh returns `DRY_RUN_NO_NEW_DATA` when no
+sessions were added, `DRY_RUN_INSUFFICIENT_NEW_SESSIONS` below the configured
+minimum, or `DRY_RUN_READY` when that threshold is met. It does not fit or promise
+valid training metrics.
 
 From `ml/`, with Python 3.12 and `PYTHONPATH=src`:
 

@@ -60,6 +60,21 @@ def test_cli_dry_run_reads_local_source_without_writes(config, tmp_path, capsys)
     assert not config.state_path.exists() and not config.registry_path.exists()
 
 
+def test_cli_dry_run_reports_insufficient_new_sessions(config, tmp_path, capsys):
+    from stocklab_ml.retraining.state import config_identity
+    cli = import_module("stocklab_ml.retraining.cli")
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(config_identity(replace(config, minimum_new_sessions=4))))
+    source = tmp_path / "incoming.csv"
+    history(103).to_csv(source, index=False, date_format="%Y-%m-%d")
+    assert cli.main(["--once", "--config", str(config_path), "--local-data", str(source), "--dry-run",
+                     "--now-utc", NOW.isoformat()]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "DRY_RUN_INSUFFICIENT_NEW_SESSIONS"
+    assert result["report"]["new_session_counts"] == {"AAPL": 3}
+    assert not config.state_path.parent.exists() and not config.registry_path.exists()
+
+
 def test_cli_failures_have_nonzero_exit_and_no_secret_echo(config, tmp_path, capsys):
     cli = import_module("stocklab_ml.retraining.cli")
     path = tmp_path / "config.json"
