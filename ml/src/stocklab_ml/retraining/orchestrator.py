@@ -396,7 +396,9 @@ def _execute(config, dependencies, now, cutoff, clock, retry_run_id, trigger_sou
         run.update(status="FAILED", failure_category=_failure(error))
     run["active_versions_after"] = _active(registry, config.model_families)
     if run["active_versions_after"] != run["active_versions_before"]:
-        run.update(status="FAILED", failure_category="ACTIVE_CHANGED_EXTERNALLY")
+        logger.info(json.dumps({"run_id": run["run_id"], "result": "ACTIVE_CHANGED_EXTERNALLY",
+            "active_versions_before": run["active_versions_before"],
+            "active_versions_after": run["active_versions_after"]}))
     completed = clock()
     _validate_run_clock(completed, run, registry)
     run["completed_at_utc"] = completed.isoformat()

@@ -50,6 +50,18 @@ def run(config, data=None, **kwargs):
         local_data=history(103) if data is None else data), now_utc=NOW, **kwargs)
 
 
+@pytest.fixture
+def active_registry(config):
+    from stocklab_ml.modeling import train_logistic_regression
+    selected = replace(config, model_families=("logistic_regression",))
+    result = train_logistic_regression(engineer_features(history()).dataframe)
+    registry = ModelVersionRegistry(config.registry_path, clock=lambda: NOW)
+    for _ in range(2):
+        record = registry.register_version(result, training_run_id=str(uuid4()), trained_at_utc=NOW)
+    registry.set_active_version(record.model_name, "v000001")
+    return selected, registry, record.model_name
+
+
 @pytest.mark.parametrize("change", [
     {"symbols": ()}, {"symbols": ("../bad",)}, {"symbols": ("AAPL", "AAPL")},
     {"model_families": ()}, {"model_families": ("unknown",)},
@@ -157,6 +169,60 @@ def test_new_sessions_train_both_once_and_keep_existing_active(config, monkeypat
     replay = run(config, retry_run_id=result.run_id)
     assert replay.status == "SKIPPED_ALREADY_PROCESSED"
     assert config.state_path.read_bytes() == journal_before
+
+
+@pytest.mark.parametrize("outcome", ["skip", "complete", "training_failure"])
+def test_external_active_change_preserves_check_outcome(active_registry, monkeypatch, caplog, outcome):
+    from stocklab_ml.modeling.contracts import ModelTrainingError
+    selected, registry, name = active_registry
+    module = import_module("stocklab_ml.retraining.orchestrator")
+    original_refresh = module.refresh_dataset
+    def refreshed_then_promoted(*args, **kwargs):
+        refreshed = original_refresh(*args, **kwargs)
+        registry.set_active_version(name, "v000002")
+        return refreshed
+    caplog.set_level("INFO", logger=module.__name__)
+    incoming = history() if outcome == "skip" else history(103)
+    with monkeypatch.context() as attempt:
+        attempt.setattr(module, "refresh_dataset", refreshed_then_promoted)
+        if outcome == "training_failure":
+            attempt.setattr(module, "train_logistic_regression", lambda *a, **k: (_ for _ in ()).throw(ModelTrainingError()))
+        first = run(selected, incoming)
+    expected = {"skip": "SKIPPED_NO_NEW_DATA", "complete": "COMPLETED", "training_failure": "FAILED"}[outcome]
+    assert first.status == expected
+    assert first.report["failure_category"] == ("ModelTrainingError" if outcome == "training_failure" else None)
+    assert first.report["active_versions_before"] == {name: "v000001"}
+    assert first.report["active_versions_after"] == {name: "v000002"}
+    assert any(json.loads(record.message).get("result") == "ACTIVE_CHANGED_EXTERNALLY" for record in caplog.records)
+    state = import_module("stocklab_ml.retraining.state").read_state(selected.state_path)
+    assert state["pending_run_id"] == (first.run_id if outcome == "training_failure" else None)
+    second = api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(incoming),
+                                       now_utc=NOW + timedelta(days=3))
+    assert second.status == ("COMPLETED" if outcome == "training_failure" else "SKIPPED_NO_NEW_DATA")
+    assert registry.get_active_version(name).model_version == "v000002"
+    assert len(registry.list_versions(name)) == (2 if outcome == "skip" else 3)
+    if outcome != "skip":
+        assert registry.get_version(name, "v000003").status == ModelStatus.ARCHIVED
+    assert json.loads(selected.state_path.read_text())["pending_run_id"] is None
+
+
+def test_existing_external_active_failure_can_resume_without_reverting_promotion(active_registry):
+    selected, registry, name = active_registry
+    result = run(selected)
+    assert result.status == "COMPLETED"
+    registry.set_active_version(name, "v000002")
+    state = json.loads(selected.state_path.read_text())
+    state["runs"][-1].update(status="FAILED", failure_category="ACTIVE_CHANGED_EXTERNALLY",
+                              active_versions_after={name: "v000002"})
+    state.update(pending_run_id=result.run_id, last_check_at_utc=None)
+    selected.state_path.write_text(json.dumps(state))
+    before = selected.registry_path.read_bytes()
+    recovered = api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(history(103)),
+                                          now_utc=NOW + timedelta(days=3))
+    assert recovered.status == "COMPLETED" and recovered.run_id == result.run_id
+    assert selected.registry_path.read_bytes() == before
+    assert json.loads(selected.state_path.read_text())["pending_run_id"] is None
+    assert registry.get_active_version(name).model_version == "v000002" and len(registry.list_versions(name)) == 3
 
 
 def test_revision_conflict_does_not_change_dataset_or_registry(config):

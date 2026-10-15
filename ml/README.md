@@ -2124,6 +2124,11 @@ manifest-last commit marker and idempotent retry remain authoritative. No untrus
 joblib is loaded by the retraining runner; artifact recovery verifies bytes/manifest
 through #76 without deserialization.
 
+An administrative #75 Active change during a check appears in the before/after
+maps and an `ACTIVE_CHANGED_EXTERNALLY` log event. The worker retains its actual
+outcome and original failure category, preserves that administrative choice, and
+can recover older runs failed for this reason without another version.
+
 ### Durable state, failures, locks and recovery
 
 The bounded schema-v1 JSON journal tracks all checks and family checkpoints:
