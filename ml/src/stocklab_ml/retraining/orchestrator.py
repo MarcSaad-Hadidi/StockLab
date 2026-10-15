@@ -37,6 +37,12 @@ def _verify_history(state, registry):
     records = {record.training_run_id: record for name in MODEL_NAMES.values()
                for record in registry.list_versions(name)}
     for run in state["runs"]:
+        terminal = run["status"] == "COMPLETED" or run["status"].startswith("SKIPPED_")
+        for family in MODEL_NAMES:
+            model = run["models"].get(family)
+            if (str(uuid5(UUID(run["run_id"]), family)) in records
+                    and (model is None or terminal and model["model_version"] is None)):
+                raise RetrainingStateError("Published family lineage is missing from its run.")
         for model in run["models"].values():
             if model["model_version"] is None:
                 continue
@@ -45,8 +51,7 @@ def _verify_history(state, registry):
                     or record.trained_at_utc.isoformat() != model["trained_at_utc"]
                     or canonical(model["payload"]) != canonical({key: record.to_dict()[key] for key in model["payload"]})):
                 raise RetrainingStateError("Published registry history is missing or changed; never restart version numbering.")
-            if ((run["status"] == "COMPLETED" or run["status"].startswith("SKIPPED_"))
-                    and timestamp(run["completed_at_utc"]) < record.registered_at_utc):
+            if terminal and timestamp(run["completed_at_utc"]) < record.registered_at_utc:
                 raise RetrainingStateError("Terminal run completion precedes its durable publication checkpoint.")
 
 
@@ -241,8 +246,13 @@ def _publish(config, state, run, family, model, result, artifact, registry, depe
         payload = training_payload(result)  # #63 metrics plus #75 fitted/report/holdout validation.
         if model["payload"] is not None and canonical(payload) != canonical(model["payload"]):
             raise RetrainingStateError("Reproduced training differs from the frozen evaluated checkpoint.")
+        trained = model["trained_at_utc"]
+        if trained is None:
+            sampled = clock()
+            _validate_run_clock(sampled, run, registry)
+            trained = sampled.isoformat()
         model.update(payload=payload, metrics=payload["metrics"], status="PENDING", failure_category=None,
-                     trained_at_utc=model["trained_at_utc"] or clock().isoformat(), phase="EVALUATED")
+                     trained_at_utc=trained, phase="EVALUATED")
         _checkpoint(config, state, run)
         record = registry.register_version(result, training_run_id=model["training_run_id"],
                                            trained_at_utc=timestamp(model["trained_at_utc"]))
@@ -294,6 +304,11 @@ def _execute(config, dependencies, now, cutoff, clock, retry_run_id, trigger_sou
     elif state and state["last_check_at_utc"] and now - timestamp(state["last_check_at_utc"]) < timedelta(days=config.check_interval_days):
         return _result(config, "SKIPPED_NOT_DUE", now, active=active, state=state, trigger_source=trigger_source)
     frame = load_dataset(config.dataset_path, config.symbols, date.fromisoformat(run["cutoff"]) if run else cutoff)
+    if state:
+        bootstrap = frame[frame.date.dt.date <= frame.symbol.map(state["baseline_dates"]).map(date.fromisoformat)]
+        expected = state["runs"][0]["previous_dataset_fingerprint"] if state["runs"] else frame_digest(frame)
+        if data_dates(bootstrap) != state["baseline_dates"] or frame_digest(bootstrap) != expected:
+            raise RetrainingStateError("Bootstrap watermarks differ from their recorded dataset.")
     if state is None:
         state = {"schema_version": 1, "symbols": list(config.symbols), "baseline_dates": data_dates(frame),
                  "last_check_at_utc": None, "successful": {}, "pending_run_id": None, "runs": []}

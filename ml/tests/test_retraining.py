@@ -221,6 +221,70 @@ def test_snapshot_watermarks_must_describe_the_recorded_range(config, symbol, wa
     assert before == (config.state_path.read_bytes(), config.dataset_path.read_bytes(), config.registry_path.read_bytes())
 
 
+@pytest.mark.parametrize("has_run", [False, True])
+@pytest.mark.parametrize("watermark", ["2099-01-01", "2024-05-16"])
+def test_bootstrap_watermarks_are_bound_to_observed_data(config, watermark, has_run):
+    baseline = pd.concat([history(), history(105, "MSFT")], ignore_index=True)
+    save_processed(config.dataset_path, baseline, overwrite=True)
+    selected = replace(config, symbols=("AAPL", "MSFT"), model_families=("logistic_regression",))
+    if has_run:
+        assert run(selected, baseline).status == "SKIPPED_NO_NEW_DATA"
+        state = json.loads(config.state_path.read_text())
+        state["runs"][0]["previous_data_dates"]["AAPL"] = watermark
+    else:
+        config.state_path.parent.mkdir()
+        state = {"schema_version": 1, "symbols": ["AAPL", "MSFT"],
+            "baseline_dates": {"AAPL": "2024-05-17", "MSFT": "2024-05-24"},
+            "last_check_at_utc": None, "successful": {}, "pending_run_id": None, "runs": []}
+    state["baseline_dates"]["AAPL"] = watermark
+    config.state_path.write_text(json.dumps(state))
+    before = config.state_path.read_bytes(), config.dataset_path.read_bytes()
+    with pytest.raises(api().RetrainingStateError):
+        api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(baseline),
+                                  now_utc=NOW + timedelta(days=3))
+    assert before == (config.state_path.read_bytes(), config.dataset_path.read_bytes())
+    assert not config.registry_path.exists() and not config.artifacts_path.exists()
+
+
+@pytest.mark.parametrize("family", ["logistic_regression", "random_forest"])
+@pytest.mark.parametrize("erase_config", [False, True])
+def test_published_family_lineage_cannot_be_erased(config, family, erase_config):
+    from stocklab_ml.retraining.state import identity_digest
+    assert run(config).status == "COMPLETED"
+    state = json.loads(config.state_path.read_text())
+    completed = state["runs"][-1]
+    model = completed["models"].pop(family)
+    state["successful"].pop(family)
+    if erase_config:
+        completed["config"]["model_families"].remove(family)
+        completed["config_fingerprint"] = identity_digest(completed["config"])
+        for key in ["active_versions_before", "active_versions_after"]:
+            completed[key].pop(model["model_name"])
+    config.state_path.write_text(json.dumps(state))
+    before = config.state_path.read_bytes(), config.dataset_path.read_bytes(), config.registry_path.read_bytes()
+    with pytest.raises(api().RetrainingStateError):
+        api().run_retraining_check(config, dependencies=api().RetrainingDependencies(history(103)),
+                                  now_utc=NOW + timedelta(days=3))
+    assert before == (config.state_path.read_bytes(), config.dataset_path.read_bytes(), config.registry_path.read_bytes())
+
+
+def test_pending_run_cannot_erase_a_completed_family(config, monkeypatch):
+    from stocklab_ml.modeling.contracts import ModelTrainingError
+    module = import_module("stocklab_ml.retraining.orchestrator")
+    with monkeypatch.context() as failed:
+        failed.setattr(module, "train_random_forest", lambda *a, **k: (_ for _ in ()).throw(ModelTrainingError()))
+        assert run(config).status == "PARTIAL_PUBLICATION"
+    state = json.loads(config.state_path.read_text())
+    state["runs"][-1]["models"].pop("logistic_regression")
+    state["successful"].pop("logistic_regression")
+    config.state_path.write_text(json.dumps(state))
+    before = config.state_path.read_bytes(), config.registry_path.read_bytes()
+    with pytest.raises(api().RetrainingStateError):
+        api().run_retraining_check(config, dependencies=api().RetrainingDependencies(history(103)),
+                                  now_utc=NOW + timedelta(days=3))
+    assert before == (config.state_path.read_bytes(), config.registry_path.read_bytes())
+
+
 @pytest.mark.parametrize("older_entry", [False, True])
 @pytest.mark.parametrize("checkpoint", ["training", "registration", "before_start"])
 def test_terminal_history_must_enclose_publication_timestamps(config, checkpoint, older_entry):
@@ -746,6 +810,33 @@ def test_retry_clock_cannot_precede_checkpointed_model_training(config, monkeypa
         api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(history(103)),
                                   now_utc=NOW + timedelta(days=2))
     assert before == (selected.state_path.read_bytes(), selected.registry_path.read_bytes())
+
+
+@pytest.mark.parametrize("prior_attempt", [False, True])
+def test_training_clock_is_validated_before_publication(config, monkeypatch, prior_attempt):
+    from types import SimpleNamespace
+    from stocklab_ml.modeling.contracts import ModelTrainingError
+    selected = replace(config, model_families=("logistic_regression",))
+    module = import_module("stocklab_ml.retraining.orchestrator")
+    if prior_attempt:
+        with monkeypatch.context() as failed:
+            failed.setattr(module, "train_logistic_regression", lambda *a, **k: (_ for _ in ()).throw(ModelTrainingError()))
+            for day in [0, 3]:
+                assert api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(history(103)),
+                    now_utc=NOW + timedelta(days=day)).status == "FAILED"
+    entry = NOW + timedelta(days=4) if prior_attempt else NOW
+    trained = NOW + timedelta(days=2) if prior_attempt else NOW - timedelta(seconds=1)
+    times = iter([entry, trained, entry + timedelta(seconds=1), entry + timedelta(seconds=2)])
+    with monkeypatch.context() as shifted:
+        shifted.setattr(module, "datetime", SimpleNamespace(now=lambda tz: next(times)))
+        with pytest.raises(api().RetrainingStateError):
+            api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(history(103)))
+    assert not config.registry_path.exists() and not config.artifacts_path.exists()
+    state = import_module("stocklab_ml.retraining.state").read_state(config.state_path)
+    assert state["runs"][-1]["models"]["logistic_regression"]["trained_at_utc"] is None
+    assert api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(history(103)),
+        now_utc=entry + timedelta(seconds=3)).status == "COMPLETED"
+    assert len(ModelVersionRegistry(config.registry_path).list_versions("logistic_regression_baseline")) == 1
 
 
 def test_system_clock_cannot_backdate_terminal_completion(config, monkeypatch):

@@ -2136,6 +2136,10 @@ Retry and completion clocks cannot precede durable run, training or registration
 Historical terminal runs must also enclose their training and registration times.
 Snapshot watermarks stay within the recorded date range, never precede the same
 symbol's previous date, and their maximum must equal the snapshot's final date.
+Bootstrap dates are checked against the actual per-symbol history prefixes and
+their original fingerprint; incremental refresh preserves those observations.
+Every deterministic family UUID found in #75 must retain its journal lineage.
+New training times are validated before their checkpoint or registration.
 
 Writes reuse the existing temporary sibling / flush / fsync / atomic replace writer.
 On POSIX, #77 additionally fsyncs publication directories and their parents for
