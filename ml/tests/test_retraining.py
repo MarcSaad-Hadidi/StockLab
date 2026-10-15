@@ -313,11 +313,36 @@ def test_bounded_provider_request_is_shared_by_models(config, transport):
     assert len(result.report["model_results"]) == 2
 
 
-def test_excessive_incremental_window_fails_without_spending_credits(config, transport):
-    result = api().run_retraining_check(replace(config, maximum_refresh_days=10),
-        dependencies=api().RetrainingDependencies(), now_utc=NOW)
-    assert result.status == "FAILED" and result.report["api_request_count"] == 0
-    assert transport.calls == [] and not config.registry_path.exists()
+@pytest.mark.parametrize("has_history", [False, True])
+def test_excessive_incremental_window_allows_explicit_catch_up(config, transport, has_history):
+    config = replace(config, model_families=("logistic_regression",))
+    if has_history:
+        assert api().run_retraining_check(config, dependencies=api().RetrainingDependencies(history()),
+            now_utc=NOW - timedelta(days=37)).status == "SKIPPED_NO_NEW_DATA"
+    before = config.dataset_path.read_bytes(), config.state_path.read_bytes() if config.state_path.exists() else None
+    with pytest.raises(api().RetrainingDataError, match="REFRESH_RANGE_EXCEEDED"):
+        api().run_retraining_check(replace(config, maximum_refresh_days=10),
+            dependencies=api().RetrainingDependencies(), now_utc=NOW)
+    assert before == (config.dataset_path.read_bytes(), config.state_path.read_bytes() if config.state_path.exists() else None)
+    assert transport.calls == [] and not config.registry_path.exists() and not config.artifacts_path.exists()
+    recovered = api().run_retraining_check(replace(config, maximum_refresh_days=60),
+        dependencies=api().RetrainingDependencies(history(130)), now_utc=NOW)
+    assert recovered.status == "COMPLETED" and recovered.report["new_session_counts"] == {"AAPL": 30}
+    assert recovered.report["api_request_count"] == 0 and transport.calls == []
+    state = json.loads(config.state_path.read_text())
+    assert len(state["runs"]) == 1 + has_history and state["pending_run_id"] is None
+    assert state["baseline_dates"] == {"AAPL": "2024-05-17"}
+
+
+def test_all_symbol_windows_checked_before_any_provider_request(config, transport):
+    baseline = pd.concat([history(130), history(100, "MSFT")], ignore_index=True)
+    save_processed(config.dataset_path, baseline, overwrite=True)
+    selected = replace(config, symbols=("AAPL", "MSFT"), maximum_refresh_days=10)
+    before = config.dataset_path.read_bytes()
+    with pytest.raises(api().RetrainingDataError, match="REFRESH_RANGE_EXCEEDED"):
+        api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(), now_utc=NOW)
+    assert transport.calls == [] and config.dataset_path.read_bytes() == before
+    assert not config.state_path.exists() and not config.registry_path.exists()
 
 
 def test_s3_partial_publication_retries_same_artifact_without_fit(config, monkeypatch):

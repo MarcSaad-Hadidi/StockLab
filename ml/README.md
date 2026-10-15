@@ -2047,8 +2047,14 @@ Only #56 `prepare_historical_dataset` calls Twelve Data, once per configured sym
 per check, shared across families. The window starts seven calendar days before that
 symbol's latest observation (bounded by its first observation) and ends at the
 conservative cutoff. It is limited to 90 inclusive calendar days by default and
-always below #56's single-request limit. A longer outage requires explicit bounded
-catch-up; no hidden full-history fetch or extra check-then-fetch is performed.
+always below #56's single-request limit. Every symbol's window is checked before
+creating pending work or spending credits. An oversized window raises a preflight
+`RetrainingDataError` (CLI exit 2), leaving the journal and bootstrap unchanged.
+For an explicit bounded catch-up, supply the prepared observations through
+`--local-data` and deliberately set `maximum_refresh_days` to cover the overlap
+through the cutoff (at most 4998 days). The runner merges them under the same
+journal and training watermarks; do not replace those files outside the runner.
+No hidden full-history fetch or extra check-then-fetch is performed.
 There is no Twelve Data retry, polling, backend/frontend key fallback or alternate
 provider. The API counter is checkpointed before each attempted request, including
 failed attempts; explicit retries add their attempted calls. #56's `1day`, `splits`,

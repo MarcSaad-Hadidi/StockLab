@@ -75,6 +75,18 @@ def test_cli_dry_run_reports_insufficient_new_sessions(config, tmp_path, capsys)
     assert not config.state_path.parent.exists() and not config.registry_path.exists()
 
 
+def test_cli_oversized_refresh_fails_before_creating_pending_work(config, tmp_path, capsys):
+    from stocklab_ml.retraining.state import config_identity
+    cli = import_module("stocklab_ml.retraining.cli")
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(config_identity(replace(config, maximum_refresh_days=10))))
+    assert cli.main(["--once", "--config", str(path), "--now-utc", NOW.isoformat()]) == 2
+    result = json.loads(capsys.readouterr().out)
+    assert result == {"status": "FAILED", "failure_category": "RetrainingDataError"}
+    assert not config.state_path.exists() and not config.registry_path.exists()
+    assert not config.artifacts_path.exists()
+
+
 def test_cli_failures_have_nonzero_exit_and_no_secret_echo(config, tmp_path, capsys):
     cli = import_module("stocklab_ml.retraining.cli")
     path = tmp_path / "config.json"

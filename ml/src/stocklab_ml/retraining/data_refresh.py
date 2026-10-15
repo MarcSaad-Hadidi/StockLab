@@ -31,8 +31,22 @@ def load_dataset(path: Path, symbols, cutoff: date) -> pd.DataFrame:
         raise RetrainingDataError("A previously prepared, valid historical dataset is required; bootstrap explicitly with #56/#58.") from None
 
 
+def refresh_windows(config, existing: pd.DataFrame, cutoff: date) -> dict[str, date]:
+    windows = {}
+    for symbol, group in existing.groupby("symbol", sort=True):
+        # shortcut: revisions outside the overlap are unseen; reconcile full history explicitly after corporate actions.
+        start = max(group.date.min().date(), group.date.max().date() - timedelta(days=config.overlap_days))
+        if start >= cutoff:
+            continue
+        if (cutoff - start).days + 1 > config.maximum_refresh_days:
+            raise RetrainingDataError("REFRESH_RANGE_EXCEEDED: perform an explicit bounded historical catch-up.")
+        windows[symbol] = start
+    return windows
+
+
 def refresh_dataset(config, existing: pd.DataFrame, *, cutoff: date, local_data, run_dir: Path,
                     before_request) -> pd.DataFrame:
+    windows = refresh_windows(config, existing, cutoff)
     frames = [existing]
     local = None
     if local_data is not None:
@@ -44,13 +58,7 @@ def refresh_dataset(config, existing: pd.DataFrame, *, cutoff: date, local_data,
             raise RetrainingDataError("Invalid local refresh data.") from None
         if not set(local.symbol.unique()).issubset(config.symbols):
             raise RetrainingDataError("Refresh contains unconfigured symbols.")
-    for symbol, group in existing.groupby("symbol", sort=True):
-        # shortcut: revisions outside the overlap are unseen; reconcile full history explicitly after corporate actions.
-        start = max(group.date.min().date(), group.date.max().date() - timedelta(days=config.overlap_days))
-        if start >= cutoff:
-            continue
-        if (cutoff - start).days + 1 > config.maximum_refresh_days:
-            raise RetrainingDataError("REFRESH_RANGE_EXCEEDED: perform an explicit bounded historical catch-up.")
+    for symbol, start in windows.items():
         if local is not None:
             incoming = local[(local.symbol == symbol) & (local.date >= pd.Timestamp(start))
                              & (local.date <= pd.Timestamp(cutoff))]

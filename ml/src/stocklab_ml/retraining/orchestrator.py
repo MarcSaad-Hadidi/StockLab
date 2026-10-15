@@ -18,7 +18,7 @@ from stocklab_ml.versioning import ModelVersionRegistry, ModelVersionError
 from stocklab_ml.versioning.validation import canonical, frame_digest, training_payload, validate_timestamp, validate_uuid
 from .contracts import (MODEL_NAMES, RetrainingBusyError, RetrainingConfig, RetrainingConfigurationError,
     RetrainingDataError, RetrainingDependencies, RetrainingRunResult, RetrainingStateError)
-from .data_refresh import data_dates, load_dataset, refresh_dataset, session_counts, snapshot_metadata
+from .data_refresh import data_dates, load_dataset, refresh_dataset, refresh_windows, session_counts, snapshot_metadata
 from .state import (config_identity, identity_digest, read_state, retraining_lock, run_path,
                     sync_directory, timestamp, write_state)
 
@@ -317,6 +317,7 @@ def _execute(config, dependencies, now, cutoff, clock, retry_run_id, trigger_sou
             expected = latest["snapshot"]["fingerprint"] if latest["snapshot"] else latest["previous_dataset_fingerprint"]
             if frame_digest(frame) != expected:
                 raise RetrainingStateError("Dataset changed outside the journal; reconcile explicitly before retraining.")
+        refresh_windows(config, frame, cutoff)
         run = _new_run(config, frame, now, cutoff, active, trigger_source, dependencies)
         state["runs"].append(run)
         state["pending_run_id"] = run["run_id"]
