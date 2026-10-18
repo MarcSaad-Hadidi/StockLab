@@ -289,6 +289,24 @@ Le fournisseur ML Python lit uniquement TWELVE_DATA_ML_API_KEY. Définissez-la d
 
 La couche Entity Framework Core est configurée pour Azure SQL. L’inscription, la connexion et la lecture privée du portefeuille sont présentes; les performances du portefeuille, les migrations additionnelles et les autres services de compte restent à faire. Azure Service Bus, AWS S3, AWS SQS, AWS Lambda et IAM sont des intégrations prévues. Aucun secret cloud ni chaîne de connexion ne doit être placé dans ce dépôt, et les tests hors ligne n’en ont pas besoin.
 
+### Configuration AWS IAM
+Rôles IAM créés :
+StockLabLambdaExecutionRole : exécution des fonctions Lambda et journalisation CloudWatch.
+StockLabMLTaskRole : accès S3 limité pour les traitements ML sur ECS Fargate.
+StockLabMLTaskExecutionRole : récupération des images de conteneurs et publication des logs.
+
+Politiques IAM personnalisées :
+StockLabMLS3AccessPolicy : lecture et écriture dans le préfixe S3 ml/.
+StockLabSQSSendPolicy : envoi de messages vers la future queue StockLab.
+StockLabSQSConsumePolicy : réception et suppression de messages dans cette queue.
+
+Sécurité :
+Principe du moindre privilège.
+Aucun accès administrateur accordé aux rôles applicatifs.
+Authentification MFA activée pour le compte root.
+Aucune clé AWS stockée dans le dépôt GitHub.
+
+
 ## Commandes utiles
 
 Lancez ces commandes depuis la racine du dépôt :
