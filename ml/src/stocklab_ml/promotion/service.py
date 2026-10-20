@@ -177,7 +177,7 @@ def apply_model_promotion(decision: PromotionDecision, *, request: ModelPromotio
                                                request.expected_active_version, expected_records=records)
     except ActiveVersionConflictError as error:
         raise PromotionConflictError("Active/metadata changed during application; CAS refused the stale evaluation.") from error
-    except OSError as error:
+    except (ModelVersionError, OSError) as error:
         raise PromotionRecoveryError("Application interrupted; inspect durable intent and current registry before recovery.") from error
     result = PromotionApplication(decision.evaluation_id, decision.evidence_sha256, request.model_name,
         request.candidate_version, request.expected_active_version, "APPLIED", applied_at_utc.isoformat())

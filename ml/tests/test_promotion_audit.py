@@ -129,3 +129,38 @@ def test_validly_rehashed_replaced_model_bytes_still_conflict_with_evaluation(se
     with pytest.raises(api().PromotionConflictError):
         api().apply_model_promotion(decision, request=request, **kwargs)
     assert kwargs["registry"].path.read_bytes() == before
+
+
+@pytest.mark.parametrize("phase", ["write", "lock_cleanup"])
+def test_wrapped_registry_failure_requires_recovery_without_replaying_cas(setup, monkeypatch, phase):
+    from pathlib import Path
+    import stocklab_ml.versioning.registry as registry_module
+    from stocklab_ml.data.models import StorageError
+    from stocklab_ml.versioning import ModelVersionError
+
+    request, kwargs, decision = approved(setup)
+    registry, store = kwargs["registry"], kwargs["audit_store"]
+    if phase == "write":
+        def fail_write(*args, **kwargs):
+            raise StorageError("simulated registry publication failure")
+        monkeypatch.setattr(registry_module, "save_raw", fail_write)
+    else:
+        unlink = Path.unlink
+        lock = registry.path.with_suffix(registry.path.suffix + ".lock")
+        def fail_cleanup(path, *args, **kwargs):
+            if path == lock:
+                raise OSError("simulated registry lock cleanup failure")
+            return unlink(path, *args, **kwargs)
+        monkeypatch.setattr(Path, "unlink", fail_cleanup)
+    with pytest.raises(api().PromotionRecoveryError) as caught:
+        api().apply_model_promotion(decision, request=request, **kwargs)
+    assert isinstance(caught.value.__cause__, ModelVersionError)
+    active = registry.get_active_version(request.model_name)
+    assert (active.model_version if active else None) == (request.candidate_version if phase == "lock_cleanup" else None)
+    assert store.load_application(request.evaluation_id) is None
+    assert store.load_intent(request.evaluation_id)["evaluation_sha256"] == decision.evidence_sha256
+    monkeypatch.undo()
+    before = registry.path.read_bytes()
+    with pytest.raises(api().PromotionRecoveryError):
+        api().apply_model_promotion(decision, request=request, **kwargs)
+    assert registry.path.read_bytes() == before

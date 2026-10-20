@@ -99,3 +99,21 @@ def test_invalid_metric_evidence_is_blocked(value):
 def test_policy_rejects_integer_too_large_for_finite_math():
     with pytest.raises(api().ModelPromotionError):
         api().ModelPromotionPolicy(minimum_return_improvement=10 ** 1000)
+
+
+@pytest.mark.parametrize("symbols", [
+    "AAPL", None, [], ["AAPL", "AAPL"], ["AAPL", "bad symbol"],
+    ["aapl"], [""], [1], [["AAPL"]], {"AAPL": 1}, True,
+])
+def test_invalid_symbol_evidence_cannot_bypass_sample_gate(symbols):
+    sample = evidence()
+    sample["dataset"]["symbols"] = symbols
+    assert api().decide_promotion(sample, api().ModelPromotionPolicy(minimum_sample_symbols=2)) == (
+        "BLOCKED", ("INVALID_METRICS",))
+
+
+@pytest.mark.parametrize("container", [list, tuple])
+def test_distinct_valid_symbols_follow_the_existing_symbol_contract(container):
+    sample = evidence()
+    sample["dataset"]["symbols"] = container(["0005:HKEX", "BRK.B", "BTC/USD", "SHOP:XTSE"])
+    assert api().decide_promotion(sample, api().ModelPromotionPolicy(minimum_sample_symbols=4)) == ("APPROVED", ())

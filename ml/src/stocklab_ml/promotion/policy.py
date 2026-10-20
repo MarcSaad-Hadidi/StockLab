@@ -1,7 +1,9 @@
 """V1 nonregression gates; positive drawdown deltas are increased risk."""
 
 import math
+import re
 
+from stocklab_ml.data.validation import SYMBOL_PATTERN
 from .contracts import ModelPromotionPolicy
 from .validation import validate_policy
 
@@ -13,9 +15,14 @@ def _less(left, right):
 def decide_promotion(evidence, policy: ModelPromotionPolicy):
     """Return a decision and every failed gate; never change model status."""
     validate_policy(policy)
-    data = evidence["dataset"]
     try:
+        data = evidence["dataset"]
         if any(type(data[name]) is not int or data[name] < 0 for name in ("evaluation_rows", "forward_rows")):
+            raise ValueError
+        symbols = data["symbols"]
+        if (not isinstance(symbols, (list, tuple)) or not symbols
+                or any(not isinstance(symbol, str) or re.fullmatch(SYMBOL_PATTERN, symbol) is None for symbol in symbols)
+                or len(set(symbols)) != len(symbols)):
             raise ValueError
         for model in (evidence["candidate"], evidence["active"]):
             if model is None:

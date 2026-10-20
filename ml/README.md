@@ -2464,7 +2464,9 @@ versions introduces selection bias; no future profitability is guaranteed.
 
 Counts require real integers; numeric thresholds must be finite, nonboolean and
 nonnegative, with accuracy/F1/drawdown tolerance bounded by one. Flags require
-actual booleans. The frozen policy is copied into every decision. Replacement
+actual booleans. Direct policy evidence requires a nonempty list or tuple of
+distinct symbols following the existing #58 symbol contract; malformed symbol
+evidence is `BLOCKED/INVALID_METRICS`. The frozen policy is copied into every decision. Replacement
 requires **all** absolute/sample/benchmark gates, F1 and return nonregression,
 drawdown within tolerance, and a strict improvement in F1, return or drawdown.
 Accuracy alone cannot authorize promotion. Perfect ties and numerical noise
@@ -2505,7 +2507,9 @@ trusted: hashes detect corruption, not an attacker replacing both evidence and h
 **There is no multi-file transaction between registry and audit.** Failure to
 publish an intent prevents CAS. A durable intent without a final application is
 `PromotionRecoveryError`, whether interruption occurred before CAS or after CAS
-but before final audit. Retrying inspects the registry but **never replays** that
+but before final audit. Wrapped #75 CAS publication or lock-cleanup failures also
+report `PromotionRecoveryError` and preserve the durable intent.
+Retrying inspects the registry but **never replays** that
 intent or infers success merely because the candidate is currently Active: an
 administrative/ABA transition could produce the same state. Preserve the intent,
 verify the registry and sources, and resolve the ambiguous operation explicitly
