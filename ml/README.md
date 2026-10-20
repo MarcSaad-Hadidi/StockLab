@@ -2302,4 +2302,240 @@ credits may incur costs; no live cost or resource adequacy is claimed here.
 **AWS scheduler not deployed — secure DEV configuration unavailable.**
 No real credentials/bucket/EFS/scheduler/worker, live retraining or S3 upload have
 been configured or validated for #77. No cloud resources are created/modified by
-offline tests. #78 promotion and #92 remain outside this implementation.
+offline tests. #92 remains outside this implementation.
+
+## Model promotion (#78)
+
+`stocklab_ml.promotion` evaluates **existing registered artifacts**, then permits
+an independently explicit application. It never trains, refreshes historical
+prices, runs the #77 scheduler, uploads artifacts, executes trades, or creates AWS
+resources. #77 continues to register new candidates as `Archived`; registration,
+artifact publication and successful evaluation never activate a candidate.
+
+Each request names an exact `model_name`, `candidate_version` and
+`expected_active_version`. There is no latest/newest/best-file lookup. Logistic
+(`logistic_regression_baseline`) and Random Forest (`random_forest_baseline`)
+remain independent families. Unknown candidates are `BLOCKED/UNKNOWN_CANDIDATE`;
+cross-family artifact references are `BLOCKED/WRONG_MODEL_FAMILY`. An already
+Active candidate returns `BLOCKED/ALREADY_ACTIVE` without any status mutation.
+
+### Evaluate, inspect, then explicitly apply
+
+```python
+from datetime import UTC, datetime
+from uuid import uuid4
+from stocklab_ml.artifacts.local_storage import artifact_paths
+from stocklab_ml.promotion import (
+    ModelPromotionPolicy, ModelPromotionRequest, PromotionAuditStore,
+    evaluate_model_promotion, apply_model_promotion,
+)
+from stocklab_ml.versioning import ModelVersionRegistry
+
+# cleaned is an explicitly supplied, validated CleanedDatasetResult.
+registry = ModelVersionRegistry("ml/models/registry.json")
+audit = PromotionAuditStore("ml/models/promotion")
+request = ModelPromotionRequest(
+    model_name="logistic_regression_baseline",
+    candidate_version="v000002",
+    expected_active_version="v000001",
+    evaluation_dataset=cleaned,
+    promotion_policy=ModelPromotionPolicy(),
+    evaluation_timestamp_utc=datetime.now(UTC),
+    evaluation_id=str(uuid4()),
+    evaluation_start="2024-07-01",
+    evaluation_end="2024-10-31",
+)
+sources = dict(
+    registry=registry, audit_store=audit,
+    active_artifact=artifact_paths(request.model_name, "v000001"),
+    candidate_artifact=artifact_paths(request.model_name, "v000002"),
+    trusted_source=True,  # Caller explicitly approves these executable private sources.
+)
+decision = evaluate_model_promotion(request, **sources)
+print(decision.decision, decision.reason_codes, decision.evidence_sha256)
+# Read-only with respect to registry and source artifacts; only audit/cache files are written.
+# After an authorized caller has reviewed the exact APPROVED decision:
+# application = apply_model_promotion(decision, request=request, **sources)
+```
+
+The evaluation and apply calls are separate operations. `APPROVED` means the
+complete policy passed, **not activated**. `REJECTED` means valid comparable
+evidence failed a policy gate. `BLOCKED` means trustworthy evidence is unavailable
+or insufficient: missing/corrupt artifacts, incompatible runtime, stale registry,
+no Active, prediction/input mismatch, or insufficient common/forward observations.
+All failed gates appear in `reason_codes`, including `LOWER_F1`, `LOWER_RETURN`,
+`DRAWDOWN_TOO_HIGH`, `INSUFFICIENT_IMPROVEMENT`, absolute-score failures and
+`BENCHMARK_REQUIREMENT_FAILED`. Neither rejection nor blocking changes statuses.
+
+No Active model is invented. Initial activation requires a separate explicit
+`initialize=True` request with `expected_active_version=None`, an exact Archived
+candidate, verified artifact, sufficient evidence, absolute thresholds and any
+configured benchmark/forward gates. Only its approved explicit apply can activate
+it. Relative replacement gates have no incumbent in this mode.
+
+### Verified existing artifacts and retraining integration
+
+`candidate_artifact` and `active_artifact` accept `LocalModelArtifact`, `LoadedModel`,
+or an approved `S3ModelArtifactStore`. Promotion always loads through #76:
+manifest identity and TrainingRunId, immutable registry metadata, bounded bytes,
+SHA-256, fitted estimator shape/parameters, Python major/minor and exact recorded
+scikit-learn/NumPy/SciPy/joblib versions are validated before inference. A passed
+`LoadedModel` is reloaded from its verified local reference; an arbitrary mutable
+in-memory estimator is never accepted as provenance. Explicit trust is required;
+SHA-256 does not authenticate a manifest and binary that an attacker can replace.
+
+An S3 store downloads the exact registered version into the audit store's
+`downloads/` cache and uses the same local loader. Only an already approved private
+bucket/prefix is accepted by #76. There are no S3 writes or infrastructure changes
+during promotion. Local artifacts allow every test and smoke to run offline.
+`RetrainingRunResult.report["model_results"][family]` already supplies exact
+model/version/run identities and artifact paths/digests; callers may use these
+after checking the registry. The #77 scheduler, cadence and journal are unchanged.
+
+### Common out-of-sample evidence
+
+The caller fixes an explicit daily interval before inference. Both versions use
+the same supplied cleaned OHLCV, symbols, ordered feature and target dates,
+actual labels, market window and `BacktestConfig`. #60 causal feature engineering
+runs once with unchanged formulas/warm-up and no imputation. #61's official
+`target_up_1d` uses the next **observed** clean close per symbol; terminal unknown
+labels are excluded. Inference receives only date, symbol and `FEATURE_COLUMNS`,
+never the label, target date or future close.
+
+#75 validates the recorded target definition and purged split rule: both training
+feature dates **and training target dates** strictly precede `split_date`. The
+common window conservatively starts at or after the later split boundary of both
+versions and the requested start. Target dates must be observed and no later than
+the explicit end. Earlier source rows supply causal warm-up only; rows after the
+end cannot influence features, labels, executions or valuations. The requested
+end must precede the evaluation UTC date to avoid claiming a still-open daily bar
+is observed. No period is selected by candidate performance. Old registry holdout
+scores from different periods are never directly compared.
+
+#63 recomputes accuracy, precision, recall, F1, confusion counts and class support
+on exactly the same new common observations. #64 and #65 retain BUY >= .60,
+SELL <= .40, HOLD otherwise, and their unchanged confidence formulas. Versioned
+predictions and decisions retain permanent ModelName/ModelVersion identities;
+their fingerprints and version records are preserved in the audit.
+
+Both #73 simulations use the same capital (default 100000), minimum confidence
+(.70), exposure (.20), open positions (10), trade allocation (.10), no shorts,
+8dp quantities and zero fees/slippage. Execution remains the next observed
+same-symbol **open** after a decision close. The market slice deliberately ends
+at the last common observed target session. Reports compare final value, total
+return, SELL-based closed-trade win rate, drawdown and executed trades. With no
+closed SELL trades, #73's win rate is zero; this is limited evidence, not a claim
+about realized trading quality.
+
+Both #74 Buy & Hold comparisons run on the same market slice, dates, symbols and
+capital. Their benchmark reports, equity dates and equity fingerprints must be
+identical or the evaluation blocks. Equal weighting, first next-session entry,
+idle unavailable allocations, no rebalancing/dividends and price-return accounting
+are unchanged. `evidence["benchmark"]` is the shared report; each model includes
+its own strategy-versus-benchmark comparison.
+
+`metric_deltas` are always candidate minus Active, including all four
+classification metrics, final value, return, win rate, drawdown and trade count.
+Return and drawdown use decimals: .04 means four percentage points. A positive
+drawdown delta is **worse**, since #73 drawdown is nonnegative.
+
+Historical OOS simulation is not live performance. Each exact record retains its
+real `trained_at_utc`. A forward row conservatively requires its feature-session
+date to be strictly after both versions' UTC training-completion dates; same-day
+availability cannot be proved without exchange close timestamps. The audit marks
+evidence `historical`, `mixed` or `prospective` and counts common forward rows.
+`minimum_forward_rows` can block a retrospective-only evaluation. Even prospective
+historical replay is not broker-observed live P&L. Reusing holdouts to select
+versions introduces selection bias; no future profitability is guaranteed.
+
+### Conservative immutable policy
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `minimum_evaluation_rows` | 30 | Common labeled observations across symbols; shortage blocks. |
+| `minimum_sample_symbols` | 1 | Distinct symbols with common eligible rows; shortage blocks. |
+| `minimum_accuracy` | .50 | Absolute candidate classification floor. |
+| `minimum_f1` | .50 | Absolute candidate F1 floor. |
+| `minimum_return_improvement` | 0 | Minimum candidate minus Active total return, in decimals. |
+| `maximum_drawdown_increase` | 0 | Maximum candidate minus Active drawdown, in decimals. |
+| `require_benchmark_comparison` | True | Require a valid shared #74 benchmark; V1 computes it for both models regardless. |
+| `require_benchmark_outperformance` | False | Candidate return must strictly exceed Buy & Hold when enabled. |
+| `minimum_forward_rows` | 0 | Common rows after both availability dates; shortage blocks. |
+
+Counts require real integers; numeric thresholds must be finite, nonboolean and
+nonnegative, with accuracy/F1/drawdown tolerance bounded by one. Flags require
+actual booleans. The frozen policy is copied into every decision. Replacement
+requires **all** absolute/sample/benchmark gates, F1 and return nonregression,
+drawdown within tolerance, and a strict improvement in F1, return or drawdown.
+Accuracy alone cannot authorize promotion. Perfect ties and numerical noise
+(relative tolerance 1e-9, absolute 1e-12) are insufficient. Defaults allow no F1 or
+return regression and no drawdown increase beyond numerical tolerance.
+
+### Atomic switching, audit and interrupted applications
+
+`apply_model_promotion` requires the exact saved approved evaluation, identical
+request/dataset fingerprint, the same registry path, unchanged policy, immutable
+version metadata and newly verified artifact digests/runtime. The new
+`registry.set_active_version_if_current(name, candidate, expected_active_version,
+expected_records=...)` acquires the existing #75 lock, rereads schema-v1 records,
+checks the expected Active and evaluated snapshots, then publishes one atomic
+status change. A stale or concurrent promotion gets a controlled conflict. At
+most one candidate can replace the same expected Active; other families, versions,
+training metrics, TrainingRunIds and artifacts remain unchanged. Existing #75
+administrative APIs and JSON schema remain compatible.
+
+Default audit root: `ml/models/promotion/` (already Git-ignored):
+
+- `evaluations/<EvaluationId>.json`: immutable decision, policy, full version and
+  training reports, artifact/runtime identities, source/feature/label/market
+  fingerprints, classification/confusion evidence, backtest/benchmark summaries,
+  equity fingerprints/dates, deltas, reasons and evaluation timestamp.
+- `intents/<EvaluationId>.json`: durable exact evidence hash, registry path,
+  candidate/previous Active identities and prepared timestamp, published before CAS.
+- `applications/<EvaluationId>.json`: final `APPLIED` result, evidence hash and
+  applied timestamp, published after CAS.
+
+Files have strict bounded JSON envelopes and a canonical SHA-256, reject duplicate
+keys/nonfinite content, use sibling temporary files, flush/fsync and atomic
+no-clobber publication. Identical evaluation retries reuse existing evidence;
+changed content with the same EvaluationId conflicts. Corrupt or missing required
+history fails closed and is never silently repaired. Audit storage must itself be
+trusted: hashes detect corruption, not an attacker replacing both evidence and hash.
+
+**There is no multi-file transaction between registry and audit.** Failure to
+publish an intent prevents CAS. A durable intent without a final application is
+`PromotionRecoveryError`, whether interruption occurred before CAS or after CAS
+but before final audit. Retrying inspects the registry but **never replays** that
+intent or infers success merely because the candidate is currently Active: an
+administrative/ABA transition could produce the same state. Preserve the intent,
+verify the registry and sources, and resolve the ambiguous operation explicitly
+under administrative control. V1 has no automatic reconciliation that can invent
+missing proof. A finalized verified audit plus matching resulting statuses and
+artifacts permits `ALREADY_APPLIED` without another registry mutation. A later
+administrative change makes that retry conflict. A killed #75 writer may leave
+its lock sentinel; never remove a live lock or steal a lock automatically.
+
+### Offline smoke and verification
+
+From repository root, using the existing Python 3.12 environment:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path ml/src).Path
+& ml/.venv/Scripts/python.exe ml/examples/model_promotion_smoke.py
+& ml/.venv/Scripts/python.exe -m pip check
+& ml/.venv/Scripts/python.exe -m pytest ml -q --ignore=ml/results --ignore=ml/models --ignore=ml/ml --basetemp=ml/results/pytest-78-root -o cache_dir=ml/results/pytest-cache-78-root
+# From ml/:
+& .venv/Scripts/python.exe -m pytest -q --basetemp=results/pytest-78-ml -o cache_dir=results/pytest-cache-78-ml
+```
+
+Use fresh ignored basetemp/cache directories and the NTFS-capable runner described
+above. The root command excludes generated local results/models, which can contain
+many old test directories. The assert-based smoke blocks sockets, trains two
+synthetic runs **only for setup**, registers exact versions, explicitly activates
+the initial version, saves/loads through #76, then forbids estimator/scaler fitting
+during promotion. It verifies unchanged Active after evaluation, reloads the audit,
+and applies explicitly only on APPROVED. Its ordinary example honestly rejects a
+lower-F1 candidate despite a better simulated return. Tests separately exercise an
+approved synthetic replacement, explicit initialization, two-process CAS and apply
+races, stale evidence, tampering, incompatible artifacts and interrupted audit.
+No live AWS calls, API credits, deployed scheduler or real trades are involved.

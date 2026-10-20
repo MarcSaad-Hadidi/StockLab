@@ -14,7 +14,7 @@ from stocklab_ml.data.models import StorageError
 from stocklab_ml.data.storage import save_raw
 from stocklab_ml.modeling.contracts import LogisticRegressionResult, RandomForestResult
 from .contracts import (
-    ModelStatus, ModelVersionError, ModelVersionNotFoundError, ModelVersionRecord,
+    ActiveVersionConflictError, ModelStatus, ModelVersionError, ModelVersionNotFoundError, ModelVersionRecord,
     RegistryBusyError, TrainingRunConflictError,
 )
 from .validation import (
@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
 DEFAULT_REGISTRY_PATH = Path(__file__).resolve().parents[3] / "models" / "registry.json"
 LOCK_TIMEOUT_SECONDS = 5.0
+_UNCONDITIONAL = object()
 
 
 def _unique_keys(pairs):
@@ -164,11 +165,20 @@ class ModelVersionRegistry:
     def get_active_version(self, model_name: str) -> ModelVersionRecord | None:
         return next((r for r in self.list_versions(model_name) if r.status == ModelStatus.ACTIVE), None)
 
-    def _set_status(self, model_name: str, model_version: str, status: ModelStatus) -> ModelVersionRecord:
+    def _set_status(self, model_name: str, model_version: str, status: ModelStatus, *,
+                    expected_active_version=_UNCONDITIONAL, expected_records=()) -> ModelVersionRecord:
         validate_name(model_name)
         validate_version(model_version)
         with self._locked():
             records = self._read()
+            if expected_active_version is not _UNCONDITIONAL:
+                active = next((r.model_version for r in records
+                               if r.model_name == model_name and r.status == ModelStatus.ACTIVE), None)
+                if active != expected_active_version:
+                    raise ActiveVersionConflictError("Active version changed; evaluate against the current Active model.")
+                for expected in expected_records:
+                    if expected not in records:
+                        raise ActiveVersionConflictError("Evaluated model metadata/status changed before activation.")
             if not any(r.model_name == model_name and r.model_version == model_version for r in records):
                 raise ModelVersionNotFoundError(f"Model version not registered: {model_name}/{model_version}.")
             updated = []
@@ -185,6 +195,19 @@ class ModelVersionRegistry:
 
     def set_active_version(self, model_name: str, model_version: str) -> ModelVersionRecord:
         return self._set_status(model_name, model_version, ModelStatus.ACTIVE)
+
+    def set_active_version_if_current(self, model_name: str, candidate_version: str,
+                                      expected_active_version: str | None, *,
+                                      expected_records: tuple[ModelVersionRecord, ...] = ()) -> ModelVersionRecord:
+        """Compare and publish under the existing lock; None explicitly expects no Active."""
+        if expected_active_version is not None:
+            validate_version(expected_active_version)
+        if (not isinstance(expected_records, tuple)
+                or any(not isinstance(record, ModelVersionRecord) or record.model_name != model_name
+                       for record in expected_records)):
+            raise ModelVersionError("Expected records must be exact snapshots of the selected model family.")
+        return self._set_status(model_name, candidate_version, ModelStatus.ACTIVE,
+                                expected_active_version=expected_active_version, expected_records=expected_records)
 
     def archive_version(self, model_name: str, model_version: str) -> ModelVersionRecord:
         return self._set_status(model_name, model_version, ModelStatus.ARCHIVED)

@@ -25,6 +25,10 @@ class RegistryBusyError(ModelVersionError):
     """Another local writer holds the registry lock; retry explicitly."""
 
 
+class ActiveVersionConflictError(ModelVersionError):
+    """The Active version or evaluated record changed before atomic activation."""
+
+
 class ModelStatus(StrEnum):
     ACTIVE = "Active"
     ARCHIVED = "Archived"
