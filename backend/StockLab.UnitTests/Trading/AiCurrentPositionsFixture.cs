@@ -79,6 +79,7 @@ internal sealed class AiCurrentPositionsFixture(string? sqlConnection, SqliteCon
             AiPortfolios = await db.AiTraderPortfolios.AsNoTracking().OrderBy(p => p.Id).ToArrayAsync(),
             AiPositions = await db.AiTraderPositions.AsNoTracking().OrderBy(p => p.Id).ToArrayAsync(),
             AiTrades = await db.AiTrades.AsNoTracking().OrderBy(p => p.Id).ToArrayAsync(),
+            Valuations = await db.AiTraderValuationSnapshots.AsNoTracking().OrderBy(p => p.Id).ToArrayAsync(),
             AiDecisions = await db.AiDecisions.AsNoTracking().OrderBy(p => p.Id).ToArrayAsync(),
             Rejections = await db.AiRejectedDecisions.AsNoTracking().OrderBy(p => p.AiDecisionId).ToArrayAsync(),
             Users = await db.Users.AsNoTracking().OrderBy(p => p.Id).ToArrayAsync(),

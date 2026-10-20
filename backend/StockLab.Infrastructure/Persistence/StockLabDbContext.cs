@@ -15,8 +15,27 @@ public class StockLabDbContext(DbContextOptions<StockLabDbContext> options) : Db
     public DbSet<AiTraderPortfolio> AiTraderPortfolios => Set<AiTraderPortfolio>();
     public DbSet<AiTraderPosition> AiTraderPositions => Set<AiTraderPosition>();
     public DbSet<AiTrade> AiTrades => Set<AiTrade>();
+    public DbSet<AiTraderValuationSnapshot> AiTraderValuationSnapshots => Set<AiTraderValuationSnapshot>();
     public DbSet<AiDecision> AiDecisions => Set<AiDecision>();
     public DbSet<AiRejectedDecision> AiRejectedDecisions => Set<AiRejectedDecision>();
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        ValidateValuationHistory();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        ValidateValuationHistory();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void ValidateValuationHistory()
+    {
+        if (ChangeTracker.Entries<AiTraderValuationSnapshot>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("AI valuation history is append-only.");
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

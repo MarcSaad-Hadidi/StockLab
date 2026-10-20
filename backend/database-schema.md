@@ -336,17 +336,52 @@ leakage is a pipeline/backtesting responsibility, not a relational constraint.
 
 ## Valuation history
 
-PortfolioSnapshots and AiPortfolioSnapshots support historical equity charts and
-drawdown without treating today's quotes as historical prices. Each has Id,
-PortfolioId (FK Portfolios.Id) or AiPortfolioId (FK AiPortfolios.Id),
-ValuedAtUtc (`datetime2(7)`), CashBalance (`decimal(27,12)` for user snapshots,
-`decimal(19,4)` for AI snapshots, >= 0) and
-PositionsValue (`decimal(19,4)`, >= 0). Unique (parent ID, ValuedAtUtc).
-Total equity is their sum; P&L and return derive from equity and initial capital.
-The valuation services must use a consistent as-of quote policy and currency.
-These are design-only support tables for the performance issues, not a request
-to implement collection now. Precise historical drawdown is limited to the
-recorded valuation frequency.
+`PortfolioSnapshots` remains a design-only user table: Id, PortfolioId,
+ValuedAtUtc, CashBalance (`decimal(27,12)`) and PositionsValue (`decimal(19,4)`).
+
+### AiPortfolioSnapshots (implemented by #79)
+
+| Column | Type / constraint |
+| --- | --- |
+| Id | `uniqueidentifier` PK |
+| AiPortfolioId | FK AiPortfolios.Id; NO ACTION |
+| CaptureId | Nonempty `uniqueidentifier`, unique across captures |
+| ValuedAtUtc | Nondefault `datetime2(7)` UTC retrieval/capture time |
+| Currency | Required `char(3)`, USD |
+| CashBalance | `decimal(19,4)`, >= 0 |
+| PositionsValue | `decimal(19,4)`, >= 0; aggregate rounded once away from zero |
+| IsInitialBaseline | `bit`; true only for atomic 100000 cash / zero positions initialization |
+| PortfolioVersion | Required `varbinary(8)`; revalidated source rowversion, empty for atomic creation baseline |
+| QuoteObservationsJson | Required `nvarchar(max)` array of symbol, quantity, average cost, price and source UTC AsOfUtc |
+
+Application entity: `AiTraderValuationSnapshot`. History is append-only in the
+service and DbContext; there is no update/delete operation. Unique CaptureId
+supports explicit replay/conflict without overwriting. The filtered unique index
+on AiPortfolioId where IsInitialBaseline = 1 prevents duplicate baselines.
+The `(AiPortfolioId, ValuedAtUtc, Id)` index supports bounded chronological reads.
+Different captures may share a timestamp; ties place the initial baseline first,
+then order by Id. TotalValue = CashBalance + PositionsValue; PnL and fractional
+return derive on read, avoiding redundant stored totals.
+
+New #66 initialization saves its known cash baseline atomically; existing
+portfolios receive no backfill. Capture reuses #66's validated market snapshot
+and revalidates portfolio/positions under short serializable locks after network
+I/O. Nonpositive, missing, wrong-symbol and non-USD prices fail. Quote observation
+times must be nondefault, zero-offset UTC and no later than capture time; older
+quotes are retained explicitly, without claiming contemporaneous/live prices.
+Actual history comes only from explicit captures, independent of backtest data.
+Observed drawdown streams all recorded equity points; fewer than two yields
+NULL. Sample count, first/last dates and coverage status expose missing history;
+even coverage since initialization cannot measure losses between observations.
+
+`AddAiTraderPerformanceMetrics` also adds signed nullable `AiTrades.RealizedPnL`
+(`decimal(19,4)`) with no default or historical reconstruction. BUY remains NULL.
+New SELL stores rounded persisted proceeds minus sold quantity * pre-sale stored
+average cost in the existing trade/cash/position transaction. Legacy NULL SELLs
+make lifetime SELL-dependent metrics unavailable, rather than break-even.
+Existing OrderId/decision uniqueness, rowversion, FK and cash/position constraints
+remain unchanged. Down drops only #79's table and column; it discards the new
+observations/accounting but preserves pre-existing cash, positions and trade rows.
 
 ## Indexes and integrity
 

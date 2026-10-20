@@ -130,6 +130,9 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(19,8)");
 
+                    b.Property<decimal?>("RealizedPnL")
+                        .HasColumnType("decimal(19,4)");
+
                     b.Property<string>("Side")
                         .IsRequired()
                         .HasColumnType("nvarchar(4)");
@@ -250,6 +253,70 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_AiPositions_AverageCost", "[AverageCost] > 0");
 
                             t.HasCheckConstraint("CK_AiPositions_Quantity", "[Quantity] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("StockLab.Domain.Entities.AiTraderValuationSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AiTraderPortfolioId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("AiPortfolioId");
+
+                    b.Property<Guid>("CaptureId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("CashBalance")
+                        .HasColumnType("decimal(19,4)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("char(3)");
+
+                    b.Property<bool>("IsInitialBaseline")
+                        .HasColumnType("bit");
+
+                    b.Property<byte[]>("PortfolioVersion")
+                        .IsRequired()
+                        .HasColumnType("varbinary(8)");
+
+                    b.Property<decimal>("PositionsValue")
+                        .HasColumnType("decimal(19,4)");
+
+                    b.Property<string>("QuoteObservationsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("ValuedAtUtc")
+                        .HasColumnType("datetime2(7)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AiTraderPortfolioId")
+                        .IsUnique()
+                        .HasFilter("[IsInitialBaseline] = 1");
+
+                    b.HasIndex("CaptureId")
+                        .IsUnique();
+
+                    b.HasIndex("AiTraderPortfolioId", "ValuedAtUtc", "Id");
+
+                    b.ToTable("AiPortfolioSnapshots", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AiPortfolioSnapshots_Baseline", "[IsInitialBaseline] = 0 OR ([CashBalance] = 100000 AND [PositionsValue] = 0 AND [QuoteObservationsJson] = '[]')");
+
+                            t.HasCheckConstraint("CK_AiPortfolioSnapshots_CaptureId", "[CaptureId] <> '00000000-0000-0000-0000-000000000000'");
+
+                            t.HasCheckConstraint("CK_AiPortfolioSnapshots_Cash", "[CashBalance] >= 0");
+
+                            t.HasCheckConstraint("CK_AiPortfolioSnapshots_Currency", "[Currency] = 'USD'");
+
+                            t.HasCheckConstraint("CK_AiPortfolioSnapshots_Positions", "[PositionsValue] >= 0");
+
+                            t.HasCheckConstraint("CK_AiPortfolioSnapshots_Timestamp", "[ValuedAtUtc] > '0001-01-01T00:00:00'");
                         });
                 });
 
@@ -594,6 +661,15 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Portfolio");
+                });
+
+            modelBuilder.Entity("StockLab.Domain.Entities.AiTraderValuationSnapshot", b =>
+                {
+                    b.HasOne("StockLab.Domain.Entities.AiTraderPortfolio", null)
+                        .WithMany()
+                        .HasForeignKey("AiTraderPortfolioId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("StockLab.Domain.Entities.Holding", b =>

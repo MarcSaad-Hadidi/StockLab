@@ -63,7 +63,7 @@ Each SQL Server mapping is in `StockLab.Infrastructure/Persistence/Configuration
 The context discovers these configurations from the Infrastructure assembly. They
 define table names, keys, indexes, decimal and string types, check constraints,
 `rowversion` concurrency tokens and `NO ACTION` foreign keys according to
-`database-schema.md`. AI Trader has its own tables described below; valuation snapshots are not stored.
+`database-schema.md`. AI Trader has its own tables and observed valuation history described below.
 
 `StockLab.Api/Program.cs` calls `AddPersistence`, which registers the scoped
 `StockLabDbContext` with the SQL Server provider. It reads the named setting
@@ -120,7 +120,8 @@ runs automatically when the API starts.
 `IAiTraderPortfolioService` initializes and reads the system-owned `AI_TRADER`
 portfolio in `AiPortfolios` and its positions in `AiPositions`. These
 entities have no user relationship and never reuse user portfolios or holdings.
-The first call creates **100000 USD cash**, with no positions. Subsequent calls,
+The first call creates **100000 USD cash**, with no positions, and commits its
+initial equity baseline atomically. Subsequent calls,
 including after a restart, preserve cash and positions. A unique portfolio key
 and recovery limited to SQL Server duplicate-key errors protect concurrent creation.
 The mappings follow `database-schema.md`: application `PortfolioKey` maps to the
@@ -137,6 +138,110 @@ Missing/invalid quotes, provider failures and non-USD quotes fail valuation with
 substituting cost or zero; persisted state remains available. Empty portfolios
 require no quote calls. Quote prices are the provider's latest available prices,
 not guaranteed executable prices or observations from the same instant.
+
+## AI Trader performance (#79)
+
+The scoped `IAiTraderPerformanceService.GetMetricsAsync` reports the independent
+`AI_TRADER` portfolio in USD through `AiTraderPerformanceSnapshot`. It reads actual
+committed `AiTrades`, current `AiPositions`, and recorded `AiPortfolioSnapshots`.
+ML decisions, rejections, HOLD, user portfolios, #73 backtests and #74 benchmarks
+are never evidence of bot execution or performance. Metrics and history queries
+are read-only, use owned untracked contexts, and never initialize a missing
+portfolio. A missing portfolio returns `PortfolioNotFound`.
+
+Current valuation reuses #66's `GetSnapshotAsync(initializeIfMissing: false)`;
+each position receives one quote through the configured `IMarketDataProvider`
+pipeline (Mock or TwelveData). There is no second price lookup for metrics or
+capture. Missing, nonpositive, wrong-symbol or non-USD quotes fail the whole
+valuation; provider failures/cancellation propagate without zero/cost substitution
+or implicit FX. The latest available quote may predate retrieval or market hours.
+
+| Metric | Definition |
+| --- | --- |
+| TotalValue | Existing snapshot's cash + current positions market value |
+| TotalPnL | TotalValue - InitialCapital (100000 USD) |
+| TotalReturn | TotalValue / InitialCapital - 1; `.12` means 12% |
+| RealizedPnL | Sum of recorded SELL P&L; NULL if any legacy SELL is unvalued |
+| UnrealizedPnL | Sum of the current snapshot positions' UnrealizedPnL |
+| WinRate | Winning executed SELLs / all executed SELLs, including break-even; `0` with no SELLs |
+| AverageWin | Sum of positive SELL P&L / winning SELL count; NULL without wins |
+| AverageLoss | Sum of negative SELL P&L / losing SELL count; a signed negative amount, NULL without losses |
+| BestTrade / WorstTrade | Maximum/minimum realized SELL P&L, ties by ExecutedAtUtc DESC then TradeId DESC |
+| MaxDrawdown | Largest observed `(running peak - equity) / running peak`; `.25` means 25% |
+
+BUY has NULL `RealizedPnL`. Each new partial/full SELL persists
+`Round(actual rounded TotalAmount - sold quantity * pre-sale stored AverageCost,
+4, AwayFromZero)` **inside the existing execution transaction**, before the
+position is reduced/removed. A partial sale accounts only for sold shares; a full
+sale's P&L survives deletion of the position. Weighted average costs, quantity,
+risk policy, order fingerprint and execution idempotency are unchanged. A retry
+returns the original trade without recomputing its accounting. Monetary storage
+remains `decimal(19,4)` and quantity `decimal(19,8)`, with no floating point.
+Current valuation retains decimal product precision; captured PositionsValue is
+rounded once to four places. Settlement/weighted-cost rounding can leave small
+differences between TotalPnL and RealizedPnL + UnrealizedPnL.
+
+Legacy SELLs retain NULL, never a fabricated zero or a guessed cost basis.
+`UnvaluedLegacySellCount` and `TradeStatisticsComplete` expose this gap. Any gap
+makes lifetime RealizedPnL, WinRate, averages, BestTrade and WorstTrade NULL.
+Trade counts remain actual ledger counts; winning/losing/break-even counts cover
+known SELLs only. With no SELLs, realized P&L and win rate are zero and averages
+and best/worst are NULL. A partial SELL counts as one SELL; retries do not count.
+
+`IAiTraderValuationHistoryService.CaptureCurrentAsync(nonempty CaptureId)` is the
+separate explicit write operation. New portfolio initialization also inserts one
+100000 USD cash/zero-position baseline in the same SaveChanges transaction.
+Existing portfolios receive no retroactive baseline or synthetic history.
+The append-only `AiTraderValuationSnapshot` entity maps to `AiPortfolioSnapshots`:
+portfolio/capture IDs, retrieval `ValuedAtUtc`, USD cash/positions value, initial
+baseline flag, source portfolio version and per-symbol JSON quantity/cost/price/
+quote `AsOfUtc`. TotalValue, PnL and Return derive on read and are not stored.
+Old positive quotes are allowed and explicitly dated; missing/default, non-UTC or
+future observation timestamps cannot be captured. Capture time does not assert
+that all prices were observed then or simultaneously.
+
+After network I/O, capture and metrics use a short serializable transaction to
+revalidate rowversion, timestamp, currency, capital, cash and every open position.
+A changed state returns `ConcurrencyConflict`; no incoherent snapshot is saved.
+No network call holds database locks. Capture identities are unique: same ID and
+identical portfolio/quote facts replay the original observation/time; changed
+facts return `CaptureConflict`. Replay revalues and therefore requires valid
+quotes. A simultaneous SQL race may return a controlled conflict; an explicit
+retry then replays the committed result. No history row is overwritten.
+Persistence failures are sanitized; cancellation rolls back capture.
+
+`GetHistoryAsync(startDateUtc?, endDateUtc?, limit=200)` validates ordered,
+nondefault UTC inclusive bounds and a limit of 1..200. SQL selects the latest
+matching points and returns them chronologically. Ties order initial baseline
+first, then observation ID. Reads do not capture anything. Metrics aggregate
+trade counts/sums in SQL, stream projected decimal SELL facts for extrema, and
+stream **all** ordered valuation points in O(n), without the chart limit.
+
+Drawdown starts at the first recorded equity, never a fabricated historical
+price or unjustified initial peak. Fewer than two observations gives NULL.
+`HistoricalCoverage` includes sample count, first/last times and
+Absent/Insufficient/SampledSinceInitialization/PartialHistory status. Even a
+baseline means sampled coverage only: daily observations miss intraday losses,
+gaps and earlier unrecorded values can understate lifetime drawdown. Zero means
+no decline in the available observations. No scheduler, automatic trades or
+cloud infrastructure is introduced; a future orchestrator must call capture.
+
+`AddAiTraderPerformanceMetrics` adds nullable AiTrades.RealizedPnL without a
+default/backfill and creates only the AI snapshot table, checks, NoAction FK,
+unique CaptureId/initial-baseline indexes and chronological portfolio index.
+It preserves existing trades, cash, positions and execution constraints. Apply
+migrations explicitly; Down removes #79's history table and P&L column and loses
+that new accounting/history, while retaining pre-existing rows and amounts.
+Use a backup before a production downgrade. No Azure SQL migration is automatic.
+
+SQLite tests cover accounting formulas, fractional/weighted/partial/full sales,
+legacy gaps, decision/user isolation, quote failures/times, read-only queries,
+capture retry/conflict/rollback/cancellation and observed drawdown. Set
+`STOCKLAB_TEST_LOCALDB=1` for real SQL Server execution smoke, migration upgrade/
+Down preserving legacy rows, precision, constraints, rowversion and capture races.
+The real API composition registers both services scoped via
+`AddAiTraderPerformance`; it exposes no new controllers. API #80 and frontend #59
+remain separate issues.
 
 The `AddAiTraderPortfolio` migration adds only these two tables. It enforces
 nonnegative cash, fixed V1 capital of 100000 USD, positive quantity/average cost,

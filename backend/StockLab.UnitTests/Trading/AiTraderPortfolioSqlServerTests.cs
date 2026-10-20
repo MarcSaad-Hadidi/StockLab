@@ -27,6 +27,7 @@ public sealed class AiTraderPortfolioSqlServerTests
             var states = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => service.GetOrCreateAsync()));
             Assert.Single(states.Select(s => s.PortfolioId).Distinct());
             Assert.Equal(1, await context.AiTraderPortfolios.CountAsync());
+            Assert.True((await context.AiTraderValuationSnapshots.SingleAsync()).IsInitialBaseline);
             Assert.All(states, state => Assert.Equal(100000m, state.CashBalance));
             Assert.Empty(await context.Users.ToListAsync());
 

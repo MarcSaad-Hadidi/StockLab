@@ -22,6 +22,7 @@ public sealed class AiTradeConfiguration : IEntityTypeConfiguration<AiTrade>
         builder.Property(trade => trade.Quantity).HasColumnType("decimal(19,8)");
         builder.Property(trade => trade.ExecutionPrice).HasColumnType("decimal(19,4)");
         builder.Property(trade => trade.TotalAmount).HasColumnType("decimal(19,4)");
+        builder.Property(trade => trade.RealizedPnL).HasColumnType("decimal(19,4)");
         builder.Property(trade => trade.ExecutedAtUtc).HasColumnType("datetime2(7)")
             .HasConversion(value => value, value => DateTime.SpecifyKind(value, DateTimeKind.Utc));
         builder.Property(trade => trade.CashBalanceAfter).HasColumnType("decimal(19,4)");

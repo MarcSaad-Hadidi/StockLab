@@ -33,6 +33,11 @@ public sealed class AiTraderPortfolioService(
                 UpdatedAtUtc = now
             };
             context.AiTraderPortfolios.Add(portfolio);
+            context.AiTraderValuationSnapshots.Add(new()
+            {
+                Id = Guid.NewGuid(), AiTraderPortfolioId = portfolio.Id, CaptureId = Guid.NewGuid(),
+                ValuedAtUtc = now, CashBalance = portfolio.InitialCapital, IsInitialBaseline = true
+            });
             try
             {
                 await context.SaveChangesAsync(cancellationToken);
@@ -49,7 +54,7 @@ public sealed class AiTraderPortfolioService(
         return new AiTraderPortfolioState(portfolio.Id, portfolio.Currency, portfolio.InitialCapital,
             portfolio.CashBalance, portfolio.Positions.OrderBy(position => position.Symbol, StringComparer.Ordinal)
                 .Select(position => new AiTraderPositionState(position.Symbol, position.Quantity, position.AverageCost))
-                .ToArray());
+                .ToArray()) { Version = portfolio.Version.ToArray(), UpdatedAtUtc = portfolio.UpdatedAtUtc };
     }
 
     public async Task<AiTraderPortfolioSnapshot> GetSnapshotAsync(CancellationToken cancellationToken = default, bool initializeIfMissing = true)
@@ -59,7 +64,7 @@ public sealed class AiTraderPortfolioService(
         foreach (var position in state.Positions)
         {
             var quote = await marketDataProvider.GetQuoteAsync(position.Symbol, cancellationToken);
-            if (quote is null || quote.Price <= 0m)
+            if (quote is null || quote.Price <= 0m || !string.Equals(quote.Symbol, position.Symbol, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException($"No valid market quote is available for {position.Symbol}.");
             }
@@ -70,13 +75,17 @@ public sealed class AiTraderPortfolioService(
 
             var marketValue = position.Quantity * quote.Price;
             positions.Add(new AiTraderPositionSnapshot(position.Symbol, position.Quantity, position.AverageCost,
-                quote.Price, marketValue, marketValue - position.Quantity * position.AverageCost));
+                quote.Price, marketValue, marketValue - position.Quantity * position.AverageCost) { QuoteAsOfUtc = quote.AsOfUtc });
         }
 
         var positionsMarketValue = positions.Sum(position => position.MarketValue);
         var totalValue = state.CashBalance + positionsMarketValue;
         return new AiTraderPortfolioSnapshot(state.PortfolioId, state.Currency, state.InitialCapital,
-            state.CashBalance, positionsMarketValue, totalValue, totalValue - state.InitialCapital, positions.ToArray());
+            state.CashBalance, positionsMarketValue, totalValue, totalValue - state.InitialCapital, positions.ToArray())
+        {
+            PortfolioVersion = state.Version, PortfolioUpdatedAtUtc = state.UpdatedAtUtc,
+            ValuationTimestampUtc = timeProvider.GetUtcNow().UtcDateTime
+        };
     }
 
     private static Task<AiTraderPortfolio?> LoadAsync(StockLabDbContext context, CancellationToken cancellationToken) =>
