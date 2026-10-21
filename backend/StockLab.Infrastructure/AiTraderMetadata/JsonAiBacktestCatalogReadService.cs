@@ -20,9 +20,12 @@ public sealed class JsonAiBacktestCatalogReadService(IOptions<AiTraderMetadataOp
         if (sources.Length > 64 || sources.Select(source => source.Path).Distinct(StringComparer.OrdinalIgnoreCase).Count() != sources.Length)
             throw new CatalogUnavailableException("backtest", true);
         var items = new List<AiBacktestCatalogItem>();
+        var remainingBytes = MaxFileBytes;
         foreach (var source in sources)
         {
-            using var document = await ReadAsync(source.Path, "backtest", cancellationToken);
+            var metadata = await ReadAsync(source.Path, "backtest", cancellationToken, remainingBytes);
+            using var document = metadata.Document;
+            remainingBytes -= metadata.BytesRead;
             try
             {
                 var root = document.RootElement;

@@ -11,7 +11,8 @@ internal static class MetadataJson
 {
     internal const int MaxFileBytes = 8 * 1024 * 1024;
 
-    internal static async Task<JsonDocument> ReadAsync(string? path, string catalog, CancellationToken token)
+    internal static async Task<(JsonDocument Document, int BytesRead)> ReadAsync(string? path, string catalog,
+        CancellationToken token, int remainingBytes = MaxFileBytes)
     {
         token.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path))
@@ -20,20 +21,22 @@ internal static class MetadataJson
         {
             await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
                 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
-            Require(stream.Length <= MaxFileBytes);
+            var limit = Math.Min(MaxFileBytes, remainingBytes);
+            Require(stream.Length <= limit);
             using var bytes = new MemoryStream();
             var buffer = new byte[8192];
             int count;
-            while ((count = await stream.ReadAsync(buffer, token)) > 0)
+            while ((count = await stream.ReadAsync(buffer.AsMemory(0,
+                Math.Min(buffer.Length, limit - (int)bytes.Length + 1)), token)) > 0)
             {
-                Require(bytes.Length + count <= MaxFileBytes);
+                Require(bytes.Length + count <= limit);
                 bytes.Write(buffer, 0, count);
             }
             var json = new UTF8Encoding(false, true).GetString(bytes.GetBuffer(), 0, (int)bytes.Length);
             var document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 32 });
             try { ValidateTree(document.RootElement); }
             catch { document.Dispose(); throw; }
-            return document;
+            return (document, (int)bytes.Length);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or NotSupportedException)
         { throw new CatalogUnavailableException(catalog); }

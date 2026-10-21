@@ -698,7 +698,11 @@ enumerated and no model/S3 reference found inside JSON is opened.
 The concrete `JsonAiModelCatalogReadService` and
 `JsonAiBacktestCatalogReadService` validate bounded UTF-8 JSON, schema, duplicate
 properties, identities, dates and metric/accounting consistency. Files are capped
-at 8 MiB each; at most 64 report files may be selected. Errors are sanitized.
+at 8 MiB each; at most 64 report files may be selected. A backtest catalog request
+also has one 8 MiB total input budget shared by reports, benchmark comparisons and
+promotion evaluations. Actual UTF-8 bytes, including whitespace, consume the
+budget; oversized sources are rejected before decoding/validation. Exceeding the
+budget returns 502 `backtest_catalog_invalid` without partial results. Errors are sanitized.
 Registry output preserves each family's Active/Archived status, exact versions,
 training run/time, classification metrics and training/evaluation periods.
 Multiple Active families do not imply any globally selected production model.

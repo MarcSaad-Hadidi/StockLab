@@ -11,7 +11,7 @@ public sealed class JsonAiModelCatalogReadService(IOptions<AiTraderMetadataOptio
 {
     public async Task<IReadOnlyList<AiModelCatalogItem>> GetAsync(CancellationToken cancellationToken = default)
     {
-        using var document = await ReadAsync(options.Value.RegistryPath, "model", cancellationToken);
+        using var document = (await ReadAsync(options.Value.RegistryPath, "model", cancellationToken)).Document;
         try
         {
             var root = document.RootElement;

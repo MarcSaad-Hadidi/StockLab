@@ -138,6 +138,43 @@ public sealed class JsonCatalogTests : IDisposable
         Assert.True((await Assert.ThrowsAsync<CatalogUnavailableException>(() => new JsonAiModelCatalogReadService(options).GetAsync())).IsInvalid);
     }
 
+    [Theory]
+    [InlineData("backtest")]
+    [InlineData("benchmark")]
+    [InlineData("promotion")]
+    public async Task Backtest_sources_share_one_byte_budget_across_all_source_types(string secondSource)
+    {
+        const int halfBudget = 4 * 1024 * 1024;
+        var first = Write("first.json", Fixture("backtest").PadRight(halfBudget));
+        var second = Write("second.json", Fixture(secondSource).PadRight(halfBudget + 1));
+        var settings = new AiTraderMetadataOptions { BacktestReportPaths = [first] };
+        if (secondSource == "backtest") settings.BacktestReportPaths = [first, second];
+        else if (secondSource == "benchmark") settings.BenchmarkComparisonPaths = [second];
+        else settings.PromotionEvaluationPaths = [second];
+
+        var error = await Assert.ThrowsAsync<CatalogUnavailableException>(() =>
+            new JsonAiBacktestCatalogReadService(Options.Create(settings)).GetAsync());
+
+        Assert.True(error.IsInvalid);
+        Assert.Equal("backtest", error.CatalogName);
+        Assert.DoesNotContain(directory, error.ToString());
+    }
+
+    [Fact]
+    public async Task Backtest_sources_at_the_total_byte_limit_are_returned_on_each_read()
+    {
+        const int halfBudget = 4 * 1024 * 1024;
+        var settings = new AiTraderMetadataOptions
+        {
+            BacktestReportPaths = [Write("first.json", Fixture("backtest").PadRight(halfBudget))],
+            BenchmarkComparisonPaths = [Write("second.json", Fixture("benchmark").PadRight(halfBudget))]
+        };
+        var service = new JsonAiBacktestCatalogReadService(Options.Create(settings));
+
+        Assert.Equal(2, (await service.GetAsync()).Count);
+        Assert.Equal(2, (await service.GetAsync()).Count);
+    }
+
     [Fact]
     public async Task Legacy_backtest_has_exact_persisted_results_without_invented_version()
     {
