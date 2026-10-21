@@ -46,7 +46,8 @@ public sealed class AiTradesHistoryService(IDbContextFactory<StockLabDbContext> 
         new AiTradeHistoryItem(t.Id, t.OrderId, t.AiDecisionId, t.Side, t.Symbol, t.Quantity, t.ExecutionPrice,
             t.TotalAmount, t.ExecutedAtUtc, t.Decision == null ? null : new AiTradeDecisionSummary(t.Decision.Id,
                 t.Decision.Signal == "BUY" ? AiTradingSignal.Buy : t.Decision.Signal == "SELL" ? AiTradingSignal.Sell : AiTradingSignal.Hold,
-                t.Decision.Confidence, t.Decision.DecisionDate, t.Decision.ModelName, t.Decision.ModelVersion)));
+                t.Decision.Confidence, t.Decision.DecisionDate, t.Decision.ModelName, t.Decision.ModelVersion))
+            { RealizedPnL = t.RealizedPnL });
 
     private static bool IsDatabaseFailure(Exception ex) => ex is DbUpdateException or DbException
         || ex is InvalidOperationException && ex.GetBaseException() is DbException;

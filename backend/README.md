@@ -240,8 +240,8 @@ capture retry/conflict/rollback/cancellation and observed drawdown. Set
 `STOCKLAB_TEST_LOCALDB=1` for real SQL Server execution smoke, migration upgrade/
 Down preserving legacy rows, precision, constraints, rowversion and capture races.
 The real API composition registers both services scoped via
-`AddAiTraderPerformance`; it exposes no new controllers. API #80 and frontend #59
-remain separate issues.
+`AddAiTraderPerformance`. The read-only HTTP facade is documented under API #80
+below; frontend integration remains deferred to #59.
 
 The `AddAiTraderPortfolio` migration adds only these two tables. It enforces
 nonnegative cash, fixed V1 capital of 100000 USD, positive quantity/average cost,
@@ -385,7 +385,7 @@ The stored execution quantity/price may differ from the original approval.
 
 No user portfolio/holding/transaction is reused, and the user paper engine is
 unchanged. There is no real broker, controller, scheduler, ML change or frontend.
-AI API endpoints (#80) remain separate work.
+The read-only AI API (#80) below exposes these persisted results without execution.
 Tests use fake quotes and isolated SQLite/LocalDB databases. The same
 `STOCKLAB_TEST_LOCALDB=1` switch runs real simultaneous orders and rollback tests;
 they never use Azure credentials or external market APIs.
@@ -430,7 +430,7 @@ ID/summary; no association is guessed or backfilled. Null is solely legacy
 compatibility: the new execution contract always commits a real decision ID.
 The migration preserves existing trade constraints and order uniqueness; its
 Down removes only the link column, FK and index. No new trade table or endpoint
-is introduced; #80 will expose these contracts later.
+is introduced by #72; API #80 now exposes these read contracts.
 
 Tests cover fractional execution facts, BUY/SELL and closed positions, legacy
 rows, bounded deterministic queries, no N+1/tracking/writes/market calls, user
@@ -472,8 +472,8 @@ propagate. There is no fake/stale fallback, partial result or implicit FX.
 
 No saves, timestamps, cash, position/history mutations or schema changes occur.
 Current price, market value and P&L remain dynamic and are not persisted.
-The service is registered scoped in API composition. No controller is introduced;
-#80 will expose this contract for the future #59 frontend. Tests use fake quotes,
+The service is registered scoped in API composition and exposed by API #80 for
+the future #59 frontend. Tests use fake quotes,
 SQLite and isolated LocalDB databases, including actual executed BUY/additional
 BUY/partial SELL/full SELL, rollback visibility and unchanged SQL rowversions.
 
@@ -570,6 +570,222 @@ and AI table. With `STOCKLAB_TEST_LOCALDB=1`, isolated SQL Server tests exercise
 four concurrent same-reason inserts, different-reason races, full decimal
 precision, one bounded joined query, all ordering keys, strict reason codes,
 required columns, FK/PK enforcement and prevention of cascading deletion.
+
+## AI Trader HTTP API (#80)
+
+`AiTraderController` provides the backend contract for the seven AI Trader page
+sections. Every operation requires the existing `Authorization: Bearer <JWT>`;
+missing, invalid, expired or wrongly signed tokens return 401. All authenticated
+users see the same independent **system-owned** `AI_TRADER` portfolio. No route
+accepts an owner/account/portfolio selector or reads personal portfolios,
+transactions, holdings, watchlists or alerts. There are no AI write endpoints.
+
+| GET route (prefix `/api/ai-trader`) | Public response and source |
+| --- | --- |
+| `/overview` | `AiTraderOverviewResponse`, one #79 `GetMetricsAsync` call |
+| `/positions` | `AiTraderPositionResponse[]`, #71 `GetCurrentAsync` |
+| `/trades?limit=20` | `AiTraderTradeResponse[]`, #72 `GetRecentAsync` |
+| `/trades/{tradeId}` | One #72 persisted execution, unknown ID 404 |
+| `/decisions?limit=20` | `AiTraderDecisionResponse[]`, #69 raw decisions plus persisted outcomes |
+| `/decisions/{decisionId}` | One original decision with outcome, unknown ID 404 |
+| `/rejected-decisions?limit=20` | `AiTraderRejectedDecisionResponse[]`, #70 recorded risk rejections |
+| `/performance` | Complete `AiTraderPerformanceResponse`, #79 `GetMetricsAsync` |
+| `/performance/history?limit=20&startDateUtc=...&endDateUtc=...` | `AiTraderEquityResponse[]`, #79 `GetHistoryAsync` |
+| `/models` | `AiTraderModelResponse[]`, validated #75 registry metadata |
+| `/backtests` | `AiTraderBacktestResponse[]`, validated persisted #73/#74/#78 reports |
+
+All history limits default to 20 and accept **1..200**. Malformed/empty GUIDs,
+invalid limits and unordered dates return 400. Detail routes deliberately have
+no GUID route constraint so malformed IDs produce validation errors, not 404.
+History bounds are inclusive ISO 8601 timestamps with an explicit `Z` or
+`+00:00`, including seconds and optionally up to seven fractional-second digits;
+timezone-less dates and nonzero offsets are rejected. The latest matching
+observations are selected in SQL then returned chronologically, baseline first
+on timestamp ties. Other histories preserve their existing deterministic
+descending ordering, including their final ID tie-breaker.
+
+### Response contracts and precision
+
+API DTOs are separate from EF entities. JSON property names use camelCase.
+Every monetary amount, price and quantity is an **invariant decimal string**
+without grouping or conversion to `double`, including nested best/worst trades
+and backtest capital/value. SQL precision and existing business calculations
+are unchanged. Counts are JSON integers, booleans are JSON booleans. All returns,
+win rates, confidence, classification metrics and drawdowns are **numeric
+fractions**: `0.12` means 12%, and the API never multiplies by 100.
+Null means unavailable or not applicable, never zero. Technical timestamps are
+UTC ISO 8601 ending in `Z`; logical decision/training/evaluation dates are
+`YYYY-MM-DD`. Python model timestamps are normalized from explicit UTC offsets.
+
+Overview returns portfolio ID/currency, initial capital, cash, positions market
+value, total value, total P&L/return, win rate, observed max drawdown, executed
+trade/open position counts, valuation timestamp and historical coverage. It
+does not call `GetSnapshotAsync` separately. Performance adds realized/unrealized
+P&L, signed averages, best/worst realized SELL details, BUY/SELL/winning/losing/
+break-even counts, `tradeStatisticsComplete` and `unvaluedLegacySellCount`.
+Every value comes from #79, including its zero win rate when there are no SELLs
+and its nullable lifetime statistics when legacy SELL costs are missing.
+
+Positions return symbol, remaining quantity, average price, current price,
+market value and `pnL` (unrealized P&L), all in portfolio currency (USD in V1).
+Full sales disappear; partial sales retain #71's stored average cost. The API
+first reads existing state to distinguish an absent portfolio from unavailable
+quotes, then lets #71 perform the valuation. Each position receives one quote;
+no current price, market value or P&L falls back to zero or average cost.
+
+Trades contain trade/order/decision IDs, side, symbol, quantity, actual persisted
+execution price/amount/time, nullable `realizedPnL`, and an optional original
+decision summary (ID, BUY/SELL/HOLD signal, confidence, logical date, model name
+and version). BUY and unvalued legacy SELL P&L stay null. Unlinked legacy trades
+have `decisionId: null` and `decision: null`. Histories never fetch current quotes
+or replace the original model version with an Active version.
+
+Decisions return the original ID/symbol/signal/confidence/date/model identity and
+recorded timestamp, plus `executionStatus`, nullable official `rejectionReason`
+and nullable associated `tradeId`. Status is `EXECUTED` when a trade exists,
+`REJECTED` when a rejection exists, `HOLD` for an unrejected HOLD, otherwise
+`UNRESOLVED`. An unresolved decision is neither approved nor rejected. #69 reads
+the bounded page; `IAiDecisionOutcomeReadService` then queries exactly those IDs
+with LEFT JOINs to rejections and trades. This is at most two SQL reads,
+independent of page size; it does not classify from the latest 200 rejections.
+Rejection history preserves all existing `AiRiskRejectionReason` codes and adds
+the original decision metadata and `rejectedAtUtc`.
+
+Equity responses contain only `valuedAtUtc`, cash, positions value, total value,
+P&L, fractional return, currency and `isInitialBaseline`. They omit internal
+quote-observation JSON, capture identities and rowversions. Current valuation
+can differ from older observations. Drawdown describes **persisted samples**,
+not unobserved intraday/lifetime losses. Coverage exposes sample count,
+first/last timestamps and Absent/Insufficient/SampledSinceInitialization/
+PartialHistory status; fewer than two observations gives null drawdown.
+
+### Empty, unavailable and initialization
+
+An initialized portfolio without positions/trades returns 200 with empty lists;
+an available empty model registry or explicit empty backtest export also returns
+`200 []`. Missing/unconfigured/unreadable sources return 503; malformed metadata
+returns 502. These conditions are never disguised as empty results.
+Missing AI portfolio returns 404 `ai_trader_not_initialized` on overview,
+positions, performance and equity history. Raw decision/trade/rejection histories
+can still be empty or readable independently. An existing portfolio with no
+historical observations returns `200 []` for equity history.
+
+Initialization is an explicit trusted application/operator call to
+`IAiTraderPortfolioService.GetOrCreateAsync`, which creates #66's actual 100000 USD
+paper capital and baseline once. No HTTP GET initializes capital, executes risk
+or trading, records decisions/rejections, captures a valuation or changes model
+status. There is no polling, scheduler, model inference/training/promotion,
+Python invocation or ML-to-backend orchestration in #80.
+
+### Private ML metadata configuration
+
+No backend SQL ModelVersions/Backtests table is assumed or introduced. #75's
+registry schema v1 contains the public model information; #76 manifests embed
+that record plus private artifact/runtime metadata, so the reader needs neither
+the manifests nor joblib bytes. #78 promotion audits supply exact identities for
+their own evaluation evidence, never a global current model.
+
+`AiTraderMetadata` is explicitly unconfigured by default. Operators may provide
+trusted private **absolute server file paths** through configuration/User Secrets
+or environment variables. No request parameter supplies a path. For example,
+set `AiTraderMetadata__RegistryPath` to a private copy of #75 `registry.json`;
+`AiTraderMetadata__BacktestReportPaths__0` to a #73 `report.json`;
+`AiTraderMetadata__BenchmarkComparisonPaths__0` to a #74 `comparison.json`;
+and `AiTraderMetadata__PromotionEvaluationPaths__0` to a #78 evaluation envelope.
+Each array may contain explicitly selected additional paths. No directory is
+enumerated and no model/S3 reference found inside JSON is opened.
+
+The concrete `JsonAiModelCatalogReadService` and
+`JsonAiBacktestCatalogReadService` validate bounded UTF-8 JSON, schema, duplicate
+properties, identities, dates and metric/accounting consistency. Files are capped
+at 8 MiB each; at most 64 report files may be selected. A backtest catalog request
+also has one 8 MiB total input budget shared by reports, benchmark comparisons and
+promotion evaluations. Actual UTF-8 bytes, including whitespace, consume the
+budget; oversized sources are rejected before decoding/validation. Exceeding the
+budget returns 502 `backtest_catalog_invalid` without partial results. Errors are sanitized.
+Registry output preserves each family's Active/Archived status, exact versions,
+training run/time, classification metrics and training/evaluation periods.
+Multiple Active families do not imply any globally selected production model.
+
+Backtest output identifies its `evaluationSource` (`backtesting`,
+`benchmark_comparison` or `model_promotion`), exact model name, period, capital,
+final value, return, available win rate/drawdown/trade count, benchmark return/
+drawdown and return delta. Native #73/#74 lack version and generation timestamp:
+`modelVersion` and `sourceTimestampUtc` stay null. #74 also lacks win rate and
+trade count, so those stay null rather than being joined to an unproven report.
+#78 uses its verified evaluation envelope and exact candidate/active record
+identities and timestamp. BLOCKED evaluations provide no backtest entries; any
+nonempty evidence is still validated. Copy original Python exports without
+reserializing JSON numbers: audit hashing preserves Python numeric lexemes, so
+rewritten numbers require a new trusted Python export.
+A configured empty `[]` is an explicit empty backtest
+export; normal #73/#74 exports are single report objects.
+
+Exports must be published atomically by trusted operator-managed writers and
+readable only by the API service account. Integrity hashes detect changed audit
+content; they cannot authenticate a malicious replacement and are not a signing
+system. Deployment still needs an explicit trusted copy/mount/synchronization of
+real ML metadata. No AWS sync, credentials, artifact downloads or infrastructure
+changes are added. The API returns only public projection fields, never raw JSON,
+local paths, S3 keys, runtime details or secrets. Test-only Python-format exports
+under `StockLab.UnitTests/AiTraderMetadata/Fixtures` are never production sources.
+
+### Errors, OpenAPI and verification
+
+Errors reuse `ApiErrorResponse` (`error`, `message`). Automatic model validation
+uses the existing `ApiValidationErrorResponse` (`validation_error` plus sanitized
+field errors); explicit empty GUID validation uses `invalid_request`.
+
+| HTTP | Error / meaning |
+| --- | --- |
+| 400 | `validation_error` / `invalid_request` |
+| 401 | `unauthorized`, existing JWT required |
+| 404 | `ai_trader_not_initialized`, `ai_trader_trade_not_found`, `ai_trader_decision_not_found` |
+| 409 | `ai_trader_concurrency_conflict`, retry a changed portfolio state |
+| 429 | Existing `market_data_rate_limited` local provider budget |
+| 502 | Existing invalid upstream response; `model_catalog_invalid` / `backtest_catalog_invalid` |
+| 503 | `ai_trader_performance_unavailable`, `ai_trader_history_unavailable`, `model_catalog_unavailable`, `backtest_catalog_unavailable`; existing provider availability/rate-limit errors |
+| 504 | Existing market-provider timeout |
+| 500 | Sanitized unexpected server error |
+
+There is no extra authorization policy requiring 403. Provider exceptions keep
+the existing middleware mapping: upstream rate limiting is 503; local limiting
+is 429. SQL/IO/AWS exception details and configured paths are never returned or
+logged. All async reads accept request cancellation. History limits precede
+materialization and reads use `AsNoTracking`; #79's complete metrics continue to
+stream all required SELL/equity projections as documented above.
+
+All eleven GET operations, concrete response schemas, nullable fields, parameter
+constraints, statuses, descriptions and JWT security appear in Development
+`/openapi/v1.json`. The normal Production OpenAPI exposure policy is unchanged.
+HTTP integration tests use `WebApplicationFactory`, actual registration/JWT/risk/
+paper execution/history services, isolated SQLite and deterministic test quotes.
+They exercise all routes, authentication, decimal precision, absent/empty/error
+states, decision outcomes, two-user isolation, no GET mutations and OpenAPI.
+Catalog tests use Python-format test-only fixtures and corruption cases.
+
+```powershell
+dotnet restore backend/StockLab.sln
+dotnet build backend/StockLab.sln --no-restore
+$env:STOCKLAB_TEST_LOCALDB = "1" # Windows; disposable test databases only
+dotnet test backend/StockLab.sln --no-build
+```
+
+#80 requires no new migration. Deployment must explicitly verify/apply #79
+`AddAiTraderPerformanceMetrics` against the intended Azure DEV database; test
+success does not prove an Azure migration or portfolio initialization. Configure
+the existing real market provider (TwelveData) for real quotes; the repository's
+Mock provider remains a local/test configuration and is not evidence of live
+prices. Outside Development, overview, positions and performance explicitly reject
+Mock with 503 `market_data_provider_unavailable` before reading valuations;
+persisted history remains readable. No cloud data is initialized/reset by these
+HTTP endpoints.
+
+Frontend #59 remains deferred. It must parse decimal strings, format numeric
+fractions as percentages, and handle nullable metrics, source errors and multiple
+Active families. Company names, target prices, stop losses, Sharpe ratio and
+profit factor are unavailable and deliberately omitted. No frontend, Python,
+automatic trading, AWS infrastructure or #92 implementation is included.
 
 ## Market-data contracts
 
