@@ -35,3 +35,25 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 @media (max-width: 760px) {.mobile-menu-button { display: inline-flex; }.ai-trader-topbar { gap: 12px; min-height: 56px; padding: 0 14px; }.topbar-actions { gap: 4px; }.global-search { width: min(36vw,210px); }.ai-trader-content { padding: 18px 12px 27px; }.ai-trader-heading { align-items: flex-start; flex-direction: column; gap: 14px; }.heading-actions { width: 100%; justify-content: flex-start; }.ai-tabs { gap: 17px; }.metric-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }.overview-grid-top, .overview-grid-bottom { grid-template-columns: 1fr; }.rejected-panel, .stats-panel { grid-column: auto; }.panel { padding: 15px 14px 13px; }.standalone-panel .data-table { min-width: 590px; } }
 @media (max-width: 520px) { .global-search, .mail-button { display: none; }.ai-trader-heading p { font-size: 10px; }.heading-actions { display: grid; grid-template-columns: 1fr 1fr; }.heading-actions .primary-button { grid-column: 1 / -1; }.ai-tabs { gap: 12px; }.metric-grid { grid-template-columns: 1fr; }.metric-card { min-height: 88px; }.overview-grid-top, .overview-grid-bottom { gap: 12px; }.simulation-note { justify-content: center; text-align: center; }.stats-content, .backtest-content { grid-template-columns: 1fr; }.sparkline { max-width: 220px; justify-self: end; }.model-version-row { flex-wrap: wrap; }.standalone-panel .data-table { min-width: 590px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+
+.ai-resource-state { padding: 22px 10px; color: #637189; text-align: center; font-size: 12px; }
+.ai-resource-state[role="alert"] { color: #9b4750; }
+.ai-resource-state .outline-button { margin-top: 6px; }
+.ai-trader-page button:disabled { cursor: not-allowed; opacity: .6; transform: none; box-shadow: none; }
+.ai-trader-page .outline-button { padding: 7px 10px; border: 1px solid #dce4ef; border-radius: 6px; background: #fff; color: #4162ae; font-size: 11px; }
+.ai-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; margin: 16px 0 0; }
+.ai-metrics div { min-width: 0; }
+.ai-metrics dt { color: #7b889d; font-size: 10px; }
+.ai-metrics dd { overflow-wrap: anywhere; margin: 4px 0 0; color: #34425c; font-size: 11px; font-weight: 600; }
+.ai-coverage-note { color: #7b889d; font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
+.ai-model-family h3 { color: #34425c; font-size: 13px; margin: 18px 0 4px; }
+.ai-model-version { padding-bottom: 12px; border-bottom: 1px solid #e8edf4; }
+.execution-status { display: inline-block; padding: 3px 5px; color: #637189; background: #f1f4fa; border-radius: 4px; }
+.ai-backtest-select { display: flex; gap: 8px; flex-direction: column; margin-top: 14px; font-size: 11px; color: #637189; }
+.ai-backtest-select select { min-width: 0; width: 100%; padding: 8px; border: 1px solid #dce4ef; border-radius: 5px; color: #34425c; background: #fff; }
+.ai-details { margin-top: 18px; }
+.ai-trader-page .table-scroll { max-width: 100%; }
+.ai-trader-page .data-table td { font-size: 10px; }
+.ai-trader-page .data-table th { font-size: 9px; }
+.ai-trader-page .data-table td.positive { color: var(--green); }
+.ai-trader-page .data-table td.negative { color: var(--red); }

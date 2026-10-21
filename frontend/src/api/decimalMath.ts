@@ -1,4 +1,4 @@
-import { isCalculatedAmount } from './decimalAmount'
+import { isBackendAmount, isCalculatedAmount } from './decimalAmount'
 
 const scale = 12
 
@@ -68,4 +68,11 @@ export function amountSign(value: string): number {
 export function amountPercent(numerator: string, denominator: string): number | null {
   const divisor = units(denominator)
   return divisor === 0n ? null : Number(units(numerator)) / Number(divisor) * 100
+}
+
+/** P&L / (quantity × average price), retaining all backend decimal digits in BigInt. */
+export function productPercent(numerator: string, left: string, right: string): number | null {
+  if (![numerator, left, right].every(isBackendAmount)) throw new Error('Invalid decimal operand')
+  const divisor = normalizedUnits(left, 28) * normalizedUnits(right, 28)
+  return divisor === 0n ? null : Number(normalizedUnits(numerator, 28) * 10n ** 28n) / Number(divisor) * 100
 }

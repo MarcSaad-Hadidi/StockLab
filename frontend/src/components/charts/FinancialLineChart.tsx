@@ -15,6 +15,7 @@ type FinancialLineChartProps = {
   pointLabel?: (index: number) => string
   showLatestValue?: boolean
   size?: 'default' | 'compact'
+  curve?: 'linear' | 'monotoneX'
 }
 
 function NoTooltip() {
@@ -105,7 +106,7 @@ export function FinancialLineChart(props: FinancialLineChartProps) {
           tickLabelStyle: { fontSize: 11, fill: '#74839a', fontFamily: 'inherit' },
         }]}
         series={[{
-          id: 'value', data: values, color: '#2f7bf0', curve: 'monotoneX',
+          id: 'value', data: values, color: '#2f7bf0', curve: props.curve ?? 'monotoneX',
           area: true, baseline: min, showMark: false, disableHighlight: true,
           valueFormatter: value => value === null ? '' : formatValue(value),
         }]}
