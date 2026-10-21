@@ -15,6 +15,7 @@ public sealed class PaperTradingPrecisionSqlServerTests
 {
     private const decimal InitialCapital = 999_999_999_999_999.9999m;
     private const string PreviousMigration = "20261004011946_IndexAiTradeHistory";
+    private const string PrecisionMigration = "20261005015352_PreservePaperTradingAmountPrecision";
 
     [LocalDbTheory]
     [InlineData("1", "1.2345", "0.5", "1.2345")]
@@ -180,12 +181,13 @@ public sealed class PaperTradingPrecisionSqlServerTests
     private static async Task AssertDowngradeBlockedAsync(StockLabDbContext db)
     {
         var applied = (await db.Database.GetAppliedMigrationsAsync()).ToArray();
+        var pending = (await db.Database.GetPendingMigrationsAsync()).ToArray();
         var error = await Assert.ThrowsAsync<SqlException>(() =>
             db.GetService<IMigrator>().MigrateAsync(PreviousMigration));
         Assert.Equal(51021, error.Number);
         Assert.Contains("cannot be represented exactly as decimal(19,4)", error.Message);
         Assert.Equal(applied, (await db.Database.GetAppliedMigrationsAsync()).ToArray());
-        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
+        Assert.Equal(pending, (await db.Database.GetPendingMigrationsAsync()).ToArray());
         await AssertMoneyColumnScaleAsync(db, 12);
     }
 
@@ -217,7 +219,8 @@ public sealed class PaperTradingPrecisionSqlServerTests
                 if (previousSchema)
                     await db.GetService<IMigrator>().MigrateAsync(PreviousMigration);
                 else
-                    await db.Database.MigrateAsync();
+                    // Exercise this migration's rollback guard independently of newer migrations' Down steps.
+                    await db.GetService<IMigrator>().MigrateAsync(PrecisionMigration);
                 db.Users.Add(new User
                 {
                     Id = fixture.UserId, DisplayName = "Precision Test", Email = "precision@example.com",

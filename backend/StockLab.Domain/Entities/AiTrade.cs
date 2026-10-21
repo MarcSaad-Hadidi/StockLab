@@ -16,6 +16,8 @@ public sealed class AiTrade
     public decimal Quantity { get; set; }
     public decimal ExecutionPrice { get; set; }
     public decimal TotalAmount { get; set; }
+    // Null for BUY and legacy SELL whose acquisition cost was not recorded.
+    public decimal? RealizedPnL { get; set; }
     public DateTime ExecutedAtUtc { get; set; }
     // Preserve the committed response even after subsequent orders change the portfolio.
     public decimal CashBalanceAfter { get; set; }

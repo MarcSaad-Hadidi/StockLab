@@ -169,9 +169,13 @@ public sealed class AiTradesHistorySqlServerTests
         await using var f = new AiCurrentPositionsFixture(connection, null);
         await using var db = f.CreateDbContext();
         await db.GetService<IMigrator>().MigrateAsync(PreviousMigration);
-        var portfolio = await f.InitializeAsync();
-        var first = Trade(portfolio.PortfolioId, Id(1), AiCurrentPositionsFixture.Now.UtcDateTime);
-        var second = Trade(portfolio.PortfolioId, Id(2), AiCurrentPositionsFixture.Now.UtcDateTime);
+        // Seed through the pre-#79 schema: the current initializer also writes a valuation baseline.
+        var portfolio = new AiTraderPortfolio { Id = Guid.NewGuid(), CreatedAtUtc = AiCurrentPositionsFixture.Now.UtcDateTime,
+            UpdatedAtUtc = AiCurrentPositionsFixture.Now.UtcDateTime };
+        db.AiTraderPortfolios.Add(portfolio);
+        await db.SaveChangesAsync();
+        var first = Trade(portfolio.Id, Id(1), AiCurrentPositionsFixture.Now.UtcDateTime);
+        var second = Trade(portfolio.Id, Id(2), AiCurrentPositionsFixture.Now.UtcDateTime);
         foreach (var trade in new[] { first, second })
             await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO AiTrades (Id, AiTraderPortfolioId, OrderId, OrderFingerprint, Side, Symbol, Quantity, ExecutionPrice, TotalAmount, ExecutedAtUtc, CashBalanceAfter, PositionQuantityAfter, AverageCostAfter) VALUES ({trade.Id}, {trade.AiTraderPortfolioId}, {trade.OrderId}, {trade.OrderFingerprint}, {trade.Side}, {trade.Symbol}, {trade.Quantity}, {trade.ExecutionPrice}, {trade.TotalAmount}, {trade.ExecutedAtUtc}, {trade.CashBalanceAfter}, {trade.PositionQuantityAfter}, {trade.AverageCostAfter})");
         await db.Database.MigrateAsync();

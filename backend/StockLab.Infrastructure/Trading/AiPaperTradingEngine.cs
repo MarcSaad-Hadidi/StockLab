@@ -88,6 +88,10 @@ public sealed class AiPaperTradingEngine(
                 throw new AiTradeExecutionException(AiTradeExecutionFailure.StorageCapacityExceeded);
 
             var now = timeProvider.GetUtcNow().UtcDateTime;
+            var realizedPnL = decision.Signal == AiTradingSignal.Sell
+                ? Money(total - quantity * holding!.AverageCost) : (decimal?)null;
+            if (realizedPnL is < -MaxStoredMoney or > MaxStoredMoney)
+                throw new AiTradeExecutionException(AiTradeExecutionFailure.StorageCapacityExceeded);
             if (decision.Signal == AiTradingSignal.Buy)
             {
                 if (total > portfolio.CashBalance)
@@ -134,6 +138,7 @@ public sealed class AiPaperTradingEngine(
                 Id = Guid.NewGuid(), AiTraderPortfolioId = portfolio.Id, OrderId = request.OrderId, AiDecisionId = request.DecisionId,
                 OrderFingerprint = fingerprint, Side = decision.Signal == AiTradingSignal.Buy ? "BUY" : "SELL",
                 Symbol = decision.Symbol, Quantity = quantity, ExecutionPrice = price, TotalAmount = total,
+                RealizedPnL = realizedPnL,
                 ExecutedAtUtc = now, CashBalanceAfter = portfolio.CashBalance,
                 PositionQuantityAfter = holding?.Quantity ?? 0m, AverageCostAfter = holding?.AverageCost
             };
