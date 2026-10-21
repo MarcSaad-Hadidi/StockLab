@@ -21,6 +21,7 @@ using StockLab.Infrastructure.Trading;
 using StockLab.Infrastructure.Portfolios;
 using StockLab.Infrastructure.Watchlists;
 using StockLab.Infrastructure.Alerts;
+using StockLab.Infrastructure.AiTraderMetadata;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -76,6 +77,10 @@ builder.Services.AddAiDecisionHistory();
 builder.Services.AddAiRejectedDecisionHistory();
 builder.Services.AddAiTradesHistory();
 builder.Services.AddAiTraderPerformance();
+builder.Services.AddScoped<IAiDecisionOutcomeReadService, AiDecisionOutcomeReadService>();
+builder.Services.Configure<AiTraderMetadataOptions>(builder.Configuration.GetSection(AiTraderMetadataOptions.SectionName));
+builder.Services.AddScoped<IAiModelCatalogReadService, JsonAiModelCatalogReadService>();
+builder.Services.AddScoped<IAiBacktestCatalogReadService, JsonAiBacktestCatalogReadService>();
 builder.Services.AddOptions<JwtOptions>()
     .Bind(builder.Configuration.GetSection(JwtOptions.SectionName))
     .Validate(options => options.IsValid(), JwtOptions.ValidationMessage)

@@ -11,4 +11,7 @@ public sealed record AiTradeHistoryItem(
     decimal ExecutionPrice,
     decimal TotalAmount,
     DateTime ExecutedAtUtc,
-    AiTradeDecisionSummary? Decision);
+    AiTradeDecisionSummary? Decision)
+{
+    public decimal? RealizedPnL { get; init; }
+}

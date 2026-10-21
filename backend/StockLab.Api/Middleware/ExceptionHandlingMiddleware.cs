@@ -41,6 +41,7 @@ public sealed class ExceptionHandlingMiddleware(
         }
         catch (Exception exception)
         {
+            var aiTraderError = AiTraderErrors.From(exception, context);
             var enrichment = exception as MarketEnrichmentException;
             var performanceUnavailable = exception is PortfolioPerformanceUnavailableException;
             var invalidRequest = exception is ArgumentException or NotSupportedException;
@@ -61,7 +62,7 @@ public sealed class ExceptionHandlingMiddleware(
             }
 
             context.Response.Clear();
-            context.Response.StatusCode = performanceUnavailable ? StatusCodes.Status503ServiceUnavailable : enrichment is not null ? enrichment.Category switch
+            context.Response.StatusCode = aiTraderError?.Status ?? (performanceUnavailable ? StatusCodes.Status503ServiceUnavailable : enrichment is not null ? enrichment.Category switch
             {
                 MarketEnrichmentFailure.LocalBudgetExceeded => 429,
                 MarketEnrichmentFailure.Timeout => 504,
@@ -69,15 +70,15 @@ public sealed class ExceptionHandlingMiddleware(
                 _ => 503
             } : providerFailure is not null ? ProviderStatus(providerFailure.Category) : rateLimited ? StatusCodes.Status429TooManyRequests : invalidRequest
                 ? StatusCodes.Status400BadRequest
-                : StatusCodes.Status500InternalServerError;
+                : StatusCodes.Status500InternalServerError);
 
-            var error = performanceUnavailable ? new ApiErrorResponse("portfolio_performance_unavailable", "Current market prices are unavailable for this portfolio.") : enrichment is not null ? new ApiErrorResponse("market_enrichment_temporarily_unavailable", "Market enrichment is temporarily unavailable.") : providerFailure is not null ? ProviderError(providerFailure.Category) : rateLimited
+            var error = aiTraderError?.Body ?? (performanceUnavailable ? new ApiErrorResponse("portfolio_performance_unavailable", "Current market prices are unavailable for this portfolio.") : enrichment is not null ? new ApiErrorResponse("market_enrichment_temporarily_unavailable", "Market enrichment is temporarily unavailable.") : providerFailure is not null ? ProviderError(providerFailure.Category) : rateLimited
                 ? new ApiErrorResponse("market_data_rate_limited", "Market data requests are temporarily rate limited.")
                 : exception is NotSupportedException
                 ? new ApiErrorResponse("unsupported_operation", "The requested operation or interval is not supported.")
                 : invalidRequest
                 ? new ApiErrorResponse("invalid_request", "The request is invalid.")
-                : new ApiErrorResponse("internal_server_error", "An unexpected error occurred.");
+                : new ApiErrorResponse("internal_server_error", "An unexpected error occurred."));
             await context.Response.WriteAsJsonAsync(error, context.RequestAborted);
         }
     }

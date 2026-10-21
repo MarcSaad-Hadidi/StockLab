@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "sha256": "bdd29898066efda61aa534298a894798662a88db0d6465345b695fdafd242392",
+  "payload": {
+    "evaluation_id": "ceaed011-c27a-425b-b04a-e05f0af98294",
+    "model_name": "logistic_regression_baseline",
+    "active_model_version": "v000002",
+    "candidate_model_version": "v000002",
+    "decision": "BLOCKED",
+    "reason_codes": [
+      "ALREADY_ACTIVE"
+    ],
+    "policy_snapshot": {
+      "minimum_evaluation_rows": 30,
+      "minimum_accuracy": 0.5,
+      "minimum_f1": 0.5,
+      "minimum_return_improvement": 0.0,
+      "maximum_drawdown_increase": 0.0,
+      "require_benchmark_comparison": true,
+      "require_benchmark_outperformance": false,
+      "minimum_sample_symbols": 1,
+      "minimum_forward_rows": 0
+    },
+    "request_sha256": "3c3978a93aabcd108891f4b2dffb7c696ec0ef6ce890cca9a0ccd8ffd20963c7",
+    "evaluated_at_utc": "2026-10-20T12:00:00+00:00",
+    "evidence": {}
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "benchmark": {
+    "initial_capital": 100000.0,
+    "final_cash": 0.0,
+    "final_positions_value": 105000.0,
+    "final_value": 105000.0,
+    "total_return": 0.050000000000000044,
+    "max_drawdown": 0.13636363636363635,
+    "start_date": "2024-01-05",
+    "end_date": "2024-01-10",
+    "symbols": [
+      "AAPL",
+      "MSFT"
+    ],
+    "symbol_count": 2,
+    "invested_symbols": [
+      "AAPL",
+      "MSFT"
+    ],
+    "uninvested_symbols": [],
+    "weighting_method": "equal_weight",
+    "entry_timing": "first observed session open strictly after start_date, at or before end_date",
+    "valuation_timing": "EOD latest observed close <= equity date; no final liquidation",
+    "quantity_decimals": 8,
+    "commission": 0.0,
+    "slippage": 0.0,
+    "dividends_included": false,
+    "price_adjustment_note": "Prices as supplied by the cleaned dataset; no additional split adjustment."
+  },
+  "comparison": {
+    "model_name": "synthetic_example",
+    "start_date": "2024-01-05",
+    "end_date": "2024-01-10",
+    "symbols": [
+      "AAPL",
+      "MSFT"
+    ],
+    "equity_dates": [
+      "2024-01-05",
+      "2024-01-08",
+      "2024-01-09",
+      "2024-01-10"
+    ],
+    "initial_capital": 100000.0,
+    "ai_final_value": 101000.0,
+    "ai_total_return": 0.010000000000000009,
+    "ai_max_drawdown": 0.029411764705882353,
+    "benchmark_final_value": 105000.0,
+    "benchmark_total_return": 0.050000000000000044,
+    "benchmark_max_drawdown": 0.13636363636363635,
+    "final_value_delta": -4000.0,
+    "return_delta": -0.040000000000000036,
+    "same_initial_capital": true,
+    "same_period": true,
+    "same_symbols": true,
+    "same_equity_dates": true,
+    "benchmark_method": "equal_weight_buy_and_hold"
+  }
+}
