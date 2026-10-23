@@ -11,6 +11,7 @@ type PerformanceLineChartProps = {
   unavailableMessage: string
   showLatestValue?: boolean
   size?: 'default' | 'compact'
+  curve?: 'linear' | 'monotoneX'
 }
 
 function chartDomain(values: readonly number[]) {
@@ -39,6 +40,7 @@ export function PerformanceLineChart({
   unavailableMessage,
   showLatestValue = false,
   size = 'default',
+  curve,
 }: PerformanceLineChartProps) {
   if (!hasUsableSeries(values, labels)) {
     return (
@@ -61,6 +63,7 @@ export function PerformanceLineChart({
       showLatestValue={showLatestValue}
       size={size}
       values={[...values]}
+      curve={curve}
     />
   )
 }

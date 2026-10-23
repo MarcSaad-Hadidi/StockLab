@@ -1,12 +1,12 @@
 import { i18n } from './i18n.ts'
-import { isCalculatedAmount, isDecimalAmount, isPositiveOperand } from '../api/decimalAmount.ts'
+import { isBackendAmount, isCalculatedAmount, isDecimalAmount, isPositiveOperand } from '../api/decimalAmount.ts'
 
 export function localeForLanguage(language = i18n.language) {
   return language === 'fr' ? 'fr-FR' : 'en-US'
 }
 
-export function formatCurrency(value: number | string | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
-  if (typeof value === 'string') return formatTradeAmount(value, language, fractionDigits, currency)
+export function formatCurrency(value: number | string | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD', backendPrecision = false) {
+  if (typeof value === 'string') return formatTradeAmount(value, language, fractionDigits, currency, backendPrecision)
   if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   return new Intl.NumberFormat(localeForLanguage(language), {
     currency,
@@ -17,10 +17,10 @@ export function formatCurrency(value: number | string | null | undefined, langua
 }
 
 /** Preserve the twelve-decimal trade amount while keeping each view's usual minimum precision. */
-export function formatTradeAmount(value: string | null | undefined, language = i18n.language, minimumFractionDigits = 2, currency = 'USD') {
-  if (!isCalculatedAmount(value)) return '—'
+export function formatTradeAmount(value: string | null | undefined, language = i18n.language, minimumFractionDigits = 2, currency = 'USD', backendPrecision = false) {
+  if (!isCalculatedAmount(value) && !(backendPrecision && isBackendAmount(value))) return '—'
   const formatter = new Intl.NumberFormat(localeForLanguage(language), {
-    currency, minimumFractionDigits, maximumFractionDigits: 12, style: 'currency',
+    currency, minimumFractionDigits, maximumFractionDigits: backendPrecision ? 28 : 12, style: 'currency',
   })
   // Intl formats decimal strings losslessly. TypeScript's declaration still omits that overload.
   return (formatter.format as unknown as (decimal: string) => string)(value)
@@ -37,10 +37,10 @@ export function formatCompactCurrency(value: number | string | null | undefined,
   }).format(value as number)
 }
 
-export function formatSignedCurrency(value: number | string | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD') {
+export function formatSignedCurrency(value: number | string | null | undefined, language = i18n.language, fractionDigits = 2, currency = 'USD', backendPrecision = false) {
   if (typeof value === 'string') {
-    if (!isCalculatedAmount(value)) return '—'
-    return `${value.startsWith('-') ? '-' : '+'}${formatTradeAmount(value.replace(/^-/, ''), language, fractionDigits, currency)}`
+    if (!isCalculatedAmount(value) && !(backendPrecision && isBackendAmount(value))) return '—'
+    return `${value.startsWith('-') ? '-' : '+'}${formatTradeAmount(value.replace(/^-/, ''), language, fractionDigits, currency, backendPrecision)}`
   }
   if (value === null || value === undefined || !Number.isFinite(value)) return '—'
   return `${value >= 0 ? '+' : '-'}${formatCurrency(Math.abs(value), language, fractionDigits, currency)}`

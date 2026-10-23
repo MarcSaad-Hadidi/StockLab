@@ -20,3 +20,10 @@ export function isPositiveAmount(value: unknown): value is string {
 export function isPositiveOperand(value: unknown): value is string {
   return typeof value === 'string' && /^(?:0|[1-9]\d{0,28})(?:\.\d{1,28})?$/.test(value) && /[1-9]/.test(value)
 }
+
+/** The AI HTTP DTOs serialize the full System.Decimal range, including scale 28. */
+export function isBackendAmount(value: unknown): value is string {
+  if (isDecimalAmount(value)) return BigInt(value.replace(/[-.]/g, '')) <= 79228162514264337593543950335n
+  return typeof value === 'string' && /^-?(?:0|[1-9]\d{0,28})(?:\.\d{1,28})?$/.test(value)
+    && BigInt(value.replace(/[-.]/g, '')) <= 79228162514264337593543950335n
+}

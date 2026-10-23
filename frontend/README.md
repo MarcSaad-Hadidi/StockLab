@@ -151,7 +151,7 @@ real-data verification uses TwelveData configured externally. Trading controls o
 | Transactions | Empty history; execution prices are never replaced with current prices; filters/table retained |
 | Watchlist | Empty list pending persistence; no manufactured saved stocks or market status |
 | Alerts | Empty alerts; draft asset search uses Twelve; saving/monitoring unavailable |
-| AI Trader | Empty positions/decisions/trades/model/backtests; metrics unavailable and activation disabled |
+| AI Trader | Connected by #59 to validated, JWT-protected backend #80 reads; empty/unavailable states reflect actual responses; execution remains disabled |
 | Profile | Explicit preview label; existing profile mock remains a known auth/persistence gap |
 | Login / Register | Existing authentication previews, unchanged; no real auth in #82 |
 

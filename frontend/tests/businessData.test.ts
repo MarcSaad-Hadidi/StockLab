@@ -10,7 +10,6 @@ import * as dashboard from "../src/dashboard/dashboardData.ts";
 import * as portfolio from "../src/portfolio/portfolioData.ts";
 import * as transactions from "../src/transactions/transactionsData.ts";
 import * as alerts from "../src/alerts/alertsData.ts";
-import * as ai from "../src/ai-trader/aiTraderData.ts";
 import {
   formatCurrency,
   formatSignedCurrency,
@@ -55,11 +54,6 @@ test("unconnected business services contain no manufactured holdings, orders, al
     transactions.transactions,
     alerts.initialAlerts,
     alerts.assetOptions,
-    ai.positions,
-    ai.currentDecisions,
-    ai.rejectedDecisions,
-    ai.recentTrades,
-    ai.modelHistory,
   ])
     assert.deepEqual(rows, []);
   for (const metric of dashboard.metrics) {
@@ -71,10 +65,6 @@ test("unconnected business services contain no manufactured holdings, orders, al
     ...Object.values(portfolio.performanceSeries),
   ])
     assert.deepEqual(series.values, []);
-  assert.deepEqual(ai.performanceSeries, []);
-  assert.equal(ai.currentModel, null);
-  assert.ok(Object.values(ai.traderSummary).every((value) => value === null));
-  assert.ok(Object.values(ai.backtestSummary).every((value) => value === null));
   assert.equal(transactions.transactionSummary.netPnl, null);
 });
 
@@ -96,7 +86,7 @@ for (const [path, label] of [
   ["transactions/TransactionsPage", "Your session has expired. Please sign in again."],
   ["watchlist/WatchlistPage", "Loading watchlist"],
   ["alerts/AlertsPage", "No alerts"],
-  ["ai-trader/AITraderPage", "AI Trader is not available yet"],
+  ["ai-trader/AITraderPage", "Your session has expired. Please sign in again."],
 ] as const)
   test(`${path} renders its original sections without fake business data`, async () => {
     const { i18n } = await import("../src/i18n/i18n.ts");
