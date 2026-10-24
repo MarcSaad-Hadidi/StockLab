@@ -14,6 +14,7 @@ public sealed class AiDecisionOutcomeReadTests
     }
 
     [LocalDbFact]
+    [Trait("Category", "SqlServer")]
     public async Task SQL_Server_reads_exact_outcomes_in_one_detached_join()
     {
         await using var f = await AiCurrentPositionsFixture.CreateAsync(sqlServer: true);

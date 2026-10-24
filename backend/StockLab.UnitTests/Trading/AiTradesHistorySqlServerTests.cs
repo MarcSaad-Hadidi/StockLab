@@ -13,6 +13,7 @@ using static StockLab.UnitTests.Trading.AiTradesHistoryServiceTests;
 
 namespace StockLab.UnitTests.Trading;
 
+[Trait("Category", "SqlServer")]
 public sealed class AiTradesHistorySqlServerTests
 {
     private const string PreviousMigration = "20261003233535_AddAiRejectedDecisions";

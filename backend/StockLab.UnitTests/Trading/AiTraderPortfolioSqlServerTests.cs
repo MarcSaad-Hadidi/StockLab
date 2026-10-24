@@ -7,6 +7,7 @@ using StockLab.Infrastructure.Trading;
 
 namespace StockLab.UnitTests.Trading;
 
+[Trait("Category", "SqlServer")]
 public sealed class AiTraderPortfolioSqlServerTests
 {
     [LocalDbFact]

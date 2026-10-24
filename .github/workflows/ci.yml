@@ -53,7 +53,7 @@ jobs:
 
       - name: test
         working-directory: backend
-        run: dotnet test StockLab.sln --configuration Release --no-build --no-restore --filter "FullyQualifiedName!~SqlServer" --logger trx --results-directory test-results
+        run: dotnet test StockLab.sln --configuration Release --no-build --no-restore --filter "Category!=SqlServer" --logger trx --results-directory test-results
 
   backend-sql-server:
     name: backend sql server tests
@@ -106,7 +106,7 @@ jobs:
       - name: discover sql server cases
         shell: pwsh
         run: |
-          $discovery = & dotnet test backend/StockLab.sln --configuration Release --no-build --no-restore --list-tests --filter 'FullyQualifiedName~SqlServer'
+          $discovery = & dotnet test backend/StockLab.sln --configuration Release --no-build --no-restore --list-tests --filter 'Category=SqlServer'
           if ($LASTEXITCODE -ne 0) { throw 'SQL Server test discovery failed.' }
           $tests = @($discovery | ForEach-Object { $_.Trim() } | Where-Object { $_.StartsWith('StockLab.UnitTests.') })
           if ($tests.Count -eq 0) { throw 'No SQL Server tests were discovered.' }
@@ -116,7 +116,7 @@ jobs:
           Write-Output "Discovered $($tests.Count) SQL Server cases."
 
       - name: test sql server
-        run: dotnet test backend/StockLab.sln --configuration Release --no-build --no-restore --filter "FullyQualifiedName~SqlServer" --logger "trx;LogFileName=sql-server.trx" --results-directory "${{ runner.temp }}/sql-server-results"
+        run: dotnet test backend/StockLab.sln --configuration Release --no-build --no-restore --filter "Category=SqlServer" --logger "trx;LogFileName=sql-server.trx" --results-directory "${{ runner.temp }}/sql-server-results"
 
       - name: require every sql server case to pass
         if: always()
