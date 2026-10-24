@@ -127,14 +127,16 @@
   }
 }
 
+@media (max-width: 760px) {
+  .app-topbar-menu {
+    display: inline-flex;
+  }
+}
+
 @media (max-width: 600px) {
   .app-topbar {
     min-height: 61px;
     padding-inline: 14px;
-  }
-
-  .app-topbar-menu {
-    display: inline-flex;
   }
 
   .app-topbar-actions {
