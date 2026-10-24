@@ -12,8 +12,6 @@
   min-width: 0;
   margin-left: 0;
 }
-.stocklab-layout button[aria-label="Open navigation"] { display: none; }
 @media (max-width: 760px) {
   .stocklab-layout.stocklab-layout { padding-left: 0; }
-  .stocklab-layout button[aria-label="Open navigation"] { display: inline-flex; }
 }
