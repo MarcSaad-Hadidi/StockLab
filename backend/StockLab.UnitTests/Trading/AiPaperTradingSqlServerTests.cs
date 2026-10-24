@@ -12,6 +12,7 @@ using static StockLab.UnitTests.Trading.AiPaperTradingEngineTests;
 
 namespace StockLab.UnitTests.Trading;
 
+[Trait("Category", "SqlServer")]
 public sealed class AiPaperTradingSqlServerTests
 {
     [LocalDbTheory]

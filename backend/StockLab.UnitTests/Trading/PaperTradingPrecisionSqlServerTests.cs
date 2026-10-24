@@ -11,6 +11,7 @@ using StockLab.Infrastructure.Trading;
 
 namespace StockLab.UnitTests.Trading;
 
+[Trait("Category", "SqlServer")]
 public sealed class PaperTradingPrecisionSqlServerTests
 {
     private const decimal InitialCapital = 999_999_999_999_999.9999m;

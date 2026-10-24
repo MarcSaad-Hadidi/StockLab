@@ -1,4 +1,4 @@
-"""Fail CI unless every discovered SQL Server test executed and passed."""
+"""Fail CI unless every category-discovered SQL Server test executed and passed."""
 
 import argparse
 from collections import Counter
@@ -11,8 +11,8 @@ def verify(trx: Path, expected_tests: Path) -> int:
     expected = expected_tests.read_text(encoding="utf-8-sig").splitlines()
     if not expected or len(set(expected)) != len(expected):
         raise ValueError("SQL Server discovery must contain unique, nonempty test cases.")
-    if any(not name.startswith("StockLab.UnitTests.") or "SqlServer" not in name for name in expected):
-        raise ValueError("Discovery contains a case outside the SQL Server test group.")
+    if any(not name.startswith("StockLab.UnitTests.") for name in expected):
+        raise ValueError("Discovery contains a case outside the backend test assembly.")
 
     report = ET.parse(trx)
     results = report.findall(".//{*}UnitTestResult")

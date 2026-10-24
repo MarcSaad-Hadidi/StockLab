@@ -835,7 +835,7 @@ randomness or wall-clock dependency is used.
 The workflow in `.github/workflows/ci.yml` separates the backend suite:
 
 - `backend build and tests` runs on Ubuntu with
-  `FullyQualifiedName!~SqlServer`, without database-server credentials.
+  `Category!=SqlServer`, without database-server credentials.
 - `backend sql server tests` runs on `windows-2022`, starts `MSSQLLocalDB` and
   sets `STOCKLAB_TEST_LOCALDB=1`. SQL Server LocalDB is part of the
   [Windows runner image](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md)
@@ -843,8 +843,13 @@ The workflow in `.github/workflows/ci.yml` separates the backend suite:
   concurrent writes. Tests use Windows integrated authentication and randomly
   named disposable databases; application/Azure connection settings are not used.
 
-Classes requiring the real engine include `SqlServer` in their fully qualified
-name. The SQL job discovers every case with `FullyQualifiedName~SqlServer` before
+Tests requiring the real engine declare `[Trait("Category", "SqlServer")]` on
+their class, or on individual methods in a mixed SQLite/SQL Server class such as
+`AiDecisionOutcomeReadTests`. Add this trait when introducing a SQL Server test;
+the LocalDB opt-in attributes control availability, not categorization. Class
+and method names have no effect on the selection.
+
+The SQL job discovers every case with `Category=SqlServer` before
 running that same filter. `.github/scripts/verify_sql_test_results.py` compares
 the discovery manifest with the TRX report, including each parameterized case.
 Missing, skipped, failed, duplicated or extra results, empty discovery and
@@ -855,12 +860,12 @@ including when a test or verification step fails.
 Run the two groups locally from the repository root:
 
 ```powershell
-dotnet test backend/StockLab.sln --configuration Release --filter 'FullyQualifiedName!~SqlServer'
+dotnet test backend/StockLab.sln --configuration Release --filter 'Category!=SqlServer'
 
 # Windows with SQL Server LocalDB installed; disposable databases only.
 $env:STOCKLAB_TEST_LOCALDB = '1'
 $env:STOCKLAB_PRICE_ALERTS_SQL_CONNECTION = ''
-dotnet test backend/StockLab.sln --configuration Release --filter 'FullyQualifiedName~SqlServer'
+dotnet test backend/StockLab.sln --configuration Release --filter 'Category=SqlServer'
 ```
 
 The price-alert SQL tests now share this LocalDB opt-in, applying the repository

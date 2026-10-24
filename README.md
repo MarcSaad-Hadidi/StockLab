@@ -355,7 +355,7 @@ Lancez ces commandes depuis la racine du dépôt :
 
     # Backend
     dotnet build backend/StockLab.sln
-    dotnet test backend/StockLab.sln --filter "FullyQualifiedName!~SqlServer"
+    dotnet test backend/StockLab.sln --filter "Category!=SqlServer"
 
     # ML
     python -m pytest ml
@@ -367,10 +367,10 @@ Sous Windows avec SQL Server LocalDB installé et démarré, lancez séparément
 ```powershell
 $env:STOCKLAB_TEST_LOCALDB = '1'
 $env:STOCKLAB_PRICE_ALERTS_SQL_CONNECTION = ''
-dotnet test backend/StockLab.sln --filter 'FullyQualifiedName~SqlServer'
+dotnet test backend/StockLab.sln --filter 'Category=SqlServer'
 ```
 
-Ces tests utilisent des bases LocalDB isolées, pas la connexion Azure de l’application. Sans configuration SQL, un `dotnet test` global peut signaler ces cas comme ignorés : cela ne valide pas les scénarios de concurrence et de `rowversion`. Voir la [documentation des tests CI backend](backend/README.md#backend-test-ci).
+Ces tests portent le trait xUnit `[Trait("Category", "SqlServer")]` : leur sélection ne dépend pas du nom de la classe ou de la méthode. Ils utilisent des bases LocalDB isolées, pas la connexion Azure de l’application. Sans configuration SQL, un `dotnet test` global peut signaler ces cas comme ignorés : cela ne valide pas les scénarios de concurrence et de `rowversion`. Voir la [documentation des tests CI backend](backend/README.md#backend-test-ci).
 
 ## Intégration continue
 

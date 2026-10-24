@@ -6,6 +6,7 @@ using static StockLab.UnitTests.Api.PriceAlertsApiTests;
 namespace StockLab.UnitTests.Api;
 
 /// <summary>SQL Server smoke using disposable LocalDB or an explicitly supplied existing schema.</summary>
+[Trait("Category", "SqlServer")]
 public sealed class PriceAlertsSqlServerApiTests
 {
     private const string ConnectionVariable = "STOCKLAB_PRICE_ALERTS_SQL_CONNECTION";

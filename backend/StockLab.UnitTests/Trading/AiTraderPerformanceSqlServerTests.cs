@@ -15,6 +15,7 @@ using static StockLab.UnitTests.Trading.AiTraderPerformanceTests;
 
 namespace StockLab.UnitTests.Trading;
 
+[Trait("Category", "SqlServer")]
 public sealed class AiTraderPerformanceSqlServerTests
 {
     [LocalDbFact]

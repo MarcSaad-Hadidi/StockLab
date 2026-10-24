@@ -6,6 +6,7 @@ using StockLab.Domain.Entities;
 
 namespace StockLab.UnitTests.Trading;
 
+[Trait("Category", "SqlServer")]
 public sealed class AiCurrentPositionsSqlServerTests
 {
     [LocalDbFact]

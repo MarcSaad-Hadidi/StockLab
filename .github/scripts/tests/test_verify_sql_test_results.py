@@ -52,6 +52,25 @@ class SqlResultsTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn("4 SQL Server tests executed and passed", result.stdout)
 
+    def test_accepts_category_discovery_without_a_sql_naming_convention(self):
+        names = [
+            "StockLab.UnitTests.Trading.AiDecisionOutcomeReadTests.SQL_Server_reads_exact_outcomes_in_one_detached_join",
+            "StockLab.UnitTests.Trading.DecisionReadTests.Reads_persisted_outcomes",
+        ]
+        self.expected.write_text("\n".join(names), encoding="utf-8")
+        self.write_report([(name, "Passed") for name in names])
+        result = self.run_validator()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("2 SQL Server tests executed and passed", result.stdout)
+
+    def test_rejects_missing_category_case_without_a_sql_naming_convention(self):
+        name = "StockLab.UnitTests.Trading.AiDecisionOutcomeReadTests.SQL_Server_reads_exact_outcomes_in_one_detached_join"
+        self.expected.write_text("\n".join([*TESTS, name]), encoding="utf-8")
+        result = self.run_validator()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("coverage mismatch", result.stderr)
+        self.assertIn(name, result.stderr)
+
     def test_rejects_skipped_failed_or_aborted_cases_even_with_positive_counters(self):
         for outcome in ("NotExecuted", "Failed", "Error", "Aborted"):
             with self.subTest(outcome=outcome):
@@ -76,9 +95,9 @@ class SqlResultsTests(unittest.TestCase):
                 self.expected.write_text("\n".join(names), encoding="utf-8")
                 self.assert_rejected()
 
-    def test_rejects_non_sql_discovery(self):
-        self.expected.write_text("StockLab.UnitTests.Api.PortfolioApiTests.Empty_portfolio", encoding="utf-8")
-        self.write_report([("StockLab.UnitTests.Api.PortfolioApiTests.Empty_portfolio", "Passed")])
+    def test_rejects_discovery_outside_the_backend_test_assembly(self):
+        self.expected.write_text("Other.UnitTests.PortfolioTests.Empty_portfolio", encoding="utf-8")
+        self.write_report([("Other.UnitTests.PortfolioTests.Empty_portfolio", "Passed")])
         self.assert_rejected()
 
     def test_rejects_inconsistent_or_missing_counters(self):
