@@ -117,6 +117,12 @@ runs automatically when the API starts.
 
 ### AI Trader portfolio (#66)
 
+For explicit initialization, genuine ML catalog configuration and verification,
+follow [AI Trader operator setup (#265)](../frontend/AI_TRADER_OPERATIONS.md#operator-commands-265).
+Use `--initialize-ai-trader` with `AiTraderSetup:ExpectedDatabase`; normal startup
+and HTTP GET requests remain read-only. `--check-ai-trader` validates the configured
+portfolio/catalog sources without initializing or modifying them.
+
 `IAiTraderPortfolioService` initializes and reads the system-owned `AI_TRADER`
 portfolio in `AiPortfolios` and its positions in `AiPositions`. These
 entities have no user relationship and never reuse user portfolios or holdings.
