@@ -66,7 +66,7 @@ def _aws_error(error, *, conditional=False):
     raise ArtifactStorageError("S3 operation failed; check private configuration, permissions and connectivity.") from error
 
 
-class S3ModelArtifactStore:
+class S3ObjectStore:
     """SDK credential chain, bounded retries, HTTPS; never creates resources or modifies policies."""
 
     def __init__(self, config: S3ArtifactConfig, *, client=None):
@@ -81,14 +81,6 @@ class S3ModelArtifactStore:
                               ignore_configured_endpoint_urls=True))
         except (BotoCoreError, ClientError) as error:
             _aws_error(error)
-
-    def _keys(self, name, version, digest=None):
-        validate_name(name)
-        validate_version(version)
-        directory = f"{self.config.prefix}/models/{name}/{version}"
-        if len(directory) > 900:
-            raise ModelArtifactError("S3 model/version key exceeds the supported length.")
-        return f"{directory}/manifest.json", f"{directory}/artifacts/{digest}.joblib" if digest is not None else None
 
     def _get(self, key, limit):
         body = None
@@ -123,6 +115,17 @@ class S3ModelArtifactStore:
             _aws_error(error, conditional=True)
         except (BotoCoreError, OSError) as error:
             _aws_error(error)
+
+class S3ModelArtifactStore(S3ObjectStore):
+    """Registered model persistence using the shared private object transport."""
+
+    def _keys(self, name, version, digest=None):
+        validate_name(name)
+        validate_version(version)
+        directory = f"{self.config.prefix}/models/{name}/{version}"
+        if len(directory) > 900:
+            raise ModelArtifactError("S3 model/version key exceeds the supported length.")
+        return f"{directory}/manifest.json", f"{directory}/artifacts/{digest}.joblib" if digest is not None else None
 
     def _manifest(self, name, version, registry):
         key, _ = self._keys(name, version)

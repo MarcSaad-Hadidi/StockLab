@@ -2543,3 +2543,241 @@ lower-F1 candidate despite a better simulated return. Tests separately exercise 
 approved synthetic replacement, explicit initialization, two-process CAS and apply
 races, stale evidence, tampering, incompatible artifacts and interrupted audit.
 No live AWS calls, API credits, deployed scheduler or real trades are involved.
+
+## Dataset and backtest storage / AWS S3 (#48)
+
+Issue #48 extends the existing #76 model storage with `S3DatasetStore`
+(`stocklab_ml.data.s3_storage`) and `S3BacktestStore`
+(`stocklab_ml.backtesting.s3_storage`). All three reuse the same validated
+`S3ArtifactConfig` and private HTTPS object transport. No training, promotion,
+risk-manager, paper-trading or execution policy is changed.
+
+### Configuration and permissions
+
+Use only the already provisioned private development resources:
+
+```powershell
+$env:STOCKLAB_ML_S3_BUCKET = "stocklab-ml-248557779705"
+$env:STOCKLAB_ML_AWS_REGION = "ca-central-1"
+$env:STOCKLAB_ML_S3_PREFIX = "ml"
+$env:AWS_PROFILE = "stocklab-dev"
+$env:PYTHONPATH = "ml/src" # commands below run from the repository root
+aws login --profile stocklab-dev
+```
+
+Use the approved temporary login or task-role credential chain, never root or
+embedded access keys. The existing role/policy are `StockLabMLTaskRole` and
+`StockLabMLS3AccessPolicy`. The code creates no bucket, IAM principal, policy,
+key, scheduler or compute resource and changes no resource configuration.
+Retain S3 Block Public Access on the bucket; no public ACL or URL is emitted.
+
+The storage classes need only `s3:GetObject` and `s3:PutObject` on the selected
+`ml/datasets/*`, `ml/backtests/*` and existing `ml/models/*` objects. They use
+neither LIST, DELETE, HEAD nor ACL operations. No policy update is performed.
+Existing bucket encryption is inherited; an existing KMS configuration can also
+require the already-approved KMS permissions described in #76. CLI live commands
+require `--live-aws`, verify the exact configuration above, and check the caller
+with STS before any S3 request, rejecting root and another account. SDK consumers
+must independently approve their configured private source as in #76.
+
+### Object organization, integrity and collisions
+
+```text
+ml/datasets/<URL-encoded-symbol>/<start>_<end>/<raw|cleaned>/<dataset-id>/
+  files/<sha256>/<original-filename>
+  manifest.json
+ml/backtests/<backtest-id>/
+  files/<sha256>/trades.csv
+  files/<sha256>/equity_curve.csv
+  files/<sha256>/positions.csv
+  files/<sha256>/report.json
+  manifest.json
+ml/models/<model-name>/<model-version>/... # unchanged #76 layout
+```
+
+Dates are ISO calendar dates. Dataset periods can include a single day. Symbols
+follow the existing historical-data contract; for example `BRK/B` becomes
+`BRK%2FB`. Run identifiers and filenames must be portable safe path segments.
+Raw dataset bytes can be CSV, provider JSON or another file format; the adapter
+does not silently parse or rewrite the source. A cleaned dataset is a separate
+publication with `kind="cleaned"`. Callers provide its symbol/period and metadata;
+the storage layer verifies bytes and identity, not the financial meaning of a
+caller-provided file.
+
+Each schema-v1 manifest contains the exact identity, JSON metadata, required
+filenames, SHA-256 and byte lengths. Files are bounded to
+`config.max_artifact_bytes` (100 MiB by default), manifests to 1 MiB. Dataset
+uploads contain one file; backtests contain the four existing engine files.
+Uploads use `If-None-Match: *`, verify stored bytes with GET, then publish the
+manifest last. Downloads derive keys internally, reject invalid/duplicate
+manifest fields, unsafe paths, wrong identities, missing files and changed
+bytes, and verify the downloaded local bytes. An ETag is never a digest.
+These [conditional writes](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html)
+prevent overwriting existing objects, including concurrent publications.
+
+Re-uploading the same bytes and metadata under the same identity is idempotent.
+Different bytes or metadata under an already published identity raise
+`ArtifactConflictError`; choose a new dataset/backtest identifier. The manifest
+is the completion marker: interrupted uploads can leave unreferenced objects,
+and retrying the same inputs can finish without deleting anything. Different
+backtest identifiers remain isolated. There is no transaction across all the
+workflow's dataset, model and backtest bundles.
+
+Downloads require a new destination directory and never overwrite an existing
+directory, including an empty one. All remote bytes are verified before creating
+it. A local disk failure can leave partial files **without a completed manifest**;
+select a new destination after resolving the failure. Files and JSON metadata
+are preserved; filesystem timestamps, ownership and original S3 system headers
+are not part of this portable contract. At most four bounded files are buffered
+in memory. Multipart uploads and automatic garbage collection are outside V1.
+
+The existing controlled error types apply: `ArtifactNotFoundError`,
+`ArtifactIntegrityError`, `ArtifactConflictError` and `ArtifactStorageError`.
+Timeouts and access failures never become successful results or trigger a
+different target. SDK connection/read timeouts are 5/30 seconds with three total
+attempts. Without ListBucket, a missing object may appear as AccessDenied (403):
+downloads then report a storage/access error; uploads still use conditional
+publication as #76 does. Caller-facing CLI errors omit raw SDK responses.
+
+### Reproducible local backtest
+
+```powershell
+& ml/.venv/Scripts/python.exe -m stocklab_ml.backtesting.s3_workflow run `
+  --output ml/results/s3-demo/run --backtest-id demo-48 `
+  --registry ml/results/s3-demo/registry.json
+```
+
+This invokes actual existing components: deterministic synthetic daily OHLCV,
+`clean_historical_dataset`, causal `engineer_features`,
+`train_logistic_regression`, the version registry and model artifact serializer,
+`generate_trading_signals`, `add_confidence_scores`, `run_backtest`, and
+`save_backtest_result`. Training uses the existing purged chronological train
+partition; only holdout predictions feed the simulation. Orders execute at the
+same symbol's next observed open after a decision. No provider client, AWS
+client, Risk Manager, Paper Trading Engine or real order service is invoked.
+
+Outputs include the raw/cleaned CSVs and cleaning report, fitted model artifact,
+predictions, confidence signals, the four engine result files, and
+`workflow.json` with provenance and exact model identity. Synthetic results
+validate mechanics and **are not real investment performance**. Outputs and model
+predictions are reproducible for the same inputs/runtime; UUIDs, model versions
+and registration timestamps intentionally differ. The default registry is the
+existing shared `ml/models/registry.json`; use the same registry across runs to
+avoid reusing a model version. Independent machines/registries must coordinate
+version identities; a collision fails safely instead of replacing a model.
+No version is automatically activated or promoted.
+
+A caller can explicitly supply a local, single-symbol historical CSV with the
+existing `date,symbol,open,high,low,close,volume` schema and an explicit cutoff:
+
+```powershell
+& ml/.venv/Scripts/python.exe -m stocklab_ml.backtesting.s3_workflow run `
+  --csv C:/data/AAPL-history.csv --as-of 2026-10-23 `
+  --output ml/results/aapl-s3-run --backtest-id aapl-20261023
+```
+
+The original CSV bytes are preserved. Cleaning discards invalid observations
+according to #58; the cleaning report records removals. Input must contain enough
+valid history and both training classes for the existing model. Multi-symbol
+workflow CSVs are rejected; run each symbol separately. `caller_supplied_csv`
+records the source category, not a certification that the file is real market
+data. No local historical dataset was available during implementation, so the
+recorded validation uses synthetic fixtures only.
+
+### Upload and retrieve existing files without another run
+
+```powershell
+# Explicit live AWS request; does not run training or backtesting again.
+& ml/.venv/Scripts/python.exe -m stocklab_ml.backtesting.s3_workflow upload `
+  --directory ml/results/s3-demo/run --live-aws
+
+# Recover and consult a backtest without loading a model or executing the engine.
+& ml/.venv/Scripts/python.exe -m stocklab_ml.backtesting.s3_workflow download-backtest `
+  --backtest-id demo-48 --output ml/results/recovered-demo-48 --live-aws
+Get-Content ml/results/recovered-demo-48/report.json
+Import-Csv ml/results/recovered-demo-48/trades.csv
+
+# Independently publish or retrieve a dataset (replace dates/symbol with its identity).
+& ml/.venv/Scripts/python.exe -m stocklab_ml.backtesting.s3_workflow upload-dataset `
+  --file ml/results/s3-demo/run/datasets/cleaned.csv --symbol SYNTH `
+  --start-date 2023-01-02 --end-date 2023-12-01 --kind cleaned --dataset-id standalone-demo-48 --live-aws
+& ml/.venv/Scripts/python.exe -m stocklab_ml.backtesting.s3_workflow download-dataset `
+  --symbol SYNTH --start-date 2023-01-02 --end-date 2023-12-01 --kind cleaned `
+  --dataset-id standalone-demo-48 --output ml/results/recovered-dataset-48 --live-aws
+
+# Existing four-file engine outputs can also be uploaded independently.
+& ml/.venv/Scripts/python.exe -m stocklab_ml.backtesting.s3_workflow upload-backtest `
+  --directory ml/results/backtesting --backtest-id existing-run-48 --live-aws
+```
+
+Use `workflow.json` for the actual symbol/date/run identities. The standalone
+dataset/backtest CLI commands use empty metadata; choose a fresh identity when
+publishing independently instead of reusing a workflow identity with different
+metadata. For custom JSON metadata use the SDK adapters directly:
+
+```python
+from stocklab_ml.artifacts import S3ArtifactConfig
+from stocklab_ml.data.s3_storage import S3DatasetStore
+from stocklab_ml.backtesting.s3_storage import S3BacktestStore
+
+config = S3ArtifactConfig.from_environment(trusted_private_source=True)
+datasets = S3DatasetStore(config)
+ref = datasets.upload_dataset("raw.json", symbol="AAPL", start_date="2024-01-02",
+    end_date="2024-01-31", kind="raw", dataset_id="aapl-raw-001",
+    metadata={"source": "caller_supplied", "synthetic": False})
+bundle = datasets.download_dataset(symbol="AAPL", start_date="2024-01-02",
+    end_date="2024-01-31", kind="raw", dataset_id="aapl-raw-001", output_dir="new-cache")
+assert bundle.metadata == {"source": "caller_supplied", "synthetic": False}
+# Existing save_backtest_result(...) returns the SavedBacktest accepted here:
+backtests = S3BacktestStore(config)
+# backtests.upload_backtest(saved, backtest_id="run-001", metadata={"synthetic": True})
+# backtests.download_backtest("run-001", output_dir="new-backtest-cache")
+```
+
+Model upload/download/loading uses `S3ModelArtifactStore` and
+`load_model_artifact` exactly as documented in #76, with the exact model name and
+version from `workflow.json`. The registry is still a local #75 authority; backtest
+and dataset recovery need no registry. Keep the original workflow directory and
+registry for retrying a model publication. Upload does not repeat a fit or engine
+run. Standard S3 requests, storage, GET verification, transfer and applicable KMS
+operations can incur small charges; no expensive AWS computation is launched.
+
+### Offline verification and optional live AWS smoke
+
+```powershell
+& ml/.venv/Scripts/python.exe -m pytest ml -q
+$env:PYTHONPATH = "ml/src"
+& ml/.venv/Scripts/python.exe ml/examples/s3_storage_smoke.py
+
+# Optional, explicitly enabled, approved development resources only:
+& ml/.venv/Scripts/python.exe ml/examples/s3_storage_smoke.py --live-aws
+```
+
+The default smoke blocks sockets, runs the actual ML/backtest workflow, transfers
+both datasets, the fitted model and all four backtest files through an in-memory
+S3 client, and verifies recovery. Model loading occurs with `Pipeline.fit`
+disabled. Tests cover conditional SDK requests, exact bytes/metadata, corruption,
+missing inputs/objects, denied access, network errors, concurrency, isolation,
+collisions, partial publication and recovery without retraining/backtesting.
+On Windows, a restricted sandbox may deny NTFS hard links used by the existing
+atomic local writers; run the same offline tests in a normally permitted local
+shell rather than weakening no-overwrite behavior.
+The shared local writer also retries a transient Windows replacement denial
+(WinError 5/32/33) at most four times, with 10/20/40 ms delays. A persistent
+denial fails safely and preserves the existing target. This only retries an
+already requested atomic replacement; no-clobber publication is unchanged.
+
+Live AWS validation for #48 has **not** been executed as part of this change.
+`--live-aws` additionally requires a usable approved temporary login and leaves
+the uniquely identified validation objects in the bucket: cleanup requires
+separate approval/permissions and is never done by this tool. Neither pytest nor
+the default smoke consumes Twelve Data credits, contacts AWS, or submits trades.
+
+Validation performed for #48 on Python 3.12: **1,585 tests passed** across all
+36 ML test files (1,221 core, 127 promotion, 237 storage/retraining), with separate
+temporary directories for each group. The 42 targeted storage/workflow/local-writer
+tests passed, as did 10,000 actual atomic local writes. The final offline smoke
+used 240 synthetic observations, produced 15 simulated trades, recovered both
+datasets and all four backtest files byte-identically, and loaded the recovered
+model with fitting disabled. Python compilation, CLI help and `git diff --check`
+also passed. These are software-validation results, not real market returns.
