@@ -49,15 +49,6 @@ export type Position = {
   tone: 'positive' | 'negative' | 'neutral'
 }
 
-export type WatchlistItem = {
-  symbol: string
-  company: string
-  price: number
-  change: number | null
-  tone: 'positive' | 'negative'
-  starred?: boolean
-}
-
 export type Transaction = {
   id: string
   symbol: string
@@ -108,8 +99,6 @@ export const metrics: Metric[] = [
 export const performanceSeries: Record<PerformanceRange, PerformanceSeries> = Object.fromEntries(['1D', '1W', '1M', '3M', '1Y', 'YTD', 'ALL'].map(range => [range, { labels: [], values: [], change: null, changeLabel: '' }])) as unknown as Record<PerformanceRange, PerformanceSeries>
 
 export const positions: Position[] = []
-
-export const watchlist: WatchlistItem[] = []
 
 export const transactions: Transaction[] = []
 

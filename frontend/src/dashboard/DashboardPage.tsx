@@ -7,6 +7,9 @@ import { getTrendClass, getTrendIcon, getTrendTone } from '../components/trend/t
 import { formatUnitPrice, formatDate, formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent, formatTradeAmount, formatQuantity } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
 import { usePortfolioData } from '../portfolio/usePortfolioData'
+import { useWatchlistData } from '../watchlist/useWatchlistData'
+import { WatchlistFeedback } from '../watchlist/WatchlistFeedback'
+import type { WatchlistItem } from '../watchlist/watchlistData'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
@@ -17,8 +20,6 @@ import {
   type PerformanceRange,
   type Position,
   type Transaction,
-  type WatchlistItem,
-  watchlist,
 } from './dashboardData'
 import { getGreetingPeriod } from './dashboardGreeting'
 import { startDashboardGreetingTimer } from './dashboardGreetingTimer'
@@ -140,9 +141,9 @@ function WatchlistRow({ item }: { item: WatchlistItem }) {
   return (
     <li className="watchlist-row">
       <StockMark size="small" symbol={item.symbol} />
-      <div className="watchlist-name"><strong>{item.symbol}</strong><small>{item.company}</small></div>
-      <div className="watchlist-price"><strong>{formatCurrency(item.price)}</strong><span className={item.tone}>{formatSignedPercent(item.change)}</span></div>
-      <button aria-label={t('dashboard.openDetails', { symbol: item.symbol })} className="icon-button row-more" onClick={() => undefined} type="button"><Icon name="more" size={18} /></button>
+      <div className="watchlist-name"><strong>{item.symbol}</strong><small>{item.name}</small></div>
+      <div className="watchlist-price"><strong>{item.currency ? formatCurrency(item.price, undefined, 2, item.currency) : '—'}</strong><span className={item.tone}>{formatSignedPercent(item.changePercent)}</span></div>
+      <a aria-label={t('dashboard.openDetails', { symbol: item.symbol })} className="icon-button row-more" href={`${routeFor('market')}?symbol=${encodeURIComponent(item.symbol)}`}><Icon name="more" size={18} /></a>
     </li>
   )
 }
@@ -175,8 +176,8 @@ export function DashboardPage() {
   const [range, setRange] = useState<PerformanceRange>('1M')
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [toastKey, setToastKey] = useState('')
   const { data: portfolio, error: portfolioError, recentTransactions } = usePortfolioData()
+  const { items: watchlist, loading: watchlistLoading, error: watchlistError, reload: reloadWatchlist } = useWatchlistData()
   const dashboardUserName = ''
   const [greetingPeriod, setGreetingPeriod] = useState(() => getGreetingPeriod(new Date()))
   const aiReturnTone = getTrendTone(aiPerformance.return)
@@ -186,13 +187,27 @@ export function DashboardPage() {
     return startDashboardGreetingTimer(() => setGreetingPeriod(getGreetingPeriod(new Date())), dashboardUserName)
   }, [])
 
+  useEffect(() => {
+    // Other pages persist mutations; revalidate when returning to this Dashboard.
+    const onVisible = () => { if (document.visibilityState === 'visible') reloadWatchlist() }
+    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) reloadWatchlist() }
+    window.addEventListener('focus', reloadWatchlist)
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('pageshow', onPageShow)
+    return () => {
+      window.removeEventListener('focus', reloadWatchlist)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('pageshow', onPageShow)
+    }
+  }, [reloadWatchlist])
+
   const greeting = t(`businessData.greeting.${greetingPeriod}`)
 
   const filteredWatchlist = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
     if (!normalizedQuery) return watchlist
-    return watchlist.filter((item) => `${item.symbol} ${item.company}`.toLowerCase().includes(normalizedQuery))
-  }, [query])
+    return watchlist.filter((item) => `${item.symbol} ${item.name}`.toLowerCase().includes(normalizedQuery))
+  }, [query, watchlist])
 
   const metrics: Metric[] = useMemo(() => [
     {
@@ -252,11 +267,6 @@ export function DashboardPage() {
 
   const transactionsError = recentTransactions.error ?? portfolioError
 
-  const showToast = (key: string) => {
-    setToastKey(key)
-    window.setTimeout(() => setToastKey(''), 2200)
-  }
-
   return (
     <div className="dashboard-page stocklab-layout">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -271,7 +281,14 @@ export function DashboardPage() {
 
           <div className="dashboard-grid dashboard-grid-top">
             <section aria-labelledby="performance-title" className="panel performance-panel"><PanelHeading id="performance-title" subtitle={t('dashboard.performanceSubtitle')} title={t('dashboard.performanceTitle')} /><div className="range-tabs" role="tablist" aria-label={t('common.performanceTimeRange')}>{ranges.map((item) => <button aria-selected={range === item} className={range === item ? 'selected' : ''} key={item} onClick={() => setRange(item)} role="tab" type="button">{t(`common.timeRanges.${item}`)}</button>)}</div><PerformanceChart key={range} range={range} /></section>
-            <section aria-labelledby="watchlist-title" className="panel watchlist-panel"><PanelHeading action={t('common.viewAll')} destination="watchlist" id="watchlist-title" subtitle={t('dashboard.watchlistSubtitle')} title={t('common.navigation.watchlist')} /><div className="watchlist-filter"><Icon name="search" size={15} /><input aria-label={t('dashboard.filterWatchlist')} onChange={(event) => setQuery(event.target.value)} placeholder={t('dashboard.filterPlaceholder')} value={query} /></div>{filteredWatchlist.length > 0 ? <ul className="watchlist-list">{filteredWatchlist.map((item) => <WatchlistRow item={item} key={item.symbol} />)}</ul> : <div className="empty-state">{t('businessData.watchlist')}</div>}<button className="add-watchlist" onClick={() => showToast('businessData.unavailable')} type="button"><span>+</span> {t('dashboard.addToWatchlist')}</button></section>
+            <section aria-labelledby="watchlist-title" aria-busy={watchlistLoading} className="panel watchlist-panel">
+              <PanelHeading action={t('common.viewAll')} destination="watchlist" id="watchlist-title" subtitle={t('dashboard.watchlistSubtitle')} title={t('common.navigation.watchlist')} />
+              <div className="watchlist-filter"><Icon name="search" size={15} /><input aria-label={t('dashboard.filterWatchlist')} onChange={(event) => setQuery(event.target.value)} placeholder={t('dashboard.filterPlaceholder')} value={query} /></div>
+              <WatchlistFeedback loading={watchlistLoading} error={watchlistError} retry={reloadWatchlist} />
+              {filteredWatchlist.length > 0 && <ul className="watchlist-list">{filteredWatchlist.map(item => <WatchlistRow item={item} key={item.symbol} />)}</ul>}
+              {!watchlistLoading && !watchlistError && filteredWatchlist.length === 0 && <div className="empty-state" role="status">{t(watchlist.length === 0 ? 'businessData.watchlist' : 'dashboard.noStocksMatch', { query: query.trim() })}</div>}
+              <a className="add-watchlist" href={routeFor('market')}><span>+</span> {t('dashboard.addToWatchlist')}</a>
+            </section>
           </div>
 
           <div className="dashboard-grid dashboard-grid-bottom">
@@ -294,7 +311,6 @@ export function DashboardPage() {
           <p className="simulation-note"><span><Icon name="activity" size={14} /> {t('businessData.unavailable')}</span> {t('businessData.backendPending')}</p>
         </div>
       <LogoAttribution /></main>
-      <div aria-live="polite" className={`toast ${toastKey ? 'visible' : ''}`}>{toastKey ? t(toastKey) : ''}</div>
     </div>
   )
 }
