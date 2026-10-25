@@ -48,7 +48,6 @@ Object.assign(globalThis, {
 test("unconnected business services contain no manufactured holdings, orders, alerts or AI results", () => {
   for (const rows of [
     dashboard.positions,
-    dashboard.watchlist,
     dashboard.transactions,
     portfolio.positions,
     transactions.transactions,

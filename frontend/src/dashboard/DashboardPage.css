@@ -109,7 +109,7 @@ h1 span { color: #e4a857; font-size: .75em; margin-left: 2px; }
 .positive { color: #22a476; }
 .negative { color: #e16e78; }
 .row-more { color: #b2bcc9; margin-left: 2px; }
-.add-watchlist { background: transparent; border: 0; color: var(--blue); font-size: 10px; font-weight: 700; margin-top: 9px; padding: 5px 0; }
+.add-watchlist { background: transparent; border: 0; color: var(--blue); display: inline-block; font-size: 10px; font-weight: 700; margin-top: 9px; padding: 5px 0; text-decoration: none; }
 .add-watchlist span { font-size: 15px; font-weight: 400; margin-right: 3px; vertical-align: -1px; }
 .empty-state { color: #9ba6b7; font-size: 11px; min-height: 180px; padding: 30px 0; text-align: center; }
 
