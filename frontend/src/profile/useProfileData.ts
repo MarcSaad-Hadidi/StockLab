@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { profileApi, ProfileApiError, type ProfileErrorCode, type UpdateProfileRequest, type UserProfile } from '../api/profileApi'
 import { portfolioApi } from '../api/portfolioApi'
-import { authStorageKey, clearAuthSession, getAuthSession, saveAuthSession, type AuthSession } from '../auth/authStorage'
+import { clearAuthSession, getAuthSession, saveAuthSession, type AuthSession } from '../auth/authStorage'
+import { subscribeAuthSession } from '../auth/useAuthUser'
 
 // Keep the token check for responses issued before a new login.
 const sameSession = (expected: AuthSession | null) => {
@@ -36,37 +37,26 @@ export function useProfileData() {
     function invalidateSession() {
       const expected = sessionRef.current
       const current = getAuthSession()
-      if (expected && current && expected.user.id === current.user.id) {
-        if (expected.accessToken === current.accessToken
-          && expected.user.displayName === current.user.displayName && expected.user.email === current.user.email) return
-        controller.abort()
-        saveController.current?.abort()
-        savingRef.current = false
-        setSaving(false)
-        setProfile(null)
-        setCapital(null)
-        setLoading(true)
-        setLoadError(null)
-        setSaveError(null)
-        setFieldErrors({})
-        setSessionWarning(false)
-        setRevision(value => value + 1)
-        return
-      }
+      if (expected && current && expected.user.id === current.user.id
+        && expected.accessToken === current.accessToken
+        && expected.user.displayName === current.user.displayName && expected.user.email === current.user.email) return
       controller.abort()
       saveController.current?.abort()
+      saveController.current = null
+      savingRef.current = false
+      sessionRef.current = current
       setProfile(null)
       setCapital(null)
-      setLoading(false)
-      setLoadError('unauthorized')
+      setLoading(current !== null)
+      setLoadError(current ? null : 'unauthorized')
+      setSaveError(null)
+      setFieldErrors({})
+      setSessionWarning(false)
       setSaving(false)
+      if (current) setRevision(value => value + 1)
     }
     synchronizeSession.current = invalidateSession
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === authStorageKey || event.key === null) invalidateSession()
-    }
-    window.addEventListener('storage', onStorage)
-    window.addEventListener('focus', invalidateSession)
+    const unsubscribe = subscribeAuthSession(invalidateSession)
     if (session) {
       void profileApi.getProfile(controller.signal).then(result => {
         if (controller.signal.aborted) return
@@ -104,8 +94,7 @@ export function useProfileData() {
     return () => {
       controller.abort()
       saveController.current?.abort()
-      window.removeEventListener('storage', onStorage)
-      window.removeEventListener('focus', invalidateSession)
+      unsubscribe()
       if (synchronizeSession.current === invalidateSession) synchronizeSession.current = null
     }
   }, [revision])

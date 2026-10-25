@@ -175,10 +175,17 @@ test('an unauthorized response clears the session and ignores a later portfolio 
   } finally { await view.close() }
 })
 
-test('a save that fails after another login cannot retain the previous account', async (t) => {
+test('a late save failure cannot retain the previous account or invalidate the newly loaded account', async (t) => {
   seed()
-  t.mock.method(profileApi, 'getProfile', async () => profile)
-  t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+  const other = { ...session, accessToken: 'another-token', user: { ...user, id: '91f8d5fd-cb7d-4852-b3a5-4c0c8d440a8c', displayName: 'Another Account', email: 'another@example.com' } }
+  const otherProfile = { ...profile, ...other.user }
+  const otherCapital = { ...capital, initialCapital: '50000', currency: 'USD' }
+  let finishProfile!: (value: typeof profile) => void
+  let finishCapital!: (value: typeof capital) => void
+  t.mock.method(profileApi, 'getProfile', async () => getAuthSession()?.accessToken === other.accessToken
+    ? new Promise<typeof profile>(resolve => { finishProfile = resolve }) : profile)
+  t.mock.method(portfolioApi, 'getPortfolio', async () => getAuthSession()?.accessToken === other.accessToken
+    ? new Promise<typeof capital>(resolve => { finishCapital = resolve }) : capital)
   let reject!: (error: Error) => void
   t.mock.method(profileApi, 'updateProfile', () => new Promise<typeof profile>((_, fail) => { reject = fail }))
   let state: ReturnType<typeof useProfileData>
@@ -187,13 +194,17 @@ test('a save that fails after another login cannot retain the previous account',
   try {
     let saving!: Promise<boolean>
     await act(async () => { saving = state.save({ displayName: 'New Name', email: user.email }) })
-    const other = { ...session, accessToken: 'another-token', user: { ...user, id: '91f8d5fd-cb7d-4852-b3a5-4c0c8d440a8c', displayName: 'Another Account' } }
-    saveAuthSession(other)
-    await act(async () => { reject(new ProfileApiError(401, 'unauthorized')); assert.equal(await saving, false) })
-    assert.equal(getAuthSession()?.accessToken, other.accessToken)
+    await act(async () => saveAuthSession(other))
     assert.equal(state!.profile, null)
     assert.equal(state!.capital, null)
-    assert.equal(state!.loadError, 'unauthorized')
+    assert.equal(state!.loading, true)
+    await act(async () => { finishProfile(otherProfile); finishCapital(otherCapital) })
+    await act(async () => { reject(new ProfileApiError(401, 'unauthorized')); assert.equal(await saving, false) })
+    assert.equal(getAuthSession()?.accessToken, other.accessToken)
+    assert.deepEqual(state!.profile, otherProfile)
+    assert.deepEqual(state!.capital, { initialCapital: '50000', currency: 'USD' })
+    assert.equal(state!.loadError, null)
+    assert.equal(state!.saving, false)
   } finally { await view.close() }
 })
 

@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { WatchlistItem } from './watchlistData'
 import { useWatchlistData } from './useWatchlistData'
 import { WatchlistFeedback } from './WatchlistFeedback'
+import { getAuthSession } from '../auth/authStorage'
 import './watchlist.css'
 
 type IconName =
@@ -101,12 +102,14 @@ export default function WatchlistPage() {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'default' | 'price' | 'change'>('default')
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [toast, setToast] = useState<{ key: string; values?: Record<string, string | number> } | null>(null)
+  const [toast, setToast] = useState<{ key: string; values?: Record<string, string | number>; sessionToken: string } | null>(null)
   const toastTimer = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(toastTimer.current), [])
 
   const showToast = (key: string, values?: Record<string, string | number>) => {
-    setToast({ key, values })
+    const sessionToken = getAuthSession()?.accessToken
+    if (!sessionToken) return
+    setToast({ key, values, sessionToken })
     window.clearTimeout(toastTimer.current)
     toastTimer.current = window.setTimeout(() => setToast(null), 2300)
   }
@@ -128,6 +131,7 @@ export default function WatchlistPage() {
   const topLoser = pricedItems.length > 0 ? pricedItems.reduce((bottom, item) => item.changePercent < bottom.changePercent ? item : bottom) : undefined
   const averageChange = pricedItems.length > 0 ? pricedItems.reduce((total, item) => total + item.changePercent, 0) / pricedItems.length : null
   const ready = !loading && !error
+  const visibleToast = ready && toast?.sessionToken === getAuthSession()?.accessToken ? toast : null
 
   return (
     <div className="watchlist-page stocklab-layout">
@@ -166,7 +170,7 @@ export default function WatchlistPage() {
           </section>
         </div>
       <LogoAttribution /></main>
-      <div aria-live="polite" className={`toast ${toast ? 'visible' : ''}`}>{toast ? t(toast.key, toast.values) : ''}</div>
+      <div aria-live="polite" className={`toast ${visibleToast ? 'visible' : ''}`}>{visibleToast ? t(visibleToast.key, visibleToast.values) : ''}</div>
     </div>
   )
 }
