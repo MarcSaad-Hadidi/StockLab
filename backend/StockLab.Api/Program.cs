@@ -22,8 +22,18 @@ using StockLab.Infrastructure.Portfolios;
 using StockLab.Infrastructure.Watchlists;
 using StockLab.Infrastructure.Alerts;
 using StockLab.Infrastructure.AiTraderMetadata;
+using StockLab.Api.Operations;
 
-var builder = WebApplication.CreateBuilder(args);
+var initializeAiTrader = args.Contains("--initialize-ai-trader", StringComparer.Ordinal);
+var checkAiTrader = args.Contains("--check-ai-trader", StringComparer.Ordinal);
+if (initializeAiTrader && checkAiTrader)
+{
+    Console.Error.WriteLine("Choose --initialize-ai-trader or --check-ai-trader, not both.");
+    Environment.ExitCode = 1;
+    return;
+}
+var builder = WebApplication.CreateBuilder(args.Where(argument =>
+    argument is not "--initialize-ai-trader" and not "--check-ai-trader").ToArray());
 
 const string frontendCorsPolicy = "Frontend";
 
@@ -232,6 +242,17 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+if (initializeAiTrader || checkAiTrader)
+{
+    try
+    {
+        Environment.ExitCode = await AiTraderSetupCommand.RunAsync(app.Services, app.Configuration,
+            initializeAiTrader, Console.Out);
+    }
+    finally { await app.DisposeAsync(); }
+    return;
+}
 
 app.UseForwardedHeaders();
 app.UseMiddleware<ExceptionHandlingMiddleware>();

@@ -54,6 +54,8 @@ internal sealed class AiTraderApiFixture(AiCurrentPositionsFixture database,
             builder.UseEnvironment(environment);
             builder.ConfigureAppConfiguration((_, configuration) =>
             {
+                // Operator catalogs/User Secrets must never merge into this isolated HTTP fixture.
+                configuration.Sources.Clear();
                 var values = new Dictionary<string, string?>
                 {
                     ["ConnectionStrings:StockLab"] = "Server=localhost;Database=AiTraderApiTestsNeverUsed;Integrated Security=true;TrustServerCertificate=true",
