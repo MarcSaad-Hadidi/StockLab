@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { marketDataApi } from '../api/marketDataClient'
 import { watchlistApi, WatchlistApiError, type WatchlistApiItem, type WatchlistErrorCode } from '../api/watchlistApi'
-import { authStorageKey, clearAuthSession, getAuthSession, type AuthSession } from '../auth/authStorage'
+import { clearAuthSession, getAuthSession, type AuthSession } from '../auth/authStorage'
+import { subscribeAuthSession } from '../auth/useAuthUser'
 import type { WatchlistItem } from './watchlistData'
 
 function sameSession(expected: AuthSession | null) {
@@ -58,16 +59,13 @@ export function useWatchlistData(enrichQuotes = true) {
       if (sameSession(session)) return
       controller.abort()
       mutationControllers.forEach(request => request.abort())
+      mutationControllers.clear()
       pendingSymbols.clear()
       setState(initialState())
       setLoadRequest({ refreshQuotes: false })
     }
     synchronize.current = synchronizeSession
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === authStorageKey || event.key === null) synchronizeSession()
-    }
-    window.addEventListener('storage', onStorage)
-    window.addEventListener('focus', synchronizeSession)
+    const unsubscribe = subscribeAuthSession(synchronizeSession)
     void Promise.resolve().then(async () => {
       controller.signal.throwIfAborted()
       setState(initialState())
@@ -94,9 +92,9 @@ export function useWatchlistData(enrichQuotes = true) {
     return () => {
       controller.abort()
       mutationControllers.forEach(request => request.abort())
+      mutationControllers.clear()
       pendingSymbols.clear()
-      window.removeEventListener('storage', onStorage)
-      window.removeEventListener('focus', synchronizeSession)
+      unsubscribe()
       if (synchronize.current === synchronizeSession) synchronize.current = null
     }
   }, [loadRequest, enrichQuotes])
