@@ -24,9 +24,11 @@ export type AiTraderDataState = {
   resources: AiTraderResources; isLoading: boolean; refresh: () => void; retry: (name: ResourceName) => void; rejectSession: () => void
 }
 const names: ResourceName[] = ['performance', 'positions', 'history', 'trades', 'decisions', 'rejections', 'models', 'backtests']
-const resourcesFor: Record<TabName, ResourceName[]> = {
+type DataView = TabName | 'Summary'
+const resourcesFor: Record<DataView, ResourceName[]> = {
   Overview: names, Positions: ['positions', 'performance'], Trades: ['trades'], Decisions: ['decisions', 'rejections'],
   Performance: ['performance', 'history'], Model: ['models'], Backtests: ['backtests'],
+  Summary: ['performance'],
 }
 function emptyResources(status: 'idle' | 'unauthorized' = 'idle'): AiTraderResources {
   return Object.fromEntries(names.map(name => [name, { status, data: null, error: status === 'unauthorized' ? new AiTraderApiError(401, 'unauthorized') : null }])) as AiTraderResources
@@ -103,7 +105,7 @@ function createLoader(api: AiTraderApi, userId: string, authorization: string, p
   }
   return {
     rejectSession: revoke,
-    ensure(tab: TabName, force = false) {
+    ensure(tab: DataView, force = false) {
       if (!active()) return
       for (const name of resourcesFor[tab]) {
         const history = name === 'trades' || name === 'decisions' || name === 'rejections'
@@ -116,7 +118,7 @@ function createLoader(api: AiTraderApi, userId: string, authorization: string, p
   }
 }
 
-export function useAiTraderData(activeTab: TabName, api: AiTraderApi = aiTraderApi): AiTraderDataState {
+export function useAiTraderData(activeTab: DataView, api: AiTraderApi = aiTraderApi): AiTraderDataState {
   const session = useAuthSession()
   const userId = session?.user.id ?? null
   const authorization = session ? `${session.tokenType} ${session.accessToken}` : null
@@ -136,10 +138,11 @@ export function useAiTraderData(activeTab: TabName, api: AiTraderApi = aiTraderA
     return () => { cancelled = true }
   }, [sessionKey, activeTab, api])
   const rejectSession = useCallback(() => { if (loader.current?.key === sessionKey) loader.current.value.rejectSession() }, [sessionKey])
+  const refresh = useCallback(() => { if (loader.current?.key === sessionKey) loader.current.value.ensure(activeTab, true) }, [sessionKey, activeTab])
   const resources = !session ? emptyResources('unauthorized') : result?.key === sessionKey ? result.resources : emptyResources()
   return {
     resources, isLoading: Boolean(session) && resourcesFor[activeTab].some(name => resources[name].status === 'loading' || resources[name].status === 'idle'),
-    refresh: () => { if (loader.current?.key === sessionKey) loader.current.value.ensure(activeTab, true) },
+    refresh,
     retry: name => { if (loader.current?.key === sessionKey) loader.current.value.retry(name) },
     rejectSession,
   }
