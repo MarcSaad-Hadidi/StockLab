@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import time
 from urllib.parse import quote
 
 import pandas as pd
@@ -39,7 +40,16 @@ def _atomic_write(path: Path, content: str, overwrite: bool) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         if overwrite:
-            os.replace(temporary, path)
+            for attempt in range(4):
+                try:
+                    os.replace(temporary, path)
+                    break
+                except PermissionError as error:
+                    # Windows can briefly lock an otherwise writable target.
+                    # Retry the same atomic replace; never unlink the target.
+                    if getattr(error, "winerror", None) not in {5, 32, 33} or attempt == 3:
+                        raise
+                    time.sleep(.01 * 2**attempt)
         else:
             # Atomic no-clobber publication, including concurrent writers, on
             # NTFS/POSIX. Unsupported filesystems fail safely without fallback.
