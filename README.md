@@ -33,7 +33,7 @@ Le produit aide l’utilisateur à explorer les données de marché et à s’ex
 - **Compte** : inscription, connexion JWT, déconnexion locale, identité du top bar, lecture/modification du nom et de l’email, changement réel du mot de passe. Les pages affichent les erreurs de validation et les échecs de l’API.
 - **Paper trading personnel** : préparation et confirmation d’un achat ou d’une vente, exécution simulée, mise à jour atomique du cash et des positions, historique et valorisation. Les données privées sont liées à l’utilisateur authentifié.
 - **Watchlist** : consultation, ajout et suppression des symboles enregistrés pour le compte.
-- **AI Trader** : consultation du portefeuille système, des décisions originales et des rejets du risque, des transactions, des performances, des modèles et des backtests. `--run-ai-decisions` produit les décisions versionnées (#257) ; `--execute-ai-decisions` applique le risque et exécute les décisions explicitement désignées en paper trading, avec journal des tentatives (#258). La page ne déclenche ni entraînement ni ordre ; la planification périodique reste distincte.
+- **AI Trader** : consultation du portefeuille système, des décisions originales et des rejets du risque, des transactions, des performances, des modèles et des backtests. `--run-ai-decisions` produit les décisions versionnées (#257) ; `--execute-ai-decisions` applique le risque et exécute les décisions explicitement désignées en paper trading, avec journal des tentatives (#258). `--capture-ai-performance` et le worker optionnel `AiPerformanceCycle` enregistrent la valorisation et le contexte des trades/modèles par créneau UTC (#259). La page ne déclenche ni entraînement ni ordre ; l'enchaînement automatique inférence/exécution reste une configuration opérationnelle distincte.
 - **Alertes** : API de gestion et surveillance périodique présentes. L’écran frontend n’est pas encore connecté et le passage persistant à l’état `Triggered` reste à implémenter.
 
 ## État actuel
@@ -45,7 +45,7 @@ Le produit aide l’utilisateur à explorer les données de marché et à s’ex
 | Dashboard, Portfolio, Transactions | Données du compte, performance avec cotations, transactions récentes et historique filtré/paginé. Chargement, absence de données et erreurs restent des états distincts. |
 | Watchlist | API et intégration frontend livrées. |
 | Alertes de prix | CRUD privé et monitoring livrés ; intégration frontend (#57) et déclenchement persistant (#43) restants. |
-| AI Trader backend | Portefeuille système indépendant, Risk Manager, exécution simulée, historiques persistés et calcul des métriques. Onze endpoints GET protégés ; aucune route d’exécution. |
+| AI Trader backend | Portefeuille système indépendant, Risk Manager, exécution simulée, historiques persistés et calcul des métriques. Treize endpoints GET protégés, capture périodique optionnelle et contexte historique des trades/modèles ; aucune route d’exécution. |
 | AI Trader frontend | Sept sections connectées aux API de lecture (#59/#241), avec états de chargement, erreurs, données indisponibles et rafraîchissement manuel. Les services et exports privés doivent être configurés. |
 | ML | Ingestion/nettoyage/features, régression logistique et Random Forest, évaluation, signaux BUY/SELL/HOLD avec confiance, backtesting et comparaison Buy & Hold livrés. |
 | Cycle de vie des modèles | Registre de versions, artefacts locaux/S3, réentraînement et promotion explicite livrés. Un candidat réentraîné reste `Archived` tant qu’il n’a pas été promu. |
@@ -242,7 +242,7 @@ En environnement `Development`, OpenAPI est disponible à `/openapi/v1.json`. Le
 | GET | `/api/portfolio/transactions`, `/api/portfolio/transactions/history` | Transactions récentes et historique paginé |
 | GET / POST / DELETE | /api/watchlist et /api/watchlist/{symbol} | Liste, ajout et suppression de symboles |
 | GET / POST / PUT / DELETE | /api/alerts et /api/alerts/{id} | Gestion des alertes ; désactivation par POST /api/alerts/{id}/disable |
-| GET | /api/ai-trader/* | Onze lectures protégées : portefeuille, performances, décisions, transactions, modèles et backtests |
+| GET | /api/ai-trader/* | Treize lectures protégées : portefeuille, performances/cycles, décisions, transactions, modèles et backtests |
 
 Après connexion, les routes privées utilisent `Authorization: Bearer <token>`. La session frontend est conservée dans `localStorage`, vérifiée à l’expiration et actualisée lors des changements de session. La déconnexion efface la session locale. Le changement de mot de passe ne constitue pas un mécanisme de révocation des JWT déjà émis ; ceux-ci conservent leur durée de validité.
 

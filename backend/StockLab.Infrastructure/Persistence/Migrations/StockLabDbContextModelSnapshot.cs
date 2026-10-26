@@ -327,6 +327,9 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("char(3)");
 
+                    b.Property<DateTime?>("CycleSlotUtc")
+                        .HasColumnType("datetime2(7)");
+
                     b.Property<bool>("IsInitialBaseline")
                         .HasColumnType("bit");
 
@@ -341,6 +344,9 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("TradeContextJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("ValuedAtUtc")
                         .HasColumnType("datetime2(7)");
 
@@ -353,6 +359,10 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                     b.HasIndex("CaptureId")
                         .IsUnique();
 
+                    b.HasIndex("AiTraderPortfolioId", "CycleSlotUtc")
+                        .IsUnique()
+                        .HasFilter("[CycleSlotUtc] IS NOT NULL");
+
                     b.HasIndex("AiTraderPortfolioId", "ValuedAtUtc", "Id");
 
                     b.ToTable("AiPortfolioSnapshots", null, t =>
@@ -364,6 +374,8 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_AiPortfolioSnapshots_Cash", "[CashBalance] >= 0");
 
                             t.HasCheckConstraint("CK_AiPortfolioSnapshots_Currency", "[Currency] = 'USD'");
+
+                            t.HasCheckConstraint("CK_AiPortfolioSnapshots_Cycle", "([CycleSlotUtc] IS NULL AND [TradeContextJson] IS NULL) OR ([CycleSlotUtc] IS NOT NULL AND [TradeContextJson] IS NOT NULL AND [IsInitialBaseline] = 0 AND [CycleSlotUtc] > '0001-01-01T00:00:00' AND [CycleSlotUtc] <= [ValuedAtUtc])");
 
                             t.HasCheckConstraint("CK_AiPortfolioSnapshots_Positions", "[PositionsValue] >= 0");
 

@@ -18,7 +18,8 @@ public sealed class AiTraderApiTests
     {
         "overview", "positions", "trades", "trades/11111111-1111-1111-1111-111111111111",
         "decisions", "decisions/11111111-1111-1111-1111-111111111111", "rejected-decisions",
-        "performance", "performance/history", "models", "backtests"
+        "performance", "performance/history", "performance/cycles",
+        "performance/cycles/11111111-1111-1111-1111-111111111111", "models", "backtests"
     };
 
     [Theory]
