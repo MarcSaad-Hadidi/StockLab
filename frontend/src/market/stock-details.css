@@ -770,6 +770,29 @@
   line-height: 1.35;
 }
 
+.stock-cash-feedback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.stock-cash-feedback .stock-form-error {
+  margin: 0;
+}
+
+.stock-cash-feedback button,
+.stock-cash-feedback a {
+  border: 0;
+  padding: 0;
+  color: #5262d7;
+  background: transparent;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .stock-details-back {
   display: inline-flex;
   align-items: center;
