@@ -18,6 +18,8 @@ import { MarketShell } from "./MarketShell";
 import { MarketIcon } from "./marketIcons";
 import { StockLogo } from "./StockLogo";
 import { MarketRequestStatus } from "./MarketRequestStatus";
+import { useOrderCash } from "./useOrderCash";
+import type { PortfolioApiError } from "../api/portfolioApi";
 import { StockDataPanel } from "./StockDataPanel";
 import { useMarketRequest } from "./useMarketRequest";
 import {
@@ -88,6 +90,10 @@ function TradeTicket({
   limitPrice,
   limitPriceError,
   availableCash,
+  cashCurrency,
+  cashLoading,
+  cashError,
+  onRetryCash,
   isSubmitting,
   isAuthenticated,
   onSideChange,
@@ -104,6 +110,10 @@ function TradeTicket({
   limitPrice: string;
   limitPriceError: string;
   availableCash: string | null;
+  cashCurrency: string | null;
+  cashLoading: boolean;
+  cashError: PortfolioApiError | null;
+  onRetryCash: () => void;
   isSubmitting: boolean;
   isAuthenticated: boolean;
   onSideChange: (side: TradeSide) => void;
@@ -247,10 +257,17 @@ function TradeTicket({
         )}
       </button>
       {isSubmitting && <p role="status">{t("stockDetails.submittingOrder")}</p>}
-      <div className="stock-cash-row">
+      <div className="stock-cash-row" aria-busy={cashLoading}>
         <span>{t("stockDetails.availableCashPaper")}</span>
-        <strong>{availableCash == null ? "—" : formatCurrency(availableCash)}</strong>
+        <strong role={cashLoading ? "status" : undefined}>{cashLoading ? t("marketApi.loading")
+          : availableCash == null ? "—" : money(availableCash, cashCurrency, localeForLanguage(i18n.language), 12)}</strong>
       </div>
+      {cashError && <div className="stock-cash-feedback">
+        <p className="stock-form-error" role="alert">{t(cashError.code === "unauthorized"
+          ? "stockDetails.tradeErrors.unauthorized" : `portfolio.errors.${cashError.code}`)}</p>
+        {cashError.code === "unauthorized" ? <a href="/login">{t("login.signIn")}</a>
+          : <button type="button" onClick={onRetryCash}>{t("watchlist.retry")}</button>}
+      </div>}
     </form>
   );
 }
@@ -312,6 +329,10 @@ export function StockDetailsPage({
   const [hasUncertainOrder, setHasUncertainOrder] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cashResult, setCashResult] = useState<{ session: AuthSession; balance: string } | null>(null);
+  const orderCash = useOrderCash();
+  // A trade response is newer than the initial portfolio read, even if that read
+  // finishes last. Never show a previous session's result while effects catch up.
+  const currentCashResult = cashResult && sameTradeSession(cashResult.session, getAuthSession()) ? cashResult : null;
   const activeRequest = useRef<{ controller: AbortController; sent: boolean } | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   const isAuthenticated = useAuthUser() !== null;
@@ -863,7 +884,11 @@ export function StockDetailsPage({
                   quantity={quantity}
                   quantityError={quantityError}
                   side={tradeSide}
-                  availableCash={cashResult?.balance ?? null}
+                  availableCash={currentCashResult?.balance ?? orderCash.data?.balance ?? null}
+                  cashCurrency={orderCash.data?.currency ?? (currentCashResult ? details.currency : null)}
+                  cashLoading={!currentCashResult && orderCash.isLoading}
+                  cashError={currentCashResult ? null : orderCash.error}
+                  onRetryCash={orderCash.retry}
                   isSubmitting={isSubmitting}
                   isAuthenticated={isAuthenticated}
                 />
