@@ -334,6 +334,15 @@ must select one model family, provide its verified artifact and explicitly trust
 the private joblib source. The selected family must have an Active version; the
 Archived catalog exports above alone cannot run inference.
 
+Issue #251 connects the Dashboard summary to the same validated `/performance`
+read as the dedicated AI Trader page. It loads only that resource, displays actual
+aggregate return/P&L/win rate/executed count and the UTC valuation timestamp, and
+refreshes manually or on focus/visible return/persisted pageshow. Loading, a missing
+portfolio, provider errors, nullable metrics and a genuine zero-trade portfolio
+remain distinct. It does not poll, fetch model catalogs or imply the bot is running.
+The former unconnected seven-day sparkline is replaced by the actual trade count;
+no historical series is invented. The full chart remains on the AI Trader page.
+
 Issue #258 adds explicit persisted-decision risk/paper execution with attempt
 journaling as described above. Issue #259 adds the opt-in performance worker and
 one-shot capture above. The local functional building blocks are now present;
@@ -346,9 +355,7 @@ operational completion still requires:
    intended data/providers. The #259 worker only samples performance; schedule
    inference/order orchestration separately if unattended trading simulation is
    wanted. Retraining/promotion must retain the existing evaluation safeguards.
-3. Connect the separate Dashboard summary to real AI metrics (#251); the dedicated
-   AI Trader page already reads its histories/metrics.
-4. Deploy asynchronous/cloud jobs if required (#50 SQS / #52 Lambda). These are
+3. Deploy asynchronous/cloud jobs if required (#50 SQS / #52 Lambda). These are
    distinct from a working local paper-trading cycle.
 Normal API startup and the React page never invoke inference/execution. Per-family Active
 versions do not choose a global operational model: the command requires that

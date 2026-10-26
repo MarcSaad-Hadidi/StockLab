@@ -1,0 +1,9 @@
+# Dashboard AI summary (#251)
+
+Reuse the existing validated `/api/ai-trader/performance` client and session-bound AI data loader. Add a Summary resource group that loads only performance; do not fetch catalogs, trades, chart history or trigger the bot. Render current aggregate return (fraction converted to percentage points), decimal-string P&L in the response currency, nullable win rate and actual executed trade count. Replace the unconnected seven-day chart with the fourth requested metric rather than inventing historical observations.
+
+Keep the existing Dashboard layout and four-column/two-column responsive card structure. Reuse the AI resource feedback component and FR/EN error/retry/session messages. Loading, missing portfolio, provider error, no executions and legitimate zeros remain distinct. Show the UTC valuation time and incomplete legacy statistics where relevant; no active/live badge or benchmark claim is inferred from API availability.
+
+Use a stable refresh callback in the shared loader. The summary refreshes on explicit action, focus, visible return and persisted pageshow. Existing loader deduplication, cancellation, session isolation, token rotation and 401 fail-closed behavior remain authoritative. No timer/polling or new cache is added.
+
+Tests cover rendered FR/EN values/signs/fractions/precision, zero and nullable metrics, loading/errors/retry, refreshed data, concurrent refresh deduplication and stale responses after session change/logout/expiry. Run frontend lint/build/all tests and independent review. Browser plugin is absent; use bundled Playwright with installed headless Chrome for actual desktop/mobile validation, including controlled test-only responses and a separate real local API smoke. No fake records are added to the database and no model or trading cycle is activated.

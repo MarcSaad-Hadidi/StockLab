@@ -46,7 +46,7 @@ Le produit aide l’utilisateur à explorer les données de marché et à s’ex
 | Watchlist | API et intégration frontend livrées. |
 | Alertes de prix | CRUD privé et monitoring livrés ; intégration frontend (#57) et déclenchement persistant (#43) restants. |
 | AI Trader backend | Portefeuille système indépendant, Risk Manager, exécution simulée, historiques persistés et calcul des métriques. Treize endpoints GET protégés, capture périodique optionnelle et contexte historique des trades/modèles ; aucune route d’exécution. |
-| AI Trader frontend | Sept sections connectées aux API de lecture (#59/#241), avec états de chargement, erreurs, données indisponibles et rafraîchissement manuel. Les services et exports privés doivent être configurés. |
+| AI Trader frontend | Sept sections connectées aux API de lecture (#59/#241), avec états de chargement, erreurs, données indisponibles et rafraîchissement manuel. Le résumé Dashboard (#251) lit les performances réelles et se réactualise au retour sur la page. Les services et exports privés doivent être configurés. |
 | ML | Ingestion/nettoyage/features, régression logistique et Random Forest, évaluation, signaux BUY/SELL/HOLD avec confiance, backtesting et comparaison Buy & Hold livrés. |
 | Cycle de vie des modèles | Registre de versions, artefacts locaux/S3, réentraînement et promotion explicite livrés. Un candidat réentraîné reste `Archived` tant qu’il n’a pas été promu. |
 | Persistance et CI | Modèles EF Core, migrations SQL, tests hors ligne et job CI SQL Server LocalDB avec contrôle des cas réellement exécutés. |

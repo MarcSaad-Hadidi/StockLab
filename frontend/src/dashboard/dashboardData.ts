@@ -101,5 +101,3 @@ export const performanceSeries: Record<PerformanceRange, PerformanceSeries> = Ob
 export const positions: Position[] = []
 
 export const transactions: Transaction[] = []
-
-export const aiPerformance = { return: null, pnl: null, winRate: null, trades: null }

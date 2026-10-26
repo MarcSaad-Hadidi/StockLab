@@ -4,7 +4,10 @@ import { PerformanceLineChart } from '../components/charts/PerformanceLineChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
 import { getTrendClass, getTrendIcon, getTrendTone } from '../components/trend/trend'
-import { formatUnitPrice, formatDate, formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedCurrency, formatSignedPercent, formatTradeAmount, formatQuantity } from '../i18n/formatters'
+import { formatUnitPrice, formatDate, formatTime, formatCompactCurrency, formatCurrency, formatPercent, formatSignedPercent, formatTradeAmount, formatQuantity, formatNumber } from '../i18n/formatters'
+import { useAiTraderData } from '../ai-trader/useAiTraderData'
+import { ResourceContent } from '../ai-trader/AiTraderPanels'
+import { fractionPoints, formatAiSignedCurrency, formatAiTimestamp } from '../ai-trader/aiTraderData'
 import { routeFor } from '../navigation/routes'
 import { usePortfolioData } from '../portfolio/usePortfolioData'
 import { useWatchlistData } from '../watchlist/useWatchlistData'
@@ -13,7 +16,6 @@ import type { WatchlistItem } from '../watchlist/watchlistData'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
-  aiPerformance,
   performanceSeries,
   type IconName,
   type Metric,
@@ -88,8 +90,6 @@ function PerformanceChart({ range }: { range: PerformanceRange }) {
     />
   )
 }
-
-function Sparkline() { return <UnavailableState message="businessData.ai" /> }
 
 function PanelHeading({ title, subtitle, action, id, destination }: { title: string; subtitle?: string; action?: string; id?: string; destination?: string }) {
   return (
@@ -168,6 +168,51 @@ function TransactionRow({ transaction, currency }: { transaction: Transaction; c
 
 const ranges: PerformanceRange[] = ['1D', '1W', '1M', '3M', '1Y', 'YTD', 'ALL']
 
+export function DashboardAiSummary() {
+  const { t, i18n } = useTranslation()
+  const { resources, isLoading, refresh, retry } = useAiTraderData('Summary')
+  const resource = resources.performance
+  useEffect(() => {
+    const visible = () => { if (document.visibilityState === 'visible') refresh() }
+    const restored = (event: PageTransitionEvent) => { if (event.persisted) refresh() }
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', visible)
+    window.addEventListener('pageshow', restored)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', visible)
+      window.removeEventListener('pageshow', restored)
+    }
+  }, [refresh])
+  return <section aria-labelledby="ai-trader-title" aria-busy={isLoading} className="panel ai-panel ai-summary">
+    <div className="ai-heading">
+      <div className="ai-title"><span className="ai-badge"><Icon name="sparkles" size={18} /></span>
+        <div><h2 id="ai-trader-title">{t('common.navigation.aiTrader')}</h2><p>{t('dashboard.aiSubtitle')}</p></div>
+      </div>
+      <div className="ai-summary-actions">
+        <button className="text-action" data-refresh-ai-summary disabled={isLoading || resource.status === 'unauthorized'} onClick={refresh} type="button">{t(isLoading ? 'aiTrader.refreshing' : 'aiTrader.refresh')}</button>
+        <a className="text-action" href={routeFor('ai-trader')}>{t('dashboard.openAiTrader')} <Icon name="chevron-right" size={16} /></a>
+      </div>
+    </div>
+    <ResourceContent resource={resource} retry={() => retry('performance')}>{data => {
+      const tone = getTrendTone(data.totalReturn)
+      return <>
+        <div className="ai-content">
+          <div className={`ai-stat ai-stat-primary ${getTrendClass(tone)}`}><span>{t('dashboard.aiReturn')}</span><strong>{formatSignedPercent(fractionPoints(data.totalReturn), i18n.language)}</strong><small>{t('dashboard.metrics.allTime')}</small></div>
+          <div className="ai-stat"><span>{t('dashboard.netPnl')}</span><strong>{formatAiSignedCurrency(data.totalPnL, i18n.language, 2, data.currency)}</strong><small>{data.currency}</small></div>
+          <div className="ai-stat"><span>{t('dashboard.winRate')}</span><strong>{formatPercent(fractionPoints(data.winRate), i18n.language, 1)}</strong><small>{t('aiTrader.sellTrades')}</small></div>
+          <div className="ai-stat"><span>{t('aiTrader.totalTrades')}</span><strong>{formatNumber(data.executedTradeCount, i18n.language, 0)}</strong><small>{t('aiTrader.buyTrades')} / {t('aiTrader.sellTrades')}</small></div>
+        </div>
+        <div className="ai-summary-notes">
+          {data.executedTradeCount === 0 && <p role="status">{t('aiTrader.noTrades')}</p>}
+          {!data.tradeStatisticsComplete && <p role="status">{t('aiTrader.incompleteStatistics', { count: data.unvaluedLegacySellCount })}</p>}
+          <p>{t('aiTrader.valuedAt', { time: formatAiTimestamp(data.valuationTimestampUtc, i18n.language) })}</p>
+        </div>
+      </>
+    }}</ResourceContent>
+  </section>
+}
+
 export function DashboardPage() {
   const { i18n, t } = useTranslation()
   useEffect(() => {
@@ -180,8 +225,6 @@ export function DashboardPage() {
   const { items: watchlist, loading: watchlistLoading, error: watchlistError, reload: reloadWatchlist } = useWatchlistData()
   const dashboardUserName = ''
   const [greetingPeriod, setGreetingPeriod] = useState(() => getGreetingPeriod(new Date()))
-  const aiReturnTone = getTrendTone(aiPerformance.return)
-  const aiReturnIcon = getTrendIcon(aiReturnTone)
 
   useEffect(() => {
     return startDashboardGreetingTimer(() => setGreetingPeriod(getGreetingPeriod(new Date())), dashboardUserName)
@@ -307,8 +350,8 @@ export function DashboardPage() {
             </section>
           </div>
 
-          <section aria-labelledby="ai-trader-title" className="panel ai-panel"><div className="ai-heading"><div className="ai-title"><span className="ai-badge"><Icon name="sparkles" size={18} /></span><div><h2 id="ai-trader-title">{t('common.navigation.aiTrader')}</h2><p>{t('dashboard.aiSubtitle')}</p></div><span className="status-badge"><i /> {t('businessData.unavailable')}</span></div><button className="text-action" onClick={() => window.location.assign(routeFor('ai-trader'))} type="button">{t('dashboard.openAiTrader')} <Icon name="chevron-right" size={16} /></button></div><div className="ai-content"><div className={`ai-stat ai-stat-primary ${getTrendClass(aiReturnTone)}`}><span>{t('dashboard.aiReturn')}</span><strong>{formatSignedPercent(aiPerformance.return)}</strong><small className={getTrendClass(aiReturnTone)}>{aiReturnIcon && <Icon name={aiReturnIcon} size={13} />} {t('businessData.unavailable')}</small></div><div className="ai-stat"><span>{t('dashboard.netPnl')}</span><strong>{formatSignedCurrency(aiPerformance.pnl)}</strong><small>{t('businessData.unavailable')}</small></div><div className="ai-stat"><span>{t('dashboard.winRate')}</span><strong>{formatPercent(aiPerformance.winRate, undefined, 1)}</strong><small>{t('businessData.ai')}</small></div><div className="ai-chart-wrap"><span>{t('dashboard.sevenDayPerformance')}</span><Sparkline /><div className="ai-chart-labels"><small>{t('common.days.mon')}</small><small>{t('dashboard.today')}</small></div></div></div></section>
-          <p className="simulation-note"><span><Icon name="activity" size={14} /> {t('businessData.unavailable')}</span> {t('businessData.backendPending')}</p>
+          <DashboardAiSummary />
+          <p className="simulation-note"><span><Icon name="activity" size={14} /> {t('aiTrader.simulationNote')}</span></p>
         </div>
       <LogoAttribution /></main>
     </div>

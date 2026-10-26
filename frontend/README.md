@@ -146,7 +146,7 @@ real-data verification uses TwelveData configured externally. Trading controls o
 | Page | Runtime source / honest state |
 | --- | --- |
 | Market / Stock Details | Twelve quote/search/history; Alpha metadata, earnings and EOD movers; free Elbstream logos |
-| Dashboard | No account balances, holdings, watchlist, trades or synthetic performance; cards and tables retained |
+| Dashboard | Account portfolio/recent activity and watchlist integrations; AI summary reads validated `/api/ai-trader/performance` for return, P&L, nullable win rate and executed trades, with loading/error/retry and return-to-page refresh. No bot execution or invented performance history. |
 | Portfolio | Empty holdings and performance, unavailable totals; never substitute a stock chart for account value |
 | Transactions | Empty history; execution prices are never replaced with current prices; filters/table retained |
 | Watchlist | Empty list pending persistence; no manufactured saved stocks or market status |
