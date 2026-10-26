@@ -107,14 +107,96 @@ the automatic decision/execution/performance cycles #257–#259.
 - Missing/unconfigured catalogs return 503; invalid exports return 502. Only a
   validated `200 []` is an empty catalog. Never deploy test fixtures as substitutes.
 
+## Run one decision cycle (#257)
+
+This operator-only command automatically performs inference and append-only
+recording once, then exits. It does not start the HTTP server or hosted workers.
+The existing JWT-protected decision-history GETs make recorded decisions visible
+to the AI Trader page; the command never creates an account or portfolio.
+
+Set these private Development User Secrets on `backend/StockLab.Api` (or the
+equivalent secure deployment configuration). There are no default model, symbols,
+paths or implicit artifact trust:
+
+| Key | Required value |
+| --- | --- |
+| `AiTraderMetadata:RegistryPath` | Absolute path to the authentic existing registry |
+| `AiDecisionPipeline:PythonExecutable` | Absolute path to the compatible Python executable, normally `ml/.venv/Scripts/python.exe` on Windows |
+| `AiDecisionPipeline:MlDirectory` | Absolute path to this checkout's `ml/` directory; its `src/` supplies the fixed Python module |
+| `AiDecisionPipeline:DatasetPath` | Absolute path to a verified daily OHLCV CSV from the existing ingestion pipeline |
+| `AiDecisionPipeline:ArtifactsDirectory` | Absolute private #76 artifact root containing `<model_name>/<model_version>/model.joblib` and `manifest.json` |
+| `AiDecisionPipeline:ModelName` | One explicitly chosen registered family, e.g. `logistic_regression_baseline` |
+| `AiDecisionPipeline:Symbols:0`, `:1`, ... | 1..100 distinct canonical symbols present on the requested session |
+| `AiDecisionPipeline:TrustedArtifacts` | Explicit `true` only for trusted private artifacts; joblib deserialization executes code |
+| `AiDecisionPipeline:TimeoutSeconds` | Optional 1..300 seconds; default 60 |
+
+Save the fitted artifact during the existing training/storage workflow using
+`save_model_artifact(registry.bind_version(...))` (#76). Select/promote the intended
+version explicitly using the existing promotion workflow (#78). The #265 catalog
+exporter saves metadata and reports, not fitted artifacts, and leaves models
+Archived. A missing artifact or absent Active version is a prerequisite failure;
+the command never trains, activates, falls back to another version or fabricates
+a HOLD decision to fill that gap. The Python environment must match the verified
+artifact manifest's supported package versions.
+
+From the repository root, with the intended connection string already installed:
+
+```powershell
+dotnet run --project backend/StockLab.Api -- --run-ai-decisions --AiDecisionPipeline:ExpectedDatabase=<exact-database-name> --AiDecisionPipeline:DecisionDate=<YYYY-MM-DD>
+```
+
+The date must be strictly before today's UTC date and name a completed daily
+session with a valid observation for **every** requested symbol. This conservative
+rule avoids treating today's daily bar as complete; exchange-calendar validation
+and fresh-data ingestion remain operator responsibilities. Future observations
+are excluded before features, and the model's training split must precede or
+equal that session. Insufficient history, invalid historical rows, changed Active
+identity during inference, bad hashes/schema, unexpected process output or a
+wrong database/pending migrations fail with exit 1. Exit 0 prints
+`decisions_recorded: N`. Timeouts/cancellation stop the child process; errors do
+not echo private stderr or paths. No provider key is required for this local CSV
+cycle and it makes no market-data request.
+
+The command invokes the same Python module that can be inspected independently:
+
+```powershell
+$env:PYTHONPATH = "$PWD/ml/src"
+ml/.venv/Scripts/python.exe -m stocklab_ml.decision_pipeline --registry-path <registry.json> --artifacts-dir <private-artifact-root> --dataset-path <verified.csv> --model-name <chosen-family> --decision-date <YYYY-MM-DD> --symbols AAPL --trusted-artifacts
+```
+
+Its stdout is a single schema-v1 JSON batch. Each row contains `symbol`, uppercase
+`signal` and a string `confidence` preserving the exact decimal through .NET/SQL
+(at most 28 fractional digits). The backend rejects duplicate/unknown fields,
+wrong dates/models/symbol sets and oversized outputs before recording anything.
+Confidence retains #65's signal-alignment meaning; it is not forecast accuracy.
+
+Stable IDs include the model name/version, symbol and session. Identical reruns
+return the original records and timestamps; corrected inputs producing a changed
+payload for the same ID conflict rather than silently replacing history. Keep the
+original CSV and artifact immutable for retry/audit. Storage commits per decision:
+a storage failure or cancellation can leave a valid prefix. Rerun the exact same
+inputs to resume; this is not an all-or-nothing batch transaction.
+
+Backend process-contract tests require Python's standard library on PATH, or
+`STOCKLAB_TEST_PYTHON` pointing to an explicit executable. They use isolated fake
+modules to test timeout, cancellation and output limits, never private artifacts.
+Python inference tests exercise actual fitted estimators and verified test-only
+artifacts with all network calls blocked.
+
 ## Remaining ML → backend orchestration
 
-Metadata synchronization, inference scheduling, recording original model decisions,
-risk evaluation, paper execution and periodic valuation capture remain trusted
-backend/operator responsibilities. They need a separately specified operational
-workflow, ownership, scheduling, deployment configuration and monitoring. Neither
-#59 nor #80 establishes an automatic ML → backend pipeline or a running bot.
-Per-family `Active` registry versions do not select a global operational model.
+Issue #257 adds the explicit `--run-ai-decisions` operator cycle documented in
+`backend/README.md`. It invokes verified Python inference and records original
+versioned decisions, including HOLD, without risk approval or trades. The operator
+must select one model family, provide its verified artifact and explicitly trust
+the private joblib source. The selected family must have an Active version; the
+Archived catalog exports above alone cannot run inference.
+
+Metadata/data synchronization, periodic scheduling, risk evaluation (#258), paper
+execution and periodic valuation capture (#259) remain separate operational work.
+Normal API startup and the React page never invoke inference. Per-family Active
+versions do not choose a global operational model: the command requires that
+choice explicitly in private backend configuration.
 
 No automatic orchestration, cloud configuration or #92 work is added by #265.
 

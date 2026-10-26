@@ -119,6 +119,13 @@ runs automatically when the API starts.
 
 For explicit initialization, genuine ML catalog configuration and verification,
 follow [AI Trader operator setup (#265)](../frontend/AI_TRADER_OPERATIONS.md#operator-commands-265).
+The explicit [decision cycle (#257)](../frontend/AI_TRADER_OPERATIONS.md#run-one-decision-cycle-257)
+adds `--run-ai-decisions`: verified Python inference followed by append-only
+versioned decisions, with a named-database guard and no HTTP/background host.
+It requires an explicitly selected Active family and a trusted verified fitted
+artifact; the metadata catalogs alone cannot run it. Normal HTTP startup does not
+require Python or pipeline configuration. Risk/execution (#258) and periodic
+performance capture (#259) remain separate.
 Use `--initialize-ai-trader` with `AiTraderSetup:ExpectedDatabase`; normal startup
 and HTTP GET requests remain read-only. `--check-ai-trader` validates the configured
 portfolio/catalog sources without initializing or modifying them.
