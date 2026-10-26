@@ -44,12 +44,12 @@ public sealed class AiPaperTradingEngine(
                 ?? throw new AiTradeExecutionException(AiTradeExecutionFailure.PortfolioNotFound);
 
             // All market I/O finishes before acquiring database locks. Fetch the target price once.
-            var price = await PriceAsync(decision.Symbol, cancellationToken);
+            var price = await PriceAsync(marketDataProvider, decision.Symbol, cancellationToken);
             var prices = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase) { [decision.Symbol] = price };
             if (decision.Signal == AiTradingSignal.Buy)
                 foreach (var position in before.Positions)
                     if (!prices.ContainsKey(position.Symbol))
-                        prices[position.Symbol] = await PriceAsync(position.Symbol, cancellationToken);
+                        prices[position.Symbol] = await PriceAsync(marketDataProvider, position.Symbol, cancellationToken);
 
             await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
             var portfolio = await db.AiTraderPortfolios.Include(p => p.Positions)
@@ -173,10 +173,10 @@ public sealed class AiPaperTradingEngine(
         }
     }
 
-    private async Task<decimal> PriceAsync(string symbol, CancellationToken cancellationToken)
+    internal static async Task<decimal> PriceAsync(IMarketDataProvider provider, string symbol, CancellationToken cancellationToken)
     {
         StockQuote? quote;
-        try { quote = await marketDataProvider.GetQuoteAsync(symbol, cancellationToken); }
+        try { quote = await provider.GetQuoteAsync(symbol, cancellationToken); }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception exception) when (exception is HttpRequestException or MarketDataProviderException
             or MarketDataRateLimitException or OperationCanceledException or InvalidOperationException)

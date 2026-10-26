@@ -12,7 +12,8 @@ public static class AiRejectedDecisionHistoryRegistration
     {
         services.AddDbContextFactory<StockLabDbContext>(lifetime: ServiceLifetime.Scoped);
         services.TryAddSingleton(TimeProvider.System);
-        services.AddScoped<IAiRejectedDecisionHistoryService, AiRejectedDecisionHistoryService>();
+        services.AddScoped<AiRejectedDecisionHistoryService>();
+        services.AddScoped<IAiRejectedDecisionHistoryService>(provider => provider.GetRequiredService<AiRejectedDecisionHistoryService>());
         return services;
     }
 }
