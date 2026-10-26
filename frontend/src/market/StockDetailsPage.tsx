@@ -12,6 +12,8 @@ import { marketDataApi } from "../api/marketDataClient";
 import { TradingApiError, tradingApi } from "../api/tradingApi";
 import { getAuthSession, type AuthSession } from "../auth/authStorage";
 import { subscribeAuthSession, useAuthUser } from "../auth/useAuthUser";
+import { useWatchlistData } from "../watchlist/useWatchlistData";
+import { WatchlistFeedback } from "../watchlist/WatchlistFeedback";
 import { MarketShell } from "./MarketShell";
 import { MarketIcon } from "./marketIcons";
 import { StockLogo } from "./StockLogo";
@@ -263,7 +265,39 @@ export function StockDetailsPage({
   const locale = localeForLanguage(i18n.language);
   const symbol = requestedSymbol.trim().toUpperCase();
   const [anchor] = useState(() => new Date());
-  const isWatchlisted = false;
+  const watchlist = useWatchlistData(false);
+  const { reload: reloadWatchlist } = watchlist;
+  const isWatchlisted = watchlist.favorites.has(symbol);
+  const watchlistReady = !watchlist.loading && !watchlist.error;
+  const watchlistPending = watchlist.pendingSymbols.size > 0;
+  const watchlistDisabled = !watchlistReady || watchlistPending;
+  const watchlistLabel = watchlist.loading ? t("watchlist.loading")
+    : watchlist.error ? t("common.navigation.watchlist")
+    : t(isWatchlisted ? "stockDetails.removeFromWatchlist" : "stockDetails.addToWatchlist", { symbol });
+  const [watchlistAction, setWatchlistAction] = useState<{ symbol: string; accessToken: string } | null>(null);
+  const showWatchlistError = watchlistAction?.symbol === symbol
+    && watchlistAction.accessToken === getAuthSession()?.accessToken;
+
+  function toggleWatchlist() {
+    if (watchlistDisabled) return;
+    const accessToken = getAuthSession()?.accessToken;
+    if (!accessToken) return;
+    setWatchlistAction({ symbol, accessToken });
+    void (isWatchlisted ? watchlist.remove(symbol) : watchlist.add(symbol));
+  }
+
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") reloadWatchlist(); };
+    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) reloadWatchlist(); };
+    window.addEventListener("focus", reloadWatchlist);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      window.removeEventListener("focus", reloadWatchlist);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [reloadWatchlist]);
   const [tradeSide, setTradeSide] = useState<TradeSide>("BUY");
   const [orderType, setOrderType] = useState<TradeOrderType>("market");
   const [limitPrice, setLimitPrice] = useState("");
@@ -527,12 +561,14 @@ export function StockDetailsPage({
               <div className="stock-title-row">
                 <h1 id="stock-details-title">{companyName}</h1>
                 <button
-                  className="stock-title-star"
+                  className={`stock-title-star${watchlistReady && isWatchlisted ? " stock-title-star-active" : ""}`}
                   type="button"
-                  aria-label={t("stockDetails.addToWatchlist", { symbol })}
-                  aria-pressed={isWatchlisted}
-                  disabled
-                  title={t("businessData.unavailable")}
+                  aria-label={watchlistLabel}
+                  aria-pressed={watchlistReady ? isWatchlisted : undefined}
+                  aria-busy={watchlistPending}
+                  disabled={watchlistDisabled}
+                  title={watchlistLabel}
+                  onClick={toggleWatchlist}
                 >
                   <MarketIcon name="star" filled={isWatchlisted} size={17} />
                 </button>
@@ -568,14 +604,17 @@ export function StockDetailsPage({
           </div>
           <div className="stock-details-actions">
             <button
-              aria-pressed={isWatchlisted}
-              className="stock-outline-button"
-              disabled
-              title={t("businessData.unavailable")}
+              aria-label={watchlistLabel}
+              aria-pressed={watchlistReady ? isWatchlisted : undefined}
+              aria-busy={watchlistPending}
+              className={`stock-outline-button${watchlistReady && isWatchlisted ? " stock-outline-button-active" : ""}`}
+              disabled={watchlistDisabled}
+              title={watchlistLabel}
+              onClick={toggleWatchlist}
               type="button"
             >
               <MarketIcon filled={isWatchlisted} name="star" size={15} />{" "}
-              {isWatchlisted
+              {!watchlistReady ? watchlistLabel : isWatchlisted
                 ? t("stockDetails.inWatchlist")
                 : t("stockDetails.addToWatchlist", { symbol })}
             </button>
@@ -589,6 +628,10 @@ export function StockDetailsPage({
             </button>
           </div>
         </header>
+        <div className="stock-watchlist-feedback">
+          <WatchlistFeedback loading={watchlist.loading} error={watchlist.error} retry={reloadWatchlist} />
+          <WatchlistFeedback error={showWatchlistError ? watchlist.mutationError : null} />
+        </div>
         <nav
           aria-label={t("stockDetails.sectionsLabel")}
           className="stock-detail-tabs"
