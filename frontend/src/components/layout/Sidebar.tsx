@@ -4,6 +4,7 @@ import { LanguageSelector } from '../LanguageSelector'
 import { isCurrentPage, routeFor } from '../../navigation/routes'
 import { SidebarIcon } from './SidebarIcon'
 import { clearAuthSession } from '../../auth/authStorage'
+import { useMobileNavigation } from './useMobileNavigation'
 import styles from './Sidebar.module.css'
 import './layout.css'
 
@@ -22,14 +23,19 @@ type SidebarProps = { open: boolean; onClose: () => void }
 /** The corrected Alerts sidebar is the shared navigation reference. */
 export function Sidebar({ open, onClose }: SidebarProps) {
   const { t } = useTranslation()
+  const { panelRef, backdropRef, mobile } = useMobileNavigation(open, onClose)
   const logout = () => {
     clearAuthSession()
     window.location.assign(routeFor('logout'))
   }
 
   return <>
-    <button aria-label={t('common.closeNavigation')} className={`${styles.backdrop} ${open ? styles.backdropOpen : ''}`} onClick={onClose} type="button" />
-    <aside className={`${styles.sidebar} ${open ? styles.open : ''}`}>
+    <button aria-hidden="true" tabIndex={-1} ref={backdropRef} className={`${styles.backdrop} ${open ? styles.backdropOpen : ''}`} onClick={onClose} type="button" />
+    <aside id="stocklab-navigation" ref={panelRef} tabIndex={-1} inert={mobile && !open}
+      role={mobile && open ? 'dialog' : undefined} aria-modal={mobile && open ? true : undefined}
+      aria-label={mobile && open ? t('common.primaryNavigation') : undefined}
+      className={`${styles.sidebar} ${open ? styles.open : ''}`}>
+      {mobile && <button aria-label={t('common.closeNavigation')} className={styles.close} onClick={onClose} type="button"><span aria-hidden="true">×</span></button>}
       <div aria-label="StockLab" className={styles.brand}>
         <span aria-hidden="true" className={styles.brandMark}><i /><i /><i /></span>
         <span>Stock<span>Lab</span></span>

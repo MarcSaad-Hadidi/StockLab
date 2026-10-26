@@ -44,9 +44,12 @@
 .item { font-family: inherit; line-height: normal; cursor: pointer; }
 .item:focus-visible { outline: 3px solid rgba(47, 123, 240, .25); outline-offset: 2px; }
 .backdrop { display: none; }
+.close { position: absolute; top: 12px; right: 7px; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; color: #718098; font: inherit; font-size: 22px; background: #fff; border: 1px solid #e8edf4; border-radius: 7px; cursor: pointer; }
+.close:focus-visible { outline: 3px solid rgba(47, 123, 240, .4); outline-offset: 2px; }
 @media (max-width: 760px) {
   .sidebar { transform: translateX(-102%); visibility: hidden; transition: transform .22s ease, visibility .22s ease; }
-  .open { transform: translateX(0); visibility: visible; box-shadow: 12px 0 32px rgba(20, 38, 68, .12); }
+  /* Opening must make the controls focusable before the slide animation starts. */
+  .open { transform: translateX(0); visibility: visible; transition-property: transform; box-shadow: 12px 0 32px rgba(20, 38, 68, .12); }
   .backdrop { position: fixed; inset: 0; z-index: 19; display: block; width: 100%; padding: 0; background: rgba(18, 32, 55, .3); border: 0; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .22s ease, visibility .22s ease; }
   .backdropOpen { opacity: 1; visibility: visible; pointer-events: auto; }
 }
