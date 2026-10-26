@@ -15,6 +15,11 @@ public sealed class AiRejectedDecisionHistoryService(
     TimeProvider timeProvider) : IAiRejectedDecisionHistoryService
 {
     public async Task<AiRejectedDecisionRecord> RecordAsync(AiRejectedDecisionRecordRequest request, CancellationToken cancellationToken = default)
+        => (await RecordWithReplayAsync(request, cancellationToken)).Record;
+
+    // Keep the public history record identical on retries; orchestration also needs atomic write attribution.
+    internal async Task<(AiRejectedDecisionRecord Record, bool IsReplay)> RecordWithReplayAsync(
+        AiRejectedDecisionRecordRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         ValidateId(request.DecisionId);
@@ -50,8 +55,8 @@ public sealed class AiRejectedDecisionHistoryService(
             db.AiRejectedDecisions.Add(rejection);
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return new(raw.Id, raw.Symbol, risk.Signal, raw.Confidence, raw.DecisionDate,
-                raw.ModelName, raw.ModelVersion, risk.RejectionReason.Value, rejection.RejectedAtUtc);
+            return (new(raw.Id, raw.Symbol, risk.Signal, raw.Confidence, raw.DecisionDate,
+                raw.ModelName, raw.ModelVersion, risk.RejectionReason.Value, rejection.RejectedAtUtc), false);
         }
         catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
         {
@@ -65,7 +70,7 @@ public sealed class AiRejectedDecisionHistoryService(
         }
     }
 
-    private async Task<AiRejectedDecisionRecord> ReplayWinnerAsync(Guid decisionId, string reason, CancellationToken token)
+    private async Task<(AiRejectedDecisionRecord Record, bool IsReplay)> ReplayWinnerAsync(Guid decisionId, string reason, CancellationToken token)
     {
         try
         {
@@ -124,11 +129,11 @@ public sealed class AiRejectedDecisionHistoryService(
             RejectionReason = rejection.RejectionReason, RejectedAtUtc = rejection.RejectedAtUtc
         };
 
-    private static AiRejectedDecisionRecord Replay(HistoryRow existing, string reason)
+    private static (AiRejectedDecisionRecord Record, bool IsReplay) Replay(HistoryRow existing, string reason)
     {
         if (!string.Equals(existing.RejectionReason, reason, StringComparison.Ordinal))
             throw new AiRejectedDecisionHistoryException(AiRejectedDecisionHistoryFailure.RejectionConflict);
-        return Map(existing);
+        return (Map(existing), true);
     }
 
     private static AiRejectedDecisionRecord Map(HistoryRow row)

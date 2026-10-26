@@ -124,8 +124,12 @@ adds `--run-ai-decisions`: verified Python inference followed by append-only
 versioned decisions, with a named-database guard and no HTTP/background host.
 It requires an explicitly selected Active family and a trusted verified fitted
 artifact; the metadata catalogs alone cannot run it. Normal HTTP startup does not
-require Python or pipeline configuration. Risk/execution (#258) and periodic
-performance capture (#259) remain separate.
+require Python or pipeline configuration. The explicit [risk/execution command
+(#258)](../frontend/AI_TRADER_OPERATIONS.md#execute-explicit-decisions-258) consumes
+persisted decision IDs, reuses the existing risk/settlement services and journals
+attempt outcomes in the new `AiExecutionAttempts` table. Apply its migration
+explicitly to the intended database before use. Periodic performance capture
+(#259) and scheduling remain separate.
 Use `--initialize-ai-trader` with `AiTraderSetup:ExpectedDatabase`; normal startup
 and HTTP GET requests remain read-only. `--check-ai-trader` validates the configured
 portfolio/catalog sources without initializing or modifying them.

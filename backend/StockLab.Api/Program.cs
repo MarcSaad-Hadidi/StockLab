@@ -27,16 +27,17 @@ using StockLab.Api.Operations;
 var initializeAiTrader = args.Contains("--initialize-ai-trader", StringComparer.Ordinal);
 var checkAiTrader = args.Contains("--check-ai-trader", StringComparer.Ordinal);
 var runAiDecisions = args.Contains("--run-ai-decisions", StringComparer.Ordinal);
-if (new[] { initializeAiTrader, checkAiTrader, runAiDecisions }.Count(selected => selected) > 1)
+var executeAiDecisions = args.Contains("--execute-ai-decisions", StringComparer.Ordinal);
+if (new[] { initializeAiTrader, checkAiTrader, runAiDecisions, executeAiDecisions }.Count(selected => selected) > 1)
 {
-    Console.Error.WriteLine("Choose one operator command: --initialize-ai-trader, --check-ai-trader or --run-ai-decisions.");
+    Console.Error.WriteLine("Choose one operator command: --initialize-ai-trader, --check-ai-trader, --run-ai-decisions or --execute-ai-decisions.");
     Environment.ExitCode = 1;
     return;
 }
 var builder = WebApplication.CreateBuilder(args.Where(argument =>
-    argument is not "--initialize-ai-trader" and not "--check-ai-trader" and not "--run-ai-decisions").ToArray());
+    argument is not "--initialize-ai-trader" and not "--check-ai-trader" and not "--run-ai-decisions" and not "--execute-ai-decisions").ToArray());
 // Provider logs can reveal private database errors before the operator's sanitized catch runs.
-if (runAiDecisions) builder.Logging.ClearProviders();
+if (runAiDecisions || executeAiDecisions) builder.Logging.ClearProviders();
 
 const string frontendCorsPolicy = "Frontend";
 
@@ -90,6 +91,7 @@ builder.Services.AddAiDecisionHistory();
 builder.Services.Configure<AiDecisionPipelineOptions>(builder.Configuration.GetSection(AiDecisionPipelineOptions.SectionName));
 builder.Services.AddScoped<IAiDecisionInferenceProvider, PythonAiDecisionInferenceProvider>();
 builder.Services.AddScoped<IAiDecisionPipelineService, AiDecisionPipelineService>();
+builder.Services.AddScoped<IAiRiskExecutionService, AiRiskExecutionService>();
 builder.Services.AddAiRejectedDecisionHistory();
 builder.Services.AddAiTradesHistory();
 builder.Services.AddAiTraderPerformance();
@@ -249,14 +251,16 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-if (initializeAiTrader || checkAiTrader || runAiDecisions)
+if (initializeAiTrader || checkAiTrader || runAiDecisions || executeAiDecisions)
 {
     using var cancellation = new CancellationTokenSource();
     ConsoleCancelEventHandler cancel = (_, e) => { e.Cancel = true; cancellation.Cancel(); };
     Console.CancelKeyPress += cancel;
     try
     {
-        Environment.ExitCode = runAiDecisions
+        Environment.ExitCode = executeAiDecisions
+            ? await AiRiskExecutionCommand.RunAsync(app.Services, app.Configuration, Console.Out, cancellation.Token)
+            : runAiDecisions
             ? await AiDecisionPipelineCommand.RunAsync(app.Services, app.Configuration, Console.Out, cancellation.Token)
             : await AiTraderSetupCommand.RunAsync(app.Services, app.Configuration, initializeAiTrader, Console.Out, cancellation.Token);
     }

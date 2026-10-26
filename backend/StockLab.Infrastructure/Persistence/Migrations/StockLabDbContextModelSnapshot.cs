@@ -71,6 +71,57 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("StockLab.Domain.Entities.AiExecutionAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal?>("ApprovedQuantity")
+                        .HasColumnType("decimal(19,8)");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<Guid>("DecisionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FailureCode")
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<bool>("IsReplay")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("RequestedPrice")
+                        .HasColumnType("decimal(19,4)");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("varchar(12)");
+
+                    b.Property<Guid?>("TradeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TradeId");
+
+                    b.HasIndex("DecisionId", "StartedAtUtc", "Id");
+
+                    b.ToTable("AiExecutionAttempts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AiExecutionAttempts_Approval", "([RequestedPrice] IS NULL AND [ApprovedQuantity] IS NULL) OR ([RequestedPrice] IS NOT NULL AND [ApprovedQuantity] IS NOT NULL AND [RequestedPrice] > 0 AND [ApprovedQuantity] >= 0)");
+
+                            t.HasCheckConstraint("CK_AiExecutionAttempts_Completion", "([Status] = 'STARTED' AND [CompletedAtUtc] IS NULL) OR ([Status] <> 'STARTED' AND [CompletedAtUtc] IS NOT NULL AND [CompletedAtUtc] >= [StartedAtUtc])");
+
+                            t.HasCheckConstraint("CK_AiExecutionAttempts_Outcome", "([Status] = 'EXECUTED' AND [TradeId] IS NOT NULL AND [FailureCode] IS NULL) OR ([Status] = 'STARTED' AND [TradeId] IS NULL AND [FailureCode] IS NULL) OR ([Status] IN ('REJECTED', 'FAILED', 'CANCELLED') AND [TradeId] IS NULL AND [FailureCode] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_AiExecutionAttempts_Status", "[Status] COLLATE Latin1_General_100_BIN2 IN ('STARTED', 'EXECUTED', 'REJECTED', 'FAILED', 'CANCELLED') AND DATALENGTH([Status]) = LEN([Status])");
+                        });
+                });
+
             modelBuilder.Entity("StockLab.Domain.Entities.AiRejectedDecision", b =>
                 {
                     b.Property<Guid>("AiDecisionId")
@@ -623,6 +674,20 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Watchlists", (string)null);
+                });
+
+            modelBuilder.Entity("StockLab.Domain.Entities.AiExecutionAttempt", b =>
+                {
+                    b.HasOne("StockLab.Domain.Entities.AiDecision", null)
+                        .WithMany()
+                        .HasForeignKey("DecisionId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("StockLab.Domain.Entities.AiTrade", null)
+                        .WithMany()
+                        .HasForeignKey("TradeId")
+                        .OnDelete(DeleteBehavior.NoAction);
                 });
 
             modelBuilder.Entity("StockLab.Domain.Entities.AiRejectedDecision", b =>

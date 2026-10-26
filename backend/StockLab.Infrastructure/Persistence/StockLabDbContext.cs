@@ -18,6 +18,7 @@ public class StockLabDbContext(DbContextOptions<StockLabDbContext> options) : Db
     public DbSet<AiTraderValuationSnapshot> AiTraderValuationSnapshots => Set<AiTraderValuationSnapshot>();
     public DbSet<AiDecision> AiDecisions => Set<AiDecision>();
     public DbSet<AiRejectedDecision> AiRejectedDecisions => Set<AiRejectedDecision>();
+    public DbSet<AiExecutionAttempt> AiExecutionAttempts => Set<AiExecutionAttempt>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -45,6 +46,7 @@ public class StockLabDbContext(DbContextOptions<StockLabDbContext> options) : Db
         {
             AiDecisionConfiguration.ConfigureSqlServerSignal(modelBuilder.Entity<AiDecision>());
             AiRejectedDecisionConfiguration.ConfigureSqlServerReason(modelBuilder.Entity<AiRejectedDecision>());
+            AiExecutionAttemptConfiguration.ConfigureSqlServerStatus(modelBuilder.Entity<AiExecutionAttempt>());
         }
     }
 }

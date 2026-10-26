@@ -183,6 +183,78 @@ modules to test timeout, cancellation and output limits, never private artifacts
 Python inference tests exercise actual fitted estimators and verified test-only
 artifacts with all network calls blocked.
 
+## Execute explicit decisions (#258)
+
+`--execute-ai-decisions` is a separate trusted operator command. It consumes
+already persisted decision IDs and requires no Python/model artifact. It neither
+generates decisions nor selects a recent backlog implicitly. Obtain the exact
+IDs from the existing authenticated `/api/ai-trader/decisions` read endpoint or a
+trusted application caller of #257. The command preserves the supplied order.
+
+First identify the intended database and explicitly apply the normal migrations,
+including `AddAiRiskExecutionAttempts`, using the existing procedure in
+`backend/README.md`. Initialize the system-owned AI portfolio with #265 if needed.
+Neither execution nor normal API startup applies migrations or creates portfolios.
+
+```powershell
+dotnet run --project backend/StockLab.Api -- --execute-ai-decisions --AiRiskExecution:ExpectedDatabase=<exact-database-name> --AiRiskExecution:DecisionIds:0=<persisted-decision-guid> --AiRiskExecution:DecisionIds:1=<another-guid>
+```
+
+Supply 1..100 distinct nonempty IDs. The database name, connection, migrations,
+complete ID set and existing AI portfolio are checked before processing. The
+same private provider/risk configuration as the current backend applies. The
+pre-approval quote uses the existing execution provider and its USD/symbol/price
+validation; the engine fetches execution quotes again and revalidates risk inside
+its settlement transaction. It may reduce the approved quantity. This does not
+claim a live-market entitlement or add a new freshness policy.
+
+BUY/SELL pass the original symbol, signal and confidence to the risk manager.
+HOLD creates no attempt, quote or order. A business refusal is persisted through
+the existing rejection history; a successful paper order is persisted through
+the existing engine. The decision ID is also the stable order ID for this
+orchestration. Terminal decisions are read back without quoting or re-evaluation,
+even if a prior process lost its response. The engine's existing serializable
+transactions and unique decision links remain the execution/rejection authority.
+
+`AiExecutionAttempts` records STARTED durably before market/risk work, then the
+validated requested price/approved quantity before submission. Completion uses
+EXECUTED, REJECTED, FAILED or CANCELLED, with controlled codes and an optional
+committed trade link. Original model/version metadata is retained through the
+decision link. Technical quote/concurrency failures remain retryable FAILED
+attempts; they do not invent a permanent ML rejection. A new explicit retry starts
+a new attempt and reuses the same order identity. There is no automatic retry loop.
+
+Audit completion and settlement are separate commits. If SQL fails or the process
+stops after settlement, an attempt may remain STARTED alongside a real trade or
+rejection. Rerunning the same decision reconciles open attempts from that
+authoritative result without another transaction. `IsReplay` indicates an existing
+or recovered outcome, not proof of which worker originally settled it. An open
+attempt with no terminal outcome remains uncertain; the command does not mark a
+possibly active worker interrupted. Cancellation makes a bounded independent-token
+attempt to save its outcome; if SQL remains unavailable the durable STARTED row
+is retained for inspection/recovery.
+
+The command prints safe per-decision outcomes and a final count summary, then
+exits without starting HTTP/background workers. Exit 0 includes ordinary risk
+refusals/HOLD/replays; exit 1 denotes invalid prerequisites, a technical FAILED
+attempt, cancellation or a journal/persistence failure. Earlier valid outcomes
+remain if a later decision fails: this is not a batch transaction. Inspect the
+journal and retry explicit unresolved IDs. Provider exception text, SQL details
+and credentials are neither printed nor stored as failure codes.
+
+Trusted application orchestration can connect both stages without a new endpoint:
+
+```csharp
+var decisions = await decisionPipeline.RunAsync(session, cancellationToken);
+foreach (var decision in decisions)
+    await riskExecution.ExecuteAsync(decision.Id, cancellationToken);
+```
+
+This PR does not invoke that sequence on normal startup, schedule it, activate
+models or execute anything on a user's account. The journal migration only adds
+a table/indexes/non-cascading foreign keys; existing account/trade data is retained.
+Tests use isolated databases and explicit Mock/controlled quotes, never a broker.
+
 ## Remaining ML → backend orchestration
 
 Issue #257 adds the explicit `--run-ai-decisions` operator cycle documented in
@@ -192,9 +264,10 @@ must select one model family, provide its verified artifact and explicitly trust
 the private joblib source. The selected family must have an Active version; the
 Archived catalog exports above alone cannot run inference.
 
-Metadata/data synchronization, periodic scheduling, risk evaluation (#258), paper
-execution and periodic valuation capture (#259) remain separate operational work.
-Normal API startup and the React page never invoke inference. Per-family Active
+Issue #258 adds explicit persisted-decision risk/paper execution with attempt
+journaling as described above. Metadata/data synchronization, periodic scheduling
+and periodic valuation capture (#259) remain separate operational work.
+Normal API startup and the React page never invoke inference/execution. Per-family Active
 versions do not choose a global operational model: the command requires that
 choice explicitly in private backend configuration.
 
