@@ -128,8 +128,11 @@ require Python or pipeline configuration. The explicit [risk/execution command
 (#258)](../frontend/AI_TRADER_OPERATIONS.md#execute-explicit-decisions-258) consumes
 persisted decision IDs, reuses the existing risk/settlement services and journals
 attempt outcomes in the new `AiExecutionAttempts` table. Apply its migration
-explicitly to the intended database before use. Periodic performance capture
-(#259) and scheduling remain separate.
+explicitly to the intended database before use. The [performance cycle
+(#259)](../frontend/AI_TRADER_OPERATIONS.md#periodic-performance-cycle-259) adds
+`--capture-ai-performance` and an opt-in periodic worker. Its migration preserves
+old observations, adds UTC cycle slots/context and prevents duplicate slots.
+Automatic inference/order scheduling remains separate from this valuation worker.
 Use `--initialize-ai-trader` with `AiTraderSetup:ExpectedDatabase`; normal startup
 and HTTP GET requests remain read-only. `--check-ai-trader` validates the configured
 portfolio/catalog sources without initializing or modifying them.
@@ -772,7 +775,7 @@ logged. All async reads accept request cancellation. History limits precede
 materialization and reads use `AsNoTracking`; #79's complete metrics continue to
 stream all required SELL/equity projections as documented above.
 
-All eleven GET operations, concrete response schemas, nullable fields, parameter
+The eleven original GET operations and the two #259 cycle reads, concrete response schemas, nullable fields, parameter
 constraints, statuses, descriptions and JWT security appear in Development
 `/openapi/v1.json`. The normal Production OpenAPI exposure policy is unchanged.
 HTTP integration tests use `WebApplicationFactory`, actual registration/JWT/risk/

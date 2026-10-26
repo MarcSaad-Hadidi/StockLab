@@ -13,6 +13,34 @@ public sealed class AiTraderValuationHistoryService(IDbContextFactory<StockLabDb
     IAiTraderPortfolioService portfolioService) : IAiTraderValuationHistoryService
 {
     public async Task<AiTraderEquityObservation> CaptureCurrentAsync(Guid captureId, CancellationToken cancellationToken = default)
+        => (await CaptureAsync(captureId, null, cancellationToken)).Observation;
+
+    internal async Task<(AiTraderEquityObservation Observation, bool IsReplay)> CaptureCycleAsync(
+        Guid captureId, DateTime slotUtc, CancellationToken token)
+    {
+        if (await FindCycleAsync(slotUtc, token) is { } previous) return (previous, true);
+        try { return await CaptureAsync(captureId, slotUtc, token); }
+        catch (AiTraderPerformanceException error) when (error.Category is AiTraderPerformanceFailure.ConcurrencyConflict
+            or AiTraderPerformanceFailure.CaptureConflict)
+        {
+            // The failed transaction has disposed before reading another worker's committed slot.
+            if (await FindCycleAsync(slotUtc, token) is { } winner) return (winner, true);
+            throw;
+        }
+    }
+
+    private async Task<AiTraderEquityObservation?> FindCycleAsync(DateTime slotUtc, CancellationToken token)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(token);
+        var row = await (from point in db.AiTraderValuationSnapshots.AsNoTracking()
+            join portfolio in db.AiTraderPortfolios on point.AiTraderPortfolioId equals portfolio.Id
+            where portfolio.PortfolioKey == AiTraderPortfolio.MainPortfolioKey && point.CycleSlotUtc == slotUtc
+            select new { Point = point, portfolio.InitialCapital }).SingleOrDefaultAsync(token);
+        return row is null ? null : Observation(row.Point, row.InitialCapital);
+    }
+
+    private async Task<(AiTraderEquityObservation Observation, bool IsReplay)> CaptureAsync(Guid captureId,
+        DateTime? cycleSlotUtc, CancellationToken cancellationToken)
     {
         if (captureId == Guid.Empty) throw new ArgumentException("A nonempty capture ID is required.", nameof(captureId));
         cancellationToken.ThrowIfCancellationRequested();
@@ -28,32 +56,43 @@ public sealed class AiTraderValuationHistoryService(IDbContextFactory<StockLabDb
             var positionsValue = decimal.Round(value.PositionsMarketValue, 4, MidpointRounding.AwayFromZero);
             if (positionsValue is < 0m or > 999999999999999.9999m)
                 throw new AiTraderPerformanceException(AiTraderPerformanceFailure.StorageCapacityExceeded);
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            var portfolio = await AiTraderPerformanceData.VerifyAsync(db, value, cancellationToken);
+            if (value.ValuationTimestampUtc < portfolio.CreatedAtUtc || cycleSlotUtc > value.ValuationTimestampUtc)
+                throw new InvalidOperationException("Valuation time cannot precede portfolio creation.");
+            var existing = await db.AiTraderValuationSnapshots.AsNoTracking().SingleOrDefaultAsync(p => p.CaptureId == captureId, cancellationToken);
+            if (existing is not null)
+            {
+                if (cycleSlotUtc is not null && existing.CycleSlotUtc == cycleSlotUtc)
+                    return (Observation(existing, portfolio.InitialCapital), true);
+                if (existing.AiTraderPortfolioId != value.PortfolioId || existing.Currency != value.Currency
+                    || existing.CashBalance != value.CashBalance || existing.PositionsValue != positionsValue
+                    || existing.IsInitialBaseline || existing.CycleSlotUtc is not null || !existing.PortfolioVersion.SequenceEqual(value.PortfolioVersion)
+                    || !Quotes(existing).SequenceEqual(quotes))
+                    throw new AiTraderPerformanceException(AiTraderPerformanceFailure.CaptureConflict);
+                return (Observation(existing, portfolio.InitialCapital), true);
+            }
+            // shortcut: cumulative context suits the small paper ledger; normalize provenance when history grows materially.
+            var context = cycleSlotUtc is null ? null : JsonSerializer.Serialize(await db.AiTrades.AsNoTracking()
+                .Where(t => t.AiTraderPortfolioId == value.PortfolioId)
+                .OrderBy(t => t.ExecutedAtUtc).ThenBy(t => t.Id)
+                .Select(t => new AiPerformanceTradeContext(t.Id, t.AiDecisionId,
+                    t.Decision == null ? null : t.Decision.ModelName, t.Decision == null ? null : t.Decision.ModelVersion,
+                    t.Symbol, t.Side, t.Quantity, t.ExecutionPrice, t.RealizedPnL, t.ExecutedAtUtc))
+                .ToArrayAsync(cancellationToken));
             var point = new AiTraderValuationSnapshot
             {
                 Id = Guid.NewGuid(), AiTraderPortfolioId = value.PortfolioId, CaptureId = captureId,
                 ValuedAtUtc = value.ValuationTimestampUtc, CashBalance = value.CashBalance,
                 PositionsValue = positionsValue, Currency = value.Currency,
-                PortfolioVersion = value.PortfolioVersion.ToArray(), QuoteObservationsJson = JsonSerializer.Serialize(quotes)
+                PortfolioVersion = value.PortfolioVersion.ToArray(), QuoteObservationsJson = JsonSerializer.Serialize(quotes),
+                CycleSlotUtc = cycleSlotUtc, TradeContextJson = context
             };
-            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
-            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-            var portfolio = await AiTraderPerformanceData.VerifyAsync(db, value, cancellationToken);
-            if (point.ValuedAtUtc < portfolio.CreatedAtUtc)
-                throw new InvalidOperationException("Valuation time cannot precede portfolio creation.");
-            var existing = await db.AiTraderValuationSnapshots.AsNoTracking().SingleOrDefaultAsync(p => p.CaptureId == captureId, cancellationToken);
-            if (existing is not null)
-            {
-                if (existing.AiTraderPortfolioId != point.AiTraderPortfolioId || existing.Currency != point.Currency
-                    || existing.CashBalance != point.CashBalance || existing.PositionsValue != point.PositionsValue
-                    || existing.IsInitialBaseline || !existing.PortfolioVersion.SequenceEqual(point.PortfolioVersion)
-                    || !Quotes(existing).SequenceEqual(quotes))
-                    throw new AiTraderPerformanceException(AiTraderPerformanceFailure.CaptureConflict);
-                return Observation(existing, portfolio.InitialCapital);
-            }
             db.AiTraderValuationSnapshots.Add(point);
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return Observation(point, portfolio.InitialCapital);
+            return (Observation(point, portfolio.InitialCapital), false);
         }
         catch (Exception ex) when (AiTraderPerformanceData.IsDatabaseFailure(ex)) { throw AiTraderPerformanceData.DatabaseFailure(ex); }
         catch (OverflowException) { throw new AiTraderPerformanceException(AiTraderPerformanceFailure.StorageCapacityExceeded); }
@@ -84,7 +123,7 @@ public sealed class AiTraderValuationHistoryService(IDbContextFactory<StockLabDb
         catch (Exception ex) when (AiTraderPerformanceData.IsDatabaseFailure(ex)) { throw AiTraderPerformanceData.DatabaseFailure(ex); }
     }
 
-    private static AiTraderEquityObservation Observation(AiTraderValuationSnapshot point, decimal capital)
+    internal static AiTraderEquityObservation Observation(AiTraderValuationSnapshot point, decimal capital)
     {
         var total = point.CashBalance + point.PositionsValue;
         return new(point.Id, point.AiTraderPortfolioId, point.CaptureId, point.ValuedAtUtc, point.Currency,

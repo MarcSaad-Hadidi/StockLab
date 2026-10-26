@@ -13,4 +13,6 @@ public sealed class AiTraderValuationSnapshot
     public bool IsInitialBaseline { get; init; }
     public byte[] PortfolioVersion { get; init; } = [];
     public string QuoteObservationsJson { get; init; } = "[]";
+    public DateTime? CycleSlotUtc { get; init; }
+    public string? TradeContextJson { get; init; }
 }

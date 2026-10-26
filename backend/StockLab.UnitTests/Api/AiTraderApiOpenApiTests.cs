@@ -16,7 +16,8 @@ public sealed class AiTraderApiOpenApiTests
         var root = json.RootElement;
         var paths = root.GetProperty("paths");
         var expected = new[] { "overview", "positions", "trades", "trades/{tradeId}", "decisions",
-            "decisions/{decisionId}", "rejected-decisions", "performance", "performance/history", "models", "backtests" };
+            "decisions/{decisionId}", "rejected-decisions", "performance", "performance/history",
+            "performance/cycles", "performance/cycles/{captureId}", "models", "backtests" };
         Assert.Equal(expected.Select(p => "/api/ai-trader/" + p).Order(),
             paths.EnumerateObject().Where(p => p.Name.StartsWith("/api/ai-trader", StringComparison.Ordinal)).Select(p => p.Name).Order());
         foreach (var route in expected)
@@ -63,6 +64,10 @@ public sealed class AiTraderApiOpenApiTests
         foreach (var name in new[] { "cashBalance", "positionsValue", "totalValue", "pnL" })
             AssertSchemaType(equity.GetProperty("properties").GetProperty(name), "string");
         AssertSchemaType(equity.GetProperty("properties").GetProperty("return"), "number");
+        var cycle = ResponseSchema(root, paths, "performance/cycles/{captureId}");
+        var context = Resolve(root, cycle.GetProperty("properties").GetProperty("trades").GetProperty("items"));
+        foreach (var name in new[] { "quantity", "executionPrice", "realizedPnL" })
+            AssertSchemaType(context.GetProperty("properties").GetProperty(name), "string");
         var model = Resolve(root, ResponseSchema(root, paths, "models").GetProperty("items"));
         foreach (var name in new[] { "modelName", "modelVersion", "modelType", "status", "trainedAtUtc" })
             AssertSchemaType(model.GetProperty("properties").GetProperty(name), "string");
@@ -73,7 +78,8 @@ public sealed class AiTraderApiOpenApiTests
             AssertSchemaType(backtest.GetProperty("properties").GetProperty(name), "string");
         foreach (var name in new[] { "totalReturn", "winRate", "maxDrawdown", "benchmarkReturn", "returnDelta" })
             AssertSchemaType(backtest.GetProperty("properties").GetProperty(name), "number");
-        foreach (var route in new[] { "trades", "decisions", "rejected-decisions", "performance/history" })
+        foreach (var route in new[] { "trades", "decisions", "rejected-decisions", "performance/history",
+            "performance/cycles", "performance/cycles/{captureId}" })
         {
             var limit = Assert.Single(paths.GetProperty("/api/ai-trader/" + route).GetProperty("get")
                 .GetProperty("parameters").EnumerateArray(), p => string.Equals(
@@ -90,6 +96,8 @@ public sealed class AiTraderApiOpenApiTests
     [InlineData("trades")]
     [InlineData("decisions")]
     [InlineData("performance/history")]
+    [InlineData("performance/cycles")]
+    [InlineData("performance/cycles/11111111-1111-1111-1111-111111111111")]
     public async Task Read_routes_do_not_accept_writes(string route)
     {
         await using var f = await AiTraderApiFixture.CreateAsync();

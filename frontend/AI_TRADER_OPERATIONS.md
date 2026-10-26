@@ -1,6 +1,8 @@
 # AI Trader: operational prerequisites after #59
 
 The React page reads the eleven JWT-protected GET endpoints from backend #80.
+Backend #259 adds two read-only cycle/context routes for trusted consumers; the
+current React page continues using its existing performance/history contracts.
 It does not execute trades, initialize a portfolio, capture valuations, train or
 promote a model, start a backtest, invoke Python, or access SQL/S3 directly.
 
@@ -255,6 +257,74 @@ models or execute anything on a user's account. The journal migration only adds
 a table/indexes/non-cascading foreign keys; existing account/trade data is retained.
 Tests use isolated databases and explicit Mock/controlled quotes, never a broker.
 
+## Periodic performance cycle (#259)
+
+Apply `AddAiPerformanceCycles` explicitly to the intended database. It adds
+nullable cycle/context columns, a consistency constraint and a unique filtered
+portfolio/UTC-slot index to the existing `AiPortfolioSnapshots` table. Legacy and
+manual observations retain null cycle metadata; no account, trade or observation
+is replaced. The existing manual capture API still revalues and rejects changed
+facts when a capture ID is reused.
+
+Run one current-slot capture after paper execution, without starting HTTP/workers:
+
+```powershell
+dotnet run --project backend/StockLab.Api -- --capture-ai-performance --AiPerformanceCycle:ExpectedDatabase=<exact-database-name>
+```
+
+The command validates the exact target, connection, current migrations and an
+existing system AI portfolio. It never initializes/migrates, infers or trades.
+Mock valuations are permitted only in Development. Failures/cancellation return
+exit 1 with safe output; success prints capture ID, slot and replay status.
+
+For periodic observation, configure private backend settings before normal startup:
+
+```json
+{
+  "AiPerformanceCycle": {
+    "Enabled": true,
+    "Interval": "01:00:00",
+    "ExpectedDatabase": "<exact-database-name>"
+  }
+}
+```
+
+The shipped default is disabled. The interval must be 1 minute..1 day (default
+one hour). The worker waits for its first tick, owns a fresh scope per cycle and
+never overlaps its own runs; shutdown cancels waiting/in-flight work. Each cycle
+uses the current UTC time floored to the configured interval. Multiple workers,
+restarts and one-shot commands share that slot identity. A committed slot returns
+the original capture without any new quote, even after prices/positions change.
+Keep the interval stable for comparable coverage. Missed slots are not fabricated
+from today's prices; downtime/provider failures leave real gaps in history.
+
+New captures reuse the existing quote validation and serializable portfolio
+verification. Valuation and the cumulative context of committed AI trades are
+saved in one transaction. Each trade retains its ID, original nullable decision
+and model/version, executed quantity/price, time and nullable realized P&L. Legacy
+unknowns remain unknown. Total portfolio return combines all strategies; these
+links do not prove per-model causality or create training labels automatically.
+Technical failure leaves no partial capture/context and can be retried. A losing
+SQL worker may return a controlled concurrency conflict before the winner is
+visible; rerunning the slot reads the committed result. Worker
+warnings omit exception details; keep normal provider/server logs private.
+
+Existing `/performance` and `/performance/history` expose the resulting metrics
+and chart samples unchanged. New authenticated, quote-free reads are:
+
+- `GET /api/ai-trader/performance/cycles?limit=20` (1..200, newest slot first).
+- `GET /api/ai-trader/performance/cycles/{captureId}?offset=0&limit=100`
+  (1..200 trades per page, with `totalTradeCount`; unknown capture: 404).
+
+Monetary/quantity response values are invariant decimal strings. The captured
+context is available to trusted exporters for future backtesting/retraining.
+Its cumulative JSON storage grows with trades × captures; normalize provenance
+storage before operating at a materially larger history/retention scale. Paging
+bounds the response, not the cost of loading that one snapshot's context.
+
+Implementation tests use owned SQLite/LocalDB and controlled prices. They do not
+enable this worker or apply migrations to the user's preview/production database.
+
 ## Remaining ML → backend orchestration
 
 Issue #257 adds the explicit `--run-ai-decisions` operator cycle documented in
@@ -265,8 +335,21 @@ the private joblib source. The selected family must have an Active version; the
 Archived catalog exports above alone cannot run inference.
 
 Issue #258 adds explicit persisted-decision risk/paper execution with attempt
-journaling as described above. Metadata/data synchronization, periodic scheduling
-and periodic valuation capture (#259) remain separate operational work.
+journaling as described above. Issue #259 adds the opt-in performance worker and
+one-shot capture above. The local functional building blocks are now present;
+operational completion still requires:
+
+1. Select/promote a verified fitted model, configure its trusted artifact and
+   input datasets, synchronize private metadata exports and apply migrations to
+   the intended database. Historical catalog entries alone cannot run inference.
+2. Commission and verify the complete #257 → #258 → #259 sequence with actual
+   intended data/providers. The #259 worker only samples performance; schedule
+   inference/order orchestration separately if unattended trading simulation is
+   wanted. Retraining/promotion must retain the existing evaluation safeguards.
+3. Connect the separate Dashboard summary to real AI metrics (#251); the dedicated
+   AI Trader page already reads its histories/metrics.
+4. Deploy asynchronous/cloud jobs if required (#50 SQS / #52 Lambda). These are
+   distinct from a working local paper-trading cycle.
 Normal API startup and the React page never invoke inference/execution. Per-family Active
 versions do not choose a global operational model: the command requires that
 choice explicitly in private backend configuration.
