@@ -1,4 +1,5 @@
 import { getAuthorizationHeader } from '../auth/authStorage'
+import { handleUnauthorized } from '../auth/handleUnauthorized'
 import { isNonNegativeAmount, isPositiveAmount } from './decimalAmount'
 
 export type PortfolioApiPosition = {
@@ -162,6 +163,7 @@ export function createPortfolioApi(
       throw new PortfolioApiError(0, 'offline', messageFor('offline'))
     }
 
+    handleUnauthorized(response, authHeader.Authorization, signal)
     let body: unknown = null
     try {
       body = await response.json()

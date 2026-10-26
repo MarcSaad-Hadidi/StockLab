@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { RequireAuth } from '../auth/RequireAuth'
 import '../i18n/i18n'
 import { TransactionsPage } from './TransactionsPage'
 
@@ -14,6 +15,6 @@ if (!transactionsRoot) {
 
 createRoot(transactionsRoot).render(
   <StrictMode>
-    <TransactionsPage />
+    <RequireAuth><TransactionsPage /></RequireAuth>
   </StrictMode>,
 )

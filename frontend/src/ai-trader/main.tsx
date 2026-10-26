@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { RequireAuth } from '../auth/RequireAuth'
 import '../i18n/i18n'
 import AITraderPage from './AITraderPage'
 
@@ -11,6 +12,6 @@ if (!root) {
 
 createRoot(root).render(
   <StrictMode>
-    <AITraderPage />
+    <RequireAuth><AITraderPage /></RequireAuth>
   </StrictMode>,
 )

@@ -20,6 +20,7 @@ export function subscribeAuthSession(changed: () => void) {
   window.addEventListener(authSessionChangedEvent, refresh)
   window.addEventListener('storage', onStorage)
   window.addEventListener('focus', refresh)
+  window.addEventListener('pageshow', refresh)
   document.addEventListener('visibilitychange', onVisibility)
   refresh()
   return () => {
@@ -27,6 +28,7 @@ export function subscribeAuthSession(changed: () => void) {
     window.removeEventListener(authSessionChangedEvent, refresh)
     window.removeEventListener('storage', onStorage)
     window.removeEventListener('focus', refresh)
+    window.removeEventListener('pageshow', refresh)
     document.removeEventListener('visibilitychange', onVisibility)
   }
 }

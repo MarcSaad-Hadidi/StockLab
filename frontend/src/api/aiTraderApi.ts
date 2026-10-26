@@ -1,4 +1,5 @@
 import { getAuthorizationHeader } from '../auth/authStorage'
+import { handleUnauthorized } from '../auth/handleUnauthorized'
 import { isBackendAmount, isPositiveAmount } from './decimalAmount'
 
 export type AiTraderSignal = 'BUY' | 'SELL' | 'HOLD'
@@ -136,6 +137,7 @@ export function createAiTraderApi(baseUrl: string, fetcher: typeof fetch = fetch
       abort?.throwIfAborted()
       throw new AiTraderApiError(0, 'offline')
     }
+    handleUnauthorized(response, header.Authorization, abort)
     let body: unknown
     try { body = await response.json() } catch {
       abort?.throwIfAborted()

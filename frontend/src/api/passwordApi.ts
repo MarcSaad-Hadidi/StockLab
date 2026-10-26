@@ -1,4 +1,5 @@
 import { getAuthorizationHeader } from '../auth/authStorage'
+import { handleUnauthorized } from '../auth/handleUnauthorized'
 
 export type ChangePasswordRequest = { currentPassword: string; newPassword: string; confirmPassword: string }
 export type PasswordErrorCode = 'unauthorized' | 'invalid_current_password' | 'validation_error'
@@ -28,6 +29,7 @@ export function createPasswordApi(baseUrl: string, fetcher: typeof fetch = (...a
       throw new PasswordApiError('offline')
     }
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    handleUnauthorized(response, auth.Authorization, signal)
     if (response.status === 204) return
     if (response.ok) throw new PasswordApiError('invalid_response')
     let details: { error?: string; errors?: Record<string, unknown> } = {}

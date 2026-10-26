@@ -1,4 +1,5 @@
 import { getAuthorizationHeader } from '../auth/authStorage'
+import { handleUnauthorized } from '../auth/handleUnauthorized'
 
 export type WatchlistApiItem = { symbol: string; createdAtUtc: string }
 export type WatchlistErrorCode = 'unauthorized' | 'already_exists' | 'not_found' | 'offline' | 'invalid_response' | 'server_error' | 'invalid_symbol'
@@ -51,6 +52,7 @@ export function createWatchlistApi(
       throw new WatchlistApiError(0, 'offline')
     }
     signal?.throwIfAborted()
+    handleUnauthorized(response, auth.Authorization, signal)
     if (!response.ok) throw new WatchlistApiError(response.status, codeFor(response.status))
     if (response.status !== status) throw new WatchlistApiError(502, 'invalid_response')
     if (status === 204) return undefined
