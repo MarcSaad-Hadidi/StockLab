@@ -93,7 +93,7 @@ public sealed class AiDecisionHistoryService(
         }
     }
 
-    private static AiDecisionRecordRequest Validate(AiDecisionRecordRequest request, DateOnly todayUtc)
+    internal static AiDecisionRecordRequest Validate(AiDecisionRecordRequest request, DateOnly todayUtc)
     {
         if (request.DecisionId == Guid.Empty)
             throw new ArgumentException("A nonempty decision ID is required.", nameof(request));

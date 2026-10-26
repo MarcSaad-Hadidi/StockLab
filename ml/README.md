@@ -7,6 +7,12 @@ prepare features, train models, and produce prediction probabilities followed by
 BUY / SELL / HOLD signals with confidence. It will never execute a trade.
 The frontend and .NET backend are not required to install or test this module.
 
+Issue #257 adds the offline `python -m stocklab_ml.decision_pipeline` entry point.
+It reuses verified Active artifacts and existing feature/signal/version contracts;
+it never trains, promotes or executes trades. The backend's explicit operator
+command invokes it and persists decisions. See [configuration, session semantics
+and retry behavior](../frontend/AI_TRADER_OPERATIONS.md#run-one-decision-cycle-257).
+
 ## Requirements
 
 Use **Python 3.12.x** across the team, with pip and the standard-library `venv`

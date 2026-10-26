@@ -26,14 +26,17 @@ using StockLab.Api.Operations;
 
 var initializeAiTrader = args.Contains("--initialize-ai-trader", StringComparer.Ordinal);
 var checkAiTrader = args.Contains("--check-ai-trader", StringComparer.Ordinal);
-if (initializeAiTrader && checkAiTrader)
+var runAiDecisions = args.Contains("--run-ai-decisions", StringComparer.Ordinal);
+if (new[] { initializeAiTrader, checkAiTrader, runAiDecisions }.Count(selected => selected) > 1)
 {
-    Console.Error.WriteLine("Choose --initialize-ai-trader or --check-ai-trader, not both.");
+    Console.Error.WriteLine("Choose one operator command: --initialize-ai-trader, --check-ai-trader or --run-ai-decisions.");
     Environment.ExitCode = 1;
     return;
 }
 var builder = WebApplication.CreateBuilder(args.Where(argument =>
-    argument is not "--initialize-ai-trader" and not "--check-ai-trader").ToArray());
+    argument is not "--initialize-ai-trader" and not "--check-ai-trader" and not "--run-ai-decisions").ToArray());
+// Provider logs can reveal private database errors before the operator's sanitized catch runs.
+if (runAiDecisions) builder.Logging.ClearProviders();
 
 const string frontendCorsPolicy = "Frontend";
 
@@ -84,6 +87,9 @@ builder.Services.AddAiCurrentPositions();
 builder.Services.AddAiRiskManager(builder.Configuration);
 builder.Services.AddAiTradeExecution();
 builder.Services.AddAiDecisionHistory();
+builder.Services.Configure<AiDecisionPipelineOptions>(builder.Configuration.GetSection(AiDecisionPipelineOptions.SectionName));
+builder.Services.AddScoped<IAiDecisionInferenceProvider, PythonAiDecisionInferenceProvider>();
+builder.Services.AddScoped<IAiDecisionPipelineService, AiDecisionPipelineService>();
 builder.Services.AddAiRejectedDecisionHistory();
 builder.Services.AddAiTradesHistory();
 builder.Services.AddAiTraderPerformance();
@@ -243,14 +249,18 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-if (initializeAiTrader || checkAiTrader)
+if (initializeAiTrader || checkAiTrader || runAiDecisions)
 {
+    using var cancellation = new CancellationTokenSource();
+    ConsoleCancelEventHandler cancel = (_, e) => { e.Cancel = true; cancellation.Cancel(); };
+    Console.CancelKeyPress += cancel;
     try
     {
-        Environment.ExitCode = await AiTraderSetupCommand.RunAsync(app.Services, app.Configuration,
-            initializeAiTrader, Console.Out);
+        Environment.ExitCode = runAiDecisions
+            ? await AiDecisionPipelineCommand.RunAsync(app.Services, app.Configuration, Console.Out, cancellation.Token)
+            : await AiTraderSetupCommand.RunAsync(app.Services, app.Configuration, initializeAiTrader, Console.Out, cancellation.Token);
     }
-    finally { await app.DisposeAsync(); }
+    finally { Console.CancelKeyPress -= cancel; await app.DisposeAsync(); }
     return;
 }
 

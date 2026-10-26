@@ -33,7 +33,7 @@ Le produit aide l’utilisateur à explorer les données de marché et à s’ex
 - **Compte** : inscription, connexion JWT, déconnexion locale, identité du top bar, lecture/modification du nom et de l’email, changement réel du mot de passe. Les pages affichent les erreurs de validation et les échecs de l’API.
 - **Paper trading personnel** : préparation et confirmation d’un achat ou d’une vente, exécution simulée, mise à jour atomique du cash et des positions, historique et valorisation. Les données privées sont liées à l’utilisateur authentifié.
 - **Watchlist** : consultation, ajout et suppression des symboles enregistrés pour le compte.
-- **AI Trader** : consultation du portefeuille système, des décisions originales et des rejets du risque, des transactions, des performances, des modèles et des backtests. La page ne déclenche ni entraînement ni ordre ; l’orchestration automatique entre ML et backend reste à définir.
+- **AI Trader** : consultation du portefeuille système, des décisions originales et des rejets du risque, des transactions, des performances, des modèles et des backtests. Une commande opérateur `--run-ai-decisions` lance une inférence vérifiée et persiste les décisions versionnées (#257). La page ne déclenche ni entraînement ni ordre ; la planification périodique, le risque et l’exécution restent distincts.
 - **Alertes** : API de gestion et surveillance périodique présentes. L’écran frontend n’est pas encore connecté et le passage persistant à l’état `Triggered` reste à implémenter.
 
 ## État actuel
@@ -408,8 +408,7 @@ Ne poussez pas directement vers main ou develop. Gardez les changements liés à
 ## Limites et feuille de route
 
 - Connecter l’interface Alerts à l’API (#57), persister le déclenchement des alertes (#43) et compléter les tests dédiés watchlist/alertes (#89).
-- Définir et déployer l’orchestration ML → backend : synchronisation des exports, inférence, enregistrement des décisions, risque, exécution et captures périodiques de performance. La consultation AI Trader est livrée ; un bot autonome opérationnel ne l’est pas.
-- Compléter les tests dédiés de backtesting (#92), en complément des tests déjà présents dans le module ML.
+- Compléter et déployer le cycle AI Trader après la commande d’inférence/persistance #257 : synchronisation des données et exports, planification périodique, risque et exécution (#258), captures de performance (#259). Un bot autonome opérationnel reste à déployer.
 - Intégrer les événements de domaine/Azure Service Bus et les tâches AWS SQS/Lambda. Le stockage S3 des modèles est déjà disponible ; les autres usages cloud et leur exploitation doivent être traités séparément.
 - Lever, si nécessaire, le plafond de vingt cotations de la page Portfolio. Au-delà, ses agrégats de marché restent indisponibles ; les positions et les montants comptables restent consultables.
 - Implémenter les parcours OAuth Google et mot de passe oublié, actuellement sans service connecté.
