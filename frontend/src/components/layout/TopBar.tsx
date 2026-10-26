@@ -37,7 +37,7 @@ export function TopBar({ onMenuOpen, title }: TopBarProps) {
   return (
     <header className="app-topbar">
       <div className="app-topbar-title">
-        <button aria-label={t('common.openNavigation')} className="app-topbar-menu" onClick={onMenuOpen} type="button">
+        <button aria-label={t('common.openNavigation')} aria-controls="stocklab-navigation" aria-haspopup="dialog" className="app-topbar-menu" onClick={onMenuOpen} type="button">
           <TopBarIcon name="menu" />
         </button>
         <span className="app-topbar-title-text">{title}</span>
