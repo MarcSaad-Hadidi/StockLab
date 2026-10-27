@@ -1,9 +1,9 @@
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
-import { portfolioApi, type PortfolioApiTransaction, type TransactionHistoryResponse } from '../api/portfolioApi'
+import { PortfolioApiError, portfolioApi, type PortfolioApiTransaction, type TransactionHistoryResponse } from '../api/portfolioApi'
 import { formatCurrency, formatNumber, formatSignedCurrency, formatTradeAmount } from '../i18n/formatters'
 import { useTranslation } from 'react-i18next'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   type Transaction,
   type TransactionAction,
@@ -13,6 +13,7 @@ import {
 import './transactions.css'
 import { getAuthSession, type AuthSession } from '../auth/authStorage'
 import { useAuthSession } from '../auth/useAuthUser'
+import { routeFor } from '../navigation/routes'
 
 type IconName =
   | 'activity'
@@ -193,10 +194,10 @@ function FilterControls({ activeFilterCount, filterMenuOpen, filters, onActionCh
   )
 }
 
-function TransactionsTable({ items, currency, message }: { items: Transaction[]; currency: string; message: string }) {
+function TransactionsTable({ items, currency, message, feedback }: { items: Transaction[]; currency: string; message: string; feedback?: ReactNode }) {
   const { t } = useTranslation()
 
-  return <div className="table-scroll"><table className="transactions-table"><thead><tr><th scope="col"><span>{t('transactions.columns.date')} <Icon name="sort" size={12} /></span></th><th scope="col">{t('market.columns.symbol')}</th><th scope="col">{t('market.columns.company')}</th><th scope="col">{t('transactions.columns.type')}</th><th scope="col">{t('common.quantity')}</th><th scope="col">{t('transactions.columns.executionPrice')}</th><th scope="col">{t('transactions.columns.totalAmount')}</th></tr></thead><tbody>{items.length === 0 && <tr><td colSpan={7}><div className="empty-state"><strong>{message}</strong></div></td></tr>}{items.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} currency={currency} />)}</tbody></table></div>
+  return <><div className="table-scroll"><table className="transactions-table"><thead><tr><th scope="col"><span>{t('transactions.columns.date')} <Icon name="sort" size={12} /></span></th><th scope="col">{t('market.columns.symbol')}</th><th scope="col">{t('market.columns.company')}</th><th scope="col">{t('transactions.columns.type')}</th><th scope="col">{t('common.quantity')}</th><th scope="col">{t('transactions.columns.executionPrice')}</th><th scope="col">{t('transactions.columns.totalAmount')}</th></tr></thead><tbody>{items.length === 0 && !feedback && <tr><td colSpan={7}><div className="empty-state" role="status"><strong>{message}</strong></div></td></tr>}{items.map((transaction) => <TransactionRow key={transaction.id} transaction={transaction} currency={currency} />)}</tbody></table></div>{feedback}</>
 }
 
 type PaginationProps = {
@@ -224,15 +225,18 @@ function AccountTransactionsPage({ session }: { session: AuthSession | null }) {
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [result, setResult] = useState<{ key: string; data: TransactionHistoryResponse | null; failed: boolean } | null>(null)
+  const [revision, setRevision] = useState(0)
+  const retryQueued = useRef(false)
+  const [result, setResult] = useState<{ key: string; data: TransactionHistoryResponse | null; error: 'load' | 'unauthorized' | null } | null>(null)
   const userId = session?.user.id ?? null
   const authorization = session ? `${session.tokenType} ${session.accessToken}` : null
   const queryKey = JSON.stringify({ page, pageSize: 10, search: filters.query.trim(),
     side: filters.action === 'All' ? undefined : filters.action, from: filters.from, to: filters.to })
-  const requestKey = JSON.stringify([userId, authorization, queryKey])
+  const requestKey = JSON.stringify([userId, authorization, queryKey, revision])
   const invalidDates = Boolean(filters.from && filters.to && filters.from > filters.to)
 
   useEffect(() => {
+    retryQueued.current = false
     if (invalidDates || !userId || !authorization) return
     const controller = new AbortController()
     const active = () => {
@@ -244,10 +248,11 @@ function AccountTransactionsPage({ session }: { session: AuthSession | null }) {
       if (!active()) return
       void portfolioApi.getTransactionHistory(JSON.parse(queryKey), controller.signal, authorization)
         .then((data) => {
-          if (active()) setResult({ key: requestKey, data, failed: false })
+          if (active()) setResult({ key: requestKey, data, error: null })
         })
-        .catch(() => {
-          if (active()) setResult({ key: requestKey, data: null, failed: true })
+        .catch((error: unknown) => {
+          if (active()) setResult({ key: requestKey, data: null,
+            error: error instanceof PortfolioApiError && error.code === 'unauthorized' ? 'unauthorized' : 'load' })
         })
     }, 150)
     return () => { window.clearTimeout(timer); controller.abort() }
@@ -263,8 +268,21 @@ function AccountTransactionsPage({ session }: { session: AuthSession | null }) {
   const currentPage = history?.page ?? 1
   const startIndex = history && history.items.length > 0 ? (history.page - 1) * history.pageSize + 1 : 0
   const endIndex = startIndex === 0 ? 0 : startIndex + (history?.items.length ?? 0) - 1
-  const message = t(!session ? 'stockDetails.tradeErrors.unauthorized' : invalidDates ? 'transactions.invalidDates' : current?.failed
+  const unauthorized = !session || current?.error === 'unauthorized'
+  const message = t(unauthorized ? 'stockDetails.tradeErrors.unauthorized' : invalidDates ? 'transactions.invalidDates' : current?.error
     ? 'transactions.loadError' : isLoading ? 'transactions.loading' : 'transactions.noTransactions')
+  function retry() {
+    const latest = getAuthSession()
+    if (current?.error !== 'load' || retryQueued.current || !latest || latest.user.id !== userId
+      || `${latest.tokenType} ${latest.accessToken}` !== authorization) return
+    retryQueued.current = true
+    setRevision(value => value + 1)
+  }
+  const feedback = (unauthorized || current?.error) && <div className="empty-state transactions-feedback" role="alert">
+    <strong>{message}</strong>
+    {unauthorized ? <a className="filter-button" href={routeFor('login')}>{t('login.signIn')}</a>
+      : <button className="filter-button" data-retry-transactions disabled={isLoading} onClick={retry} type="button">{t('watchlist.retry')}</button>}
+  </div>
   const activeFilterCount = [
     filters.query.trim().length > 0,
     filters.assetType !== 'All',
@@ -308,7 +326,7 @@ function AccountTransactionsPage({ session }: { session: AuthSession | null }) {
 
           <section aria-labelledby="transactions-table-title" aria-busy={isLoading} className="panel transactions-panel">
             <h2 className="sr-only" id="transactions-table-title">{t('transactions.tableTitle')}</h2>
-            <TransactionsTable items={history?.items.map(toTransaction) ?? []} currency={currency} message={message} />
+            <TransactionsTable items={history?.items.map(toTransaction) ?? []} currency={currency} message={message} feedback={feedback} />
             {history && <div className="table-footer"><span>{t('transactions.showing', { start: startIndex, end: endIndex, count: history.totalCount })}</span><Pagination currentPage={currentPage} onPageChange={setPage} totalPages={totalPages} /></div>}
           </section>
           <p className="simulation-note"><Icon name="activity" size={13} /> {t('transactions.paperTradingNote')}</p>
