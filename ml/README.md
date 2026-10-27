@@ -13,6 +13,12 @@ it never trains, promotes or executes trades. The backend's explicit operator
 command invokes it and persists decisions. See [configuration, session semantics
 and retry behavior](../frontend/AI_TRADER_OPERATIONS.md#run-one-decision-cycle-257).
 
+For the first ML stage of #273, the offline
+[zero-trade diagnostic](docs/zero-trade-diagnosis.md) reproduces an existing
+two-baseline catalog, verifies its registered predictions and reports, then
+explains aggregate signal/confidence/execution filters. It preserves inputs,
+policy and model status; it does not activate the bot or publish private rows.
+
 ## Requirements
 
 Use **Python 3.12.x** across the team, with pip and the standard-library `venv`
