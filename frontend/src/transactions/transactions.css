@@ -778,6 +778,9 @@ select:focus-visible {
   font-size: 9px;
 }
 
+.transactions-feedback { padding: 18px; gap: 12px; }
+.transactions-feedback .filter-button { min-width: 96px; color: var(--blue); background: #f4f7ff; border-color: #dce5ff; text-decoration: none; }
+
 .simulation-note {
   display: flex;
   align-items: center;
