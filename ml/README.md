@@ -19,6 +19,12 @@ two-baseline catalog, verifies its registered predictions and reports, then
 explains aggregate signal/confidence/execution filters. It preserves inputs,
 policy and model status; it does not activate the bot or publish private rows.
 
+The [full local paper-cycle procedure](../frontend/AI_TRADER_OPERATIONS.md#run-the-full-local-paper-cycle-273)
+uses `python -m stocklab_ml.operational_cycle --config <private-config.json>` with
+`--once`, `--loop` or `--stop`. It requires an explicitly promoted fitted model,
+fresh immutable inputs and the exact existing database. The runner never trains
+or promotes automatically.
+
 ## Requirements
 
 Use **Python 3.12.x** across the team, with pip and the standard-library `venv`

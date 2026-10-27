@@ -571,7 +571,7 @@ def test_bounded_provider_request_is_shared_by_models(config, transport):
     assert result.report["api_request_count"] == len(transport.calls) == 1
     from urllib.parse import parse_qs, urlparse
     query = parse_qs(urlparse(transport.calls[0][0].url).query)
-    assert query["start_date"] == ["2024-05-10"] and query["end_date"] == ["2024-06-30"]
+    assert query["start_date"] == ["2024-05-10"] and query["end_date"] == ["2024-06-30T23:59:59"]
     assert query["adjust"] == ["splits"] and query["interval"] == ["1day"]
     assert len(result.report["model_results"]) == 2
 

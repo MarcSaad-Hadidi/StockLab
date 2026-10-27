@@ -48,7 +48,7 @@ def test_pipeline_contract(tmp_path, transport, payload):
     assert f"{url.scheme}://{url.netloc}{url.path}" == "https://api.twelvedata.com/time_series"
     assert parse_qs(url.query) == {
         "symbol": ["AAPL"], "interval": ["1day"], "start_date": ["2024-01-01"],
-        "end_date": ["2024-01-09"], "order": ["asc"], "format": ["JSON"], "adjust": ["splits"]}
+        "end_date": ["2024-01-09T23:59:59"], "order": ["asc"], "format": ["JSON"], "adjust": ["splits"]}
     assert request.headers["Authorization"] == "apikey ML-TEST-KEY"
     assert "ML-TEST-KEY" not in request.url
     assert options["allow_redirects"] is False

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "backend_dll": "C:/StockLab/.tmp/ai-trader-build/bin/StockLab.Api/debug/StockLab.Api.dll",
+  "expected_database": "YOUR_EXACT_LOCAL_DATABASE",
+  "registry_path": "C:/private/stocklab/registry.json",
+  "artifacts_directory": "C:/private/stocklab/artifacts",
+  "model_name": "logistic_regression_baseline",
+  "symbols": ["AAPL"],
+  "history_start": "2021-01-01",
+  "data_directory": "C:/private/stocklab/cycle-inputs",
+  "state_directory": "C:/private/stocklab/cycle-state",
+  "trusted_artifacts": false,
+  "share_website_quota": false,
+  "interval_seconds": 1800
+}

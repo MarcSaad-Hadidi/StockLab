@@ -15,6 +15,18 @@ public sealed class AiTraderValuationHistoryService(IDbContextFactory<StockLabDb
     public async Task<AiTraderEquityObservation> CaptureCurrentAsync(Guid captureId, CancellationToken cancellationToken = default)
         => (await CaptureAsync(captureId, null, cancellationToken)).Observation;
 
+    public async Task<AiTraderEquityObservation> CaptureOnceAsync(Guid captureId, CancellationToken cancellationToken = default)
+    {
+        if (captureId == Guid.Empty) throw new ArgumentException("A capture identity is required.", nameof(captureId));
+        await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var previous = await (from point in db.AiTraderValuationSnapshots.AsNoTracking()
+            join portfolio in db.AiTraderPortfolios on point.AiTraderPortfolioId equals portfolio.Id
+            where point.CaptureId == captureId && portfolio.PortfolioKey == AiTraderPortfolio.MainPortfolioKey
+            select new { Point = point, portfolio.InitialCapital }).SingleOrDefaultAsync(cancellationToken);
+        return previous is null ? await CaptureCurrentAsync(captureId, cancellationToken)
+            : Observation(previous.Point, previous.InitialCapital);
+    }
+
     internal async Task<(AiTraderEquityObservation Observation, bool IsReplay)> CaptureCycleAsync(
         Guid captureId, DateTime slotUtc, CancellationToken token)
     {

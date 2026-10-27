@@ -29,16 +29,17 @@ var checkAiTrader = args.Contains("--check-ai-trader", StringComparer.Ordinal);
 var runAiDecisions = args.Contains("--run-ai-decisions", StringComparer.Ordinal);
 var executeAiDecisions = args.Contains("--execute-ai-decisions", StringComparer.Ordinal);
 var captureAiPerformance = args.Contains("--capture-ai-performance", StringComparer.Ordinal);
-if (new[] { initializeAiTrader, checkAiTrader, runAiDecisions, executeAiDecisions, captureAiPerformance }.Count(selected => selected) > 1)
+var runAiTraderCycle = args.Contains("--run-ai-trader-cycle", StringComparer.Ordinal);
+if (new[] { initializeAiTrader, checkAiTrader, runAiDecisions, executeAiDecisions, captureAiPerformance, runAiTraderCycle }.Count(selected => selected) > 1)
 {
-    Console.Error.WriteLine("Choose one operator command: --initialize-ai-trader, --check-ai-trader, --run-ai-decisions, --execute-ai-decisions or --capture-ai-performance.");
+    Console.Error.WriteLine("Choose one operator command: --initialize-ai-trader, --check-ai-trader, --run-ai-decisions, --execute-ai-decisions, --capture-ai-performance or --run-ai-trader-cycle.");
     Environment.ExitCode = 1;
     return;
 }
 var builder = WebApplication.CreateBuilder(args.Where(argument =>
-    argument is not "--initialize-ai-trader" and not "--check-ai-trader" and not "--run-ai-decisions" and not "--execute-ai-decisions" and not "--capture-ai-performance").ToArray());
+    argument is not "--initialize-ai-trader" and not "--check-ai-trader" and not "--run-ai-decisions" and not "--execute-ai-decisions" and not "--capture-ai-performance" and not "--run-ai-trader-cycle").ToArray());
 // Provider logs can reveal private database errors before the operator's sanitized catch runs.
-if (runAiDecisions || executeAiDecisions || captureAiPerformance) builder.Logging.ClearProviders();
+if (runAiDecisions || executeAiDecisions || captureAiPerformance || runAiTraderCycle) builder.Logging.ClearProviders();
 
 const string frontendCorsPolicy = "Frontend";
 
@@ -211,6 +212,12 @@ builder.Services.AddKeyedSingleton<Microsoft.Extensions.Caching.Memory.IMemoryCa
         SizeLimit = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<MarketDataCacheOptions>>().Value.SizeLimit
     }));
 builder.Services.AddMarketDataTerminal(builder.Configuration);
+if (runAiTraderCycle)
+    builder.Services.AddKeyedSingleton<IMarketDataProvider>("Terminal", (provider, _) =>
+        new AiTradingCycleMarketDataProvider(provider.GetRequiredService<TwelveDataProvider>(),
+            provider.GetRequiredService<TimeProvider>(), DateOnly.TryParseExact(builder.Configuration["AiTradingCycle:DecisionDate"],
+                "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None,
+                out var cycleSession) ? cycleSession : null));
 builder.Services.AddOptions<MarketDataRateLimitOptions>()
     .Bind(builder.Configuration.GetSection(MarketDataRateLimitOptions.SectionName))
     .Validate(options => options.IsValid(), MarketDataRateLimitOptions.ValidationMessage)
@@ -253,14 +260,16 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-if (initializeAiTrader || checkAiTrader || runAiDecisions || executeAiDecisions || captureAiPerformance)
+if (initializeAiTrader || checkAiTrader || runAiDecisions || executeAiDecisions || captureAiPerformance || runAiTraderCycle)
 {
     using var cancellation = new CancellationTokenSource();
     ConsoleCancelEventHandler cancel = (_, e) => { e.Cancel = true; cancellation.Cancel(); };
     Console.CancelKeyPress += cancel;
     try
     {
-        Environment.ExitCode = captureAiPerformance
+        Environment.ExitCode = runAiTraderCycle
+            ? await AiTradingCycleCommand.RunAsync(app.Services, app.Configuration, Console.Out, cancellation.Token)
+            : captureAiPerformance
             ? await AiPerformanceCycleCommand.RunAsync(app.Services, Console.Out, cancellation.Token)
             : executeAiDecisions
             ? await AiRiskExecutionCommand.RunAsync(app.Services, app.Configuration, Console.Out, cancellation.Token)
