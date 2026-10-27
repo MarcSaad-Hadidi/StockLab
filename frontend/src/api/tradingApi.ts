@@ -1,4 +1,5 @@
 import { getAuthorizationHeader } from '../auth/authStorage'
+import { handleUnauthorized } from '../auth/handleUnauthorized'
 import { isPositiveAmount, isNonNegativeAmount } from './decimalAmount'
 
 export type TradeSide = 'BUY' | 'SELL'
@@ -155,6 +156,7 @@ export function createTradingApi(
         throw new TradingApiError(0, 'offline', messageFor('offline'))
       }
 
+      handleUnauthorized(response, authHeader.Authorization, signal)
       let body: unknown = null
       try {
         body = await response.json()

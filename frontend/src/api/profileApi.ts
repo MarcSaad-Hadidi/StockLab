@@ -1,4 +1,5 @@
 import { getAuthorizationHeader } from '../auth/authStorage'
+import { handleUnauthorized } from '../auth/handleUnauthorized'
 
 export type UserProfile = {
   id: string
@@ -48,6 +49,7 @@ export function createProfileApi(baseUrl: string, fetcher: typeof fetch = fetch,
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
       throw new ProfileApiError(0, 'offline')
     }
+    handleUnauthorized(response, auth.Authorization, signal)
     let body: unknown
     try { body = await response.json() }
     catch {

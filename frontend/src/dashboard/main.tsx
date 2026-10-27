@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { RequireAuth } from '../auth/RequireAuth'
 import '../i18n/i18n'
 import { DashboardPage } from './DashboardPage'
 import './DashboardPage.css'
@@ -14,6 +15,6 @@ if (!dashboardRoot) {
 
 createRoot(dashboardRoot).render(
   <StrictMode>
-    <DashboardPage />
+    <RequireAuth><DashboardPage /></RequireAuth>
   </StrictMode>,
 )
