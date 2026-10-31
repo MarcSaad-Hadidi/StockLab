@@ -70,6 +70,6 @@ public sealed class AuthController(
             accessToken.Token,
             "Bearer",
             accessToken.ExpiresAtUtc,
-            new LoginUserIdentityResponse(user.Id, user.DisplayName, user.Email)));
+            new LoginUserIdentityResponse(user.Id, user.DisplayName, user.Email, user.PreferredLanguage)));
     }
 }

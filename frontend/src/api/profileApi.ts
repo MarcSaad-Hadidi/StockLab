@@ -1,5 +1,6 @@
 import { getAuthorizationHeader } from '../auth/authStorage'
 import { handleUnauthorized } from '../auth/handleUnauthorized'
+import { isSupportedLanguage, type Language } from '../i18n/languages'
 
 export type UserProfile = {
   id: string
@@ -7,6 +8,7 @@ export type UserProfile = {
   email: string
   createdAtUtc: string
   updatedAtUtc: string
+  preferredLanguage: Language
 }
 export type UpdateProfileRequest = Pick<UserProfile, 'displayName' | 'email'>
 export type ProfileErrorCode = 'unauthorized' | 'profile_not_found' | 'validation_error'
@@ -31,33 +33,38 @@ const utcDate = (value: unknown) => text(value) && /(?:Z|[+-]\d{2}:\d{2})$/i.tes
 function isProfile(value: unknown): value is UserProfile {
   return record(value) && text(value.id) && /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value.id)
     && text(value.displayName) && text(value.email) && utcDate(value.createdAtUtc) && utcDate(value.updatedAtUtc)
+    && isSupportedLanguage(value.preferredLanguage)
 }
 
 export function createProfileApi(baseUrl: string, fetcher: typeof fetch = fetch,
   authorization: () => { Authorization: string } | null = getAuthorizationHeader) {
-  async function request(payload?: UpdateProfileRequest, signal?: AbortSignal): Promise<UserProfile> {
+  async function request(payload?: UpdateProfileRequest | { preferredLanguage: Language }, signal?: AbortSignal): Promise<UserProfile> {
     const auth = authorization()
     if (!auth) throw new ProfileApiError(401, 'unauthorized')
     let response: Response
+    const languageUpdate = payload && 'preferredLanguage' in payload
+    const body = payload ? JSON.stringify('preferredLanguage' in payload
+      ? { preferredLanguage: payload.preferredLanguage }
+      : { displayName: payload.displayName.trim(), email: payload.email.trim() }) : undefined
     try {
-      response = await fetcher(`${baseUrl.replace(/\/$/, '')}/api/profile`, {
+      response = await fetcher(`${baseUrl.replace(/\/$/, '')}/api/profile${languageUpdate ? '/language' : ''}`, {
         method: payload ? 'PUT' : 'GET', signal,
         headers: { Accept: 'application/json', ...auth, ...(payload ? { 'Content-Type': 'application/json' } : {}) },
-        ...(payload ? { body: JSON.stringify({ displayName: payload.displayName.trim(), email: payload.email.trim() }) } : {}),
+        ...(payload ? { body } : {}),
       })
     } catch {
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
       throw new ProfileApiError(0, 'offline')
     }
     handleUnauthorized(response, auth.Authorization, signal)
-    let body: unknown
-    try { body = await response.json() }
+    let result: unknown
+    try { result = await response.json() }
     catch {
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
       if (response.ok) throw new ProfileApiError(502, 'invalid_response')
     }
     if (!response.ok) {
-      const details = record(body) ? body : {}
+      const details = record(result) ? result : {}
       const code: ProfileErrorCode = response.status === 401 ? 'unauthorized'
         : response.status === 404 ? 'profile_not_found'
         : response.status === 400 ? 'validation_error'
@@ -67,12 +74,14 @@ export function createProfileApi(baseUrl: string, fetcher: typeof fetch = fetch,
         .filter((entry): entry is [string, string[]] => Array.isArray(entry[1]) && entry[1].every(text))) : {}
       throw new ProfileApiError(response.status, code, fields)
     }
-    if (!isProfile(body)) throw new ProfileApiError(502, 'invalid_response')
-    return body
+    if (!isProfile(result)) throw new ProfileApiError(502, 'invalid_response')
+    if (languageUpdate && result.preferredLanguage !== payload.preferredLanguage) throw new ProfileApiError(502, 'invalid_response')
+    return result
   }
   return {
     getProfile: (signal?: AbortSignal) => request(undefined, signal),
     updateProfile: (payload: UpdateProfileRequest, signal?: AbortSignal) => request(payload, signal),
+    updateLanguage: (preferredLanguage: Language, signal?: AbortSignal) => request({ preferredLanguage }, signal),
   }
 }
 

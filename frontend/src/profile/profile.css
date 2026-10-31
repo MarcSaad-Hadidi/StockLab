@@ -159,6 +159,8 @@ a { text-decoration: none; }
 .currency-select { position: relative; display: inline-flex; align-items: center; flex: 0 0 auto; }
 .currency-select select { width: 92px; height: 29px; padding: 0 24px 0 9px; color: #4a586d; font-size: 9px; background: #fff; border: 1px solid #e3e8f0; border-radius: 6px; outline: 0; appearance: none; }
 .currency-select .icon { position: absolute; right: 7px; pointer-events: none; color: #8392a7; }
+.currency-select select:focus-visible { outline: 2px solid #4357ed; outline-offset: 2px; }
+.language-preference-row small { white-space: normal; line-height: 1.5; }
 
 .account-security-panel { margin-top: 16px; }
 .security-grid { display: grid; grid-template-columns: 1fr 1fr; margin-top: 13px; }

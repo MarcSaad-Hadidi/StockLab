@@ -1,3 +1,5 @@
+import { isSupportedLanguage, type Language } from '../i18n/languages'
+
 export const authStorageKey = 'stocklab-auth'
 export const authSessionChangedEvent = 'stocklab-auth-changed'
 
@@ -5,6 +7,7 @@ export type AuthUser = {
   id: string
   displayName: string
   email: string
+  preferredLanguage?: Language // Existing sessions issued before this preference remain usable.
 }
 
 export type AuthSession = {
@@ -45,6 +48,7 @@ function isAuthSession(value: unknown): value is AuthSession {
   if (!Number.isFinite(Date.parse(value.expiresAtUtc))) return false
   if (!record(value.user)) return false
   return nonEmptyString(value.user.id) && nonEmptyString(value.user.displayName) && nonEmptyString(value.user.email)
+    && (value.user.preferredLanguage === undefined || isSupportedLanguage(value.user.preferredLanguage))
 }
 
 export function saveAuthSession(session: AuthSession, storage: AuthStorage | undefined = browserStorage()): boolean {

@@ -24,7 +24,7 @@ await i18n.changeLanguage('en')
 
 const user = { id: 'd4fd8828-1a30-46f7-86c0-8cbbfa644f66', displayName: 'Samira Martin', email: 'samira@example.com' }
 const session = { accessToken: 'signed-token', tokenType: 'Bearer' as const, expiresAtUtc: '2099-01-01T00:00:00Z', user }
-const profile = { ...user, createdAtUtc: '2026-09-24T23:40:00Z', updatedAtUtc: '2026-09-25T00:15:00Z' }
+const profile = { ...user, preferredLanguage: 'en' as const, createdAtUtc: '2026-09-24T23:40:00Z', updatedAtUtc: '2026-09-25T00:15:00Z' }
 const capital = { cashBalance: '20000', initialCapital: '25000', investedValue: '5000', totalValue: '25000', currency: 'CAD', positions: [] }
 async function mount(component: React.ReactElement) {
   const container = document.createElement('div'); document.body.append(container)
@@ -33,6 +33,117 @@ async function mount(component: React.ReactElement) {
   return { container, async close() { await act(async () => root.unmount()); container.remove() } }
 }
 function seed() { window.localStorage.clear(); saveAuthSession(session) }
+
+test('Profile language selection uses the persisted response and translates the interface without a reload', async (t) => {
+  seed()
+  await i18n.changeLanguage('en')
+  t.mock.method(profileApi, 'getProfile', async () => profile)
+  t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+  let finish!: (value: object) => void
+  let requested = ''
+  t.mock.method(profileApi, 'updateLanguage', language => { requested = language; return new Promise(resolve => { finish = resolve }) })
+  const { default: Page } = await import('../src/profile/ProfilePage.tsx')
+  const view = await mount(React.createElement(Page))
+  try {
+    const select = view.container.querySelector<HTMLSelectElement>('#profile-language')
+    assert.ok(select)
+    await act(async () => { select.value = 'fr'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true })) })
+    assert.equal(requested, 'fr')
+    assert.equal(select.disabled, true)
+    assert.equal(i18n.language, 'en', 'a pending response is not a persisted preference')
+    await act(async () => { finish({ ...profile, preferredLanguage: 'fr' }) })
+    assert.equal(i18n.language, 'fr')
+    assert.equal(window.localStorage.getItem('stocklab-language'), 'fr')
+    assert.equal(getAuthSession()?.user.preferredLanguage, 'fr')
+    assert.match(view.container.textContent!, /Votre langue de préférence a été enregistrée/)
+  } finally { await view.close(); await i18n.changeLanguage('en') }
+})
+
+test('a rejected language save preserves the old preference and exposes an error instead of success', async (t) => {
+  seed()
+  await i18n.changeLanguage('en')
+  t.mock.method(profileApi, 'getProfile', async () => profile)
+  t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+  t.mock.method(profileApi, 'updateLanguage', async () => { throw new ProfileApiError(409, 'profile_update_conflict') })
+  const { default: Page } = await import('../src/profile/ProfilePage.tsx')
+  const view = await mount(React.createElement(Page))
+  try {
+    const select = view.container.querySelector<HTMLSelectElement>('#profile-language')
+    assert.ok(select)
+    await act(async () => { select.value = 'fr'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true })) })
+    assert.equal(select.value, 'en')
+    assert.equal(i18n.language, 'en')
+    assert.ok(view.container.querySelector('[data-language-feedback][role="alert"]'))
+    assert.doesNotMatch(view.container.textContent!, /preferred language has been saved/)
+  } finally { await view.close() }
+})
+
+test('a late language response cannot change a replacement account or its interface language', async (t) => {
+  seed()
+  t.mock.method(profileApi, 'getProfile', async () => profile)
+  t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+  let finish!: (value: typeof profile) => void
+  t.mock.method(profileApi, 'updateLanguage', () => new Promise(resolve => { finish = resolve }))
+  let state!: ReturnType<typeof useProfileData>
+  function Probe() { state = useProfileData(); return null }
+  const view = await mount(React.createElement(Probe))
+  try {
+    let pending!: Promise<boolean>
+    await act(async () => { pending = state.saveLanguage('fr') })
+    await act(async () => { saveAuthSession({ ...session, user: { ...user, id: 'other-user' } }) })
+    await act(async () => { finish({ ...profile, preferredLanguage: 'fr' }); assert.equal(await pending, false) })
+    assert.equal(getAuthSession()?.user.id, 'other-user')
+    assert.equal(i18n.language, 'en')
+  } finally { await view.close() }
+})
+
+test('a session refresh that closes the password dialog restores the language selector', async (t) => {
+  seed()
+  let persisted = profile
+  t.mock.method(profileApi, 'getProfile', async () => persisted)
+  t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+  const { default: Page } = await import('../src/profile/ProfilePage.tsx')
+  const view = await mount(React.createElement(Page))
+  try {
+    const password = Array.from(view.container.querySelectorAll('button')).find(button => button.textContent === 'Change Password')!
+    await act(async () => password.click())
+    assert.ok(view.container.querySelector('[role="dialog"]'))
+    assert.equal(view.container.querySelector<HTMLSelectElement>('#profile-language')!.disabled, true)
+    persisted = { ...profile, displayName: 'Updated Elsewhere' }
+    await act(async () => {
+      saveAuthSession({ ...session, user: persisted })
+      window.dispatchEvent(new dom.window.StorageEvent('storage', { key: authStorageKey }))
+    })
+    assert.equal(view.container.querySelector('[role="dialog"]'), null)
+    assert.equal(view.container.querySelector('h1')!.textContent, persisted.displayName)
+    assert.equal(view.container.querySelector<HTMLSelectElement>('#profile-language')!.disabled, false)
+  } finally { await view.close() }
+})
+
+test('a language save confirmation does not follow a replacement account', async (t) => {
+  seed()
+  let persisted = profile
+  t.mock.method(profileApi, 'getProfile', async () => persisted)
+  t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+  t.mock.method(profileApi, 'updateLanguage', async language => {
+    persisted = { ...profile, preferredLanguage: language }
+    return persisted
+  })
+  const { default: Page } = await import('../src/profile/ProfilePage.tsx')
+  const view = await mount(React.createElement(Page))
+  try {
+    const select = view.container.querySelector<HTMLSelectElement>('#profile-language')!
+    await act(async () => { select.value = 'fr'; select.dispatchEvent(new dom.window.Event('change', { bubbles: true })) })
+    assert.match(view.container.textContent!, /Votre langue de préférence a été enregistrée/)
+    persisted = { ...persisted, id: '91f8d5fd-cb7d-4852-b3a5-4c0c8d440a8c', displayName: 'Another Account' }
+    await act(async () => {
+      saveAuthSession({ ...session, user: persisted })
+      window.dispatchEvent(new dom.window.StorageEvent('storage', { key: authStorageKey }))
+    })
+    assert.equal(view.container.querySelector('h1')!.textContent, 'Another Account')
+    assert.doesNotMatch(view.container.textContent!, /Votre langue de préférence a été enregistrée/)
+  } finally { await view.close(); await i18n.changeLanguage('en') }
+})
 
 test('Profile renders the server account and actual capital without manufactured account details', async (t) => {
   seed()

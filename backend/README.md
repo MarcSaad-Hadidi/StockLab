@@ -1150,6 +1150,31 @@ registration. A duplicate email returns <code>409 Conflict</code> with
 <code>email_already_registered</code>. These routes do not change passwords or
 portfolio data, and they require no database migration.
 
+### Account language preference (#283)
+
+`GET /api/profile`, `PUT /api/profile` and the login response's `user` include
+`preferredLanguage` (`en` or `fr`). `PUT /api/profile/language` accepts
+`{"preferredLanguage":"fr"}` with a Bearer token and updates only the authenticated
+user's preference and update timestamp. It returns the saved profile on HTTP 200;
+invalid/missing codes return 400, missing authentication 401, missing user 404,
+and a rowversion conflict 409 (`profile_update_conflict`). User IDs supplied in
+the body cannot select another account. The existing name/email endpoint leaves
+the language preference unchanged.
+
+Apply `AddUserPreferredLanguage` before deploying the new API. It backfills existing
+users with `en`, matching the previous application default, and constrains stored
+codes to the supported languages. Rolling this migration back drops the preference
+column; identity, password and portfolio data are preserved, and a later upgrade
+defaults the preference to `en` again.
+
+Profile's language setting applies the saved response to i18n without reloading;
+failures retain the previous preference and display localized errors. Login applies
+the account language before redirecting, replacing a previous browser choice.
+The shared local language cache is used on every page and storage events update
+already open tabs. The existing public language selectors still control the
+browser display; persistent account preference changes use Profile. This issue
+does not add a mandatory initial-language prompt or a top-bar language button.
+
 ## Portfolio API
 
 Human trade responses (`POST /api/portfolio/trades`, recent transactions and

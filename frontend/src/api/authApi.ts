@@ -1,4 +1,5 @@
 import type { AuthSession, AuthUser } from '../auth/authStorage'
+import { isSupportedLanguage } from '../i18n/languages'
 
 export type RegisterRequest = {
   displayName: string
@@ -80,6 +81,7 @@ function fieldErrors(value: unknown): Record<string, string[]> {
 
 function validUser(value: unknown): value is AuthUser {
   return record(value) && string(value.id) && string(value.displayName) && string(value.email)
+    && isSupportedLanguage(value.preferredLanguage)
 }
 
 function validRegisterResponse(value: unknown): value is RegisterResponse {

@@ -3,6 +3,8 @@ import { profileApi, ProfileApiError, type ProfileErrorCode, type UpdateProfileR
 import { portfolioApi } from '../api/portfolioApi'
 import { clearAuthSession, getAuthSession, saveAuthSession, type AuthSession } from '../auth/authStorage'
 import { subscribeAuthSession } from '../auth/useAuthUser'
+import { setLanguage } from '../i18n/i18n'
+import { isSupportedLanguage, type Language } from '../i18n/languages'
 
 // Keep the token check for responses issued before a new login.
 const sameSession = (expected: AuthSession | null) => {
@@ -39,7 +41,8 @@ export function useProfileData() {
       const current = getAuthSession()
       if (expected && current && expected.user.id === current.user.id
         && expected.accessToken === current.accessToken
-        && expected.user.displayName === current.user.displayName && expected.user.email === current.user.email) return
+        && expected.user.displayName === current.user.displayName && expected.user.email === current.user.email
+        && expected.user.preferredLanguage === current.user.preferredLanguage) return
       controller.abort()
       saveController.current?.abort()
       saveController.current = null
@@ -62,11 +65,14 @@ export function useProfileData() {
         if (controller.signal.aborted) return
         if (!sameSession(session)) { invalidateSession(); return }
         if (result.id !== session.user.id) throw new ProfileApiError(502, 'invalid_response')
-        setProfile(result)
         const current = getAuthSession()!
-        if (current.user.displayName !== result.displayName || current.user.email !== result.email)
-          setSessionWarning(!saveAuthSession({ ...current, user: { id: result.id, displayName: result.displayName, email: result.email } }))
+        if (current.user.preferredLanguage !== session.user.preferredLanguage) { invalidateSession(); return }
+        setProfile(result)
+        if (current.user.displayName !== result.displayName || current.user.email !== result.email
+          || current.user.preferredLanguage !== result.preferredLanguage)
+          setSessionWarning(!saveAuthSession({ ...current, user: { id: result.id, displayName: result.displayName, email: result.email, preferredLanguage: result.preferredLanguage } }))
         sessionRef.current = getAuthSession()
+        if (isSupportedLanguage(result.preferredLanguage)) void setLanguage(result.preferredLanguage)
       }).catch(error => {
         if (!controller.signal.aborted) {
           if (!sameSession(session)) { invalidateSession(); return }
@@ -99,7 +105,7 @@ export function useProfileData() {
     }
   }, [revision])
 
-  async function save(request: UpdateProfileRequest): Promise<boolean> {
+  async function save(request: UpdateProfileRequest | { preferredLanguage: Language }): Promise<boolean> {
     if (savingRef.current || !profile) return false
     const session = sessionRef.current
     if (!sameSession(session)) {
@@ -107,7 +113,8 @@ export function useProfileData() {
       return false
     }
     const currentSession = getAuthSession()!
-    if (session!.user.displayName !== currentSession.user.displayName || session!.user.email !== currentSession.user.email) {
+    if (session!.user.displayName !== currentSession.user.displayName || session!.user.email !== currentSession.user.email
+      || session!.user.preferredLanguage !== currentSession.user.preferredLanguage) {
       synchronizeSession.current?.()
       return false
     }
@@ -118,7 +125,9 @@ export function useProfileData() {
     setSaveError(null)
     setFieldErrors({})
     try {
-      const result = await profileApi.updateProfile(request, controller.signal)
+      const result = 'preferredLanguage' in request
+        ? await profileApi.updateLanguage(request.preferredLanguage, controller.signal)
+        : await profileApi.updateProfile(request, controller.signal)
       if (controller.signal.aborted) return false
       if (!sameSession(session)) {
         synchronizeSession.current?.()
@@ -126,13 +135,15 @@ export function useProfileData() {
       }
       if (result.id !== session!.user.id) throw new ProfileApiError(502, 'invalid_response')
       const current = getAuthSession()!
-      if (session!.user.displayName !== current.user.displayName || session!.user.email !== current.user.email) {
+      if (session!.user.displayName !== current.user.displayName || session!.user.email !== current.user.email
+        || session!.user.preferredLanguage !== current.user.preferredLanguage) {
         synchronizeSession.current?.()
         return false
       }
       setProfile(result)
-      setSessionWarning(!saveAuthSession({ ...current, user: { id: result.id, displayName: result.displayName, email: result.email } }))
+      setSessionWarning(!saveAuthSession({ ...current, user: { id: result.id, displayName: result.displayName, email: result.email, preferredLanguage: result.preferredLanguage } }))
       sessionRef.current = getAuthSession()
+      if ('preferredLanguage' in request) await setLanguage(result.preferredLanguage)
       return true
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -174,5 +185,6 @@ export function useProfileData() {
     setSessionWarning(false)
     setRevision(value => value + 1)
   }
-  return { profile, capital, loading, loadError, saveError, fieldErrors, saving, sessionWarning, save, reload, clearSaveErrors }
+  return { profile, capital, loading, loadError, saveError, fieldErrors, saving, sessionWarning, save, reload, clearSaveErrors,
+    saveLanguage: (preferredLanguage: Language) => save({ preferredLanguage }) }
 }

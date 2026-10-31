@@ -3,6 +3,7 @@ import { LanguageSelector } from '../components/LanguageSelector'
 import { formatSignedPercent } from '../i18n/formatters'
 import { AuthApiError, authApi } from '../api/authApi'
 import { saveAuthSession } from '../auth/authStorage'
+import { setLanguage } from '../i18n/i18n'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -93,6 +94,7 @@ export default function LoginPage() {
         setServerError('login.errors.sessionStorage')
         return
       }
+      if (session.user.preferredLanguage) await setLanguage(session.user.preferredLanguage)
       window.location.assign(routeFor('dashboard'))
     } catch (error) {
       if (error instanceof AuthApiError) {

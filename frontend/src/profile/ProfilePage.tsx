@@ -93,13 +93,16 @@ function UnavailablePreference({ label, description }: { label: string; descript
 export default function ProfilePage() {
   const { i18n, t } = useTranslation()
   useEffect(() => { document.title = `${t('profile.title')} | StockLab` }, [i18n.language, t])
-  const { profile, capital, loading, loadError, saveError, fieldErrors, saving, sessionWarning, save, reload, clearSaveErrors } = useProfileData()
+  const { profile, capital, loading, loadError, saveError, fieldErrors, saving, sessionWarning, save, saveLanguage, reload, clearSaveErrors } = useProfileData()
+  const [languageAttempted, setLanguageAttempted] = useState(false)
+  const [languageSaved, setLanguageSaved] = useState<{ userId: string; language: UserProfile['preferredLanguage'] } | null>(null)
   const [draft, setDraft] = useState<UpdateProfileRequest>({ displayName: '', email: '' })
   const [editingProfile, setEditingProfile] = useState<UserProfile | null>(null)
   const editing = profile !== null && editingProfile === profile
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [saved, setSaved] = useState(false)
   const [passwordProfile, setPasswordProfile] = useState<UserProfile | null>(null)
+  const passwordOpen = passwordProfile !== null && passwordProfile === profile
   const [passwordSavedProfile, setPasswordSavedProfile] = useState<UserProfile | null>(null)
   const canEdit = profile !== null && !loading && !saving && loadError === null
   const nameError = Object.keys(fieldErrors).some(key => key.toLowerCase() === 'displayname')
@@ -113,6 +116,7 @@ export default function ProfilePage() {
   const beginEditing = () => {
     if (!canEdit || editing) return
     clearSaveErrors()
+    setLanguageAttempted(false); setLanguageSaved(null)
     setDraft({ displayName: profile.displayName, email: profile.email })
     setSaved(false)
     setEditingProfile(profile)
@@ -179,12 +183,34 @@ export default function ProfilePage() {
           <section aria-labelledby="preferences-title" className="panel preferences-panel">
             <div className="panel-heading"><div><h2 id="preferences-title">{t('profile.preferences')}</h2><p>{t('profile.preferencesDescription')}</p></div></div>
             <div className="preferences-list">
+              <div className="preference-row select-row language-preference-row">
+                <div><label htmlFor="profile-language"><strong>{t('profile.language')}</strong></label><small id="profile-language-description">{t('profile.languageDescription')}</small></div>
+                <span className="currency-select"><select id="profile-language" aria-describedby="profile-language-description"
+                  disabled={!canEdit || editing || passwordOpen} value={profile?.preferredLanguage ?? ''}
+                  title={editing ? t('profile.languageFinishEditing') : undefined}
+                  onChange={event => {
+                    const language = event.target.value
+                    if ((language !== 'en' && language !== 'fr') || !profile) return
+                    const userId = profile.id
+                    setLanguageAttempted(true); setLanguageSaved(null)
+                    void saveLanguage(language).then(saved => { if (saved) setLanguageSaved({ userId, language }) })
+                  }}>
+                  <option disabled value="">—</option><option value="en">English</option><option value="fr">Français</option>
+                </select><Icon name="chevron-down" size={12} /></span>
+              </div>
               <UnavailablePreference description={t('profile.emailNotificationsDescription')} label={t('profile.emailNotifications')} />
               <UnavailablePreference description={t('profile.tradeAlertsDescription')} label={t('profile.tradeAlerts')} />
               <UnavailablePreference description={t('profile.marketingCommunicationsDescription')} label={t('profile.marketingCommunications')} />
               <div className="preference-row select-row"><div><strong>{t('profile.accountCurrency')}</strong><small>{t('profile.accountCurrencyDescription')}</small></div><strong>{capital?.currency ?? '—'}</strong></div>
               <UnavailablePreference description={t('profile.darkModeDescription')} label={t('profile.darkMode')} />
             </div>
+            {languageAttempted && saving && <p className="profile-feedback" role="status">{t('profile.saving')}</p>}
+            {languageAttempted && saveError && <div className="profile-feedback form-error" role="alert" data-language-feedback>
+              <p>{t(`profile.errors.${saveError}`)}</p>
+              {saveError === 'profile_update_conflict' && <button type="button" className="cancel-button" onClick={() => { setLanguageAttempted(false); reload() }}>{t('marketApi.retry')}</button>}
+            </div>}
+            {languageSaved && languageSaved.userId === profile?.id && languageSaved.language === profile.preferredLanguage
+              && <p className="profile-saved" role="status">{t('profile.languageSaved')}</p>}
           </section>
         </div>
         <section aria-labelledby="security-title" className="panel account-security-panel">
@@ -198,7 +224,7 @@ export default function ProfilePage() {
         <p className="simulation-note">{t('profile.unavailableNote')}</p>
       </div>
     </main>
-    {passwordProfile !== null && passwordProfile === profile && <PasswordModal onClose={() => setPasswordProfile(null)} onSave={() => {
+    {passwordOpen && <PasswordModal onClose={() => setPasswordProfile(null)} onSave={() => {
       setPasswordProfile(null)
       setPasswordSavedProfile(profile)
     }} />}

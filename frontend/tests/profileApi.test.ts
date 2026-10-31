@@ -5,9 +5,31 @@ import { createProfileApi, ProfileApiError } from '../src/api/profileApi.ts'
 const profile = {
   id: 'd4fd8828-1a30-46f7-86c0-8cbbfa644f66', displayName: 'Samira Martin', email: 'samira@example.com',
   createdAtUtc: '2026-09-24T23:40:00Z', updatedAtUtc: '2026-09-25T00:15:00Z',
+  preferredLanguage: 'en',
 }
 const authorization = () => ({ Authorization: 'Bearer test-token' })
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
+
+test('language updates persist only the preference through an authenticated profile endpoint', async () => {
+  let captured: { url: string; init?: RequestInit } | undefined
+  const api = createProfileApi('', async (url, init) => {
+    captured = { url: String(url), init }
+    return json({ ...profile, preferredLanguage: 'fr' })
+  }, authorization)
+  const saved = await api.updateLanguage('fr')
+  assert.equal(saved.preferredLanguage, 'fr')
+  assert.equal(captured?.url, '/api/profile/language')
+  assert.equal(captured?.init?.method, 'PUT')
+  assert.equal(new Headers(captured?.init?.headers).get('Authorization'), 'Bearer test-token')
+  assert.deepEqual(JSON.parse(String(captured?.init?.body)), { preferredLanguage: 'fr' })
+})
+
+test('missing or unsupported server preferences cannot be accepted as saved profile data', async () => {
+  for (const preferredLanguage of [undefined, null, 'es', 'FR', 'fr-FR', 1]) {
+    const api = createProfileApi('', async () => json({ ...profile, preferredLanguage }), authorization)
+    await assert.rejects(api.getProfile(), (error: unknown) => error instanceof ProfileApiError && error.code === 'invalid_response')
+  }
+})
 
 test('profile reads and updates use authenticated API requests and the server response', async () => {
   const calls: { url: string; init?: RequestInit }[] = []

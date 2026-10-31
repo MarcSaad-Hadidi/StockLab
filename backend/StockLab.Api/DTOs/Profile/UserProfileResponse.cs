@@ -5,4 +5,5 @@ public sealed record UserProfileResponse(
     string DisplayName,
     string Email,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    string PreferredLanguage);

@@ -66,6 +66,7 @@ and Transactions; AI accounting is defined separately below.
 | Email | `nvarchar(254)`, nonblank |
 | NormalizedEmail | `nvarchar(254)`, unique, nonblank |
 | PasswordHash | `nvarchar(1024)`; only the encoded output of the chosen password hasher |
+| PreferredLanguage | `nvarchar(2)`, default `en`, CHECK in (`en`, `fr`); SQL Server binary collation keeps the stored codes lowercase |
 | CreatedAtUtc | `datetime2(7)` |
 | UpdatedAtUtc | `datetime2(7)`, >= CreatedAtUtc |
 | Version | `rowversion` |

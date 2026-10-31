@@ -6,4 +6,4 @@ public sealed record LoginUserResponse(
     DateTimeOffset ExpiresAtUtc,
     LoginUserIdentityResponse User);
 
-public sealed record LoginUserIdentityResponse(Guid Id, string DisplayName, string Email);
+public sealed record LoginUserIdentityResponse(Guid Id, string DisplayName, string Email, string PreferredLanguage);
