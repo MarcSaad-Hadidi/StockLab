@@ -159,19 +159,19 @@ public sealed class UserProfileApiTests
     }
 
     [Fact]
-    public async Task Get_profile_returns_not_found_when_the_sub_user_no_longer_exists()
+    public async Task Get_profile_rejects_the_session_when_the_sub_user_no_longer_exists()
     {
         await using var fixture = await UserProfileFixture.CreateAsync();
         var token = CreateSignedToken(Guid.NewGuid().ToString("D"), fixture.ExpectedUtcNow);
 
         using var response = await GetWithTokenAsync(fixture.Client, token);
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal("profile_not_found", await ErrorCodeAsync(response));
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("unauthorized", await ErrorCodeAsync(response));
     }
 
     [Fact]
-    public async Task Put_profile_returns_not_found_when_the_sub_user_no_longer_exists()
+    public async Task Put_profile_rejects_the_session_when_the_sub_user_no_longer_exists()
     {
         await using var fixture = await UserProfileFixture.CreateAsync();
         var token = CreateSignedToken(Guid.NewGuid().ToString("D"), fixture.ExpectedUtcNow);
@@ -179,8 +179,8 @@ public sealed class UserProfileApiTests
         using var response = await PutWithTokenAsync(fixture.Client, token,
             """{"displayName":"Person","email":"person@example.com"}""");
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal("profile_not_found", await ErrorCodeAsync(response));
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("unauthorized", await ErrorCodeAsync(response));
     }
 
     [Fact]
@@ -466,7 +466,7 @@ public sealed class UserProfileApiTests
         var token = new JwtSecurityToken(
             issuer: TestIssuer,
             audience: TestAudience,
-            claims: [new Claim(JwtRegisteredClaimNames.Sub, subject)],
+            claims: [new Claim(JwtRegisteredClaimNames.Sub, subject), new Claim("session_version", "0")],
             notBefore: issuedAtUtc.AddMinutes(-1).UtcDateTime,
             expires: issuedAtUtc.AddMinutes(30).UtcDateTime,
             signingCredentials: credentials);

@@ -11,6 +11,8 @@ namespace StockLab.Infrastructure.Identity;
 
 public sealed class JwtAccessTokenService(IOptions<JwtOptions> options, TimeProvider timeProvider) : IAccessTokenService
 {
+    public const string SessionVersionClaim = "session_version";
+
     public AccessTokenResult CreateAccessToken(User user)
     {
         var jwtOptions = options.Value;
@@ -19,6 +21,7 @@ public sealed class JwtAccessTokenService(IOptions<JwtOptions> options, TimeProv
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString("D")),
+            new Claim(SessionVersionClaim, user.SessionVersion.ToString(CultureInfo.InvariantCulture)),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("D")),
             new Claim(JwtRegisteredClaimNames.Name, user.DisplayName),
             new Claim(JwtRegisteredClaimNames.Iat,

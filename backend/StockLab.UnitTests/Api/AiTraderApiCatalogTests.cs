@@ -40,7 +40,7 @@ public sealed class AiTraderApiCatalogTests : IDisposable
             foreach (var privateValue in new[] { directory, "DO_NOT_LEAK", "TEST_ONLY_PRIVATE_VALUE", "aws_secret", "StackTrace", "joblib" })
                 Assert.DoesNotContain(privateValue, json, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(before, await f.Database.StateAsync());
-            Assert.Empty(f.Observer.Commands);
+            Assert.Contains("\"Users\"", Assert.Single(f.Observer.Commands)); // Authentication only; no catalog SQL.
             Assert.Equal(0, f.Observer.SaveCalls);
             Assert.Empty(f.Market.Calls);
         }
@@ -56,7 +56,8 @@ public sealed class AiTraderApiCatalogTests : IDisposable
         });
         foreach (var route in new[] { "models", "backtests" })
             Assert.Empty((await f.ReadAsync($"/api/ai-trader/{route}", AiTraderApiFixture.Token())).EnumerateArray());
-        Assert.Empty(f.Observer.Commands);
+        Assert.Equal(2, f.Observer.Commands.Count); // One session lookup per request.
+        Assert.All(f.Observer.Commands, sql => Assert.Contains("\"Users\"", sql));
         Assert.Equal(0, f.Observer.SaveCalls);
     }
 
@@ -115,7 +116,7 @@ public sealed class AiTraderApiCatalogTests : IDisposable
         var json = JsonSerializer.Serialize(result);
         foreach (var field in new[] { "training_report", "holdout_sha256", "artifact", "joblib", "registryPath", directory })
             Assert.DoesNotContain(field, json, StringComparison.OrdinalIgnoreCase);
-        Assert.Empty(f.Observer.Commands);
+        Assert.Contains("\"Users\"", Assert.Single(f.Observer.Commands));
         Assert.Equal(0, f.Observer.SaveCalls);
         Assert.Empty(f.Market.Calls);
     }
@@ -158,7 +159,7 @@ public sealed class AiTraderApiCatalogTests : IDisposable
         Assert.Equal(JsonValueKind.Null, comparison.GetProperty("winRate").ValueKind);
         Assert.Equal(JsonValueKind.Null, comparison.GetProperty("executedTrades").ValueKind);
         Assert.Equal(before, await f.Database.StateAsync());
-        Assert.Empty(f.Observer.Commands);
+        Assert.Contains("\"Users\"", Assert.Single(f.Observer.Commands));
         Assert.Equal(0, f.Observer.SaveCalls);
         Assert.Empty(f.Market.Calls);
     }

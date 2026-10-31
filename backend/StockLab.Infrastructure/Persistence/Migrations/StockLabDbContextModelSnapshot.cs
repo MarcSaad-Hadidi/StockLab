@@ -644,6 +644,12 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                         .HasDefaultValue("en")
                         .UseCollation("Latin1_General_100_BIN2");
 
+                    b.Property<long>("SessionVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2(7)");
 
@@ -669,6 +675,8 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_Users_PasswordHash_NotBlank", "LTRIM(RTRIM([PasswordHash])) <> ''");
 
                             t.HasCheckConstraint("CK_Users_PreferredLanguage", "[PreferredLanguage] IN ('en', 'fr')");
+
+                            t.HasCheckConstraint("CK_Users_SessionVersion", "[SessionVersion] >= 0");
 
                             t.HasCheckConstraint("CK_Users_UpdatedAtUtc", "[UpdatedAtUtc] >= [CreatedAtUtc]");
                         });

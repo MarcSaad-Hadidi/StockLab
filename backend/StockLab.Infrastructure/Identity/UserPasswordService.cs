@@ -17,6 +17,8 @@ public sealed class UserPasswordService(StockLabDbContext dbContext, IPasswordHa
         if (passwordHasher.VerifyHashedPassword(user, user.PasswordHash, currentPassword) == PasswordVerificationResult.Failed)
             return PasswordChangeResult.InvalidCurrentPassword;
         user.PasswordHash = passwordHasher.HashPassword(user, newPassword);
+        // Commit the hash and revocation together; failed writes preserve both previous values.
+        user.SessionVersion = checked(user.SessionVersion + 1);
         user.UpdatedAtUtc = timeProvider.GetUtcNow().UtcDateTime;
         try
         {

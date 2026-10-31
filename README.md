@@ -244,7 +244,7 @@ En environnement `Development`, OpenAPI est disponible à `/openapi/v1.json`. Le
 | GET / POST / PUT / DELETE | /api/alerts et /api/alerts/{id} | Gestion des alertes ; désactivation par POST /api/alerts/{id}/disable |
 | GET | /api/ai-trader/* | Treize lectures protégées : portefeuille, performances/cycles, décisions, transactions, modèles et backtests |
 
-Après connexion, les routes privées utilisent `Authorization: Bearer <token>`. La session frontend est conservée dans `localStorage`, vérifiée à l’expiration et actualisée lors des changements de session. La déconnexion efface la session locale. Le changement de mot de passe ne constitue pas un mécanisme de révocation des JWT déjà émis ; ceux-ci conservent leur durée de validité.
+Après connexion, les routes privées utilisent `Authorization: Bearer <token>`. La session frontend est conservée dans `localStorage`, vérifiée à l’expiration et actualisée lors des changements de session. La déconnexion efface la session locale. Chaque requête privée vérifie aussi la version de session du compte en base : un changement de mot de passe révoque tous ses anciens JWT, y compris celui de la session courante. Une nouvelle connexion avec le nouveau mot de passe fournit un token valide. Appliquer la migration `AddUserSessionVersion` avant le déploiement ; les sessions émises avant cette évolution doivent se reconnecter une fois.
 
 #### Portfolio API
 
