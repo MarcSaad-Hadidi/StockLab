@@ -287,10 +287,10 @@ public sealed class AiRiskExecutionTests
 
     internal static AiRiskExecutionService Service(AiCurrentPositionsFixture f, AiRiskOptions? policy = null,
         IDbContextFactory<StockLabDbContext>? journal = null, IAiRiskManager? risk = null, IAiTradeExecutionService? execution = null,
-        IMarketDataProvider? quotes = null)
+        IMarketDataProvider? quotes = null, TimeProvider? timeProvider = null)
     {
         var options = Options.Create(policy ?? new AiRiskOptions());
-        var clock = new AiCurrentPositionsFixture.Clock();
+        var clock = timeProvider ?? new AiCurrentPositionsFixture.Clock();
         return new(journal ?? f, new AiDecisionHistoryService(f, clock), new AiDecisionOutcomeReadService(f),
             risk ?? new AiRiskManager(new AiTraderPortfolioService(f, quotes ?? f.ValuationMarket, clock), options),
             execution ?? new AiPaperTradingEngine(f, quotes ?? f.ExecutionMarket, options, clock),

@@ -257,6 +257,111 @@ models or execute anything on a user's account. The journal migration only adds
 a table/indexes/non-cascading foreign keys; existing account/trade data is retained.
 Tests use isolated databases and explicit Mock/controlled quotes, never a broker.
 
+## Run the full local paper cycle (#273)
+
+The local operator runner composes the existing #257 decision pipeline, #258
+risk/paper execution and an idempotent valuation capture. Normal HTTP startup
+does not launch it. It never submits an order to a real broker or changes a
+user portfolio. One loop owns its passes sequentially; all invocations for the
+same local portfolio must use the same private state directory.
+
+1. Keep the intended SQL database and its history. Apply reviewed migrations
+   explicitly if needed, initialize the system paper portfolio through the
+   existing setup command, and configure `MarketData:Provider=TwelveData`.
+2. Prepare a fitted artifact with the existing #76 APIs. Use the audited #78
+   evaluation/application workflow to promote a selected version. Retain the
+   validation/test, calibration, backtest and benchmark evidence privately.
+   The runner requires the exact Active version; it never tunes thresholds,
+   trains, promotes, or falls back to a different model. A policy-approved
+   historical evaluation is not prospective evidence of profitability.
+3. Build the operator backend, using an isolated output if a server is running:
+
+   ```powershell
+   dotnet build backend/StockLab.Api --artifacts-path .tmp/ai-trader-build
+   ```
+
+4. Copy `ml/examples/ai_trader_cycle.config.example.json` into an ignored private
+   location and replace every example path/database value. Paths must be
+   absolute; environment-variable placeholders are not expanded. Keep inputs,
+   state, registry and artifacts separate. The initial universe is limited to
+   1–10 USD US-equity symbols on the supported exchange calendar. The history
+   start must preserve the fitted feature history. Set `trusted_artifacts=true`
+   only after verifying ownership and provenance of that fitted joblib.
+5. Configure the dedicated `TWELVE_DATA_ML_API_KEY`. Sharing the configured website
+   credential is an explicit alternative: set `share_website_quota=true` and add
+   `website_secrets_path` with the absolute path of the existing Development
+   User Secrets JSON. This reuses only its configured Website/Fallback selector,
+   with no credential failover. It shares that credential's quota. Keys stay out
+   of the cycle config, command arguments and logs. The ML credential is removed
+   from the child environment; the backend resolves its quote credential through
+   its existing configuration.
+6. From the repository root, run one pass and inspect its actual outcomes:
+
+   ```powershell
+   $env:PYTHONPATH = "$PWD/ml/src"
+   ml/.venv/Scripts/python.exe -m stocklab_ml.operational_cycle --config <private-config.json> --once
+   ```
+
+The runner first checks the exact database, migrations, initialized portfolio,
+real provider, active model and effective risk policy. Confidence below 70% or
+short-selling configuration blocks this cycle. It then fetches daily
+split-adjusted inputs using the existing ingestion pipeline. The inclusive end
+is sent as `T23:59:59`, so the requested closed session is not lost at midnight
+([Twelve Data's date/time selection contract](https://twelvedata.com/docs)).
+
+Only a session before today's UTC date is eligible. The regular US-equity
+calendar currently covers 2026–2028, including observed holidays and the 2028
+Saturday New Year's exception, using the
+[published exchange calendar](https://www.nyse.com/trade/hours-calendars).
+An unknown year or a missing expected bar blocks the cycle. Exceptional closures
+are not guessed: absent data blocks until explicitly reviewed. Partial attempts
+remain private; only complete, validated, hashed snapshots are published. A
+same-session retry verifies and reuses that immutable snapshot without another
+historical request. Execution and valuation reject future quotes and source
+observations older than the required session. Prices are the provider's latest
+available observations with their original timestamps, not a promise of live
+executable prices.
+
+`COMPLETED` means decisions and terminal outcomes were persisted and valuation
+captured. `executed`, `rejected` and `hold` count the actual outcomes; a successful
+pass may contain zero trades. HOLD confidence describes neutrality, not expected
+profit. The existing risk manager and settlement engine retain sizing, cash,
+exposure and no-short safeguards. Opening AI Trader and selecting **Refresh**
+reads these persisted decisions, orders, holdings and performance from the real
+authenticated backend.
+
+After verifying the manual pass, start sequential operation with the same config:
+
+```powershell
+ml/.venv/Scripts/python.exe -m stocklab_ml.operational_cycle --config <private-config.json> --loop
+```
+
+`interval_seconds` must be 60–86400; the example checks every 30 minutes. A
+completed session is replayed without inference, quotes, orders or new captures.
+To request a clean stop after the active pass, use a second terminal:
+
+```powershell
+ml/.venv/Scripts/python.exe -m stocklab_ml.operational_cycle --config <private-config.json> --stop
+```
+
+The next explicit `--loop` clears the stop request and resumes the same journals.
+Do not delete lock files: ownership belongs to the OS and is released on exit.
+An interrupted trade reuses its original decision/order IDs. An interrupted
+capture reuses its saved capture ID without revaluation. Before advancing to a
+new session, the backend reconciles unfinished older journals using the original
+persisted outcomes and capture identity. Remaining stale unresolved signals are
+marked `ABANDONED` in that journal and are never submitted. Capture reconciliation
+uses current quotes and records its real capture time; it does not fabricate a
+historical valuation. Failed reconciliation blocks new inference.
+
+The private state directory contains bounded atomic `status.json` (last attempt,
+stage and last success) and `session-<date>.json` checkpoints. CLI errors expose
+only fixed status/stage codes; raw child output, private paths, inputs and model
+audit evidence are not published. A changed model/universe/input/journal blocks
+instead of silently rewriting a session. Preserve evidence and resolve the
+specific configuration/data issue before retrying. Do not run legacy manual
+execution commands concurrently with this managed cycle.
+
 ## Periodic performance cycle (#259)
 
 Apply `AddAiPerformanceCycles` explicitly to the intended database. It adds

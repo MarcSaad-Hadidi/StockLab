@@ -87,7 +87,8 @@ class HistoricalRequest:
         params = {
             "symbol": symbol, "interval": "1day",
             "start_date": self.start_date.isoformat(),
-            "end_date": self.end_date.isoformat(),
+            # A date alone ends at midnight and can omit that session's bar.
+            "end_date": self.end_date.isoformat() + "T23:59:59",
             "order": "asc", "format": "JSON", "adjust": "splits",
         }
         if exchange:
