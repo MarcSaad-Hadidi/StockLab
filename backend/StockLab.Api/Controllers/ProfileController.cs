@@ -72,11 +72,36 @@ public sealed class ProfileController(IUserProfileService userProfileService) : 
         }
     }
 
+    /// <summary>Sets the authenticated user's account language without changing identity fields.</summary>
+    [HttpPut("language")]
+    [Consumes("application/json")]
+    [ProducesResponseType(typeof(UserProfileResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiValidationErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<UserProfileResponse>> UpdateLanguageAsync(
+        [FromBody] UpdateUserLanguageRequest request, CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+            return Unauthorized(new ApiErrorResponse("unauthorized", "Authentication is required."));
+        try
+        {
+            var user = await userProfileService.UpdateLanguageAsync(userId, request.PreferredLanguage, cancellationToken);
+            return user is null ? NotFound(ProfileNotFound()) : Ok(ToResponse(user));
+        }
+        catch (UserProfileUpdateConflictException)
+        {
+            return Conflict(new ApiErrorResponse("profile_update_conflict", "The profile was modified by another request."));
+        }
+    }
+
     private static ApiErrorResponse ProfileNotFound() =>
         new("profile_not_found", "The profile was not found.");
 
     private static UserProfileResponse ToResponse(User user) =>
         new(user.Id, user.DisplayName, user.Email,
             DateTime.SpecifyKind(user.CreatedAtUtc, DateTimeKind.Utc),
-            DateTime.SpecifyKind(user.UpdatedAtUtc, DateTimeKind.Utc));
+            DateTime.SpecifyKind(user.UpdatedAtUtc, DateTimeKind.Utc), user.PreferredLanguage);
 }

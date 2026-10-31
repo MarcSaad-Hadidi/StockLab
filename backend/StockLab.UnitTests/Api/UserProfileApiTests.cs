@@ -25,6 +25,77 @@ public sealed class UserProfileApiTests
     private const string TestAudience = "StockLab.Tests";
     private const string TestSigningKey = "test-only-signing-key-at-least-32-bytes-long";
 
+    [Theory]
+    [InlineData("fr")]
+    [InlineData("en")]
+    public async Task Language_preference_is_persisted_per_account_and_restored_by_login(string language)
+    {
+        await using var fixture = await UserProfileFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "Original", "language@example.com");
+        var other = await CreateSignedInAccountAsync(fixture, "Other", "other@example.com");
+        using var request = new HttpRequestMessage(HttpMethod.Put, "/api/profile/language")
+        {
+            Content = Json(JsonSerializer.Serialize(new { preferredLanguage = language, userId = other.Id }))
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", account.Token);
+        using var response = await fixture.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(language, body.RootElement.GetProperty("preferredLanguage").GetString());
+        Assert.Equal("Original", body.RootElement.GetProperty("displayName").GetString());
+        Assert.Equal("language@example.com", body.RootElement.GetProperty("email").GetString());
+        using var profile = await GetWithTokenAsync(fixture.Client, account.Token);
+        using var saved = JsonDocument.Parse(await profile.Content.ReadAsStringAsync());
+        Assert.Equal(language, saved.RootElement.GetProperty("preferredLanguage").GetString());
+        using var login = await LoginAsync(fixture.Client, "language@example.com");
+        using var signedIn = JsonDocument.Parse(await login.Content.ReadAsStringAsync());
+        Assert.Equal(language, signedIn.RootElement.GetProperty("user").GetProperty("preferredLanguage").GetString());
+        using var otherResponse = await GetWithTokenAsync(fixture.Client, other.Token);
+        using var otherProfile = JsonDocument.Parse(await otherResponse.Content.ReadAsStringAsync());
+        Assert.Equal("en", otherProfile.RootElement.GetProperty("preferredLanguage").GetString());
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"preferredLanguage\":null}")]
+    [InlineData("{\"preferredLanguage\":\"\"}")]
+    [InlineData("{\"preferredLanguage\":\"es\"}")]
+    [InlineData("{\"preferredLanguage\":\"FR\"}")]
+    [InlineData("{\"preferredLanguage\":\"fr-FR\"}")]
+    public async Task Invalid_language_does_not_change_the_saved_preference(string payload)
+    {
+        await using var fixture = await UserProfileFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "Original", "language@example.com");
+        using var request = new HttpRequestMessage(HttpMethod.Put, "/api/profile/language") { Content = Json(payload) };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", account.Token);
+        using var response = await fixture.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("validation_error", await ErrorCodeAsync(response));
+        using var profile = await GetWithTokenAsync(fixture.Client, account.Token);
+        using var body = JsonDocument.Parse(await profile.Content.ReadAsStringAsync());
+        Assert.Equal("en", body.RootElement.GetProperty("preferredLanguage").GetString());
+    }
+
+    [Fact]
+    public async Task Language_update_requires_authentication()
+    {
+        await using var fixture = await UserProfileFixture.CreateAsync();
+        using var response = await fixture.Client.PutAsync("/api/profile/language", Json("""{"preferredLanguage":"fr"}"""));
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Language_update_concurrency_failure_is_not_reported_as_success()
+    {
+        await using var fixture = await UserProfileFixture.CreateAsync(new RejectProfileUpdateWithConcurrencyConflict());
+        var account = await CreateSignedInAccountAsync(fixture, "Original", "language@example.com");
+        using var request = new HttpRequestMessage(HttpMethod.Put, "/api/profile/language") { Content = Json("""{"preferredLanguage":"fr"}""") };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", account.Token);
+        using var response = await fixture.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("profile_update_conflict", await ErrorCodeAsync(response));
+    }
+
     public static IEnumerable<object[]> InvalidProfileRequests
     {
         get
@@ -78,7 +149,7 @@ public sealed class UserProfileApiTests
         Assert.Equal("User B", bodyB.RootElement.GetProperty("displayName").GetString());
         Assert.Equal("b@example.com", bodyB.RootElement.GetProperty("email").GetString());
         Assert.Equal(
-            new[] { "id", "displayName", "email", "createdAtUtc", "updatedAtUtc" },
+            new[] { "id", "displayName", "email", "createdAtUtc", "updatedAtUtc", "preferredLanguage" },
             bodyA.RootElement.EnumerateObject().Select(property => property.Name).ToArray());
         Assert.DoesNotContain("password", responseTextA, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("hash", responseTextA, StringComparison.OrdinalIgnoreCase);
@@ -202,7 +273,7 @@ public sealed class UserProfileApiTests
             Assert.EndsWith("Z", body.RootElement.GetProperty("createdAtUtc").GetString());
             Assert.EndsWith("Z", body.RootElement.GetProperty("updatedAtUtc").GetString());
             Assert.Equal(
-                new[] { "id", "displayName", "email", "createdAtUtc", "updatedAtUtc" },
+                new[] { "id", "displayName", "email", "createdAtUtc", "updatedAtUtc", "preferredLanguage" },
                 body.RootElement.EnumerateObject().Select(property => property.Name).ToArray());
             Assert.DoesNotContain("password", responseText, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("hash", responseText, StringComparison.OrdinalIgnoreCase);
@@ -313,7 +384,7 @@ public sealed class UserProfileApiTests
 
         var responseSchema = ResolveResponseSchema(document.RootElement, getOperation, "200");
         Assert.Equal(
-            new[] { "id", "displayName", "email", "createdAtUtc", "updatedAtUtc" },
+            new[] { "id", "displayName", "email", "createdAtUtc", "updatedAtUtc", "preferredLanguage" },
             responseSchema.GetProperty("properties").EnumerateObject().Select(property => property.Name).ToArray());
         var requestSchemaReference = putOperation.GetProperty("requestBody").GetProperty("content")
             .GetProperty("application/json").GetProperty("schema").GetProperty("$ref").GetString()!;
@@ -504,7 +575,7 @@ public sealed class UserProfileApiTests
             CancellationToken cancellationToken = default)
         {
             var profileUpdateIsPending = eventData.Context?.ChangeTracker.Entries<User>()
-                .Any(entry => entry.State == EntityState.Modified && entry.Property(user => user.Email).IsModified) == true;
+                .Any(entry => entry.State == EntityState.Modified) == true;
             if (profileUpdateIsPending)
                 throw new DbUpdateConcurrencyException("Simulated profile update conflict.");
 

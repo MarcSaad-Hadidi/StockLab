@@ -636,6 +636,14 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("nvarchar(1024)");
 
+                    b.Property<string>("PreferredLanguage")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(2)
+                        .HasColumnType("nvarchar(2)")
+                        .HasDefaultValue("en")
+                        .UseCollation("Latin1_General_100_BIN2");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2(7)");
 
@@ -659,6 +667,8 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_Users_NormalizedEmail_NotBlank", "LTRIM(RTRIM([NormalizedEmail])) <> ''");
 
                             t.HasCheckConstraint("CK_Users_PasswordHash_NotBlank", "LTRIM(RTRIM([PasswordHash])) <> ''");
+
+                            t.HasCheckConstraint("CK_Users_PreferredLanguage", "[PreferredLanguage] IN ('en', 'fr')");
 
                             t.HasCheckConstraint("CK_Users_UpdatedAtUtc", "[UpdatedAtUtc] >= [CreatedAtUtc]");
                         });

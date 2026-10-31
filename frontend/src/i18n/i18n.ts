@@ -2,11 +2,9 @@ import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import en from './locales/en.json' with { type: 'json' }
 import fr from './locales/fr.json' with { type: 'json' }
+import { defaultLanguage, fallbackLanguage, isSupportedLanguage, supportedLanguages, type Language } from './languages'
+export { defaultLanguage, fallbackLanguage, isSupportedLanguage, supportedLanguages, type Language } from './languages'
 
-export const supportedLanguages = ['en', 'fr'] as const
-export type Language = (typeof supportedLanguages)[number]
-export const defaultLanguage: Language = 'en'
-export const fallbackLanguage: Language = 'en'
 export const languageStorageKey = 'stocklab-language'
 
 export const translationResources = {
@@ -23,10 +21,6 @@ function browserStorage(): LanguageStorage | undefined {
   } catch {
     return undefined
   }
-}
-
-export function isSupportedLanguage(value: string | null | undefined): value is Language {
-  return value === 'en' || value === 'fr'
 }
 
 function readStoredLanguage(storage: LanguageStorage | undefined): string | null {
@@ -70,5 +64,11 @@ function syncDocumentLanguage(language: string) {
 
 syncDocumentLanguage(i18n.language)
 i18n.on('languageChanged', syncDocumentLanguage)
+
+// A saved preference also updates pages that are already open in another tab.
+if (typeof window !== 'undefined') window.addEventListener('storage', event => {
+  if (event.key === languageStorageKey && isSupportedLanguage(event.newValue))
+    void i18n.changeLanguage(event.newValue)
+})
 
 export { i18n }

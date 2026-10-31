@@ -47,14 +47,14 @@ test('login returns a validated bearer session', async () => {
     accessToken: 'signed-token',
     tokenType: 'Bearer',
     expiresAtUtc: '2026-09-27T13:00:00Z',
-    user: { id: '1b7f6c30-8c4f-4fe8-9350-2f6be1f9c2c0', displayName: 'Alex Johnson', email: 'alex@example.com' },
+    user: { id: '1b7f6c30-8c4f-4fe8-9350-2f6be1f9c2c0', displayName: 'Alex Johnson', email: 'alex@example.com', preferredLanguage: 'fr' },
   }))
 
   assert.deepEqual(await api.login({ email: 'alex@example.com', password: 'password' }), {
     accessToken: 'signed-token',
     tokenType: 'Bearer',
     expiresAtUtc: '2026-09-27T13:00:00Z',
-    user: { id: '1b7f6c30-8c4f-4fe8-9350-2f6be1f9c2c0', displayName: 'Alex Johnson', email: 'alex@example.com' },
+    user: { id: '1b7f6c30-8c4f-4fe8-9350-2f6be1f9c2c0', displayName: 'Alex Johnson', email: 'alex@example.com', preferredLanguage: 'fr' },
   })
 })
 

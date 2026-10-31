@@ -10,6 +10,25 @@ public sealed class UserProfileService(
     StockLabDbContext dbContext,
     TimeProvider timeProvider) : IUserProfileService
 {
+    public async Task<User?> UpdateLanguageAsync(Guid userId, string preferredLanguage, CancellationToken cancellationToken)
+    {
+        if (preferredLanguage is not ("en" or "fr"))
+            throw new ArgumentOutOfRangeException(nameof(preferredLanguage));
+        var user = await dbContext.Users.SingleOrDefaultAsync(item => item.Id == userId, cancellationToken);
+        if (user is null) return null;
+        user.PreferredLanguage = preferredLanguage;
+        user.UpdatedAtUtc = timeProvider.GetUtcNow().UtcDateTime;
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new UserProfileUpdateConflictException();
+        }
+        return user;
+    }
+
     public Task<User?> GetAsync(Guid userId, CancellationToken cancellationToken) =>
         dbContext.Users.AsNoTracking()
             .SingleOrDefaultAsync(user => user.Id == userId, cancellationToken);

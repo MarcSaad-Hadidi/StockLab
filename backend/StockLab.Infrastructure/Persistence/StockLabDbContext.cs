@@ -44,6 +44,7 @@ public class StockLabDbContext(DbContextOptions<StockLabDbContext> options) : Db
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(StockLabDbContext).Assembly);
         if (Database.IsSqlServer())
         {
+            modelBuilder.Entity<User>().Property(user => user.PreferredLanguage).UseCollation("Latin1_General_100_BIN2");
             AiDecisionConfiguration.ConfigureSqlServerSignal(modelBuilder.Entity<AiDecision>());
             AiRejectedDecisionConfiguration.ConfigureSqlServerReason(modelBuilder.Entity<AiRejectedDecision>());
             AiExecutionAttemptConfiguration.ConfigureSqlServerStatus(modelBuilder.Entity<AiExecutionAttempt>());

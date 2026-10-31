@@ -222,12 +222,9 @@ public sealed class PaperTradingPrecisionSqlServerTests
                 else
                     // Exercise this migration's rollback guard independently of newer migrations' Down steps.
                     await db.GetService<IMigrator>().MigrateAsync(PrecisionMigration);
-                db.Users.Add(new User
-                {
-                    Id = fixture.UserId, DisplayName = "Precision Test", Email = "precision@example.com",
-                    NormalizedEmail = "PRECISION@EXAMPLE.COM", PasswordHash = "test-only-hash",
-                    CreatedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow
-                });
+                // Seed the historical schema, which predates account language preferences.
+                var createdAt = DateTime.UtcNow;
+                await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO Users (Id, DisplayName, Email, NormalizedEmail, PasswordHash, CreatedAtUtc, UpdatedAtUtc) VALUES ({fixture.UserId}, N'Precision Test', N'precision@example.com', N'PRECISION@EXAMPLE.COM', N'test-only-hash', {createdAt}, {createdAt})");
                 db.Portfolios.Add(new Portfolio
                 {
                     Id = fixture.PortfolioId, UserId = fixture.UserId, Currency = "USD",
