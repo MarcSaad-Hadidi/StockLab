@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { routeFor } from '../../navigation/routes'
 import type { ReactNode } from 'react'
 import { useAuthUser } from '../../auth/useAuthUser'
+import { LanguageSelector } from '../LanguageSelector'
 import './topbar.css'
 
 type TopBarIconName = 'bell' | 'chevron' | 'menu' | 'user'
@@ -43,6 +44,7 @@ export function TopBar({ onMenuOpen, title }: TopBarProps) {
         <span className="app-topbar-title-text">{title}</span>
       </div>
       <div className="app-topbar-actions">
+        <LanguageSelector />
         <button aria-label={t('common.notifications')} className="app-topbar-notification" onClick={() => window.location.assign(routeFor('alerts'))} type="button">
           <TopBarIcon name="bell" />
         </button>

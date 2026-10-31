@@ -136,11 +136,12 @@
 @media (max-width: 600px) {
   .app-topbar {
     min-height: 61px;
+    gap: 12px;
     padding-inline: 14px;
   }
 
   .app-topbar-actions {
-    gap: 10px;
+    gap: 8px;
   }
 
   .app-topbar-title-text {
