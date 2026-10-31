@@ -344,6 +344,24 @@ Le réentraînement publie de nouvelles versions `Archived`. La promotion compar
 
 La persistance SQL et l’adaptateur S3 des modèles sont implémentés. Leur déploiement, leurs connexions et leurs droits d’accès restent propres à l’environnement. Le modèle de réentraînement dans `ml/aws/` prépare EventBridge Scheduler, ECS Fargate et un volume EFS partagé ; il n’atteste pas d’un déploiement AWS et son planning est désactivé par défaut. Les intégrations applicatives Azure Service Bus, AWS SQS et Lambda restent à développer. Aucun secret cloud ni chaîne de connexion ne doit être placé dans ce dépôt.
 
+### Configuration AWS IAM
+Rôles IAM créés :
+StockLabLambdaExecutionRole : exécution des fonctions Lambda et journalisation CloudWatch.
+StockLabMLTaskRole : accès S3 limité pour les traitements ML sur ECS Fargate.
+StockLabMLTaskExecutionRole : récupération des images de conteneurs et publication des logs.
+
+Politiques IAM personnalisées :
+StockLabMLS3AccessPolicy : lecture et écriture dans le préfixe S3 ml/.
+StockLabSQSSendPolicy : envoi de messages vers la future queue StockLab.
+StockLabSQSConsumePolicy : réception et suppression de messages dans cette queue.
+
+Sécurité :
+Principe du moindre privilège.
+Aucun accès administrateur accordé aux rôles applicatifs.
+Authentification MFA activée pour le compte root.
+Aucune clé AWS stockée dans le dépôt GitHub.
+
+
 ## Commandes utiles
 
 Lancez ces commandes depuis la racine du dépôt :
