@@ -8,6 +8,7 @@ public sealed class User
     public string NormalizedEmail { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public string PreferredLanguage { get; set; } = "en";
+    public long SessionVersion { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
     public byte[] Version { get; set; } = [];

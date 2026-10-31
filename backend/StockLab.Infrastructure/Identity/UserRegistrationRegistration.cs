@@ -13,6 +13,7 @@ public static class UserRegistrationRegistration
         services.AddScoped<IUserRegistrationService, UserRegistrationService>();
         services.AddScoped<IUserLoginService, UserLoginService>();
         services.AddScoped<IUserPasswordService, UserPasswordService>();
+        services.AddScoped<IUserSessionValidator, UserSessionValidator>();
         services.AddScoped<IUserProfileService, UserProfileService>();
         services.AddSingleton<IAccessTokenService, JwtAccessTokenService>();
         return services;

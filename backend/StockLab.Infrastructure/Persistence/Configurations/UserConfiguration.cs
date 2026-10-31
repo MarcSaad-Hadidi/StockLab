@@ -16,6 +16,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             table.HasCheckConstraint("CK_Users_PasswordHash_NotBlank", "LTRIM(RTRIM([PasswordHash])) <> ''");
             table.HasCheckConstraint("CK_Users_UpdatedAtUtc", "[UpdatedAtUtc] >= [CreatedAtUtc]");
             table.HasCheckConstraint("CK_Users_PreferredLanguage", "[PreferredLanguage] IN ('en', 'fr')");
+            table.HasCheckConstraint("CK_Users_SessionVersion", "[SessionVersion] >= 0");
         });
         builder.HasKey(user => user.Id);
         builder.Property(user => user.DisplayName).HasMaxLength(100).IsRequired();
@@ -23,6 +24,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.NormalizedEmail).HasMaxLength(254).IsRequired();
         builder.Property(user => user.PasswordHash).HasMaxLength(1024).IsRequired();
         builder.Property(user => user.PreferredLanguage).HasMaxLength(2).HasDefaultValue("en").IsRequired();
+        builder.Property(user => user.SessionVersion).HasDefaultValue(0L).IsConcurrencyToken();
         builder.Property(user => user.CreatedAtUtc).HasColumnType("datetime2(7)");
         builder.Property(user => user.UpdatedAtUtc).HasColumnType("datetime2(7)");
         builder.Property(user => user.Version).IsRowVersion().HasColumnType("rowversion");

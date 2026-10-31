@@ -51,7 +51,7 @@ and profile contracts, plus the portfolio read contract;
 Infrastructure implements these services and the EF Core SQL Server mapping. Registration atomically creates an account and its default
 USD
 paper-trading portfolio. Login verifies the stored password hash and returns a
-stateless JWT access token.
+signed JWT access token whose session version is checked against the account on each protected request.
 
 ## Entity Framework Core
 
@@ -1091,8 +1091,8 @@ Send the token to endpoints marked `[Authorize]` as
 or otherwise invalid tokens return the safe `unauthorized` response.
 Current market-data routes, health checks, registration and login remain public.
 The profile and portfolio routes require a valid access token. Access tokens expire after `Jwt:AccessTokenMinutes` (60 minutes by default); there is no
-refresh-token flow yet. Frontend session storage and login-page integration are
-separate work.
+refresh-token flow yet. The frontend handles rejected sessions through its shared
+401 handler and private-page sign-in redirect.
 
 The token issuer, audience and lifetime are configured by `Jwt:Issuer`,
 `Jwt:Audience` and `Jwt:AccessTokenMinutes`. Set the signing key only in User
@@ -1109,18 +1109,51 @@ password, and match the confirmation. Passwords are never trimmed.
 
 A `204 No Content` response is returned only after the new hash is saved.
 Invalid input returns `400 validation_error`; a wrong current password returns
-`400 invalid_current_password`; a missing account returns `404 user_not_found`.
+`400 invalid_current_password`. A session for an account that has been deleted
+is rejected with `401 unauthorized` before the endpoint runs; an account removed
+between authentication and password lookup can still return `404 user_not_found`.
 Concurrent updates return `409 password_update_conflict`, and persistence failures
 use the existing generic `500` response. The endpoint shares the configured login
 rate limit and returns `429` when exhausted. No plaintext password is stored or
-returned. Existing JWTs retain their configured expiry; this change does not add
-a token revocation mechanism.
+returned. A successful change commits the new hash and an incremented session
+version together, invalidating all previously issued JWTs, including the one
+used for the change. Failed validation or persistence leaves existing sessions
+valid. Sign in with the new password to obtain a current token.
 
 The frontend waits for `204` before showing success, renders safe localized
 errors, blocks duplicate submissions, and discards responses after the sign-in
 session changes. API tests use isolated SQLite persistence and the actual password
 hasher/login services to verify that the old password is rejected and the new one
 works. This test setup does not validate Azure SQL connectivity.
+
+### Session revocation (#255)
+
+New JWTs contain a canonical nonnegative `session_version` claim from the same
+account snapshot whose password was verified. After normal signature, issuer,
+audience and expiry validation, the shared JWT handler checks the single `sub`
+and version against `Users` on each protected request. This also protects AI routes that
+only use `[Authorize]`. Missing, malformed, duplicate, outdated and unknown-user
+sessions receive the existing safe `401 unauthorized` response. Unexpected session
+store failures return a sanitized 500 and never grant protected access. Public
+routes do not perform a session-store lookup or accept an unchecked principal;
+optional Bearer headers therefore do not make liveness or public market data
+depend on the user database. Explicit authorization and fallback policies still
+enforce the session check, while `[AllowAnonymous]` remains public.
+
+`Users.SessionVersion` is independent of rowversion, profile edits and password
+hash upgrades. Password changes advance it in the same save as the hash, with
+concurrency protection; other security operations can revoke all sessions by
+advancing this counter in their account update transaction. Never decrease or
+reset it. No token denylist, refresh tokens or server-side logout endpoint is added.
+There is no per-instance cache, so separate API instances observe persisted
+revocation on the next authentication check. Requests already authenticated before
+the revocation commits may finish; they are not retroactively cancelled.
+
+Deploy `AddUserSessionVersion` before the updated API. Existing accounts are
+backfilled with zero. JWTs issued before this change lack the required claim,
+so users must sign in again once after deployment. The migration refuses rollback
+once any account has revoked sessions, preserving the counter and migration
+history instead of re-enabling old JWTs through an older binary.
 
 ## User profile
 

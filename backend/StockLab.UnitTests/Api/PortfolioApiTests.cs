@@ -433,7 +433,7 @@ public sealed class PortfolioApiTests
         Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
         using var unknown = await GetWithTokenAsync(fixture.Client, CreateSignedToken(Guid.NewGuid().ToString()),
             "/api/portfolio/transactions/history");
-        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, unknown.StatusCode);
         var account = await CreateSignedInAccountAsync(fixture, "empty-history@example.com");
         using var empty = await GetWithTokenAsync(fixture.Client, account.Token,
             "/api/portfolio/transactions/history?to=9999-12-31&page=50");
@@ -497,15 +497,15 @@ public sealed class PortfolioApiTests
     }
 
     [Fact]
-    public async Task Unknown_subject_returns_not_found_instead_of_another_users_portfolio()
+    public async Task Unknown_subject_returns_unauthorized_instead_of_another_users_portfolio()
     {
         await using var fixture = await PortfolioFixture.CreateAsync();
         await CreateSignedInAccountAsync(fixture, "existing@example.com");
 
         using var response = await GetWithTokenAsync(fixture.Client, CreateSignedToken(Guid.NewGuid().ToString()));
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal("portfolio_not_found", await ErrorCodeAsync(response));
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("unauthorized", await ErrorCodeAsync(response));
     }
 
     [Fact]
@@ -670,7 +670,7 @@ public sealed class PortfolioApiTests
     {
         var now = DateTime.UtcNow;
         var token = new JwtSecurityToken(TestIssuer, TestAudience,
-            subject is null ? [] : [new Claim(JwtRegisteredClaimNames.Sub, subject)],
+            subject is null ? [] : [new Claim(JwtRegisteredClaimNames.Sub, subject), new Claim("session_version", "0")],
             notBefore: now.AddHours(-2), expires: expired ? now.AddHours(-1) : now.AddMinutes(30),
             signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
                 SecurityAlgorithms.HmacSha256));

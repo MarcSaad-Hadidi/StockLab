@@ -22,6 +22,7 @@ using StockLab.Application.Interfaces;
 using StockLab.Infrastructure.Persistence;
 using StockLab.Infrastructure.Identity;
 using StockLab.UnitTests.Trading;
+using StockLab.Domain.Entities;
 
 namespace StockLab.UnitTests.Api;
 
@@ -33,6 +34,7 @@ internal sealed class AiTraderApiFixture(AiCurrentPositionsFixture database,
     private const string Issuer = "StockLab.AiTrader.Api.Tests";
     private const string Audience = "StockLab.AiTrader.Tests";
     private const string SigningKey = "ai-trader-test-only-signing-key-at-least-32-bytes";
+    private static readonly Guid DefaultUserId = Guid.Parse("11111111-2222-4333-8444-555555555555");
     public AiCurrentPositionsFixture Database { get; } = database;
     public HttpClient Client { get; } = client;
     public Clock Time { get; } = clock;
@@ -44,6 +46,13 @@ internal sealed class AiTraderApiFixture(AiCurrentPositionsFixture database,
         string environment = "Development")
     {
         var database = await AiCurrentPositionsFixture.CreateAsync();
+        await using (var db = database.CreateDbContext())
+        {
+            db.Users.Add(new User { Id = DefaultUserId, DisplayName = "Test authenticated reader", Email = "reader@example.test",
+                NormalizedEmail = "READER@EXAMPLE.TEST", PasswordHash = "test-only-not-a-login-hash",
+                CreatedAtUtc = AiCurrentPositionsFixture.Now.UtcDateTime, UpdatedAtUtc = AiCurrentPositionsFixture.Now.UtcDateTime });
+            await db.SaveChangesAsync();
+        }
         var clock = new Clock();
         var observer = new DatabaseObserver();
         database.ValuationMarket.Quote = (symbol, _) => new StockQuote(symbol, "USD",
@@ -125,7 +134,7 @@ internal sealed class AiTraderApiFixture(AiCurrentPositionsFixture database,
     {
         var now = DateTime.UtcNow;
         var token = new JwtSecurityToken(Issuer, Audience,
-            [new Claim(JwtRegisteredClaimNames.Sub, (userId ?? Guid.NewGuid()).ToString())],
+            [new Claim(JwtRegisteredClaimNames.Sub, (userId ?? DefaultUserId).ToString()), new Claim("session_version", "0")],
             notBefore: now.AddHours(-2), expires: expired ? now.AddHours(-1) : now.AddMinutes(30),
             signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(
                 invalidSignature ? "another-test-only-key-at-least-32-bytes" : SigningKey)), SecurityAlgorithms.HmacSha256));

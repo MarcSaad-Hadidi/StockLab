@@ -425,7 +425,7 @@ public sealed class WatchlistApiTests
     private static string SignedToken(string? subject, bool expired = false, string signingKey = SigningKey)
     {
         var now = DateTime.UtcNow;
-        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()) };
+        var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()), new("session_version", "0") };
         if (subject is not null) claims.Add(new(JwtRegisteredClaimNames.Sub, subject));
         var token = new JwtSecurityToken(Issuer, Audience, claims, now.AddHours(-2),
             expired ? now.AddHours(-1) : now.AddMinutes(30),

@@ -40,7 +40,7 @@ public sealed class AiTraderApiHistoryTests
             var rows = (await f.ReadAsync($"{Root}/performance/history{query}", AiTraderApiFixture.Token()))
                 .EnumerateArray().ToArray();
             Assert.Equal(times.TakeLast(expected), rows.Select(p => p.GetProperty("valuedAtUtc").GetDateTime().ToUniversalTime()));
-            Assert.InRange(f.Observer.Commands.Count, 1, 2);
+            Assert.InRange(f.Observer.Commands.Count, 2, 3); // Session check plus the existing bounded history reads.
             Assert.Contains(f.Observer.Commands, command => command.Contains("LIMIT", StringComparison.OrdinalIgnoreCase));
             Assert.Equal(0, f.Observer.SaveCalls);
         }
@@ -173,7 +173,9 @@ public sealed class AiTraderApiHistoryTests
             f.Observer.Reset();
             var rows = (await f.ReadAsync($"{Root}/trades{query}", AiTraderApiFixture.Token())).EnumerateArray().ToArray();
             Assert.Equal(ids.Take(expected), rows.Select(t => t.GetProperty("tradeId").GetGuid()));
-            var command = Assert.Single(f.Observer.Commands);
+            Assert.Equal(2, f.Observer.Commands.Count);
+            Assert.Contains("\"Users\"", f.Observer.Commands[0]);
+            var command = f.Observer.Commands[1];
             Assert.Contains("LIMIT", command, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("LEFT JOIN", command, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(0, f.Observer.SaveCalls);
@@ -232,7 +234,7 @@ public sealed class AiTraderApiHistoryTests
             AssertFraction(selectedRow, "confidence", .1m);
             Assert.Equal("2026-10-02", selectedRow.GetProperty("decisionDate").GetString());
             AssertUtc(selectedRow, "recordedAtUtc");
-            Assert.InRange(f.Observer.Commands.Count, 1, 3);
+            Assert.InRange(f.Observer.Commands.Count, 2, 4); // Includes the session lookup.
             Assert.Contains(f.Observer.Commands, sql => sql.Contains("LIMIT", StringComparison.OrdinalIgnoreCase));
             Assert.Contains(f.Observer.Commands, sql => sql.Contains("LEFT JOIN", StringComparison.OrdinalIgnoreCase));
             Assert.Equal(0, f.Observer.SaveCalls);
@@ -242,7 +244,9 @@ public sealed class AiTraderApiHistoryTests
             f.Observer.Reset();
             var rows = (await f.ReadAsync($"{Root}/rejected-decisions{query}", token)).EnumerateArray().ToArray();
             Assert.Equal(ids.Take(expected), rows.Select(d => d.GetProperty("decisionId").GetGuid()));
-            var sql = Assert.Single(f.Observer.Commands);
+            Assert.Equal(2, f.Observer.Commands.Count);
+            Assert.Contains("\"Users\"", f.Observer.Commands[0]);
+            var sql = f.Observer.Commands[1];
             Assert.Contains("LIMIT", sql, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(0, f.Observer.SaveCalls);
         }

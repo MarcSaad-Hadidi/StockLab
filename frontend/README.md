@@ -108,8 +108,11 @@ success only after `204 No Content` confirms persistence. It displays backend
 errors rather than a simulated success.
 
 There is no refresh-token flow, Google OAuth or working forgot-password service.
-Local logout and password changes do not revoke already issued JWTs on the server;
-session revocation remains [#255](https://github.com/MarcSaad-Hadidi/StockLab/issues/255).
+Password changes revoke all previously issued JWTs on the server, including the
+current one. Its next authenticated request receives a 401 and the existing guard
+redirects to Login; sign in with the new password. Local logout clears browser
+state and does not independently revoke tokens on the server. After the session
+version migration is deployed, existing users must sign in again once.
 
 ## Personal paper trading and decimal amounts
 
@@ -236,7 +239,7 @@ operational verification; Vite startup does not commission an autonomous bot.
   connects it to the backend. Backend alert CRUD and periodic monitoring exist;
   persistent triggering remains [#43](https://github.com/MarcSaad-Hadidi/StockLab/issues/43).
   The UI's email/push options do not provide notification delivery.
-- Personal performance history (#252), server-side JWT revocation (#255), Google
+- Personal performance history (#252), Google
   OAuth and password recovery remain incomplete as described above.
 - Consistent visible Mock-provider provenance and quote-observation timestamps,
   notably in Watchlist, remain [#254](https://github.com/MarcSaad-Hadidi/StockLab/issues/254).

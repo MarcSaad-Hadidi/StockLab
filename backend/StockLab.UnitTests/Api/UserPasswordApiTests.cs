@@ -102,7 +102,7 @@ public sealed partial class UserLoginApiTests
 
 
     [Fact]
-    public async Task Password_change_missing_account_returns_not_found()
+    public async Task Password_change_missing_account_rejects_the_session()
     {
         await using var fixture = await LoginFixture.CreateAsync(loginPermitLimit: 100);
         await SignInForPasswordChangeAsync(fixture);
@@ -113,9 +113,9 @@ public sealed partial class UserLoginApiTests
             await context.Users.ExecuteDeleteAsync();
         }
         using var response = await fixture.Client.PutAsync("/api/auth/password", Json(JsonSerializer.Serialize(new { currentPassword = "old-password", newPassword = "new-password", confirmPassword = "new-password" })));
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal("user_not_found", body.RootElement.GetProperty("error").GetString());
+        Assert.Equal("unauthorized", body.RootElement.GetProperty("error").GetString());
     }
 
     [Fact]

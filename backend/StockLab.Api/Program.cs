@@ -129,6 +129,7 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
         };
         options.Events = new JwtBearerEvents
         {
+            OnTokenValidated = StockLab.Api.Authentication.SessionTokenValidation.ValidateAsync,
             OnChallenge = async context =>
             {
                 context.HandleResponse();

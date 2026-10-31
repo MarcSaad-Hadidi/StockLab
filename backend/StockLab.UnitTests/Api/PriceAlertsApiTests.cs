@@ -650,7 +650,7 @@ internal sealed class PriceAlertsFixture : IAsyncDisposable
     {
         var now = DateTime.UtcNow;
         var claims = subject is null ? Array.Empty<System.Security.Claims.Claim>()
-            : new[] { new System.Security.Claims.Claim(JwtRegisteredClaimNames.Sub, subject) };
+            : new[] { new System.Security.Claims.Claim(JwtRegisteredClaimNames.Sub, subject), new System.Security.Claims.Claim("session_version", "0") };
         var token = new JwtSecurityToken(Issuer, Audience, claims, now.AddHours(-2), expired ? now.AddHours(-1) : now.AddMinutes(30),
             new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)), SecurityAlgorithms.HmacSha256));
         return new JwtSecurityTokenHandler().WriteToken(token);
