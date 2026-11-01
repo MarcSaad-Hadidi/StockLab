@@ -200,6 +200,8 @@ L’ancien build Dashboard reste disponible si nécessaire :
 
 La clé JWT est validée au démarrage. La connexion SQL est nécessaire à la résolution des services de persistance ; les routes de marché seules peuvent fonctionner sans base. Le fournisseur `Mock` évite les clés de marché, mais ne remplace pas la base des comptes.
 
+Les nouvelles connexions durent 8 heures par défaut (`Jwt:AccessTokenMinutes = 480`, valeur configurable de 1 à 1440 minutes). La date d’expiration reste fixe, y compris pendant une utilisation active ; il faut se reconnecter à son échéance. Les tokens déjà émis conservent leur durée initiale. Conservez la même clé de signature, le même issuer/audience et les comptes persistants lors d’un redémarrage pour préserver les sessions encore valides. Un changement de mot de passe continue à révoquer les anciens tokens. Aucun mécanisme de renouvellement par refresh token n’est actuellement implémenté.
+
 Restaurez les outils et les packages :
 
     dotnet tool restore
@@ -326,7 +328,7 @@ Pour les secrets locaux, préférez les user-secrets .NET depuis la racine du d�
     dotnet user-secrets set "TwelveData:Keys:Fallback" "<TWELVE_DATA_FALLBACK_KEY>" --project backend/StockLab.Api/StockLab.Api.csproj
     dotnet user-secrets set "AlphaVantage:ApiKey" "<ALPHA_VANTAGE_KEY>" --project backend/StockLab.Api/StockLab.Api.csproj
 
-La configuration versionnée définit `Jwt:Issuer`, `Jwt:Audience` et `Jwt:AccessTokenMinutes` (60 minutes). La valeur privée `Jwt:SigningKey` doit contenir au moins 32 octets UTF-8. La connexion SQL porte le nom `ConnectionStrings:StockLab`.
+La configuration versionnée définit `Jwt:Issuer`, `Jwt:Audience` et `Jwt:AccessTokenMinutes` (480 minutes, soit 8 heures). La valeur privée `Jwt:SigningKey` doit contenir au moins 32 octets UTF-8. La connexion SQL porte le nom `ConnectionStrings:StockLab`.
 
 Avec des variables d’environnement, .NET utilise un double soulignement pour les clés imbriquées : `Jwt__SigningKey`, `ConnectionStrings__StockLab`, `TwelveData__Keys__Website`, `TwelveData__ActiveWebsiteKey`, `AlphaVantage__ApiKey` et `MarketData__Provider=TwelveData`. `Cors__AllowedOrigins__0` configure une origine frontend autorisée pour un accès direct à l’API. Le proxy Vite permet l’accès local via la même origine.
 

@@ -1098,9 +1098,31 @@ Send the token to endpoints marked `[Authorize]` as
 `Authorization: Bearer <token>`. Missing, malformed, expired, incorrectly signed,
 or otherwise invalid tokens return the safe `unauthorized` response.
 Current market-data routes, health checks, registration and login remain public.
-The profile and portfolio routes require a valid access token. Access tokens expire after `Jwt:AccessTokenMinutes` (60 minutes by default); there is no
-refresh-token flow yet. The frontend handles rejected sessions through its shared
-401 handler and private-page sign-in redirect.
+The profile and portfolio routes require a valid access token. New logins use
+`Jwt:AccessTokenMinutes`, defaulting to 480 minutes (8 hours), with a supported
+configuration range of 1–1440 minutes. Startup rejects values outside this range.
+An explicit shorter operator setting still takes precedence; development and
+deployment environment overrides must be checked when diagnosing early expiry.
+The login response's `expiresAtUtc` and the JWT's signed `exp` describe the same
+fixed deadline. The backend retains its 30-second clock tolerance; the frontend
+stops using the token at the returned deadline.
+
+Activity, navigation, refresh and tab changes do not move that deadline. There is
+no refresh-token or sliding-session flow: sign in again at expiry. Changing the
+default does not extend tokens already issued; sign in again to receive the new
+duration. The frontend handles rejected sessions through its shared 401 handler
+and private-page sign-in redirect, without clearing a newer login on an old
+request's late 401.
+
+An ordinary backend restart preserves an unexpired session when the persisted
+account, session generation, signing key, issuer and audience remain the same.
+Keep these authentication settings stable across restarts and API instances;
+generating a new signing key on each launch invalidates existing JWTs before
+their deadline. Password changes revoke old sessions deliberately. Deleted
+accounts and invalid signatures/issuer/audience also cause a 401; a session-store
+outage returns a service error rather than falsely labelling a session expired.
+Browser and server clocks should be synchronized; the UI does not bypass server
+expiry validation or extend a rejected token locally.
 
 The token issuer, audience and lifetime are configured by `Jwt:Issuer`,
 `Jwt:Audience` and `Jwt:AccessTokenMinutes`. Set the signing key only in User

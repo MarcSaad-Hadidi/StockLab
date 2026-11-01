@@ -5,17 +5,17 @@ namespace StockLab.Infrastructure.Identity;
 public sealed class JwtOptions
 {
     public const string SectionName = "Jwt";
-    public const string ValidationMessage = "JWT issuer, audience, signing key and positive access token lifetime are required; the signing key must be at least 32 UTF-8 bytes.";
+    public const string ValidationMessage = "JWT issuer, audience, signing key and an access token lifetime from 1 to 1440 minutes are required; the signing key must be at least 32 UTF-8 bytes.";
 
     public string Issuer { get; set; } = string.Empty;
     public string Audience { get; set; } = string.Empty;
     public string SigningKey { get; set; } = string.Empty;
-    public int AccessTokenMinutes { get; set; } = 60;
+    public int AccessTokenMinutes { get; set; } = 480;
 
     public bool IsValid() =>
         !string.IsNullOrWhiteSpace(Issuer) &&
         !string.IsNullOrWhiteSpace(Audience) &&
         !string.IsNullOrWhiteSpace(SigningKey) &&
         Encoding.UTF8.GetByteCount(SigningKey) >= 32 &&
-        AccessTokenMinutes > 0;
+        AccessTokenMinutes is > 0 and <= 1440;
 }
