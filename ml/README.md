@@ -2,8 +2,8 @@
 
 ## Purpose
 
-StockLab's independent Python ML module will receive historical data, clean it,
-prepare features, train models, and produce prediction probabilities followed by
+StockLab's independent Python ML module receives historical data, cleans it,
+prepares features, trains models, and produces prediction probabilities followed by
 BUY / SELL / HOLD signals with confidence. It will never execute a trade.
 The frontend and .NET backend are not required to install or test this module.
 
@@ -136,7 +136,11 @@ Python ML only. Never commit its value or any other secret.
 The Twelve Data Website key (`TwelveData:Keys:Website`) belongs exclusively to
 the .NET backend's Market / Stock Details features. Python ML must not use it,
 and the Website backend must not use `TWELVE_DATA_ML_API_KEY`.
-There is no fallback between the two keys.
+There is no automatic fallback between the two keys. The operational runner also
+supports explicitly authorized quota sharing as documented in the
+[local paper-cycle procedure](../frontend/AI_TRADER_OPERATIONS.md#run-the-full-local-paper-cycle-273).
+For an operator-authorized Fallback credential, supply it only through the Python
+process's `TWELVE_DATA_ML_API_KEY`; never put it in command arguments or config files.
 
 ## Architecture invariant
 
@@ -144,15 +148,31 @@ There is no fallback between the two keys.
 - **Risk Manager = WHETHER + HOW MUCH**: decide whether a trade is allowed and its size.
 - **Paper Trading Engine = EXECUTE**: execute approved simulated trades.
 
-ML never executes trades. These responsibilities are documented only at this stage.
+ML never executes trades. The explicit local runner invokes the existing backend
+services, which retain risk approval and paper settlement responsibilities.
 
 ## Current status
 
-**#54 provides the environment; #56 adds historical ingestion; #58 adds a separate
-local cleaning stage; #60 adds deterministic feature engineering.** Imputation, scaling, train/test splits,
-training, predictions, risk management, backtesting, frontend/API integration,
-AWS, and Azure remain outside this module's current implementation. Installation
-downloads Python packages; pytest needs no external service, real API key, or credit.
+The implemented Python pipeline covers historical ingestion, cleaning, feature
+engineering, chronological training/evaluation, Logistic Regression and Random
+Forest, signals/confidence, backtesting, Buy & Hold comparison, versioned model
+artifacts, retraining checks and audited promotion. The local operational runner
+connects inference to backend risk, paper execution and persisted performance.
+
+These are distinct operator workflows: starting the HTTP server does not launch
+the paper-cycle loop, the retraining CLI performs one check for an external
+scheduler, and new candidates remain Archived until an audited promotion is
+applied. Local commissioning does not establish an AWS/Azure deployment or a
+profitable strategy. The sections below document each implemented contract.
+
+Run `python -m pytest ml` from the repository root or `python -m pytest` from
+`ml/`. Collection excludes private data/model/result directories, including
+cyclic junctions deliberately created by storage tests. Tests remain offline and
+need no real API key or credit.
+
+For the Windows operator setup, supervised local loop, scheduled retraining,
+stop/restart commands and acceptance checks, see
+[local ML operation](docs/local-operation.md).
 
 ## Historical data pipeline (#56)
 
