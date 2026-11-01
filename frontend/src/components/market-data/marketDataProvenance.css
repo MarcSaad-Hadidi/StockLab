@@ -1,0 +1,10 @@
+.market-data-provenance { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 12px; color: #526174; font-size: 11px; line-height: 1.5; text-align: left; font-weight: 400; white-space: normal; }
+.market-data-source { display: inline-block; border-radius: 5px; padding: 2px 6px; background: #eef2f7; color: #40516a; font-size: 11px; font-weight: 600; }
+.market-data-source-mock { color: #82500a; background: #fff1d6; border: 1px solid #efd09a; }
+.market-data-provenance-compact { font-size: 10px; gap: 3px 8px; }
+.market-data-sources { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 10px 0; font-size: 12px; color: #526174; }
+.watchlist-row > .market-data-provenance, .market-overview-row > .market-data-provenance { grid-column: 1 / -1; width: 100%; }
+.stock-chart-card > .market-data-provenance { padding: 0 20px 16px; }
+.dashboard-page .watchlist-row { flex-wrap: wrap; padding-block: 7px; }
+.dashboard-page .watchlist-row > .market-data-provenance { flex: 0 0 100%; }
+td > .market-data-provenance { width: 170px; margin-top: 6px; align-items: flex-start; }

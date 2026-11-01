@@ -21,6 +21,7 @@ import { MarketRequestStatus } from "./MarketRequestStatus";
 import { useOrderCash } from "./useOrderCash";
 import type { PortfolioApiError } from "../api/portfolioApi";
 import { StockDataPanel } from "./StockDataPanel";
+import { MarketDataProvenance } from '../components/market-data/MarketDataProvenance';
 import { useMarketRequest } from "./useMarketRequest";
 import {
   calculateTradeTotal,
@@ -617,8 +618,8 @@ export function StockDetailsPage({
                             ? "marketApi.marketOpen"
                             : "marketApi.marketClosed",
                         )}{" "}
-                    · {new Date(quote.data.asOfUtc).toLocaleString(locale)}
                   </p>
+                  <MarketDataProvenance {...quote.data} />
                 </>
               )}
             </div>
@@ -726,6 +727,7 @@ export function StockDetailsPage({
                     />
                   )}
                 </div>
+                {history.data && <MarketDataProvenance source={history.data.source} sourceOnly />}
               </article>
               {!showEnrichment && (
                 <button

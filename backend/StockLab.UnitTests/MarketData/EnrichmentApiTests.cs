@@ -11,6 +11,30 @@ namespace StockLab.UnitTests.MarketData;
 public sealed class EnrichmentApiTests
 {
     [Fact]
+    public async Task Eod_rankings_identify_alpha_vantage_even_when_terminal_quotes_are_mock()
+    {
+        using var alpha = new Handler { Respond = (_, _) => Task.FromResult(Response("""{"last_updated":"2026-09-04","top_gainers":[],"top_losers":[],"most_actively_traded":[]}""")) };
+        using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:StockLab"] = "Server=localhost;Database=ProvenanceTestsNeverUsed;Integrated Security=true;TrustServerCertificate=true",
+                ["MarketData:Provider"] = "Mock", ["AlphaVantage:ApiKey"] = "ALPHA-TEST-KEY",
+                ["Jwt:Issuer"] = "StockLab.Api.Tests", ["Jwt:Audience"] = "StockLab.Tests",
+                ["Jwt:SigningKey"] = "test-only-signing-key-at-least-32-bytes-long"
+            }));
+            builder.ConfigureServices(services => services.AddHttpClient("AlphaVantage").ConfigurePrimaryHttpMessageHandler(() => alpha));
+        });
+        using var client = app.CreateClient(new() { BaseAddress = new("https://localhost") });
+        using var response = await client.GetAsync("/api/market/movers");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.True(body.RootElement.TryGetProperty("source", out var source));
+        Assert.Equal("AlphaVantage", source.GetString());
+        Assert.Equal("2026-09-04", body.RootElement.GetProperty("lastUpdated").GetString());
+    }
+
+    [Fact]
     public async Task Http_endpoints_and_openapi_are_safe_and_twelve_keeps_its_responsibility()
     {
         using var alpha=new Handler{Respond=(_,_)=>Task.FromResult(Response("{\"Information\":\"quota per day\"}"))};

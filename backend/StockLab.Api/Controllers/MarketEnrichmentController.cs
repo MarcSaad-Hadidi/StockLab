@@ -29,8 +29,12 @@ public sealed class MarketEnrichmentController(IMarketEnrichmentProvider enrichm
     [ProducesResponseType(typeof(StockEarnings), 200)]
     public async Task<ActionResult<StockEarnings>> Earnings([FromRoute, Required] string symbol, CancellationToken token) => Ok(await enrichment.GetEarningsAsync(symbol, token));
     [HttpGet("api/market/movers")]
-    [ProducesResponseType(typeof(MarketMovers), 200)]
-    public async Task<ActionResult<MarketMovers>> Movers(CancellationToken token) => Ok(await enrichment.GetMoversAsync(token));
+    [ProducesResponseType(typeof(MarketMoversResponse), 200)]
+    public async Task<ActionResult<MarketMoversResponse>> Movers(CancellationToken token)
+    {
+        var result = await enrichment.GetMoversAsync(token);
+        return Ok(new MarketMoversResponse(result.LastUpdated, result.Gainers, result.Losers, result.MostActive));
+    }
     [HttpGet("api/stocks/{symbol}/news")]
     [ProducesResponseType(typeof(StockNews), 200)]
     public async Task<ActionResult<StockNews>> News([FromRoute, Required] string symbol, CancellationToken token) => Ok(await enrichment.GetNewsAsync(symbol, token));

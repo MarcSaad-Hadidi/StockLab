@@ -819,6 +819,14 @@ The API composes cache, deduplication and rate limiting around an explicitly sel
   be positive and reported volumes nonnegative. Currency codes use ISO 4217.
 - Timestamps use `DateTimeOffset` with UTC offset zero. Quote timestamps describe
   when the price was observed, not when the backend received it.
+- The HTTP quote and history responses include `source` (`Mock` or `TwelveData`)
+  from the same configuration used to select the terminal provider. The
+  independent movers response identifies `AlphaVantage`, even when the primary
+  quote provider is Mock. These labels do not assert that a quote is current or
+  that the different providers observed prices simultaneously. `asOfUtc` remains
+  the original quote observation; adding provenance requires no extra lookup.
+  Browser response-receipt times are separate client metadata and remain attached
+  to cached responses.
 - History uses half-open ranges: UTC instants for Minute/Hour, DateOnly period dates for Day/Week/Month. Bars are unadjusted, sorted and unique by the matching temporal value; no synthetic market-closure bars.
 - Unknown symbols return null for quote/history. A known symbol with no historical
   data in the range returns an empty Bars list. Search with no matches returns an
@@ -1490,7 +1498,7 @@ Minute/Hour must use the former; Day/Week/Month must use the latter.
 Filtering is [from,to) in that temporal domain, with no date-to-instant conversion.
 This is an intentional breaking correction to the initial daily UTC API contract.
 
-Response fields: symbol, currency, interval and bars. A calendar bar is:
+Response fields: symbol, currency, interval, bars and source. A calendar bar is:
 {"openTimeUtc":null,"periodDate":"2026-08-24","open":200,"high":201,"low":199.5,"close":200.5,"volume":20000000}
 
 An intraday bar has openTimeUtc as a real UTC datetime and periodDate=null.

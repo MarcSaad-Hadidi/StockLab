@@ -4,7 +4,8 @@ public sealed record StockHistoryResponse(
     string Symbol,
     string Currency,
     string Interval,
-    StockHistoryBarResponse[] Bars);
+    StockHistoryBarResponse[] Bars,
+    string? Source = null);
 
 public sealed record StockHistoryBarResponse(
     DateTimeOffset? OpenTimeUtc,

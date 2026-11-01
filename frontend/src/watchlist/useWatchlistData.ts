@@ -15,7 +15,7 @@ function errorCode(error: unknown): WatchlistErrorCode {
 }
 
 function unquoted(item: WatchlistApiItem): WatchlistItem {
-  return { ...item, name: item.symbol, exchange: '—', currency: null, price: null, change: null, changePercent: null, tone: '' }
+  return { ...item, name: item.symbol, exchange: '—', currency: null, price: null, change: null, changePercent: null, tone: '', provenance: null }
 }
 
 async function enrich(items: WatchlistItem[], signal: AbortSignal, refreshQuotes: boolean): Promise<WatchlistItem[]> {
@@ -27,6 +27,7 @@ async function enrich(items: WatchlistItem[], signal: AbortSignal, refreshQuotes
         const quote = await marketDataApi.quote(item.symbol, signal, { refresh: refreshQuotes })
         const currency = quote.currency.trim().toUpperCase()
         return { ...item, name: quote.name?.trim() || item.symbol, exchange: quote.exchange?.trim() || '—',
+          provenance: { source: quote.source, asOfUtc: quote.asOfUtc, receivedAtUtc: quote.receivedAtUtc },
           currency: /^[A-Z]{3}$/.test(currency) ? currency : null, price: quote.price, change: quote.change, changePercent: quote.changePercent,
           tone: quote.changePercent === null ? '' : quote.changePercent >= 0 ? 'positive' : 'negative' } satisfies WatchlistItem
       } catch {

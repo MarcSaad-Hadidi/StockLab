@@ -324,7 +324,7 @@ for (const mode of ["partial", "total"] as const) {
     marketDataApi.quote = async symbol => {
       if (!recovered && (mode === "total" || symbol === "NVDA")) throw new MarketDataError(503);
       return { symbol, name: "Real " + symbol, exchange: "NASDAQ", currency: "USD", price: 123.45, priceDecimal: '123.45',
-        change: null, changePercent: null, volume: null, asOfUtc: "2026-09-04T20:00:00Z",
+        change: null, changePercent: null, volume: null, asOfUtc: "2026-09-04T20:00:00Z", source: 'Mock',
         open: null, high: null, low: null, previousClose: null, averageVolume: null,
         isMarketOpen: false, fiftyTwoWeek: null };
     };
@@ -353,6 +353,12 @@ for (const mode of ["partial", "total"] as const) {
       assert.equal(popular.querySelector('[role="alert"]'), null);
       assert.equal(popular.querySelectorAll(".market-overview-row").length, 5);
       assert.ok(Array.from(popular.querySelectorAll(".market-stock-quote strong")).every(node => node.textContent?.includes("123.45")));
+      const quotedCells = [...document.querySelectorAll('.market-results-table td')].filter(cell => cell.textContent?.includes('123.45'));
+      assert.equal(quotedCells.length, 5);
+      for (const cell of quotedCells) {
+        assert.match(cell.textContent!, /Mock · simulated data/);
+        assert.equal(cell.querySelector('time')?.getAttribute('datetime'), '2026-09-04T20:00:00Z');
+      }
     } finally {
       await act(async () => root.unmount());
       Object.assign(marketDataApi, original);

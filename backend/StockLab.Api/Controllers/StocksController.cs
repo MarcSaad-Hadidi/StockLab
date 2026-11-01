@@ -3,13 +3,15 @@ using System.ComponentModel.DataAnnotations;
 using StockLab.Api.DTOs;
 using StockLab.Application.Interfaces;
 using StockLab.Application.DTOs.MarketData;
+using Microsoft.Extensions.Options;
+using StockLab.Api.Configuration;
 
 namespace StockLab.Api.Controllers;
 
 [ApiController]
 [Route("api/stocks")]
 [Produces("application/json")]
-public sealed class StocksController(IMarketDataProvider marketDataProvider) : ControllerBase
+public sealed class StocksController(IMarketDataProvider marketDataProvider, IOptions<MarketDataProviderOptions> options) : ControllerBase
 {
     /// <summary>Gets historical bars for a stock symbol.</summary>
     [HttpGet("{symbol}/history")]
@@ -39,7 +41,7 @@ public sealed class StocksController(IMarketDataProvider marketDataProvider) : C
 
         return Ok(new StockHistoryResponse(history.Symbol, history.Currency, history.Interval.ToString(),
             history.Bars.Select(bar => new StockHistoryBarResponse(
-                bar.OpenTimeUtc, bar.PeriodDate, bar.Open, bar.High, bar.Low, bar.Close, bar.Volume)).ToArray()));
+                bar.OpenTimeUtc, bar.PeriodDate, bar.Open, bar.High, bar.Low, bar.Close, bar.Volume)).ToArray(), options.Value.Provider));
     }
 
     /// <summary>Searches stocks by ticker or company name.</summary>
@@ -85,6 +87,6 @@ public sealed class StocksController(IMarketDataProvider marketDataProvider) : C
         return Ok(new StockQuoteResponse(
             quote.Symbol, quote.Price, quote.Change, quote.ChangePercent, quote.Volume,
             quote.Currency, quote.AsOfUtc, quote.Name, quote.Exchange, quote.Open, quote.High, quote.Low,
-            quote.PreviousClose, quote.AverageVolume, quote.IsMarketOpen, quote.FiftyTwoWeek));
+            quote.PreviousClose, quote.AverageVolume, quote.IsMarketOpen, quote.FiftyTwoWeek, options.Value.Provider));
     }
 }

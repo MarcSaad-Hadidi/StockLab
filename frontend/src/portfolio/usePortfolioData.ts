@@ -5,8 +5,10 @@ import { getAuthSession } from '../auth/authStorage'
 import { addAmounts, subtractAmounts, tradeProduct, valuationProduct, amountPercent, amountSign } from '../api/decimalMath'
 import { useAuthSession } from '../auth/useAuthUser'
 import { useRecentTransactions, type RecentTransactionsState } from './useRecentTransactions'
+import type { QuoteProvenance } from '../api/marketDataApi'
 
 export type PortfolioPosition = {
+  provenance?: QuoteProvenance | null
   symbol: string
   name: string
   quantity: string
@@ -127,6 +129,7 @@ export function usePortfolioData(): PortfolioDataState {
             quantity: position.quantity,
             averagePrice: position.averageCost,
             currentPrice: quote?.priceDecimal ?? null,
+            provenance: quote ? { source: quote.source, asOfUtc: quote.asOfUtc, receivedAtUtc: quote.receivedAtUtc } : null,
             dailyChangePercent: quote?.changePercent ?? null,
             marketValue,
             pnl,

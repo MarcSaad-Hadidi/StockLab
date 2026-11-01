@@ -9,6 +9,7 @@ import type { WatchlistItem } from './watchlistData'
 import { useWatchlistData } from './useWatchlistData'
 import { WatchlistFeedback } from './WatchlistFeedback'
 import { getAuthSession } from '../auth/authStorage'
+import { MarketDataProvenance } from '../components/market-data/MarketDataProvenance'
 import './watchlist.css'
 
 type IconName =
@@ -88,6 +89,7 @@ function WatchlistRow({ item, removing, onDetails, onRemove }: { item: Watchlist
         <button aria-label={`${t('alerts.createAlert')} — ${item.symbol}`} className="alert-button" disabled title={t('businessData.unavailable')} type="button"><Icon name="bell" size={14} /></button>
         <button aria-label={t('watchlist.removeFromWatchlist', { symbol: item.symbol })} className="remove-button" disabled={removing} onClick={() => onRemove(item)} type="button"><Icon name="x" size={15} /></button>
       </div>
+      {item.provenance && <MarketDataProvenance {...item.provenance} />}
     </article>
   )
 }

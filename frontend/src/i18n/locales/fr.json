@@ -1055,6 +1055,15 @@
     "rangeFact": "Fourchette de cours sur 52 semaines : de {{low}} à {{high}}.",
     "valuationFact": "Ratio cours/bénéfice publié : {{pe}} ; bénéfice par action (TTM) : {{eps}}."
   },
+  "marketProvenance": {
+    "source": "Source : {{source}}",
+    "mock": "Mock · données simulées",
+    "unknownSource": "indisponible",
+    "observedAt": "Cours observé le",
+    "receivedAt": "Réponse reçue le",
+    "unknownObservation": "Date d’observation indisponible",
+    "pricingSources": "Sources des cours affichés :"
+  },
   "marketApi": {
     "logoAttribution": "Logos fournis par Elbstream",
     "marketRanking": "Classement du marché",

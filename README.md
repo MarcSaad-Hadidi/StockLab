@@ -29,7 +29,7 @@ L’état ci-dessous reflète le code fusionné dans `develop` au **23 octobre 2
 
 Le produit aide l’utilisateur à explorer les données de marché et à s’exercer à prendre des décisions de portefeuille sans envoyer d’ordres à un courtier.
 
-- **Marché** : recherche, cotations, historique OHLCV, valeurs en mouvement, fondamentaux, résultats et actualités. Le fournisseur `Mock` est sélectionné par défaut pour le développement ; les adaptateurs externes nécessitent leurs clés et leurs budgets.
+- **Marché** : recherche, cotations, historique OHLCV, valeurs en mouvement, fondamentaux, résultats et actualités. Le fournisseur `Mock` est sélectionné par défaut pour le développement et ses données sont explicitement signalées comme simulées ; les adaptateurs externes nécessitent leurs clés et leurs budgets. Les cours affichent leur source et leur date d’observation, distincte de l’heure de réception de la réponse affichée dans la liste de suivi et le détail d’une action.
 - **Compte** : inscription, connexion JWT, déconnexion locale, identité du top bar, lecture/modification du nom et de l’email, changement réel du mot de passe. Les pages affichent les erreurs de validation et les échecs de l’API.
 - **Paper trading personnel** : préparation et confirmation d’un achat ou d’une vente, exécution simulée, mise à jour atomique du cash et des positions, historique et valorisation. Les données privées sont liées à l’utilisateur authentifié.
 - **Watchlist** : consultation, ajout et suppression des symboles enregistrés pour le compte.

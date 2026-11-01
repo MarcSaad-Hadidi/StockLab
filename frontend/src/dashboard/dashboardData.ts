@@ -1,3 +1,5 @@
+import type { QuoteProvenance } from '../api/marketDataApi'
+
 export type IconName =
   | 'activity'
   | 'bell'
@@ -39,6 +41,7 @@ export type PerformanceSeries = {
 }
 
 export type Position = {
+  provenance?: QuoteProvenance | null
   symbol: string
   company: string
   shares: string
