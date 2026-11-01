@@ -44,6 +44,38 @@ async function probe(enrich = true) {
   return { ...view, state: () => state }
 }
 
+test('Watchlist identifies simulated quotes and separates old observation from the later receipt', async t => {
+  seed()
+  t.mock.method(watchlistApi, 'getWatchlist', async () => [aapl])
+  t.mock.method(marketDataApi, 'quote', async () => ({ ...quote, asOfUtc: '2026-09-04T20:00:00Z', source: 'Mock', receivedAtUtc: '2026-10-31T12:00:00Z' }))
+  const { default: Page } = await import('../src/watchlist/WatchlistPage.tsx')
+  const view = await mount(React.createElement(Page))
+  try {
+    assert.match(view.container.textContent!, /Mock.*simulated/i)
+    const times = view.container.querySelectorAll('[data-market-provenance] time')
+    assert.equal(times[0]?.getAttribute('datetime'), '2026-09-04T20:00:00Z')
+    assert.equal(times[1]?.getAttribute('datetime'), '2026-10-31T12:00:00Z')
+    await act(async () => i18n.changeLanguage('fr'))
+    assert.match(view.container.textContent!, /simulées/)
+    assert.match(view.container.textContent!, /Cours observé le/)
+    assert.match(view.container.textContent!, /Réponse reçue le/)
+  } finally { await view.close(); await i18n.changeLanguage('en') }
+})
+
+for (const source of ['TwelveData', undefined] as const) test(`Watchlist labels ${source ?? 'missing'} provenance without claiming live or simulated prices`, async t => {
+  seed()
+  t.mock.method(watchlistApi, 'getWatchlist', async () => [aapl])
+  t.mock.method(marketDataApi, 'quote', async () => ({ ...quote, source }))
+  const { default: Page } = await import('../src/watchlist/WatchlistPage.tsx')
+  const view = await mount(React.createElement(Page))
+  try {
+    const provenance = view.container.querySelector('[data-market-provenance]')!
+    assert.match(provenance.textContent!, source ? /Twelve Data/ : /Source: unavailable/)
+    assert.doesNotMatch(provenance.textContent!, /Mock|simulated|live/i)
+    assert.equal(provenance.querySelector('time')?.getAttribute('datetime'), quote.asOfUtc)
+  } finally { await view.close() }
+})
+
 test('membership is fetched on each mount and missing quotes keep all persisted symbols', async t => {
   seed()
   let reads = 0

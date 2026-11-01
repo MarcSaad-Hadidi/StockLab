@@ -1,4 +1,7 @@
+import type { QuoteProvenance } from '../api/marketDataApi'
+
 export type WatchlistItem = {
+  provenance?: QuoteProvenance | null
   symbol: string
   createdAtUtc: string
   name: string

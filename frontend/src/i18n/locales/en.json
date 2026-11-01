@@ -1055,6 +1055,15 @@
     "rangeFact": "52-week price range: {{low}} to {{high}}.",
     "valuationFact": "Reported P/E ratio: {{pe}}; earnings per share (TTM): {{eps}}."
   },
+  "marketProvenance": {
+    "source": "Source: {{source}}",
+    "mock": "Mock · simulated data",
+    "unknownSource": "unavailable",
+    "observedAt": "Quote observed on",
+    "receivedAt": "Response received on",
+    "unknownObservation": "Observation time unavailable",
+    "pricingSources": "Sources of displayed market prices:"
+  },
   "marketApi": {
     "logoAttribution": "Logos provided by Elbstream",
     "marketRanking": "Market ranking",

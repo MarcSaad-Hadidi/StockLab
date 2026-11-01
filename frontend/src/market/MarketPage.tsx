@@ -12,6 +12,7 @@ import { localeForLanguage, formatSignedPercent } from "../i18n/formatters";
 import { useWatchlistData } from "../watchlist/useWatchlistData";
 import { WatchlistFeedback } from "../watchlist/WatchlistFeedback";
 import { getAuthSession } from "../auth/authStorage";
+import { MarketDataProvenance } from '../components/market-data/MarketDataProvenance';
 
 export function MarketPage({
   onOpenStock,
@@ -144,6 +145,7 @@ export function MarketPage({
                       : formatSignedPercent(item.quote.changePercent)}
                   </span>
                 </div>
+                {item.quote && <MarketDataProvenance {...item.quote} compact />}
               </button>
             ))}
           </div>
@@ -159,6 +161,7 @@ export function MarketPage({
               </h2>
             </div>
             <div className="market-movers-description">
+            {movers.data && <MarketDataProvenance source={movers.data.source} sourceOnly />}
             <small>
               {t("marketApi.eodMovers")}
               {movers.data?.lastUpdated && ` · ${movers.data.lastUpdated}`}
@@ -238,7 +241,9 @@ export function MarketPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {results.slice((page - 1) * 10, page * 10).map((stock) => (
+                  {results.slice((page - 1) * 10, page * 10).map((stock) => {
+                    const quote = popular.data?.find(item => item.symbol === stock.symbol)?.quote;
+                    return (
                     <tr key={stock.symbol}>
                       <td>
                         <button
@@ -263,12 +268,11 @@ export function MarketPage({
                       <td>{stock.currency ?? "—"}</td>
                       <td title={t("marketApi.priceOnDetails")}>
                         {money(
-                          popular.data?.find(
-                            (item) => item.symbol === stock.symbol,
-                          )?.quote?.price,
+                          quote?.price,
                           stock.currency,
                           localeForLanguage(i18n.language),
                         )}
+                        {quote && <MarketDataProvenance {...quote} compact />}
                       </td>
                       <td>
                         <button
@@ -292,7 +296,7 @@ export function MarketPage({
                         </button>
                       </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>

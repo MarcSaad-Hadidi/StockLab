@@ -33,6 +33,23 @@ const base = { cashBalance: '1000', initialCapital: '1000', investedValue: '0', 
 const trade = { id: 'trade-1', side: 'BUY' as const, symbol: 'AAPL', quantity: '0.25', executionPrice: '1.2345',
   totalAmount: '0.3086', executedAtUtc: '2026-01-01T23:59:59Z' }
 
+test('valuation keeps the provenance of the exact quote used for each position', async t => {
+  t.mock.method(portfolioApi, 'getPortfolio', async () => ({ ...base, positions: [{ symbol: 'MSFT', quantity: '1', averageCost: '100' }] }))
+  t.mock.method(portfolioApi, 'getRecentTransactions', async () => [])
+  t.mock.method(marketDataApi, 'quote', async () => ({ symbol: 'MSFT', currency: 'CAD', price: 150, priceDecimal: '150', source: 'Mock',
+    asOfUtc: '2026-09-04T20:00:00Z', receivedAtUtc: '2026-10-31T12:00:00Z', change: null, changePercent: null,
+    volume: null, name: null, exchange: null, open: null, high: null, low: null, previousClose: null,
+    averageVolume: null, isMarketOpen: null, fiftyTwoWeek: null }))
+  let state!: PortfolioDataState
+  function Probe() { state = usePortfolioData(); return null }
+  const view = await mount(React.createElement(Probe))
+  try {
+    const position = state.data!.positions[0]
+    assert.equal(position.marketValue, '150')
+    assert.deepEqual(position.provenance, { source: 'Mock', asOfUtc: '2026-09-04T20:00:00Z', receivedAtUtc: '2026-10-31T12:00:00Z' })
+  } finally { await view.close() }
+})
+
 for (const [cashBalance, initialCapital] of [
   ['99999.999999999999', '100000'],
   ['999999999999999.999899999999', '999999999999999.9999'],

@@ -186,6 +186,19 @@ ticker fallback and visible attribution; it does not spend Alpha API credits.
 Keep that attribution when reusing the component. See the
 [backend provider documentation](../backend/README.md#market-enrichment-and-frontend-integration-82).
 
+Quote and history responses identify their configured source (`Mock` or
+`TwelveData`); movers identify the separate `AlphaVantage` source. Market, Stock
+Details, Watchlist, Portfolio and Dashboard show this provenance in English or
+French. Mock quotes are explicitly labelled simulated data. An absent source is
+shown as unavailable, never inferred to be live.
+
+Quote dates display the provider's `asOfUtc` observation in UTC. Watchlist and
+Stock Details separately show when the browser received the response. Receipt
+metadata stays attached to the cached response, and refreshing never replaces
+the original observation time. History identifies its source without inventing
+a quote timestamp for calendar bars. Valuation source summaries describe the
+quotes used for positions; a cash-only portfolio has no quote-source banner.
+
 Market initially requests five curated symbols (AAPL, MSFT, NVDA, AMZN, GOOGL), with
 at most three concurrent quote requests. These are identifiers, not seeded prices.
 Search waits 450 ms, cancels stale requests and skips empty queries. Search rows
@@ -241,8 +254,6 @@ operational verification; Vite startup does not commission an autonomous bot.
   The UI's email/push options do not provide notification delivery.
 - Personal performance history (#252), Google
   OAuth and password recovery remain incomplete as described above.
-- Consistent visible Mock-provider provenance and quote-observation timestamps,
-  notably in Watchlist, remain [#254](https://github.com/MarcSaad-Hadidi/StockLab/issues/254).
 - Controls with no connected service, including unsupported profile fields and
   exports, remain disabled or explicitly unavailable. Market currently enables
   All/Stocks filters; the other asset filters remain disabled. See the

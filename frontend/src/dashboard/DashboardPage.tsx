@@ -10,6 +10,7 @@ import { ResourceContent } from '../ai-trader/AiTraderPanels'
 import { fractionPoints, formatAiSignedCurrency, formatAiTimestamp } from '../ai-trader/aiTraderData'
 import { routeFor } from '../navigation/routes'
 import { usePortfolioData } from '../portfolio/usePortfolioData'
+import { MarketDataProvenance, MarketDataSources } from '../components/market-data/MarketDataProvenance'
 import { useWatchlistData } from '../watchlist/useWatchlistData'
 import { WatchlistFeedback } from '../watchlist/WatchlistFeedback'
 import type { WatchlistItem } from '../watchlist/watchlistData'
@@ -129,7 +130,7 @@ function PositionRow({ position, currency }: { position: Position; currency: str
     <tr>
       <td><div className="asset-cell"><StockMark size="small" symbol={position.symbol} /><span><strong>{position.symbol}</strong><small>{position.company}</small></span></div></td>
       <td>{t('dashboard.shares', { replace: { count: formatQuantity(position.shares, i18n.language) } })}</td>
-      <td><strong>{formatCurrency(position.value, i18n.language, 2, currency)}</strong><small className="muted-line">{formatUnitPrice(position.price, i18n.language, currency)}</small></td>
+      <td><strong>{formatCurrency(position.value, i18n.language, 2, currency)}</strong><small className="muted-line">{formatUnitPrice(position.price, i18n.language, currency)}</small>{position.provenance && <MarketDataProvenance {...position.provenance} compact />}</td>
       <td><div className="allocation-cell"><AllocationBar allocation={position.allocation} /><small>{formatPercent(position.allocation, undefined, 1)}</small></div></td>
       <td><span className={`change-pill ${position.tone}`}>{formatSignedPercent(position.change)}</span></td>
     </tr>
@@ -144,6 +145,7 @@ function WatchlistRow({ item }: { item: WatchlistItem }) {
       <div className="watchlist-name"><strong>{item.symbol}</strong><small>{item.name}</small></div>
       <div className="watchlist-price"><strong>{item.currency ? formatCurrency(item.price, undefined, 2, item.currency) : '—'}</strong><span className={item.tone}>{formatSignedPercent(item.changePercent)}</span></div>
       <a aria-label={t('dashboard.openDetails', { symbol: item.symbol })} className="icon-button row-more" href={`${routeFor('market')}?symbol=${encodeURIComponent(item.symbol)}`}><Icon name="more" size={18} /></a>
+      {item.provenance && <MarketDataProvenance {...item.provenance} compact />}
     </li>
   )
 }
@@ -294,6 +296,7 @@ export function DashboardPage() {
     value: position.marketValue,
     allocation: position.weight,
     price: position.currentPrice,
+    provenance: position.provenance,
     change: position.dailyChangePercent,
     tone: position.dailyChangePercent === null ? 'neutral' : position.dailyChangePercent < 0 ? 'negative' : 'positive',
   })) ?? [], [portfolio])
@@ -320,6 +323,7 @@ export function DashboardPage() {
         <div className="dashboard-content">
           <section className="welcome-row"><div><p className="eyebrow">{new Intl.DateTimeFormat(i18n.language, { dateStyle: 'full' }).format(new Date())}</p><h1>{greeting} <span>👋</span></h1><p className="welcome-copy">{t('dashboard.welcome')}</p></div><button className="primary-button" disabled title={t('businessData.unavailable')} type="button"><span>+</span> {t('common.addInvestment')}</button></section>
 
+          <MarketDataSources items={portfolio?.positions.map(position => position.provenance) ?? []} />
           <section aria-label={t('dashboard.portfolioSummary')} className="metrics-grid">{metrics.map((metric) => <MetricCard key={metric.label} metric={metric} currency={portfolio?.currency ?? 'USD'} />)}</section>
 
           <div className="dashboard-grid dashboard-grid-top">

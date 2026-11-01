@@ -1,5 +1,12 @@
 import { isPositiveOperand } from './decimalAmount'
 
+export type MarketDataSource = 'Mock' | 'TwelveData' | 'AlphaVantage';
+export type QuoteProvenance = {
+  source?: MarketDataSource | null;
+  asOfUtc?: string | null;
+  receivedAtUtc?: string | null;
+};
+
 export type CompanyLogo = {
   symbol: string;
   pngUrl: string | null;
@@ -43,7 +50,7 @@ export type StockFundamentals = {
     strongSell: number | null;
   } | null;
 };
-export type MarketMovers = {
+export type MarketMovers = QuoteProvenance & {
   lastUpdated: string | null;
   gainers: MarketMover[];
   losers: MarketMover[];
@@ -57,7 +64,7 @@ export type MarketMover = {
   changePercent: number;
   volume: number;
 };
-export type StockQuote = {
+export type StockQuote = QuoteProvenance & {
   symbol: string;
   price: number;
   priceDecimal: string;
@@ -97,7 +104,7 @@ export type HistoryBar = {
   close: number;
   volume: number | null;
 };
-export type StockHistory = {
+export type StockHistory = QuoteProvenance & {
   symbol: string;
   currency: string;
   interval: HistoryInterval;
@@ -127,6 +134,11 @@ const nullableNumber = (v: unknown) => v === null || number(v);
 const nullableString = (v: unknown) => v === null || typeof v === "string";
 const volume = (v: unknown) =>
   v === null || (number(v) && Number.isSafeInteger(v) && v >= 0);
+const timestamp = (v: unknown): v is string => typeof v === 'string'
+  && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?(?:Z|[+-]\d{2}:\d{2})$/i.test(v)
+  && Number.isFinite(Date.parse(v));
+const source = (v: unknown, allowed: readonly MarketDataSource[]) => v === undefined || v === null || allowed.includes(v as MarketDataSource);
+const received = <T,>(value: T): T => ({ ...value, receivedAtUtc: new Date(Date.now()).toISOString() });
 function quote(v: unknown): v is StockQuote {
   return (
     record(v) &&
@@ -138,8 +150,8 @@ function quote(v: unknown): v is StockQuote {
     nullableNumber(v.changePercent) &&
     volume(v.volume) &&
     typeof v.currency === "string" &&
-    typeof v.asOfUtc === "string" &&
-    Number.isFinite(Date.parse(v.asOfUtc)) &&
+    timestamp(v.asOfUtc) &&
+    source(v.source, ['Mock', 'TwelveData']) &&
     nullableString(v.name) &&
     nullableString(v.exchange) &&
     [v.open, v.high, v.low, v.previousClose].every(nullableNumber) &&
@@ -170,6 +182,7 @@ function history(v: unknown): v is StockHistory {
     !record(v) ||
     typeof v.symbol !== "string" ||
     typeof v.currency !== "string" ||
+    !source(v.source, ['Mock', 'TwelveData']) ||
     !["Minute", "Hour", "Day", "Week", "Month"].includes(String(v.interval)) ||
     !Array.isArray(v.bars)
   )
@@ -211,6 +224,7 @@ export function createMarketDataApi(
     ttl: number,
     cacheKey = path,
     refresh = false,
+    decorate?: (value: T) => T,
   ): Promise<T> {
     signal.throwIfAborted();
     const cached = cache.get(cacheKey);
@@ -235,10 +249,11 @@ export function createMarketDataApi(
     }
     signal.throwIfAborted();
     if (!valid(value)) throw new MarketDataError(502);
+    const result = decorate ? decorate(value) : value;
     if (cache.size >= 40) cache.delete(cache.keys().next().value!);
-    cache.set(cacheKey, { value, expires: Date.now() + ttl });
+    cache.set(cacheKey, { value: result, expires: Date.now() + ttl });
     if (path.endsWith("/logo")) logoListeners.forEach((listener) => listener());
-    return value;
+    return result;
   }
   return {
     subscribeLogos(listener: () => void) {
@@ -323,6 +338,7 @@ export function createMarketDataApi(
         "/api/market/movers",
         (v: unknown): v is MarketMovers =>
           record(v) &&
+          source(v.source, ['AlphaVantage']) &&
           nullableString(v.lastUpdated) &&
           [v.gainers, v.losers, v.mostActive].every(
             (rows) =>
@@ -339,6 +355,9 @@ export function createMarketDataApi(
           ),
         signal,
         43_200_000,
+        undefined,
+        false,
+        received,
       );
     },
     quote(symbol: string, signal: AbortSignal, options: { refresh?: boolean } = {}) {
@@ -350,6 +369,7 @@ export function createMarketDataApi(
         15_000,
         path,
         options.refresh,
+        received,
       );
     },
     async search(query: string, signal: AbortSignal) {
@@ -378,6 +398,8 @@ export function createMarketDataApi(
         signal,
         300_000,
         range ? `history:${symbol.trim().toUpperCase()}:${range}` : undefined,
+        false,
+        received,
       );
     },
   };

@@ -30,6 +30,30 @@ const quote = {
   fiftyTwoWeek: null,
 };
 
+test('quote receipts stay distinct from source observation and do not change on a cache hit', async t => {
+  let now = Date.parse('2026-10-31T12:00:00Z');
+  t.mock.method(Date, 'now', () => now);
+  const api = createMarketDataApi('', async () => Response.json({ ...quote, source: 'Mock' }));
+  const first = await api.quote('AAPL', signal());
+  assert.equal(first.source, 'Mock');
+  assert.equal(first.asOfUtc, '2026-09-04T20:00:00Z');
+  assert.equal(first.receivedAtUtc, '2026-10-31T12:00:00.000Z');
+  now += 1_000;
+  const cached = await api.quote('AAPL', signal());
+  assert.equal(cached.receivedAtUtc, first.receivedAtUtc);
+  const refreshed = await api.quote('AAPL', signal(), { refresh: true });
+  assert.equal(refreshed.receivedAtUtc, '2026-10-31T12:00:01.000Z');
+  assert.equal(refreshed.asOfUtc, first.asOfUtc);
+});
+
+test('invalid or timezone-less quote provenance is rejected rather than presented as recent', async () => {
+  for (const payload of [{ ...quote, source: 'unknown-provider' }, { ...quote, source: { name: 'Mock' } },
+    { ...quote, asOfUtc: '2026-09-04T20:00:00' }]) {
+    const api = createMarketDataApi('', async () => Response.json(payload));
+    await assert.rejects(api.quote('AAPL', signal()), error => error instanceof MarketDataError && error.status === 502);
+  }
+});
+
 test('quote parsing retains the original decimal operand beside an approximate chart price', async () => {
   const priceDecimal = '999999999999999.9999';
   const api = createMarketDataApi('', async () => Response.json({ ...quote, price: Number(priceDecimal), priceDecimal }));
@@ -118,7 +142,9 @@ for (const [status, key] of [
 }
 test("malformed numeric quote rejected; null optional fields retained", async () => {
   const valid = createMarketDataApi("", async () => Response.json(quote));
-  assert.deepEqual(await valid.quote("AAPL", signal()), quote);
+  const { receivedAtUtc, ...parsed } = await valid.quote("AAPL", signal());
+  assert.ok(Number.isFinite(Date.parse(receivedAtUtc!)));
+  assert.deepEqual(parsed, quote);
   for (const bad of [
     { ...quote, price: "204" },
     { ...quote, volume: -1 },
@@ -234,8 +260,11 @@ test("one movers response fills all lists and invalid mover numerics are rejecte
   const row = { symbol: "TSLA", price: 123.4, change: 2.3, changePercent: 1.9, volume: 12345 };
   const payload = { lastUpdated: "2026-09-04", gainers: [row], losers: [], mostActive: [row] };
   const api = createMarketDataApi("", async () => { calls++; return Response.json(payload); });
-  assert.deepEqual(await api.movers(signal()), payload);
-  assert.deepEqual(await api.movers(signal()), payload);
+  const first = await api.movers(signal());
+  const { receivedAtUtc, ...parsed } = first;
+  assert.ok(Number.isFinite(Date.parse(receivedAtUtc!)));
+  assert.deepEqual(parsed, payload);
+  assert.deepEqual(await api.movers(signal()), first);
   assert.equal(calls, 1);
   const invalid = createMarketDataApi("", async () => Response.json({ ...payload, gainers: [{ ...row, volume: null }] }));
   await assert.rejects(invalid.movers(signal()), MarketDataError);

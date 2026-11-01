@@ -161,7 +161,8 @@ public sealed class ApiValidationTests : IDisposable
         Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var root = json.RootElement;
-        Assert.Equal(4, root.EnumerateObject().Count());
+        Assert.Equal(5, root.EnumerateObject().Count());
+        Assert.Equal(JsonValueKind.String, root.GetProperty("source").ValueKind);
         Assert.Equal("AAPL", root.GetProperty("symbol").GetString());
         Assert.Equal("USD", root.GetProperty("currency").GetString());
         Assert.Equal("Day", root.GetProperty("interval").GetString());
