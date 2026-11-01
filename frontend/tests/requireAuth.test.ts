@@ -92,8 +92,8 @@ function clock(t: TestContext) {
     return id
   })
   t.mock.method(window, 'clearTimeout', id => { timers.delete(id!) })
-  return { timers, now: () => now, async tick() {
-    now += 5000
+  return { timers, now: () => now, async tick(milliseconds = 5000) {
+    now += milliseconds
     await act(async () => { for (const [id, timer] of [...timers]) if (timer.due <= now) { timers.delete(id); timer.run() } })
   } }
 }
@@ -126,6 +126,35 @@ test('same-account token rotation keeps the page and uses the new expiry deadlin
     assert.deepEqual(destinations, [])
     await time.tick()
     assert.equal(view.container.textContent, '')
+    assert.deepEqual(destinations, ['/login'])
+  } finally { await view.close() }
+})
+
+test('an eight-hour server deadline survives activity and tab changes without sliding past expiry', async t => {
+  const time = clock(t)
+  const deadline = new Date(time.now() + 28_800_000).toISOString()
+  saveAuthSession({ ...session, expiresAtUtc: deadline })
+  const view = await mount()
+  try {
+    await time.tick(3_600_000)
+    await act(async () => {
+      view.container.querySelector('button')!.click()
+      window.dispatchEvent(new dom.window.Event('focus'))
+      window.dispatchEvent(new dom.window.Event('pageshow'))
+      window.dispatchEvent(new dom.window.StorageEvent('storage', { key: authStorageKey }))
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+      document.dispatchEvent(new dom.window.Event('visibilitychange'))
+    })
+    assert.match(view.container.textContent!, /account-a: changed draft/)
+    assert.equal(getAuthSession()?.expiresAtUtc, deadline)
+    assert.deepEqual(destinations, [])
+    await time.tick(25_199_999)
+    assert.match(view.container.textContent!, /changed draft/)
+    assert.deepEqual(destinations, [])
+    await time.tick(1)
+    assert.equal(view.container.textContent, '')
+    assert.equal(getAuthSession(), null)
+    assert.equal(view.signal().aborted, true)
     assert.deepEqual(destinations, ['/login'])
   } finally { await view.close() }
 })
