@@ -142,7 +142,8 @@ def test_cli_sanitizes_private_failures_and_keeps_stdout_empty(tmp_path):
         "--registry-path", str(tmp_path / "private-registry"), "--artifacts-dir", str(tmp_path),
         "--dataset-path", str(tmp_path / "private-dataset"), "--model-name", "logistic_regression_baseline",
         "--symbols", "AAPL", "--decision-date", "2024-05-31", "--trusted-artifacts"],
-        env=os.environ | {"PYTHONPATH": "src"}, capture_output=True, text=True, timeout=30)
+        env=os.environ | {"PYTHONPATH": os.path.dirname(os.path.dirname(__file__)) + "/src"},
+        capture_output=True, text=True, timeout=30)
     assert completed.returncode == 1
     assert completed.stdout == ""
     assert completed.stderr.strip() == "decision_inference_failed"
