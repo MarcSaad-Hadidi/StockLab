@@ -1426,12 +1426,41 @@ While the API is running:
 
 ```powershell
 Invoke-RestMethod http://localhost:5274/health
+Invoke-RestMethod http://localhost:5274/health/ready
 Invoke-RestMethod http://localhost:5274/openapi/v1.json
 ```
 
-`GET /health` returns HTTP 200 and `Healthy` using ASP.NET Core Health Checks.
-This is a process health endpoint only: no database or external dependencies are
-registered yet, so it does not certify cloud connectivity.
+`GET /health` is process-only liveness: it returns HTTP 200 and `Healthy` without
+resolving SQL services or running readiness checks. A database outage must not
+turn liveness into a restart loop.
+
+`GET /health/ready` returns HTTP 200 and `Healthy` only when the configured
+`ConnectionStrings:StockLab` connection opens, every known EF migration is
+applied, and a bounded read of `Users.SessionVersion` succeeds. A missing,
+unavailable or misconfigured database, pending migrations, or an unreadable
+authentication schema returns HTTP 503 and `Unhealthy`. A newly created empty
+account database is ready after its migrations are applied; no user account is
+required. Database availability is checked again on each request, so recovery
+does not require restarting the API.
+
+The SQL readiness check has a five-second cancellation budget and command
+timeout. It creates and disposes its own context, preserves caller cancellation,
+and never creates a database, applies migrations, writes business data or repairs
+schema. Apply migrations explicitly before making a deployment ready. The
+public body contains only status text; provider exceptions and connection values
+are not included. Raw EF diagnostics are disabled only for the probe context.
+Both probes are explicitly anonymous, including under an authorization fallback
+policy or when an optional Bearer header is supplied. Responses are not cached.
+
+SQL is the shared dependency for account authentication and persisted business
+operations. JWT and selected market-provider settings are validated at startup.
+Market/enrichment providers, ML/Python, model catalogs and optional cloud services
+have feature-specific failure states; the global readiness probe makes no calls
+to them and spends no market-data credits. A green readiness response certifies
+the SQL checks above, not live market data or AI Trader commissioning. It does
+not test write permissions by changing data.
+
+The probes use the existing [ASP.NET Core health-check framework](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/health-checks?view=aspnetcore-10.0).
 
 OpenAPI JSON is available at `/openapi/v1.json` only in Development. There is no
 Swagger UI configured. Outside Development the OpenAPI route returns 404.

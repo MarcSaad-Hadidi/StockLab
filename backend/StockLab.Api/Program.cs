@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using StockLab.Application.Interfaces;
@@ -23,6 +25,7 @@ using StockLab.Infrastructure.Watchlists;
 using StockLab.Infrastructure.Alerts;
 using StockLab.Infrastructure.AiTraderMetadata;
 using StockLab.Api.Operations;
+using StockLab.Api.Health;
 
 var initializeAiTrader = args.Contains("--initialize-ai-trader", StringComparer.Ordinal);
 var checkAiTrader = args.Contains("--check-ai-trader", StringComparer.Ordinal);
@@ -77,7 +80,8 @@ builder.Services.AddOpenApi(options =>
         return Task.CompletedTask;
     });
 });
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks().AddCheck<SqlServerReadinessHealthCheck>("sql_server",
+    failureStatus: HealthStatus.Unhealthy, tags: ["ready"], timeout: SqlServerReadinessHealthCheck.ProbeTimeout);
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddUserRegistration();
 builder.Services.AddWatchlist();
@@ -298,7 +302,17 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHealthChecks("/health");
+app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = registration => registration.Tags.Contains("ready"),
+    ResultStatusCodes =
+    {
+        [HealthStatus.Healthy] = StatusCodes.Status200OK,
+        [HealthStatus.Degraded] = StatusCodes.Status503ServiceUnavailable,
+        [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
+    }
+}).AllowAnonymous();
 
 app.Run();
 

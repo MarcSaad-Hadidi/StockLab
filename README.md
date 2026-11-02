@@ -225,12 +225,16 @@ L’API écoute sur http://localhost:5274. Le serveur Vite frontend relaie les r
 Vérifiez que l’API fonctionne :
 
     curl http://localhost:5274/health
+    curl http://localhost:5274/health/ready
+
+`/health` vérifie uniquement que le processus répond. `/health/ready` retourne `200 Healthy` lorsque SQL Server est accessible, que les migrations sont appliquées et qu’une lecture limitée du schéma d’authentification réussit ; sinon, elle retourne `503 Unhealthy`. Le contrôle dispose d’un budget d’annulation de cinq secondes et ne crée ni ne modifie de données. Ces sondes sont publiques et ne consomment aucun appel aux fournisseurs boursiers. Voir les [détails de la readiness](backend/README.md#health-and-openapi).
 
 En environnement `Development`, OpenAPI est disponible à `/openapi/v1.json`. Les principales familles de routes sont :
 
 | Méthode | Route | Fonction |
 | --- | --- | --- |
-| GET | /health | Contrôle de santé |
+| GET | /health | Sonde de vie du processus |
+| GET | /health/ready | Readiness SQL, migrations et accès au schéma d’authentification |
 | GET | `/api/stocks/search`, `/api/market/movers` | Recherche et valeurs en mouvement |
 | GET | `/api/stocks/{symbol}/quote`, `/api/stocks/{symbol}/history` | Cotation et historique OHLCV |
 | GET | `/api/stocks/{symbol}/fundamentals`, `/api/stocks/{symbol}/logo`, `/api/stocks/{symbol}/earnings`, `/api/stocks/{symbol}/news` | Enrichissement |
