@@ -100,6 +100,15 @@ token clears that session; an old response cannot clear a newer login's token.
 Logout removes the local session and navigates to Login. Private loaders cancel
 or ignore obsolete requests when the account or token changes.
 
+The backend issues new sessions for 8 hours by default, with a configurable
+1–1440-minute lifetime. The frontend preserves the returned `expiresAtUtc`; it
+does not substitute a shorter timer or extend it on activity, tab changes or
+navigation. Existing sessions retain their original deadline. Sign in again to
+receive a newly configured duration. An ordinary API restart keeps a valid
+session when its account store and signing key/issuer/audience are unchanged.
+Changing those settings can reject an unexpired token and is distinct from
+normal expiry. No refresh-token flow silently renews the session.
+
 Profile reads and updates `/api/profile`. Successful name/email edits update the
 stored identity used by the top bar; capital and currency come from the portfolio
 API. Unsupported profile fields remain unavailable. The password dialog calls

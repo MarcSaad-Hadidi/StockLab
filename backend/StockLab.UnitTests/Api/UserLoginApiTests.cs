@@ -47,6 +47,9 @@ public sealed partial class UserLoginApiTests
             yield return [TestIssuer, "", TestSigningKey, "60"];
             yield return [TestIssuer, TestAudience, "short", "60"];
             yield return [TestIssuer, TestAudience, TestSigningKey, "0"];
+            yield return [TestIssuer, TestAudience, TestSigningKey, "-1"];
+            yield return [TestIssuer, TestAudience, TestSigningKey, "1441"];
+            yield return [TestIssuer, TestAudience, TestSigningKey, "2147483647"];
         }
     }
 
@@ -508,13 +511,16 @@ public sealed partial class UserLoginApiTests
             string issuer = TestIssuer,
             string audience = TestAudience,
             string signingKey = TestSigningKey,
-            string accessTokenMinutes = "60",
+            string? accessTokenMinutes = "60",
             int loginPermitLimit = 5,
             string loginWindow = "00:01:00",
             string? trustedProxyAddress = null,
-            string? remoteProxyAddress = null)
+            string? remoteProxyAddress = null,
+            DateTimeOffset? issuedAtUtc = null,
+            string? databasePath = null)
         {
-            var connection = new SqliteConnection("Data Source=:memory:");
+            var connection = new SqliteConnection(databasePath is null ? "Data Source=:memory:"
+                : new SqliteConnectionStringBuilder { DataSource = databasePath, Pooling = false }.ToString());
             await connection.OpenAsync();
             var optionsBuilder = new DbContextOptionsBuilder<StockLabDbContext>().UseSqlite(connection);
             if (saveChangesInterceptor is not null)
@@ -522,24 +528,27 @@ public sealed partial class UserLoginApiTests
                 optionsBuilder.AddInterceptors(saveChangesInterceptor);
             }
             var options = optionsBuilder.Options;
-            var now = DateTimeOffset.UtcNow;
+            var now = issuedAtUtc ?? DateTimeOffset.UtcNow;
             var expectedUtcNow = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, now.Minute,
                 now.Second, TimeSpan.Zero);
 
             var application = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             {
-                builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
-                    new Dictionary<string, string?>
+                builder.ConfigureAppConfiguration((_, configuration) =>
+                {
+                    var values = new Dictionary<string, string?>
                     {
                         ["ConnectionStrings:StockLab"] = "Server=localhost;Database=LoginTestsNeverUsed;Integrated Security=true;TrustServerCertificate=true",
                         ["Jwt:Issuer"] = issuer,
                         ["Jwt:Audience"] = audience,
                         ["Jwt:SigningKey"] = signingKey,
-                        ["Jwt:AccessTokenMinutes"] = accessTokenMinutes,
                         ["LoginRateLimit:PermitLimit"] = loginPermitLimit.ToString(),
                         ["LoginRateLimit:Window"] = loginWindow,
                         ["ForwardedHeaders:KnownProxies:0"] = trustedProxyAddress
-                    }));
+                    };
+                    if (accessTokenMinutes is not null) values["Jwt:AccessTokenMinutes"] = accessTokenMinutes;
+                    configuration.AddInMemoryCollection(values);
+                });
                 builder.ConfigureTestServices(services =>
                 {
                     services.RemoveAll<DbContextOptions<StockLabDbContext>>();
