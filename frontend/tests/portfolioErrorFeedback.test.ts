@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { JSDOM } from 'jsdom'
 import React, { act } from 'react'
-import { createPortfolioApi, portfolioApi } from '../src/api/portfolioApi.ts'
+import { createPortfolioApi, portfolioApi, type PortfolioPerformanceRange } from '../src/api/portfolioApi.ts'
 import { marketDataApi } from '../src/api/marketDataClient.ts'
 import { saveAuthSession } from '../src/auth/authStorage.ts'
 
@@ -31,7 +31,11 @@ function deferred<T>() {
   const promise = new Promise<T>(done => { resolve = done })
   return { promise, resolve }
 }
-beforeEach(async () => {
+beforeEach(async t => {
+  t.mock.method(portfolioApi, 'getPerformanceHistory', async (range: PortfolioPerformanceRange) => ({
+    range, currency: 'CAD', fromUtc: range === 'ALL' ? null : '2026-01-01T00:00:00Z',
+    toUtc: new Date().toISOString(), sampleCount: 0, resolution: 'observation' as const, points: [], firstRecordedAtUtc: null, lastRecordedAtUtc: null,
+  }))
   window.localStorage.clear(); saveAuthSession(session)
   await i18n.changeLanguage('en')
 })

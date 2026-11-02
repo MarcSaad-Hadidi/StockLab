@@ -6,6 +6,8 @@ type PerformanceLineChartProps = {
   labels: readonly string[]
   ariaLabel: string
   formatValue: (value: number) => string
+  formatPointValue?: (index: number) => string
+  formatAxisLabel?: (index: number) => string
   formatTick?: (value: number) => string
   pointLabel?: (index: number) => string
   unavailableMessage: string
@@ -35,6 +37,8 @@ export function PerformanceLineChart({
   labels,
   ariaLabel,
   formatValue,
+  formatPointValue,
+  formatAxisLabel,
   formatTick,
   pointLabel,
   unavailableMessage,
@@ -56,6 +60,8 @@ export function PerformanceLineChart({
       ariaLabel={ariaLabel}
       formatTick={formatTick}
       formatValue={formatValue}
+      formatPointValue={formatPointValue}
+      formatAxisLabel={formatAxisLabel}
       labels={[...labels]}
       max={max}
       min={min}

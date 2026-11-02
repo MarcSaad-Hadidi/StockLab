@@ -165,9 +165,19 @@ stored accounting data and other available prices.
 Quote enrichment currently covers the first **20 positions**, in batches of five.
 An account above that cap cannot obtain a complete market valuation by repeatedly
 retrying the same request. The UI distinguishes that limit from retryable quote
-failures. This is a current valuation, not a persisted personal performance
-history: Dashboard and Portfolio time-series charts remain unavailable pending
-[#252](https://github.com/MarcSaad-Hadidi/StockLab/issues/252).
+failures. Current valuation remains independent of the persisted personal history
+added by [#252](https://github.com/MarcSaad-Hadidi/StockLab/issues/252).
+Both charts read `GET /api/portfolio/performance/history?range=...` for `1D`,
+`1W`, `1M`, `3M`, `1Y`, `YTD` and `ALL`. They display only actual committed
+observations, with UTC timestamps, currency, source and recorded coverage. Empty
+periods and a single observation have explicit states; no baseline or historical
+point is invented in the browser. Long histories display at most 500 original
+bucket observations, with the original sample count retained. Numeric chart
+geometry is approximate; monetary tooltips and accessible labels retain the
+original exact decimal strings. History refreshes independently on range change,
+retry, return to the visible page and once per minute while visible. A failed
+history load does not hide the current valuation. Mock history is labeled.
+See [backend capture configuration](../backend/README.md#personal-portfolio-performance-history-252).
 
 Recent activity uses `GET /api/portfolio/transactions`; the Transactions page uses
 `GET /api/portfolio/transactions/history` with search, BUY/SELL, date and page
@@ -261,8 +271,7 @@ operational verification; Vite startup does not commission an autonomous bot.
   connects it to the backend. Backend alert CRUD and periodic monitoring exist;
   persistent triggering remains [#43](https://github.com/MarcSaad-Hadidi/StockLab/issues/43).
   The UI's email/push options do not provide notification delivery.
-- Personal performance history (#252), Google
-  OAuth and password recovery remain incomplete as described above.
+- Google OAuth and password recovery remain incomplete as described above.
 - Controls with no connected service, including unsupported profile fields and
   exports, remain disabled or explicitly unavailable. Market currently enables
   All/Stocks filters; the other asset filters remain disabled. See the

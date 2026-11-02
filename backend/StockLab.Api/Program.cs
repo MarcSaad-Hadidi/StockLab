@@ -89,6 +89,7 @@ builder.Services.AddPriceAlerts();
 builder.Services.AddPriceAlertMonitoring(builder.Configuration);
 builder.Services.AddPaperTrading();
 builder.Services.AddScoped<IPortfolioService, PortfolioService>();
+builder.Services.AddPersonalPortfolioHistory(builder.Configuration);
 builder.Services.AddAiTraderPortfolio();
 builder.Services.AddAiCurrentPositions();
 builder.Services.AddAiRiskManager(builder.Configuration);
@@ -217,6 +218,8 @@ builder.Services.AddKeyedSingleton<Microsoft.Extensions.Caching.Memory.IMemoryCa
         SizeLimit = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<MarketDataCacheOptions>>().Value.SizeLimit
     }));
 builder.Services.AddMarketDataTerminal(builder.Configuration);
+builder.Services.AddSingleton(services => new PortfolioPerformanceSource(
+    services.GetRequiredService<Microsoft.Extensions.Options.IOptions<MarketDataProviderOptions>>().Value.Provider));
 if (runAiTraderCycle)
     builder.Services.AddKeyedSingleton<IMarketDataProvider>("Terminal", (provider, _) =>
         new AiTradingCycleMarketDataProvider(provider.GetRequiredService<TwelveDataProvider>(),

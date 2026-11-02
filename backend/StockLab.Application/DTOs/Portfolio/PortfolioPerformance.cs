@@ -19,4 +19,5 @@ public sealed record PortfolioPerformancePosition(
     decimal CurrentPrice,
     decimal MarketValue,
     decimal Pnl,
-    decimal PnlPercent);
+    decimal PnlPercent,
+    DateTimeOffset? QuoteAsOfUtc = null);

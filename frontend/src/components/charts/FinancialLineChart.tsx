@@ -11,6 +11,8 @@ type FinancialLineChartProps = {
   max: number
   ariaLabel: string
   formatValue: (value: number) => string
+  formatPointValue?: (index: number) => string
+  formatAxisLabel?: (index: number) => string
   formatTick?: (value: number) => string
   pointLabel?: (index: number) => string
   showLatestValue?: boolean
@@ -22,7 +24,7 @@ function NoTooltip() {
   return null
 }
 
-function ChartInteraction({ values, labels, formatValue, pointLabel, showLatestValue, ariaLabel, overlay }: FinancialLineChartProps & { overlay: HTMLDivElement | null }) {
+function ChartInteraction({ values, labels, formatValue, formatPointValue, pointLabel, showLatestValue, ariaLabel, overlay }: FinancialLineChartProps & { overlay: HTMLDivElement | null }) {
   const xScale = useXScale<'point'>()
   const yScale = useYScale<'linear'>()
   const { left, top, width, height } = useDrawingArea()
@@ -33,11 +35,14 @@ function ChartInteraction({ values, labels, formatValue, pointLabel, showLatestV
   const markerIndex = activeIndex ?? values.length - 1
   const x = xScale(markerIndex) ?? left
   const y = yScale(values[markerIndex])
-  const tooltipWidth = Math.min(activeIndex === null ? Math.max(96, formatValue(values[markerIndex]).length * 8 + 28) : 164, width + left - 8)
+  const valueText = formatPointValue?.(markerIndex) ?? formatValue(values[markerIndex])
+  const tooltipWidth = Math.min(formatPointValue
+    ? Math.max(activeIndex === null ? 96 : 164, valueText.length * 8 + 28, activeIndex === null ? 0 : labels[markerIndex].length * 6 + 28)
+    : activeIndex === null ? Math.max(96, valueText.length * 8 + 28) : 164, width + left - 8)
   const tooltipHeight = activeIndex === null ? 34 : 66
   const tooltipX = Math.min(Math.max(x - tooltipWidth / 2, 8), left + width - tooltipWidth)
   const tooltipY = Math.min(Math.max(y < top + tooltipHeight + 20 ? y + 20 : y - tooltipHeight - 20, 6), top + height - tooltipHeight)
-  const announce = (index: number) => pointLabel?.(index) ?? `${labels[index]}: ${formatValue(values[index])}`
+  const announce = (index: number) => pointLabel?.(index) ?? `${labels[index]}: ${formatPointValue?.(index) ?? formatValue(values[index])}`
 
   // MUI's drawing layer is aria-hidden; keep the interactive points in an
   // accessible sibling SVG, using the exact same MUI scales and plot bounds.
@@ -77,7 +82,8 @@ function ChartInteraction({ values, labels, formatValue, pointLabel, showLatestV
       {(activeIndex !== null || showLatestValue) && <g className="financial-chart-tooltip" pointerEvents="none" transform={`translate(${tooltipX} ${tooltipY})`}>
         <rect width={tooltipWidth} height={tooltipHeight} rx="10" />
         {activeIndex !== null && <text className="financial-chart-date" x="14" y="23">{labels[markerIndex]}</text>}
-        <text className="financial-chart-value" x="14" y={activeIndex === null ? 22 : 48}>{formatValue(values[markerIndex])}</text>
+        <text className="financial-chart-value" style={formatPointValue ? { fontSize: Math.min(15, (tooltipWidth - 28) / Math.max(1, valueText.length) * 1.7) } : undefined}
+          x="14" y={activeIndex === null ? 22 : 48}>{valueText}</text>
       </g>}
     </g>
     </svg>
@@ -96,7 +102,7 @@ export function FinancialLineChart(props: FinancialLineChartProps) {
         margin={{ left: 4, right: 28, top: 28, bottom: 12 }}
         xAxis={[{
           scaleType: 'point', data: values.map((_, index) => index),
-          valueFormatter: index => labels[index] ?? '',
+          valueFormatter: index => props.formatAxisLabel?.(index) ?? labels[index] ?? '',
           disableLine: true, disableTicks: true, height: 32,
           tickLabelMinGap: 28, tickLabelStyle: { fontSize: 11, fill: '#74839a', fontFamily: 'inherit' },
         }]}
