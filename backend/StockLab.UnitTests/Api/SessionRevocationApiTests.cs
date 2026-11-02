@@ -177,15 +177,15 @@ public sealed partial class UserLoginApiTests
         var token = await LoginAndReadTokenAsync(fixture, "sessions@example.com", "old-password");
         using (var scope = fixture.CreateScope())
         {
-            // The health endpoint has no Authorize metadata. Make it private before its first request.
+            // This test-only route has no authorization metadata; health probes are explicitly anonymous.
             scope.ServiceProvider.GetRequiredService<IOptions<AuthorizationOptions>>().Value.FallbackPolicy =
                 new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
         }
-        using var before = await SessionGetAsync(fixture, token, "/health");
+        using var before = await SessionGetAsync(fixture, token, "/tests/fallback-protected");
         Assert.Equal(HttpStatusCode.OK, before.StatusCode);
         using var changed = await SessionPasswordAsync(fixture, token, "old-password", "new-password");
         Assert.Equal(HttpStatusCode.NoContent, changed.StatusCode);
-        using var rejected = await SessionGetAsync(fixture, token, "/health");
+        using var rejected = await SessionGetAsync(fixture, token, "/tests/fallback-protected");
         Assert.Equal(HttpStatusCode.Unauthorized, rejected.StatusCode);
     }
 

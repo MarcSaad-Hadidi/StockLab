@@ -5,6 +5,11 @@ Accept: text/plain
 
 ###
 
+GET {{StockLab.Api_HostAddress}}/health/ready
+Accept: text/plain
+
+###
+
 GET {{StockLab.Api_HostAddress}}/openapi/v1.json
 Accept: application/json
 
