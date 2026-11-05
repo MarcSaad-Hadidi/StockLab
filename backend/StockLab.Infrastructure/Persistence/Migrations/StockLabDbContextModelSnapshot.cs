@@ -465,6 +465,73 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("StockLab.Domain.Entities.PortfolioValuationSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CashBalance")
+                        .IsRequired()
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("char(3)");
+
+                    b.Property<decimal>("InitialCapital")
+                        .HasColumnType("decimal(19,4)");
+
+                    b.Property<Guid>("PortfolioId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("PortfolioVersion")
+                        .IsRequired()
+                        .HasColumnType("varbinary(8)");
+
+                    b.Property<string>("PositionsValue")
+                        .IsRequired()
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTime?>("QuoteAsOfUtc")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("QuoteObservationsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("RecordedAtUtc")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<DateTime>("SlotUtc")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TotalValue")
+                        .IsRequired()
+                        .HasColumnType("varchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PortfolioId", "SlotUtc")
+                        .IsUnique();
+
+                    b.HasIndex("PortfolioId", "RecordedAtUtc", "Id");
+
+                    b.ToTable("PortfolioValuationSnapshots", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PortfolioValuationSnapshots_Amounts", "CAST([CashBalance] AS decimal(38,12)) >= 0 AND CAST([PositionsValue] AS decimal(38,12)) >= 0 AND CAST([TotalValue] AS decimal(38,12)) >= 0 AND [InitialCapital] > 0 AND LTRIM(RTRIM([CashBalance])) <> '' AND LTRIM(RTRIM([PositionsValue])) <> '' AND LTRIM(RTRIM([TotalValue])) <> ''");
+
+                            t.HasCheckConstraint("CK_PortfolioValuationSnapshots_Source", "[Source] IN ('Cash', 'Mock', 'TwelveData')");
+
+                            t.HasCheckConstraint("CK_PortfolioValuationSnapshots_Times", "[SlotUtc] > '0001-01-01' AND [RecordedAtUtc] >= [SlotUtc]");
+                        });
+                });
+
             modelBuilder.Entity("StockLab.Domain.Entities.PriceAlert", b =>
                 {
                     b.Property<Guid>("Id")
@@ -787,6 +854,15 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("StockLab.Domain.Entities.PortfolioValuationSnapshot", b =>
+                {
+                    b.HasOne("StockLab.Domain.Entities.Portfolio", null)
+                        .WithMany()
+                        .HasForeignKey("PortfolioId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("StockLab.Domain.Entities.PriceAlert", b =>

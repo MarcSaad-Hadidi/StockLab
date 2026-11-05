@@ -91,6 +91,47 @@ authentication are implemented by #16/#17, not by this document.
 InitialCapital is immutable after creation. The application assigns exactly
 100000.0000 USD at registration; other funding operations are outside V1.
 
+### PortfolioValuationSnapshots
+
+Personal performance observations (#252), separate from the AI snapshot tables.
+Rows are append-only. No historical data is inferred from current holdings.
+
+| Column | Type / constraint |
+| --- | --- |
+| Id | `uniqueidentifier`, primary key |
+| PortfolioId | FK Portfolios.Id, NoAction |
+| SlotUtc | `datetime2(7)`, UTC interval key, > minimum date |
+| RecordedAtUtc | `datetime2(7)`, actual capture time, >= SlotUtc |
+| CashBalance | `varchar(64)`, canonical invariant decimal text, >= 0 |
+| PositionsValue | `varchar(64)`, canonical invariant decimal text, >= 0 |
+| TotalValue | `varchar(64)`, canonical invariant decimal text, cash + positions at capture |
+| InitialCapital | `decimal(19,4)`, original capital at capture, > 0 |
+| Currency | `char(3)`, portfolio currency at capture |
+| Source | `nvarchar(20)`, Cash / Mock / TwelveData |
+| QuoteAsOfUtc | nullable `datetime2(7)`, oldest included quote observation |
+| PortfolioVersion | `varbinary(8)`, original portfolio rowversion |
+| QuoteObservationsJson | `nvarchar(max)`, observed symbols, precise operands and quote timestamps |
+
+Unique `(PortfolioId, SlotUtc)` prevents duplicate captures across workers and
+restarts. `(PortfolioId, RecordedAtUtc, Id)` supports owned chronological reads.
+Capture validates complete quotes, matching currency, unchanged account/holdings
+and rowversion after network I/O. A scaled-integer comparison rejects any product,
+position sum or cash addition already rounded by System.Decimal. Values are finite nonnegative decimals below
+`1e26` with at most twelve meaningful fractional places; no partial/zero fallback
+observation is saved. SQL `decimal(38,12)` casts enforce numeric validity and
+positivity of the text amount fields. Typed invariant EF converters preserve the
+amounts without the SqlClient coercion overflow encountered for wide fixed-scale
+numeric parameters. These immutable read-model fields are not used for SQL
+monetary sums; the existing Portfolios/Transactions numeric ledger is unchanged.
+
+Migration creates an empty table with no backfill. Down is allowed only while
+the table is empty, preserving existing observed history. Application updates and
+deletes are rejected. History reads use JWT ownership, the current portfolio
+currency and UTC windows; a bounded latest-actual-observation bucket selection
+reduces long responses without fabricating values. Cash-only accounts require no
+market request. Mock holdings are permitted only in Development and remain
+explicitly marked as simulated; unavailable captures leave gaps.
+
 ### Holdings
 
 | Column | Type / constraint |

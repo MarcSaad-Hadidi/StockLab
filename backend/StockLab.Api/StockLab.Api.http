@@ -59,3 +59,16 @@ GET {{StockLab.Api_HostAddress}}/api/stocks/AAPL/history?from=2026-08-24T13:30:0
 Accept: application/json
 
 ###
+
+### Personal portfolio performance history (use an access token returned by login)
+@personalAccessToken = <access-token-from-login>
+
+GET {{StockLab.Api_HostAddress}}/api/portfolio/performance/history?range=1M
+Authorization: Bearer {{personalAccessToken}}
+Accept: application/json
+
+### All actually recorded personal observations, with bounded downsampling
+
+GET {{StockLab.Api_HostAddress}}/api/portfolio/performance/history?range=ALL
+Authorization: Bearer {{personalAccessToken}}
+Accept: application/json

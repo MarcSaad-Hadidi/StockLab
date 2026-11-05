@@ -27,6 +27,20 @@ export type PortfolioApiTransaction = {
   executedAtUtc: string
 }
 
+export const performanceRanges = ['1D', '1W', '1M', '3M', '1Y', 'YTD', 'ALL'] as const
+export type PortfolioPerformanceRange = typeof performanceRanges[number]
+export type PortfolioPerformanceHistory = {
+  range: PortfolioPerformanceRange
+  currency: string
+  fromUtc: string | null
+  toUtc: string
+  sampleCount: number
+  resolution: 'observation' | 'hour' | 'day' | 'month' | 'year'
+  firstRecordedAtUtc: string | null
+  lastRecordedAtUtc: string | null
+  points: Array<{ recordedAtUtc: string; totalValue: string; source: 'Cash' | 'Mock' | 'TwelveData'; quoteAsOfUtc: string | null }>
+}
+
 export type TransactionHistoryQuery = {
   page: number
   pageSize: number
@@ -122,6 +136,37 @@ function validHistory(value: unknown): value is TransactionHistoryResponse {
     && isNonNegativeAmount(summary.totalProceeds)
 }
 
+const utcTime = (value: unknown): value is string => typeof value === 'string'
+  && value.endsWith('Z') && Number.isFinite(Date.parse(value))
+
+function validPerformanceHistory(value: unknown, range: PortfolioPerformanceRange): value is PortfolioPerformanceHistory {
+  if (!record(value) || value.range !== range || typeof value.currency !== 'string' || !/^[A-Z]{3}$/.test(value.currency)
+    || !utcTime(value.toUtc) || (range === 'ALL' ? value.fromUtc !== null : !utcTime(value.fromUtc))
+    || !Number.isSafeInteger(value.sampleCount) || (value.sampleCount as number) < 0
+    || !['observation', 'hour', 'day', 'month', 'year'].includes(String(value.resolution))
+    || !Array.isArray(value.points) || value.points.length > 500 || value.points.length > (value.sampleCount as number)
+    || (value.sampleCount === 0) !== (value.points.length === 0)
+    || (value.resolution === 'observation' && value.sampleCount !== value.points.length)) return false
+  const from = value.fromUtc === null ? -Infinity : Date.parse(value.fromUtc as string)
+  const to = Date.parse(value.toUtc)
+  if (from > to) return false
+  if (value.sampleCount === 0) return value.firstRecordedAtUtc === null && value.lastRecordedAtUtc === null
+  if (!utcTime(value.firstRecordedAtUtc) || !utcTime(value.lastRecordedAtUtc)) return false
+  const first = Date.parse(value.firstRecordedAtUtc), last = Date.parse(value.lastRecordedAtUtc)
+  if (first < from || last > to || first > last) return false
+  let previous = -Infinity
+  return value.points.every(point => {
+    if (!record(point) || !utcTime(point.recordedAtUtc) || !isNonNegativeAmount(point.totalValue)
+      || !['Cash', 'Mock', 'TwelveData'].includes(String(point.source))
+      || (point.quoteAsOfUtc !== null && !utcTime(point.quoteAsOfUtc))) return false
+    const time = Date.parse(point.recordedAtUtc)
+    if (time < first || time > last || time < previous
+      || (point.quoteAsOfUtc !== null && Date.parse(point.quoteAsOfUtc as string) > time)) return false
+    previous = time
+    return true
+  })
+}
+
 function codeFor(status: number, value: unknown): PortfolioApiErrorCode {
   if (value === 'portfolio_not_found') return 'portfolio_not_found'
   if (status === 401) return 'unauthorized'
@@ -180,6 +225,12 @@ export function createPortfolioApi(
   }
 
   return {
+    async getPerformanceHistory(range: PortfolioPerformanceRange, signal?: AbortSignal, expectedAuthorization?: string): Promise<PortfolioPerformanceHistory> {
+      const body = await getJson(`/api/portfolio/performance/history?range=${encodeURIComponent(range)}`, signal, expectedAuthorization)
+      if (!validPerformanceHistory(body, range))
+        throw new PortfolioApiError(502, 'invalid_response', messageFor('invalid_response'))
+      return body
+    },
     async getTransactionHistory(query: TransactionHistoryQuery, signal?: AbortSignal, expectedAuthorization?: string): Promise<TransactionHistoryResponse> {
       const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) })
       for (const key of ['search', 'side', 'from', 'to'] as const) {

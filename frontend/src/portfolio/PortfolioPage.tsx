@@ -1,5 +1,5 @@
 import { StockLogo, LogoAttribution } from '../market/StockLogo'
-import { PerformanceLineChart } from '../components/charts/PerformanceLineChart'
+import { PersonalPerformanceChart } from '../components/charts/PersonalPerformanceChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
 import { formatUnitPrice, formatCompactCurrency, formatCurrency, formatNumber, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
@@ -7,13 +7,13 @@ import { useTranslation } from 'react-i18next'
 import { MarketDataProvenance, MarketDataSources } from '../components/market-data/MarketDataProvenance'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { performanceSeries } from './portfolioData'
+import { performanceRanges, type PortfolioPerformanceRange } from '../api/portfolioApi'
 import { usePortfolioData, type PortfolioPosition } from './usePortfolioData'
 import { addAmounts, subtractAmounts, amountPercent, amountSign } from '../api/decimalMath'
 import './portfolio.css'
 
 type IconName = 'grid' | 'globe' | 'briefcase' | 'sliders' | 'star' | 'bell' | 'brain' | 'user' | 'logout' | 'search' | 'chevron' | 'download' | 'arrowUp' | 'arrowDown' | 'info' | 'menu'
-type TimeRange = keyof typeof performanceSeries
+type TimeRange = PortfolioPerformanceRange
 
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
@@ -46,25 +46,6 @@ function toneFor(value: number | string | null | undefined): 'neutral' | 'positi
   if (typeof value === 'string') return amountSign(value) < 0 ? 'negative' : amountSign(value) > 0 ? 'positive' : 'neutral'
   if (value === null || value === undefined || !Number.isFinite(value)) return 'neutral'
   return value < 0 ? 'negative' : value > 0 ? 'positive' : 'neutral'
-}
-
-function PerformanceChart({ range }: { range: TimeRange }) {
-  const { i18n, t } = useTranslation()
-  const series = performanceSeries[range]
-  if (series.values.length === 0) {
-    return <div className="financial-chart-state"><p className="portfolio-empty" role="status">{t('portfolio.performanceUnavailable')}</p></div>
-  }
-  const labels = series.labels.map((label) => new Intl.DateTimeFormat(i18n.language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${label}T00:00:00.000Z`)))
-  return (
-    <PerformanceLineChart
-      ariaLabel={t('portfolio.performanceChart', { range: t(`common.timeRanges.${range}`) })}
-      formatValue={value => formatCompactCurrency(value * 1000, i18n.language)}
-      labels={labels}
-      pointLabel={index => t('portfolio.chartPoint', { label: labels[index], value: formatCompactCurrency(series.values[index] * 1000, i18n.language) })}
-      unavailableMessage="businessData.portfolio"
-      values={series.values}
-    />
-  )
 }
 
 function AllocationPanel({ cashBalance, totalValue, currency }: { cashBalance: string | null; totalValue: string | null; currency: string }) {
@@ -118,7 +99,7 @@ export default function PortfolioPage() {
         : (isLoading || error || quoteLoadFailed) && <button type="button" data-retry-portfolio disabled={isLoading} onClick={retry}>{t('watchlist.retry')}</button>}
     </div>}
     <MarketDataSources items={positions.map(position => position.provenance)} />
-    <section className="metrics-grid"><MetricCard label={t('portfolio.totalPortfolioValue')} value={formatCurrency(data?.totalValue, i18n.language, 2, currency)} detail={data?.pnl === null || data?.pnl === undefined ? undefined : formatSignedCurrency(data.pnl, i18n.language, 2, currency)} tone={pnlTone} /><MetricCard label={t('portfolio.availableCash')} value={formatCurrency(data?.cashBalance, i18n.language, 2, currency)} /><MetricCard label={t('portfolio.investedCapital')} value={formatCurrency(data?.investedValue, i18n.language, 2, currency)} /><MetricCard label={t('portfolio.totalReturnAllTime')} value={formatSignedPercent(data?.returnPercent, i18n.language)} detail={data?.initialCapital === null || data?.initialCapital === undefined ? undefined : t('portfolio.sinceInitialCapital')} tone={returnTone} /></section><section className="overview-grid"><section className="panel performance-panel"><div className="panel-header"><h2>{t('portfolio.performanceTitle')} <Icon name="info" /></h2></div><div className="range-tabs" role="tablist" aria-label={t('common.performanceTimeRange')}>{(Object.keys(performanceSeries) as TimeRange[]).map((option) => <button key={option} type="button" className={range === option ? 'selected' : ''} aria-selected={range === option} onClick={() => setRange(option)} role="tab">{t(`common.timeRanges.${option}`)}</button>)}</div><PerformanceChart key={range} range={range} /></section><AllocationPanel cashBalance={data?.cashBalance ?? null} totalValue={data?.totalValue ?? null} currency={currency} /></section>{data ? <PositionsTable positions={positions} currency={currency} />
+    <section className="metrics-grid"><MetricCard label={t('portfolio.totalPortfolioValue')} value={formatCurrency(data?.totalValue, i18n.language, 2, currency)} detail={data?.pnl === null || data?.pnl === undefined ? undefined : formatSignedCurrency(data.pnl, i18n.language, 2, currency)} tone={pnlTone} /><MetricCard label={t('portfolio.availableCash')} value={formatCurrency(data?.cashBalance, i18n.language, 2, currency)} /><MetricCard label={t('portfolio.investedCapital')} value={formatCurrency(data?.investedValue, i18n.language, 2, currency)} /><MetricCard label={t('portfolio.totalReturnAllTime')} value={formatSignedPercent(data?.returnPercent, i18n.language)} detail={data?.initialCapital === null || data?.initialCapital === undefined ? undefined : t('portfolio.sinceInitialCapital')} tone={returnTone} /></section><section className="overview-grid"><section className="panel performance-panel"><div className="panel-header"><h2>{t('portfolio.performanceTitle')} <Icon name="info" /></h2></div><div className="range-tabs" role="tablist" aria-label={t('common.performanceTimeRange')}>{performanceRanges.map((option) => <button key={option} type="button" className={range === option ? 'selected' : ''} aria-selected={range === option} onClick={() => setRange(option)} role="tab">{t(`common.timeRanges.${option}`)}</button>)}</div><PersonalPerformanceChart range={range} ariaLabel={t('portfolio.performanceChart', { range: t(`common.timeRanges.${range}`) })} /></section><AllocationPanel cashBalance={data?.cashBalance ?? null} totalValue={data?.totalValue ?? null} currency={currency} /></section>{data ? <PositionsTable positions={positions} currency={currency} />
       : <section className="panel positions-panel"><div className="panel-header"><h2>{t('portfolio.positions')}</h2></div>
         <p className="portfolio-empty">{t(isLoading ? 'portfolio.loading' : 'portfolio.positionsUnavailable')}</p></section>}<LogoAttribution /></main></div></div>
 }

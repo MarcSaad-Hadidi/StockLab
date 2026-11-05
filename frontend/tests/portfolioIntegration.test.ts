@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { JSDOM } from 'jsdom'
 import React, { act } from 'react'
-import { portfolioApi, type TransactionHistoryQuery, type TransactionHistoryResponse } from '../src/api/portfolioApi.ts'
+import { portfolioApi, type TransactionHistoryQuery, type TransactionHistoryResponse, type PortfolioPerformanceRange } from '../src/api/portfolioApi.ts'
 import { marketDataApi } from '../src/api/marketDataClient.ts'
 import { usePortfolioData, type PortfolioDataState } from '../src/portfolio/usePortfolioData.ts'
 import { saveAuthSession } from '../src/auth/authStorage.ts'
@@ -23,7 +23,11 @@ Object.assign(globalThis, { React, window: dom.window, document: dom.window.docu
 const { createRoot } = await import('react-dom/client')
 const { i18n } = await import('../src/i18n/i18n.ts')
 await i18n.changeLanguage('en')
-beforeEach(() => {
+beforeEach(t => {
+  t.mock.method(portfolioApi, 'getPerformanceHistory', async (range: PortfolioPerformanceRange) => ({
+    range, currency: 'CAD', fromUtc: range === 'ALL' ? null : '2026-01-01T00:00:00Z',
+    toUtc: new Date().toISOString(), sampleCount: 0, resolution: 'observation' as const, points: [], firstRecordedAtUtc: null, lastRecordedAtUtc: null,
+  }))
   window.localStorage.clear()
   saveAuthSession({ accessToken: 'portfolio-test-token', tokenType: 'Bearer', expiresAtUtc: '2099-01-01T00:00:00Z',
     user: { id: 'portfolio-test-user', displayName: 'Test Account', email: 'portfolio@example.com' } })
