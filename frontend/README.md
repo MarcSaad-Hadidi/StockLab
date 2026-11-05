@@ -169,8 +169,9 @@ failures. Current valuation remains independent of the persisted personal histor
 added by [#252](https://github.com/MarcSaad-Hadidi/StockLab/issues/252).
 Both charts read `GET /api/portfolio/performance/history?range=...` for `1D`,
 `1W`, `1M`, `3M`, `1Y`, `YTD` and `ALL`. They display only actual committed
-observations, with UTC timestamps, currency, source and recorded coverage. Empty
-periods and a single observation have explicit states; no baseline or historical
+observations, with UTC timestamps, currency, source and recorded coverage. A UTC
+time axis preserves elapsed time between observations, including capture gaps.
+Empty periods and a single observation have explicit states; no baseline or historical
 point is invented in the browser. Long histories display at most 500 original
 bucket observations, with the original sample count retained. Numeric chart
 geometry is approximate; monetary tooltips and accessible labels retain the

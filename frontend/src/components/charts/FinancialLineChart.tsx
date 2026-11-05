@@ -7,12 +7,13 @@ import './financial-line-chart.css'
 type FinancialLineChartProps = {
   values: number[]
   labels: string[]
+  timestamps?: readonly number[]
   min: number
   max: number
   ariaLabel: string
   formatValue: (value: number) => string
   formatPointValue?: (index: number) => string
-  formatAxisLabel?: (index: number) => string
+  formatAxisLabel?: (value: number) => string
   formatTick?: (value: number) => string
   pointLabel?: (index: number) => string
   showLatestValue?: boolean
@@ -24,8 +25,8 @@ function NoTooltip() {
   return null
 }
 
-function ChartInteraction({ values, labels, formatValue, formatPointValue, pointLabel, showLatestValue, ariaLabel, overlay }: FinancialLineChartProps & { overlay: HTMLDivElement | null }) {
-  const xScale = useXScale<'point'>()
+function ChartInteraction({ values, labels, timestamps, formatValue, formatPointValue, pointLabel, showLatestValue, ariaLabel, overlay }: FinancialLineChartProps & { overlay: HTMLDivElement | null }) {
+  const xScale = useXScale<'point' | 'utc'>()
   const yScale = useYScale<'linear'>()
   const { left, top, width, height } = useDrawingArea()
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
@@ -33,7 +34,8 @@ function ChartInteraction({ values, labels, formatValue, formatPointValue, point
   const [pinnedIndex, setPinnedIndex] = useState<number | null>(null)
   const activeIndex = hoveredIndex ?? focusedIndex ?? pinnedIndex
   const markerIndex = activeIndex ?? values.length - 1
-  const x = xScale(markerIndex) ?? left
+  const xAt = (index: number) => xScale(timestamps?.[index] ?? index) ?? left
+  const x = xAt(markerIndex)
   const y = yScale(values[markerIndex])
   const valueText = formatPointValue?.(markerIndex) ?? formatValue(values[markerIndex])
   const tooltipWidth = Math.min(formatPointValue
@@ -52,10 +54,10 @@ function ChartInteraction({ values, labels, formatValue, formatPointValue, point
     <g className="financial-chart-interaction">
       {activeIndex !== null && <line className="financial-chart-crosshair" x1={x} x2={x} y1={top} y2={top + height} />}
       {values.map((value, index) => {
-        const pointX = xScale(index) ?? left
+        const pointX = xAt(index)
         const pointY = yScale(value)
-        const previousX = xScale(index - 1) ?? pointX
-        const nextX = xScale(index + 1) ?? pointX
+        const previousX = index === 0 ? pointX : xAt(index - 1)
+        const nextX = index === values.length - 1 ? pointX : xAt(index + 1)
         const hitLeft = index === 0 ? left : (previousX + pointX) / 2
         const hitRight = index === values.length - 1 ? left + width : (pointX + nextX) / 2
         return (
@@ -92,7 +94,7 @@ function ChartInteraction({ values, labels, formatValue, formatPointValue, point
 }
 
 export function FinancialLineChart(props: FinancialLineChartProps) {
-  const { values, labels, min, max, ariaLabel, formatValue, formatTick = formatValue, size = 'default' } = props
+  const { values, labels, timestamps, min, max, ariaLabel, formatValue, formatTick = formatValue, size = 'default' } = props
   const gradientId = useId().replaceAll(':', '')
   const [overlay, setOverlay] = useState<HTMLDivElement | null>(null)
   return (
@@ -101,8 +103,13 @@ export function FinancialLineChart(props: FinancialLineChartProps) {
         aria-label={ariaLabel}
         margin={{ left: 4, right: 28, top: 28, bottom: 12 }}
         xAxis={[{
-          scaleType: 'point', data: values.map((_, index) => index),
-          valueFormatter: index => props.formatAxisLabel?.(index) ?? labels[index] ?? '',
+          ...(timestamps ? {
+            scaleType: 'utc' as const, data: timestamps.map(value => new Date(value)), domainLimit: 'strict' as const,
+            valueFormatter: (value: Date) => props.formatAxisLabel?.(value.getTime()) ?? value.toISOString(),
+          } : {
+            scaleType: 'point' as const, data: values.map((_, index) => index),
+            valueFormatter: (index: number) => props.formatAxisLabel?.(index) ?? labels[index] ?? '',
+          }),
           disableLine: true, disableTicks: true, height: 32,
           tickLabelMinGap: 28, tickLabelStyle: { fontSize: 11, fill: '#74839a', fontFamily: 'inherit' },
         }]}

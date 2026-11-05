@@ -33,9 +33,10 @@ export function PersonalPerformanceChart({ range, ariaLabel }: { range: Portfoli
       <p>{t('personalHistory.lastObservation', { amount: amount(0), date: labels[0] })}</p>
     </div> : <PerformanceLineChart ariaLabel={ariaLabel}
       values={points.map(point => Number(point.totalValue))} labels={labels}
+      timestamps={points.map(point => Date.parse(point.recordedAtUtc))}
       formatValue={value => formatCurrency(value, i18n.language, 2, data.currency)}
       formatPointValue={amount} formatTick={value => formatCompactCurrency(value, i18n.language, 2, data.currency)}
-      formatAxisLabel={index => axisDate.format(new Date(points[index].recordedAtUtc))}
+      formatAxisLabel={timestamp => axisDate.format(timestamp)}
       pointLabel={index => `${labels[index]}: ${amount(index)}`}
       unavailableMessage="personalHistory.empty" showLatestValue curve="linear" />}
     <div className="personal-history-footer">

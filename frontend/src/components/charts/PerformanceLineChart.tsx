@@ -4,10 +4,13 @@ import { FinancialLineChart } from './FinancialLineChart'
 type PerformanceLineChartProps = {
   values: readonly number[]
   labels: readonly string[]
+  /** Observation times in UTC milliseconds; omitted for categorical charts. */
+  timestamps?: readonly number[]
   ariaLabel: string
   formatValue: (value: number) => string
   formatPointValue?: (index: number) => string
-  formatAxisLabel?: (index: number) => string
+  /** Formats a UTC millisecond tick when timestamps exist, otherwise a category index. */
+  formatAxisLabel?: (value: number) => string
   formatTick?: (value: number) => string
   pointLabel?: (index: number) => string
   unavailableMessage: string
@@ -24,8 +27,10 @@ function chartDomain(values: readonly number[]) {
   return { min: minValue - padding, max: maxValue + padding }
 }
 
-function hasUsableSeries(values: readonly number[], labels: readonly string[]) {
+function hasUsableSeries(values: readonly number[], labels: readonly string[], timestamps?: readonly number[]) {
   return values.length > 0 && values.length === labels.length && values.every(Number.isFinite)
+    && (!timestamps || (timestamps.length === values.length && timestamps.every((value, index) =>
+      Number.isFinite(new Date(value).getTime()) && (index === 0 || value >= timestamps[index - 1]))))
 }
 
 /**
@@ -35,6 +40,7 @@ function hasUsableSeries(values: readonly number[], labels: readonly string[]) {
 export function PerformanceLineChart({
   values,
   labels,
+  timestamps,
   ariaLabel,
   formatValue,
   formatPointValue,
@@ -46,7 +52,7 @@ export function PerformanceLineChart({
   size = 'default',
   curve,
 }: PerformanceLineChartProps) {
-  if (!hasUsableSeries(values, labels)) {
+  if (!hasUsableSeries(values, labels, timestamps)) {
     return (
       <div className={`financial-chart-state ${size === 'compact' ? 'financial-chart-state-compact' : ''}`}>
         <UnavailableState message={unavailableMessage} />
@@ -63,6 +69,7 @@ export function PerformanceLineChart({
       formatPointValue={formatPointValue}
       formatAxisLabel={formatAxisLabel}
       labels={[...labels]}
+      timestamps={timestamps}
       max={max}
       min={min}
       pointLabel={pointLabel}
