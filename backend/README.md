@@ -55,9 +55,10 @@ signed JWT access token whose session version is checked against the account on 
 
 ## Entity Framework Core
 
-`StockLab.Infrastructure/Persistence/StockLabDbContext.cs` owns the six currently
-supported entities: User, Portfolio, Holding, Transaction, Watchlist and
-PriceAlert. Their business properties and navigations live in
+`StockLab.Infrastructure/Persistence/StockLabDbContext.cs` owns the personal account
+entities User, Portfolio, Holding, Transaction, Watchlist, PriceAlert and
+PortfolioValuationSnapshot, alongside the separate AI entities described below.
+Their business properties and navigations live in
 `StockLab.Domain/Entities`; no EF Core annotations or dependencies enter Domain.
 Each SQL Server mapping is in `StockLab.Infrastructure/Persistence/Configurations`.
 The context discovers these configurations from the Infrastructure assembly. They
@@ -1317,6 +1318,78 @@ balances, multiple/fractional positions, user isolation, invalid tokens, missing
 portfolios, safe failures and the OpenAPI contract. SQLite does not replace
 validation against Azure SQL.
 
+## Personal portfolio performance history (#252)
+
+`GET /api/portfolio/performance/history?range=1M` reads only committed observations
+owned by the authenticated user's portfolio. It never fetches quotes, writes a
+snapshot or appends the current value. Anonymous/revoked sessions return 401,
+missing portfolios 404, and invalid ranges 400; a valid portfolio without recorded
+observations returns 200 with an empty `points` array. Responses are `no-store`.
+
+Periods are UTC: rolling 24 hours (`1D`), seven days (`1W`), calendar one/three
+months (`1M`/`3M`), calendar one year (`1Y`), January 1 through now (`YTD`), or all
+recorded data (`ALL`). Endpoints are inclusive; future observations and rows in a
+different currency are excluded. The response includes `range`, `currency`,
+`fromUtc` (null for ALL), `toUtc`, `sampleCount`, `resolution`, actual full-series
+`firstRecordedAtUtc`/`lastRecordedAtUtc` (null when empty) and chronological
+`points` (`recordedAtUtc`, exact-string `totalValue`, `source`, `quoteAsOfUtc`).
+Count and rows are read in one serializable transaction. Up to 500 observations
+are returned directly; larger windows select the latest actual observation per
+UTC hour/day/month/year bucket, depending on the recorded span. `sampleCount`
+continues to describe the full filtered series. No interpolation, averages,
+retroactive baseline or synthetic endpoint is stored or returned.
+
+`PortfolioPerformanceCapture` runs in the API process, enabled by default:
+
+```json
+"PortfolioPerformanceCapture": { "Enabled": true, "Interval": "01:00:00" }
+```
+
+The interval must be one minute through one day. Use
+`PortfolioPerformanceCapture__Enabled=false` to disable it, or
+`PortfolioPerformanceCapture__Interval=00:15:00` to change the interval. The first
+run occurs after one interval. Accounts are paged in batches of 50 and processed
+sequentially; each scope/cycle is canceled on host shutdown. The worker reuses
+current valuation, market-data caching, request deduplication and the shared quote
+budget, including the current backend limit of at most 20 positions (lower when
+the configured provider permit limit is lower). Failed or unsupported valuations
+are skipped, preserving earlier observations and allowing other accounts to run.
+Capture independently checks rounded products, position sums and cash addition
+with scaled integers; amounts already rounded by System.Decimal are not persisted.
+History therefore has honest gaps during outages, unavailable quotes, currency
+mismatches, capacity limits, quota pressure or backend downtime. Missed periods
+are never backfilled. Changing the interval does not rewrite earlier records.
+
+There is one immutable observation per portfolio/UTC interval slot. Its recorded
+time is the actual valuation capture time, not a fabricated slot-start date.
+Quotes are obtained before taking database locks; a short serializable
+transaction rechecks the original portfolio rowversion, cash, capital, currency
+and holdings before inserting. Concurrent slot winners are reconciled without
+changing the original point. Cash-only snapshots use real stored cash without a
+provider call. Mock holdings may be captured only in Development and retain the
+`Mock` source; production requires real configured quotes for held positions.
+Policy and provenance use the same immutable provider selection as the terminal,
+so a live configuration reload cannot relabel an existing Mock provider as live.
+Retrieval time does not imply a real-time quote: original quote times/operands
+and the portfolio version are retained for audit.
+
+Apply `AddPersonalPortfolioPerformanceHistory` explicitly before enabling the
+deployment. It adds an empty table with NoAction ownership, chronological and
+unique slot indexes; no existing cash/trade amount or AI table is changed. Its
+rollback is blocked if any observation exists, preventing accidental history
+loss. Snapshot cash/positions/total are immutable canonical invariant decimal
+text, with typed EF conversion and SQL numeric checks; this avoids SqlClient
+coercion overflow for wide derived values. Values must fit the validation range
+`0 <= amount < 1e26` with at most twelve meaningful decimal places. The existing
+numeric cash and transaction ledger mappings are unchanged. SQL history columns
+are not used for monetary arithmetic. See [the schema contract](database-schema.md#portfoliovaluationsnapshots).
+
+Dashboard and Portfolio share the same historical API and show loading,
+retry/error, empty and single-point states separately. The current valuation is
+independent. Tests cover real SQL Server migration/rollback, rowversion changes,
+concurrent capture, precision, paging and worker cancellation. LocalDB validation
+does not establish Azure SQL connectivity.
+
 ## Watchlist API
 
 The watchlist is one implicit list per user, persisted in the existing `Watchlists`
@@ -1426,12 +1499,41 @@ While the API is running:
 
 ```powershell
 Invoke-RestMethod http://localhost:5274/health
+Invoke-RestMethod http://localhost:5274/health/ready
 Invoke-RestMethod http://localhost:5274/openapi/v1.json
 ```
 
-`GET /health` returns HTTP 200 and `Healthy` using ASP.NET Core Health Checks.
-This is a process health endpoint only: no database or external dependencies are
-registered yet, so it does not certify cloud connectivity.
+`GET /health` is process-only liveness: it returns HTTP 200 and `Healthy` without
+resolving SQL services or running readiness checks. A database outage must not
+turn liveness into a restart loop.
+
+`GET /health/ready` returns HTTP 200 and `Healthy` only when the configured
+`ConnectionStrings:StockLab` connection opens, every known EF migration is
+applied, and a bounded read of `Users.SessionVersion` succeeds. A missing,
+unavailable or misconfigured database, pending migrations, or an unreadable
+authentication schema returns HTTP 503 and `Unhealthy`. A newly created empty
+account database is ready after its migrations are applied; no user account is
+required. Database availability is checked again on each request, so recovery
+does not require restarting the API.
+
+The SQL readiness check has a five-second cancellation budget and command
+timeout. It creates and disposes its own context, preserves caller cancellation,
+and never creates a database, applies migrations, writes business data or repairs
+schema. Apply migrations explicitly before making a deployment ready. The
+public body contains only status text; provider exceptions and connection values
+are not included. Raw EF diagnostics are disabled only for the probe context.
+Both probes are explicitly anonymous, including under an authorization fallback
+policy or when an optional Bearer header is supplied. Responses are not cached.
+
+SQL is the shared dependency for account authentication and persisted business
+operations. JWT and selected market-provider settings are validated at startup.
+Market/enrichment providers, ML/Python, model catalogs and optional cloud services
+have feature-specific failure states; the global readiness probe makes no calls
+to them and spends no market-data credits. A green readiness response certifies
+the SQL checks above, not live market data or AI Trader commissioning. It does
+not test write permissions by changing data.
+
+The probes use the existing [ASP.NET Core health-check framework](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/health-checks?view=aspnetcore-10.0).
 
 OpenAPI JSON is available at `/openapi/v1.json` only in Development. There is no
 Swagger UI configured. Outside Development the OpenAPI route returns 404.

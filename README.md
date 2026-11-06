@@ -42,7 +42,7 @@ Le produit aide l’utilisateur à explorer les données de marché et à s’ex
 | --- | --- |
 | Authentification et compte | Login/Register reliés à l’API, session JWT, profil GET/PUT, changement du mot de passe avec vérification de l’ancien et confirmation de sauvegarde réelle. OAuth Google et récupération de mot de passe non implémentés. |
 | Trading personnel | Ordres BUY/SELL `market` et `limit`, contrôles de cash/positions, confirmation, déduplication par `orderId`, persistance transactionnelle et gestion des changements de session. |
-| Dashboard, Portfolio, Transactions | Données du compte, performance avec cotations, transactions récentes et historique filtré/paginé. Chargement, absence de données et erreurs restent des états distincts. |
+| Dashboard, Portfolio, Transactions | Données du compte, valorisation actuelle avec cotations, observations de performance personnelles persistées, transactions récentes et historique filtré/paginé. Chargement, absence de données et erreurs restent des états distincts. |
 | Watchlist | API et intégration frontend livrées. |
 | Alertes de prix | CRUD privé et monitoring livrés ; intégration frontend (#57) et déclenchement persistant (#43) restants. |
 | AI Trader backend | Portefeuille système indépendant, Risk Manager, exécution simulée, historiques persistés et calcul des métriques. Treize endpoints GET protégés, capture périodique optionnelle et contexte historique des trades/modèles ; aucune route d’exécution. |
@@ -225,12 +225,16 @@ L’API écoute sur http://localhost:5274. Le serveur Vite frontend relaie les r
 Vérifiez que l’API fonctionne :
 
     curl http://localhost:5274/health
+    curl http://localhost:5274/health/ready
+
+`/health` vérifie uniquement que le processus répond. `/health/ready` retourne `200 Healthy` lorsque SQL Server est accessible, que les migrations sont appliquées et qu’une lecture limitée du schéma d’authentification réussit ; sinon, elle retourne `503 Unhealthy`. Le contrôle dispose d’un budget d’annulation de cinq secondes et ne crée ni ne modifie de données. Ces sondes sont publiques et ne consomment aucun appel aux fournisseurs boursiers. Voir les [détails de la readiness](backend/README.md#health-and-openapi).
 
 En environnement `Development`, OpenAPI est disponible à `/openapi/v1.json`. Les principales familles de routes sont :
 
 | Méthode | Route | Fonction |
 | --- | --- | --- |
-| GET | /health | Contrôle de santé |
+| GET | /health | Sonde de vie du processus |
+| GET | /health/ready | Readiness SQL, migrations et accès au schéma d’authentification |
 | GET | `/api/stocks/search`, `/api/market/movers` | Recherche et valeurs en mouvement |
 | GET | `/api/stocks/{symbol}/quote`, `/api/stocks/{symbol}/history` | Cotation et historique OHLCV |
 | GET | `/api/stocks/{symbol}/fundamentals`, `/api/stocks/{symbol}/logo`, `/api/stocks/{symbol}/earnings`, `/api/stocks/{symbol}/news` | Enrichissement |
@@ -242,6 +246,7 @@ En environnement `Development`, OpenAPI est disponible à `/openapi/v1.json`. Le
 | GET | /api/portfolio/performance | Valorisation et performance avec les cotations du fournisseur configuré |
 | POST | /api/portfolio/trades | Exécuter un ordre de paper trading personnel |
 | GET | `/api/portfolio/transactions`, `/api/portfolio/transactions/history` | Transactions récentes et historique paginé |
+| GET | `/api/portfolio/performance/history?range=1M` | Observations de valorisation personnelles persistées, par période UTC |
 | GET / POST / DELETE | /api/watchlist et /api/watchlist/{symbol} | Liste, ajout et suppression de symboles |
 | GET / POST / PUT / DELETE | /api/alerts et /api/alerts/{id} | Gestion des alertes ; désactivation par POST /api/alerts/{id}/disable |
 | GET | /api/ai-trader/* | Treize lectures protégées : portefeuille, performances/cycles, décisions, transactions, modèles et backtests |

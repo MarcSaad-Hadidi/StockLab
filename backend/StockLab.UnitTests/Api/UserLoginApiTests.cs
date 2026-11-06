@@ -683,3 +683,10 @@ public sealed class ProtectedApiProbeController : ControllerBase
     [HttpGet]
     public IActionResult Get() => Ok(new { sub = User.FindFirst("sub")?.Value });
 }
+
+[ApiController]
+public sealed class FallbackApiProbeController : ControllerBase
+{
+    [HttpGet("/tests/fallback-protected")]
+    public IActionResult Get() => Ok();
+}

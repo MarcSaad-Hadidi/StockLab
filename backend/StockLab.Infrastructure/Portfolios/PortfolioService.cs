@@ -94,7 +94,8 @@ public sealed class PortfolioService(
                 quote.Price,
                 marketValue,
                 pnl,
-                pnl / investedValue * 100m));
+                pnl / investedValue * 100m,
+                quote.AsOfUtc));
         }
 
         var investedCapital = positions.Sum(position => position.Quantity * position.AverageCost);

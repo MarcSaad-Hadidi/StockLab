@@ -21,7 +21,7 @@ using StockLab.Infrastructure.Persistence;
 
 namespace StockLab.UnitTests.Api;
 
-public sealed class PortfolioApiTests
+public sealed partial class PortfolioApiTests
 {
     private const string TestIssuer = "StockLab.Api.Tests";
     private const string TestAudience = "StockLab.Tests";
@@ -692,7 +692,7 @@ public sealed class PortfolioApiTests
 
         public static async Task<PortfolioFixture> CreateAsync(
             IMarketDataProvider? marketDataProvider = null,
-            int? marketDataPermitLimit = null)
+            int? marketDataPermitLimit = null, TimeProvider? clock = null)
         {
             var connection = new SqliteConnection("Data Source=:memory:");
             await connection.OpenAsync();
@@ -715,6 +715,11 @@ public sealed class PortfolioApiTests
                 });
                 builder.ConfigureTestServices(services =>
                 {
+                    if (clock is not null)
+                    {
+                        services.RemoveAll<TimeProvider>();
+                        services.AddSingleton(clock);
+                    }
                     services.RemoveAll<DbContextOptions<StockLabDbContext>>();
                     services.RemoveAll<DbContextOptions>();
                     services.RemoveAll<StockLabDbContext>();
@@ -767,7 +772,7 @@ public sealed class PortfolioApiTests
         }
     }
 
-    private sealed class CountingMarketDataProvider(decimal price = 100m) : IMarketDataProvider
+    private sealed class CountingMarketDataProvider(decimal price = 100m, DateTimeOffset? asOf = null) : IMarketDataProvider
     {
         public int QuoteCalls { get; private set; }
 
@@ -776,7 +781,7 @@ public sealed class PortfolioApiTests
             cancellationToken.ThrowIfCancellationRequested();
             QuoteCalls++;
             return Task.FromResult<StockQuote?>(new StockQuote(
-                symbol, "USD", price, 0m, 0m, null, DateTimeOffset.UtcNow));
+                symbol, "USD", price, 0m, 0m, null, asOf ?? DateTimeOffset.UtcNow));
         }
 
         public Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(

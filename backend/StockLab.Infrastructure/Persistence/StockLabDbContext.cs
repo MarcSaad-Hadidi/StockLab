@@ -8,6 +8,7 @@ public class StockLabDbContext(DbContextOptions<StockLabDbContext> options) : Db
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<Portfolio> Portfolios => Set<Portfolio>();
+    public DbSet<PortfolioValuationSnapshot> PortfolioValuationSnapshots => Set<PortfolioValuationSnapshot>();
     public DbSet<Holding> Holdings => Set<Holding>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<Watchlist> Watchlists => Set<Watchlist>();
@@ -34,6 +35,8 @@ public class StockLabDbContext(DbContextOptions<StockLabDbContext> options) : Db
 
     private void ValidateValuationHistory()
     {
+        if (ChangeTracker.Entries<PortfolioValuationSnapshot>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Personal portfolio valuation history is append-only.");
         if (ChangeTracker.Entries<AiTraderValuationSnapshot>().Any(e => e.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("AI valuation history is append-only.");
     }

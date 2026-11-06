@@ -14,6 +14,7 @@ namespace StockLab.UnitTests.Identity;
 public sealed class SessionRevocationSqlServerTests
 {
     private const string PreviousMigration = "20261031191523_AddUserPreferredLanguage";
+    private const string SessionVersionMigration = "20261031205259_AddUserSessionVersion";
 
     [LocalDbFact]
     public async Task Migration_backfills_existing_accounts_and_refuses_to_discard_revocations_on_rollback()
@@ -24,7 +25,8 @@ public sealed class SessionRevocationSqlServerTests
         var id = Guid.NewGuid();
         var now = DateTime.UtcNow;
         await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO Users (Id, DisplayName, Email, NormalizedEmail, PasswordHash, CreatedAtUtc, UpdatedAtUtc) VALUES ({id}, N'Existing account', N'session@example.com', N'SESSION@EXAMPLE.COM', N'test-only-existing-hash', {now}, {now})");
-        await db.Database.MigrateAsync();
+        // Exercise this migration's rollback contract independently of later migrations.
+        await db.GetService<IMigrator>().MigrateAsync(SessionVersionMigration);
         Assert.Equal(1, await db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID(N'Users') AND name = N'SessionVersion'").SingleAsync());
         var account = await db.Users.AsNoTracking().SingleAsync();
         Assert.Equal(0, account.SessionVersion);
@@ -32,10 +34,9 @@ public sealed class SessionRevocationSqlServerTests
         Assert.Equal("en", account.PreferredLanguage);
         await Assert.ThrowsAsync<SqlException>(() => db.Database.ExecuteSqlRawAsync("UPDATE Users SET SessionVersion = -1"));
         await db.Database.ExecuteSqlRawAsync("UPDATE Users SET SessionVersion = 1");
-        var latest = (await db.Database.GetAppliedMigrationsAsync()).Last();
         var rejected = await Assert.ThrowsAsync<SqlException>(() => db.GetService<IMigrator>().MigrateAsync(PreviousMigration));
         Assert.Contains("revocation", rejected.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(latest, await db.Database.GetAppliedMigrationsAsync());
+        Assert.Contains(SessionVersionMigration, await db.Database.GetAppliedMigrationsAsync());
         Assert.Equal(1, (await db.Users.AsNoTracking().SingleAsync()).SessionVersion);
     }
 

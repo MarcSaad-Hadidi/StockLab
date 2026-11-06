@@ -1117,6 +1117,20 @@
     "featuredLosers": "Featured losers",
     "featuredScope": "From the five popular stocks"
   },
+  "personalHistory": {
+    "loading": "Loading recorded portfolio history…",
+    "loadError": "Recorded portfolio history could not be loaded. Please try again.",
+    "empty": "No observations have been recorded for this period yet.",
+    "insufficient": "Only one observation has been recorded for this period. The chart will appear after another observation.",
+    "lastObservation": "Last recorded value: {{amount}} ({{date}}).",
+    "coverage": "{{count}} recorded observations · {{from}} – {{to}}.",
+    "coverage_one": "{{count}} recorded observation · {{from}}.",
+    "coverage_other": "{{count}} recorded observations · {{from}} – {{to}}.",
+    "downsampled_one": "{{count}} actual point displayed.",
+    "downsampled": "{{count}} actual points displayed.",
+    "downsampled_other": "{{count}} actual points displayed.",
+    "refresh": "Refresh history"
+  },
   "businessData": {
     "unavailable": "Not available yet",
     "backendPending": "This account service is not connected yet. No account data is displayed.",

@@ -1117,6 +1117,20 @@
     "featuredLosers": "Baisses de la sélection",
     "featuredScope": "Parmi les cinq actions populaires"
   },
+  "personalHistory": {
+    "loading": "Chargement des valorisations enregistrées…",
+    "loadError": "L’historique enregistré est temporairement indisponible. Veuillez réessayer.",
+    "empty": "Aucune observation n’a encore été enregistrée pour cette période.",
+    "insufficient": "Une seule observation a été enregistrée pour cette période. Le graphique apparaîtra après une nouvelle observation.",
+    "lastObservation": "Dernière valeur enregistrée : {{amount}} ({{date}}).",
+    "coverage": "{{count}} observations enregistrées · {{from}} – {{to}}.",
+    "coverage_one": "{{count}} observation enregistrée · {{from}}.",
+    "coverage_other": "{{count}} observations enregistrées · {{from}} – {{to}}.",
+    "downsampled_one": "{{count}} point réel affiché.",
+    "downsampled": "{{count}} points réels affichés.",
+    "downsampled_other": "{{count}} points réels affichés.",
+    "refresh": "Actualiser l’historique"
+  },
   "businessData": {
     "unavailable": "Pas encore disponible",
     "backendPending": "Ce service de compte n’est pas encore connecté. Aucune donnée de compte n’est affichée.",
