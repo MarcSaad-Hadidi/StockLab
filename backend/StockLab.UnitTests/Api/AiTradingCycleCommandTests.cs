@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -165,6 +166,190 @@ public sealed class AiTradingCycleCommandTests : IDisposable
         Assert.Equal(0, inference.Calls);
         await using var reader = f.CreateDbContext();
         Assert.Empty(await reader.AiTrades.ToArrayAsync());
+    }
+
+    [Fact]
+    public Task Named_multi_asset_policy_executes_a_valid_score_and_rejects_a_different_policy_on_replay()
+        => AssertNamedPolicyAsync(sql: false);
+
+    [LocalDbFact]
+    [Trait("Category", "SqlServer")]
+    public Task Named_multi_asset_policy_preserves_real_sql_cash_and_replay_identity()
+        => AssertNamedPolicyAsync(sql: true);
+
+    private async Task AssertNamedPolicyAsync(bool sql)
+    {
+        await using var f = await AiRiskExecutionTests.Fixture(sql: sql);
+        var inference = new AiDecisionPipelineTests.Inference();
+        inference.Batch = inference.Batch with { Decisions = [
+            new("AAPL", AiTradingSignal.Buy, .67m),
+            new("MSFT", AiTradingSignal.Sell, .80m),
+            new("NVDA", AiTradingSignal.Hold, .80m)] };
+        await using var services = Services(f, inference, policy: new AiRiskOptions { MinimumConfidence = .65m });
+        var settings = Settings();
+        if (sql)
+        {
+            await using var context = f.CreateDbContext();
+            settings["AiTradingCycle:ExpectedDatabase"] = context.Database.GetDbConnection().Database;
+        }
+        settings["AiTradingCycle:RiskPolicy"] = "daily-multi-asset-v1";
+        Assert.Equal(0, await AiTradingCycleCommand.RunAsync(services, settings, new StringWriter()));
+        await using var reader = f.CreateDbContext();
+        Assert.Single(await reader.AiTrades.ToArrayAsync());
+        var journalPath = Directory.GetFiles(Path.Combine(root, "state"), "session-*.json").Single();
+        using var journal = JsonDocument.Parse(File.ReadAllText(journalPath));
+        Assert.Equal(2, journal.RootElement.GetProperty("SchemaVersion").GetInt32());
+        Assert.Equal("daily-multi-asset-v1", journal.RootElement.GetProperty("RiskPolicy").GetString());
+        var before = await f.StateAsync();
+        Assert.Equal(0, await AiTradingCycleCommand.RunAsync(services, settings, new StringWriter()));
+        Assert.Equal(before, await f.StateAsync());
+        settings["AiTradingCycle:RiskPolicy"] = null;
+        await using var legacy = Services(f, inference);
+        var output = new StringWriter();
+        Assert.Equal(1, await AiTradingCycleCommand.RunAsync(legacy, settings, output));
+        Assert.Contains("JOURNAL", output.ToString());
+        Assert.Equal(before, await f.StateAsync());
+        Assert.Equal(1, inference.Calls);
+    }
+
+    [Theory]
+    [InlineData(null, .65)]
+    [InlineData("unknown", .65)]
+    [InlineData("daily-multi-asset-v1", .64)]
+    [InlineData("daily-multi-asset-v1", .70)]
+    public async Task Unmatched_risk_policy_blocks_before_inference(string? profile, double confidence)
+    {
+        await using var f = await AiRiskExecutionTests.Fixture();
+        var inference = new AiDecisionPipelineTests.Inference();
+        await using var services = Services(f, inference, policy: new AiRiskOptions { MinimumConfidence = (decimal)confidence });
+        var settings = Settings();
+        settings["AiTradingCycle:RiskPolicy"] = profile;
+        var before = await f.StateAsync();
+        var output = new StringWriter();
+        Assert.Equal(1, await AiTradingCycleCommand.RunAsync(services, settings, output));
+        Assert.Contains("POLICY", output.ToString());
+        Assert.Equal(0, inference.Calls);
+        Assert.Equal(before, await f.StateAsync());
+    }
+
+    [Theory]
+    [InlineData("exposure")]
+    [InlineData("allocation")]
+    [InlineData("positions")]
+    [InlineData("short")]
+    public async Task Named_policy_rejects_changed_portfolio_limits(string changed)
+    {
+        await using var f = await AiRiskExecutionTests.Fixture();
+        var inference = new AiDecisionPipelineTests.Inference();
+        var policy = new AiRiskOptions { MinimumConfidence = .65m };
+        if (changed == "exposure") policy.MaxPositionExposurePercent = .21m;
+        if (changed == "allocation") policy.MaxCashAllocationPerTradePercent = .11m;
+        if (changed == "positions") policy.MaxOpenPositions = 11;
+        if (changed == "short") policy.AllowShortSelling = true;
+        await using var services = Services(f, inference, policy: policy);
+        var settings = Settings();
+        settings["AiTradingCycle:RiskPolicy"] = "daily-multi-asset-v1";
+        var before = await f.StateAsync();
+        var output = new StringWriter();
+        Assert.Equal(1, await AiTradingCycleCommand.RunAsync(services, settings, output));
+        Assert.Contains("POLICY", output.ToString());
+        Assert.Equal(0, inference.Calls);
+        Assert.Equal(before, await f.StateAsync());
+    }
+
+    [Theory]
+    [InlineData("0.65", false)]
+    [InlineData("0.70", true)]
+    public async Task Explicit_baseline_wins_over_conflicting_layered_configuration(string confidence, bool ready)
+    {
+        var prefix = "STOCKLAB_POLICY_TEST_" + Guid.NewGuid().ToString("N") + "_";
+        try
+        {
+            Environment.SetEnvironmentVariable(prefix + "AiTradingCycle__RiskPolicy", "daily-multi-asset-v1");
+            Environment.SetEnvironmentVariable(prefix + "AiTrader__Risk__MinimumConfidence", confidence);
+            var settings = new ConfigurationBuilder().AddInMemoryCollection(Settings().AsEnumerable())
+                .AddEnvironmentVariables(prefix).AddCommandLine(["--AiTradingCycle:RiskPolicy=baseline-v1"]).Build();
+            settings["AiTradingCycle:CheckOnly"] = "true";
+            var policy = new AiRiskOptions();
+            settings.GetSection(AiRiskOptions.SectionName).Bind(policy);
+            await using var f = await AiRiskExecutionTests.Fixture();
+            var inference = new AiDecisionPipelineTests.Inference();
+            await using var services = Services(f, inference, policy: policy);
+            var output = new StringWriter();
+            Assert.Equal(ready ? 0 : 1, await AiTradingCycleCommand.RunAsync(services, settings, output));
+            Assert.Contains(ready ? "READY" : "POLICY", output.ToString());
+            Assert.Equal(0, inference.Calls);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(prefix + "AiTradingCycle__RiskPolicy", null);
+            Environment.SetEnvironmentVariable(prefix + "AiTrader__Risk__MinimumConfidence", null);
+        }
+    }
+
+    [LocalDbFact]
+    [Trait("Category", "SqlServer")]
+    public async Task Actual_entry_does_not_inherit_named_policy_when_command_line_does_not_opt_in()
+    {
+        await using var f = await AiRiskExecutionTests.Fixture(sql: true);
+        await using var db = f.CreateDbContext();
+        foreach (var confidence in new[] { "0.65", "0.70" })
+        {
+            var start = new ProcessStartInfo("dotnet") { WorkingDirectory = AppContext.BaseDirectory,
+                UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+            start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+            start.Environment["DOTNET_ENVIRONMENT"] = "Development";
+            start.Environment["AiTradingCycle__RiskPolicy"] = "daily-multi-asset-v1";
+            start.Environment["AiTrader__Risk__MinimumConfidence"] = confidence;
+            foreach (var argument in new[] { typeof(AiTradingCycleCommand).Assembly.Location, "--run-ai-trader-cycle",
+                "--ConnectionStrings:StockLab=" + db.Database.GetConnectionString(),
+                "--AiTradingCycle:ExpectedDatabase=" + db.Database.GetDbConnection().Database,
+                "--AiTradingCycle:CheckOnly=true", "--MarketData:Provider=TwelveData",
+                "--AiTraderMetadata:RegistryPath=" + Path.Combine(root, "PRIVATE_MISSING_REGISTRY.json") })
+                start.ArgumentList.Add(argument);
+            using var process = Process.Start(start)!;
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            try
+            {
+                await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(60));
+                var output = await stdout + await stderr;
+                Assert.Equal(1, process.ExitCode);
+                using var result = JsonDocument.Parse(output);
+                Assert.Equal(confidence == "0.65" ? "POLICY" : "MODEL", result.RootElement.GetProperty("stage").GetString());
+                Assert.DoesNotContain("PRIVATE_MISSING", output);
+            }
+            finally
+            {
+                if (!process.HasExited) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); }
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Fresh_scope_cannot_take_over_matching_durable_decisions(bool completed)
+    {
+        await using var f = await AiRiskExecutionTests.Fixture();
+        var inference = new AiDecisionPipelineTests.Inference();
+        inference.Batch = inference.Batch with { Decisions = [
+            new("AAPL", AiTradingSignal.Buy, completed ? .90m : .67m),
+            new("MSFT", AiTradingSignal.Sell, .80m), new("NVDA", AiTradingSignal.Hold, .80m)] };
+        await using var original = Services(f, inference, risk: completed ? null : new UnavailableExecution());
+        var settings = Settings();
+        Assert.Equal(completed ? 0 : 1, await AiTradingCycleCommand.RunAsync(original, settings, new StringWriter()));
+        var before = await f.StateAsync();
+        var other = Path.Combine(root, "other-state");
+        settings["AiTradingCycle:StateDirectory"] = other;
+        settings["AiTradingCycle:RiskPolicy"] = "daily-multi-asset-v1";
+        await using var candidate = Services(f, inference, policy: new AiRiskOptions { MinimumConfidence = .65m });
+        var output = new StringWriter();
+        Assert.Equal(1, await AiTradingCycleCommand.RunAsync(candidate, settings, output));
+        Assert.Contains("JOURNAL", output.ToString());
+        Assert.Equal(before, await f.StateAsync());
+        Assert.Equal(1, inference.Calls);
+        if (Directory.Exists(other)) Assert.Empty(Directory.GetFiles(other, "session-*.json"));
     }
 
     [Theory]
@@ -360,6 +545,12 @@ public sealed class AiTradingCycleCommandTests : IDisposable
             if (!interrupted && result.Status == "EXECUTED") { interrupted = true; throw new IOException("private interrupted response"); }
             return result;
         }
+    }
+
+    private sealed class UnavailableExecution : IAiRiskExecutionService
+    {
+        public Task<AiRiskExecutionResult> ExecuteAsync(Guid id, CancellationToken token = default)
+            => Task.FromException<AiRiskExecutionResult>(new IOException("test-only interruption before execution"));
     }
 
     private sealed class InterruptAfterCapture(IAiTraderValuationHistoryService inner) : IAiTraderValuationHistoryService

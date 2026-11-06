@@ -38,7 +38,16 @@ public static class AiTradingCycleCommand
             if (configuration["MarketData:Provider"] != "TwelveData") throw new InvalidOperationException();
             stage = "POLICY";
             var riskPolicy = provider.GetRequiredService<IOptions<AiRiskOptions>>().Value;
-            if (!riskPolicy.IsValid() || riskPolicy.MinimumConfidence < .70m) throw new InvalidOperationException();
+            var riskProfile = configuration["AiTradingCycle:RiskPolicy"];
+            if (riskProfile == "baseline-v1") riskProfile = null;
+            var matchingPolicy = riskProfile switch {
+                null => riskPolicy.MinimumConfidence >= .70m,
+                AiTradingCycleJournal.DailyMultiAssetPolicy => riskPolicy.MinimumConfidence == .65m
+                    && riskPolicy.MaxPositionExposurePercent == .20m
+                    && riskPolicy.MaxCashAllocationPerTradePercent == .10m && riskPolicy.MaxOpenPositions == 10,
+                _ => false
+            };
+            if (!riskPolicy.IsValid() || !matchingPolicy) throw new InvalidOperationException();
             stage = "PORTFOLIO";
             await provider.GetRequiredService<IAiTraderPortfolioService>().GetStateAsync(cancellationToken, initializeIfMissing: false);
             stage = "MODEL";
@@ -98,6 +107,7 @@ public static class AiTradingCycleCommand
                     || Path.GetFileName(previousPath) != "session-" + previous.Session.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + ".json")
                     throw new InvalidOperationException();
                 if (previous.Session >= session || previous.Stage is "COMPLETED" or "ABANDONED") continue;
+                if (previous.RiskPolicy != riskProfile) throw new InvalidOperationException();
                 var previousRows = await db.AiDecisions.AsNoTracking().Where(d => d.DecisionDate == previous.Session
                     && d.ModelName == previous.ModelName && d.ModelVersion == previous.ModelVersion
                     && previous.Symbols.Contains(d.Symbol)).ToArrayAsync(cancellationToken);
@@ -123,14 +133,19 @@ public static class AiTradingCycleCommand
                 var saved = AiTradingCycleJournal.Read(journalPath);
                 if (saved.Database != database || saved.Session != session || saved.ModelName != modelName
                     || saved.ModelVersion != modelVersion || saved.DatasetSha256 != hash || !saved.Symbols.SequenceEqual(symbols)
+                    || saved.RiskPolicy != riskProfile
                     || saved.StartedAtUtc > clock.GetUtcNow().UtcDateTime || saved.Stage == "ABANDONED")
                     throw new InvalidOperationException();
                 journal = saved;
             }
             else
             {
-                journal = new(1, database, session, modelName!, modelVersion!, symbols, hash, [],
-                    Guid.NewGuid(), clock.GetUtcNow().UtcDateTime, "INFERENCE");
+                if (await db.AiDecisions.AsNoTracking().AnyAsync(d => d.DecisionDate == session
+                    && d.ModelName == modelName && d.ModelVersion == modelVersion
+                    && symbols.Contains(d.Symbol), cancellationToken))
+                    throw new InvalidOperationException();
+                journal = new(riskProfile is null ? 1 : 2, database, session, modelName!, modelVersion!, symbols, hash, [],
+                    Guid.NewGuid(), clock.GetUtcNow().UtcDateTime, "INFERENCE", RiskPolicy: riskProfile);
                 journal.Save(journalPath);
             }
             var replay = journal.Stage == "COMPLETED";

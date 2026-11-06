@@ -39,8 +39,10 @@ if (new[] { initializeAiTrader, checkAiTrader, runAiDecisions, executeAiDecision
     Environment.ExitCode = 1;
     return;
 }
-var builder = WebApplication.CreateBuilder(args.Where(argument =>
-    argument is not "--initialize-ai-trader" and not "--check-ai-trader" and not "--run-ai-decisions" and not "--execute-ai-decisions" and not "--capture-ai-performance" and not "--run-ai-trader-cycle").ToArray());
+var applicationArgs = args.Where(argument =>
+    argument is not "--initialize-ai-trader" and not "--check-ai-trader" and not "--run-ai-decisions" and not "--execute-ai-decisions" and not "--capture-ai-performance" and not "--run-ai-trader-cycle").ToArray();
+if (runAiTraderCycle) applicationArgs = ["--AiTradingCycle:RiskPolicy=baseline-v1", .. applicationArgs];
+var builder = WebApplication.CreateBuilder(applicationArgs);
 // Provider logs can reveal private database errors before the operator's sanitized catch runs.
 if (runAiDecisions || executeAiDecisions || captureAiPerformance || runAiTraderCycle) builder.Logging.ClearProviders();
 
