@@ -222,7 +222,8 @@ the qualified identifier stays in the dataset and is checked against metadata.
 Numeric international tickers are supported without guessing exchange mappings.
 
 Dates accept Python `date` or strict `YYYY-MM-DD` strings. Require
-`start_date < end_date < date.today()` using the machine's local date. Today is
+`start_date < end_date < datetime.now(UTC).date()`, independently of the machine's
+local timezone, matching the operational cycle's UTC clock. The current UTC day is
 excluded to avoid current daily bars; callers remain responsible for provider
 publication delays and selecting a completed session in the relevant exchange.
 Returned dates must lie inside the requested boundaries. Daily dates are calendar

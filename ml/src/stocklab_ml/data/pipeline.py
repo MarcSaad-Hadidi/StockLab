@@ -19,7 +19,7 @@ def prepare_historical_dataset(
 ) -> HistoricalDatasetResult:
     """Fetch at most once; retain valid-envelope raw data even if a bar is bad.
 
-    Dates are inclusive calendar boundaries and end_date must precede today.
+    Dates are inclusive calendar boundaries and end_date must precede today in UTC.
     Result dates describe actual returned sessions; no completeness of exchange
     calendars is inferred, no gaps are filled, and no retry is performed.
     """

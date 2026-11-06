@@ -8,7 +8,11 @@ Use a dedicated named LocalDB instance for the configured Windows user. Packaged
 desktop applications can virtualize LocalDB's default profile directories: a task
 may otherwise resolve an empty instance with the same default name. The local
 setup uses `(localdb)\StockLabLocal`. Verify access from both the application and
-the task context. Moving an existing database requires a verified COPY_ONLY
+the task context. Launch the HTTP API in the same native Windows task context as
+the ML worker: launching it from a packaged desktop app can create conflicting
+LocalDB runtime metadata even for the same named instance and Windows user.
+The local `StockLab-Local-Api` task is started manually and has no logon trigger.
+Moving an existing database requires a verified COPY_ONLY
 backup, restore into an empty target and matching table counts/content checksums;
 retain the original database and backup. Never initialize a replacement portfolio
 to hide an instance mismatch.
@@ -32,7 +36,7 @@ config files, logs or this repository. Backend quote credentials remain separate
 
 ## Windows tasks
 
-The commissioned local setup uses two tasks under the current user's identity,
+The commissioned local setup uses two ML tasks under the current user's identity,
 with limited privileges and no saved Windows password:
 
 | Task | Trigger and behavior |
