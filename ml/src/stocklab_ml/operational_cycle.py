@@ -31,7 +31,8 @@ STAGES = {"PREFLIGHT", "DATABASE_TARGET", "DATABASE_CONNECTION", "MIGRATIONS", "
 
 def validate_config(payload):
     if (type(payload) is not dict or not REQUIRED <= payload.keys()
-            or payload.keys() - REQUIRED - {"website_secrets_path"}
+            or payload.keys() - REQUIRED - {"website_secrets_path", "risk_profile"}
+            or "risk_profile" in payload and payload["risk_profile"] != "daily-multi-asset-v1"
             or type(payload["schema_version"]) is not int or payload["schema_version"] != 1
             or payload["trusted_artifacts"] is not True or type(payload["share_website_quota"]) is not bool
             or type(payload["interval_seconds"]) is not int or not 60 <= payload["interval_seconds"] <= 86400
@@ -129,6 +130,7 @@ class BackendCycleError(Exception):
 
 def _backend(config, version, *, snapshot=None):
     arguments = {"AiTradingCycle:ExpectedDatabase": config["expected_database"],
+        "AiTradingCycle:RiskPolicy": "baseline-v1",
         "AiTradingCycle:ModelName": config["model_name"], "AiTradingCycle:ModelVersion": version,
         "AiTradingCycle:StateDirectory": str(config["state_directory"]),
         "AiTraderMetadata:RegistryPath": str(config["registry_path"]),
@@ -136,6 +138,11 @@ def _backend(config, version, *, snapshot=None):
         "AiDecisionPipeline:ArtifactsDirectory": str(config["artifacts_directory"]),
         "AiDecisionPipeline:ModelName": config["model_name"], "AiDecisionPipeline:TrustedArtifacts": "true"}
     arguments.update({f"AiDecisionPipeline:Symbols:{i}": symbol for i, symbol in enumerate(config["symbols"])})
+    if config.get("risk_profile") == "daily-multi-asset-v1":
+        arguments.update({"AiTradingCycle:RiskPolicy": "daily-multi-asset-v1",
+            "AiTrader:Risk:MinimumConfidence": "0.65", "AiTrader:Risk:MaxPositionExposurePercent": "0.20",
+            "AiTrader:Risk:MaxCashAllocationPerTradePercent": "0.10", "AiTrader:Risk:MaxOpenPositions": "10",
+            "AiTrader:Risk:AllowShortSelling": "false"})
     if snapshot is None:
         arguments["AiTradingCycle:CheckOnly"] = "true"
     else:

@@ -34,6 +34,35 @@ The private launcher resolves the authorized Fallback key from existing User
 Secrets into the Python process environment. No key belongs in task arguments,
 config files, logs or this repository. Backend quote credentials remain separate.
 
+The five-symbol commissioning wrapper reuses the cycle's immutable daily input
+snapshot for retraining through `RetrainingDependencies.local_data`. It validates
+the current session manifest and trims only rows beyond retraining's conservative
+cutoff; a missing/invalid current input fails without a second provider batch.
+The retraining logon trigger waits two minutes for the cycle to prepare inputs;
+its existing daily trigger and three-day cadence remain. This avoids competing
+five-request ML batches against the same eight-credit-per-minute Fallback key.
+The general retraining CLI still supports its explicit provider-backed workflow.
+
+After an explicit historical assessment, a private cycle config may select
+`"risk_profile": "daily-multi-asset-v1"`. This pins a 0.65 directional-score floor,
+20% symbol exposure, 10% per-order allocation, ten positions and no shorts in that
+backend child process only. The HTTP service and unnamed cycles retain their
+existing defaults (at least 0.70 for an unnamed cycle). It does not change the ML
+BUY/SELL thresholds or manufacture calibrated probabilities. Unknown profiles or
+mismatched limits fail before inference. Use a fresh state scope: schema-v2
+journals pin the profile and cannot be replayed/resumed under another policy;
+legacy schema-v1 journals remain valid for unnamed cycles. Historical activity
+and profit are screening evidence, not prospective guarantees.
+
+The runner and actual backend entry point explicitly default the command-line
+profile to `baseline-v1`, so an ambient setting cannot silently opt an unnamed
+cycle into the alternative policy. A new journal is rejected if matching durable
+decisions already exist; restore the original journal rather than adopting those
+decisions in a fresh directory. Keep one active runner/state scope per system
+portfolio. Retain retired scopes only as recovery archives after checking their
+terminal outcomes and stopping their workers. A new scope requires disjoint
+decision identities; concurrent different-scope execution is unsupported.
+
 ## Windows tasks
 
 The commissioned local setup uses two ML tasks under the current user's identity,
@@ -48,6 +77,11 @@ Tasks ignore overlapping starts and permit three bounded restarts after a proces
 failure. The host-specific launcher, configuration, logs, artifacts and journals
 remain together in ignored private model directories. Retain them for recovery;
 copying this Git checkout alone does not recreate a commissioned environment.
+
+Use an installed stable PowerShell executable for task actions, such as Windows
+PowerShell with compatible launchers. Avoid versioned Codex/WindowsApps runtime
+paths: an application update can remove them and leave tasks unable to start.
+Keep the machine's existing execution policy; do not add a policy bypass.
 
 Inspect operation without reading or printing secrets:
 
