@@ -176,6 +176,33 @@ export function usePortfolioData(): PortfolioDataState {
     }
   }, [userId, authorization, sessionKey, requestKey])
 
+  useEffect(() => {
+    if (!userId || !authorization) return
+    let timer: number | undefined
+    const refresh = () => {
+      window.clearTimeout(timer)
+      if (document.visibilityState !== 'visible') return
+      // Tab changes can emit both visibility and focus. Coalesce them, but do
+      // not drop a refresh merely because an older request is still in flight.
+      timer = window.setTimeout(() => {
+        const current = getAuthSession()
+        if (document.visibilityState !== 'visible' || current?.user.id !== userId
+          || `${current.tokenType} ${current.accessToken}` !== authorization) return
+        setRevision(value => value + 1)
+      }, 100)
+    }
+    const restored = (event: PageTransitionEvent) => { if (event.persisted) refresh() }
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('pageshow', restored)
+    return () => {
+      window.clearTimeout(timer)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('pageshow', restored)
+    }
+  }, [userId, authorization])
+
   function retry() {
     const current = getAuthSession()
     if (!current || current.user.id !== userId || `${current.tokenType} ${current.accessToken}` !== authorization
@@ -185,7 +212,7 @@ export function usePortfolioData(): PortfolioDataState {
   }
 
   const current = result?.sessionKey === sessionKey ? result.state : null
-  const recentTransactions = useRecentTransactions(Boolean(session && current?.data))
+  const recentTransactions = useRecentTransactions(Boolean(session && current?.data), revision)
   // Mask the old owner's data during render, before effect cleanup and loading run.
   if (!session) return { data: null, isLoading: false,
     error: new PortfolioApiError(401, 'unauthorized', 'Your session has expired. Please sign in again.'),

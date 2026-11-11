@@ -10,12 +10,12 @@ export type RecentTransactionsState = {
   retry: () => void
 }
 
-export function useRecentTransactions(enabled: boolean): RecentTransactionsState {
+export function useRecentTransactions(enabled: boolean, portfolioRevision: number): RecentTransactionsState {
   const session = useAuthSession()
   const userId = session?.user.id ?? null
   const authorization = session ? `${session.tokenType} ${session.accessToken}` : null
   const [revision, setRevision] = useState(0)
-  const requestKey = JSON.stringify([userId, authorization, revision])
+  const requestKey = JSON.stringify([userId, authorization, revision, portfolioRevision])
   const [result, setResult] = useState<{ key: string; data: PortfolioApiTransaction[] | null; error: PortfolioApiError | null } | null>(null)
   const activeRequest = useRef<AbortController | null>(null)
   const retryQueued = useRef(false)
