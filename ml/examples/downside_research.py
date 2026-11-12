@@ -4,6 +4,7 @@ import argparse
 import hashlib
 from importlib.metadata import version
 import json
+import os
 from pathlib import Path
 import platform
 import re
@@ -295,11 +296,15 @@ def main() -> None:
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--monthly", action="store_true", help="Refit both heads monthly; annual remains the default.")
     modes.add_argument("--training-panel", type=Path, help="Verified broader training-only panel; both heads refit annually.")
+    parser.add_argument("--boosted", action="store_true", help="Use both fixed boosted heads with --training-panel.")
     args = parser.parse_args()
+    if args.boosted and (args.training_panel is None or args.monthly):
+        parser.error("--boosted requires --training-panel and cannot be combined with --monthly.")
     frequency = {"refit_frequency": "monthly"} if args.monthly else {}
     broader = args.training_panel is not None
     refit_upside = args.monthly or broader
-    protocol_name = ("broader-training-model-20261112-v1" if broader else
+    protocol_name = ("broader-boosted-model-20261112-v1" if args.boosted else
+                     "broader-training-model-20261112-v1" if broader else
                      "monthly-dual-head-20261112-v1" if args.monthly else "dedicated-downside-20261112-v1")
     _, prices, spy, events, _, commitment = load_replay_inputs(args.study_dir, args.data_dir, args.dividend_dir)
     frames = load_snapshot(args.data_dir)
@@ -312,7 +317,8 @@ def main() -> None:
                                                         commitment["price_inputs_sha256"]["spy.csv"])
         fit_options.update(training_frame=combined, date_weighted=True)
     args.out.mkdir(parents=True, exist_ok=False)
-    protocol = WORKSPACE / ("docs/superpowers/plans/2026-11-12-broader-training.md" if broader else
+    protocol = WORKSPACE / ("docs/superpowers/plans/2026-11-12-broader-boosted.md" if args.boosted else
+        "docs/superpowers/plans/2026-11-12-broader-training.md" if broader else
         "docs/superpowers/plans/2026-11-12-monthly-ml.md" if args.monthly else "docs/superpowers/plans/2026-11-12-downside-ml.md")
     (args.out / "protocol-plan.md").write_bytes(protocol.read_bytes())
     paths = [Path(__file__), Path(downside.__file__), Path(research.__file__), Path(swing.__file__)]
@@ -334,11 +340,18 @@ def main() -> None:
     elif broader:
         commitment.update(refit_frequency="annual", date_weighted=True, training_panel=panel_commitment,
             entry_forecast_role="contextual provenance only; broader decisions use refitted upside scores")
+    if args.boosted:
+        commitment.update(boosted=True, omp_num_threads=os.environ.get("OMP_NUM_THREADS"))
     (args.out / "inputs.json").write_text(json.dumps(commitment, indent=2), encoding="utf-8")
 
     def predict(label: str, start: str, end: str, *, upside: bool = False):
         if upside:
-            predictions, audits = swing.walk_forward_predict(features, "rf_swing20", start, end, **fit_options)
+            predictions, audits = swing.walk_forward_predict(features,
+                "boosted_swing20" if args.boosted else "rf_swing20", start, end, **fit_options)
+        elif args.boosted:
+            predictions, audits = swing._walk_forward_predict(frame, "boosted_price_downside20", start, end,
+                "boosted", downside.LABEL, downside.KNOWN_DATE, downside.DOWNSIDE_FEATURES,
+                "probability_downside", **fit_options)
         else:
             predictions, audits = downside.predict(frame, start, end, **fit_options)
         head = "upside" if upside else "downside"
@@ -405,6 +418,8 @@ def main() -> None:
     elif broader:
         summary.update(refit_frequency="annual", date_weighted=True, training_panel=panel_commitment)
         summary["limitations"] += " Broader training is a retrospective provider-available sample; historical identity continuity and terminal proceeds are unverified."
+    if args.boosted:
+        summary["boosted"] = True
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
 
