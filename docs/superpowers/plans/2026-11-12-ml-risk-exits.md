@@ -43,7 +43,7 @@ Review next-open causality, cooldown off-by-one, dividend-aware stops/entitlemen
 - [x] Reuse validated price/dividend/prediction loading, bind code/input hashes and write experiment inputs before returns. Runner refuses existing output directories.
 - [x] Select on 2018-2020, persist selection then evaluate only selected versus baseline on later/full periods and higher costs. Test deterministic selection and rejection of changed frozen inputs.
 - [x] Independently reconcile output and review patch; resolve findings and run final focused checks.
-- [ ] Record exact results, limitations and whether the target passed, then commit/push to existing PR #290 without promoting an unqualified model.
+- [x] Record exact results, limitations and whether the target passed, then commit/push to existing PR #290 without promoting an unqualified model.
 
 ## Observed result and one pre-results entry-model ablation
 
@@ -66,3 +66,5 @@ Before computing any new strategy returns, authorize exactly ONE ablation: exist
 The single ablation passes selection at 9.7730% CAGR/15.1500% DD. Its later result is 9.6625% CAGR/9.3782% DD (114 buys/25 sells); full result is 10.2292% CAGR/15.1500% DD (181 buys/40 sells, 39 protective). Full higher-cost result is 9.4155%/15.7101%. Both periods underperform SPY and fail 20%; the later drawdown also exceeds the mostly-cash original reset. No model is promoted and the overall goal remains incomplete.
 
 427 research/adjacent tests pass, including 82 research cases. Two initial atomic NTFS export tests failed inside the sandbox; both and the final entire selected suite pass outside it with actual hard-link publication. Independent review verifies exact default parity against prepatch code, byte-identical full baseline CSVs, all source/code/selection/protocol hashes, nine purged annual boundaries, yearly entry diagnostics and every selected daily accounting balance within $1.2e-10. Source/protocol copies preserve both experiment versions before status updates. No dependencies, production configuration, native tasks, live database or broker orders changed. Latest develop re-fetched unchanged at8e9e177.
+
+Implementation `f307d33` is published to `origin/codex/ml-local-completion`. PR #290's title/body match the final scope and measured failures; it remains open/draft and unmerged. Exact ten-file staging and configured-secret scan passed. This bounded experiment is complete; the active overall ML goal is not.
