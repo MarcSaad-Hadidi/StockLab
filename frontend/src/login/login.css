@@ -444,7 +444,7 @@ input {
 .quote-card {
   position: absolute;
   display: grid;
-  min-width: 55px;
+  width: 120px;
   gap: 3px;
   padding: 8px 9px;
   border: 1px solid rgba(220, 226, 241, 0.72);
@@ -462,6 +462,12 @@ input {
 .quote-card span {
   color: #35aa79;
   white-space: nowrap;
+}
+
+.quote-card small {
+  color: #535a6d;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .quote-tsla span {
@@ -637,3 +643,10 @@ input {
   .login-card .label-row { flex-wrap: wrap; gap: 8px; }
 }
 
+
+/* Hide samples before the sign-in card could obscure their disclosure. */
+@media (max-width: 1100px) {
+  .market-decoration {
+    display: none;
+  }
+}
