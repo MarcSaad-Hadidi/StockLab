@@ -923,3 +923,18 @@ tbody tr:nth-child(7) { animation-delay: 1s; }
     transition-duration: 0.01ms !important;
   }
 }
+
+@media (max-width: 760px) {
+  .metric-card p, .metric-card span, .range-tabs button, .performance-stats span,
+  .performance-stats strong, .donut span, .allocation-legend li,
+  .allocation-legend strong, .allocation-link, .allocation-caption,
+  .table-actions button, table, th {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .panel-header h2, .symbol-cell strong { font-size: 14px; }
+  .panel-header, .table-actions { flex-wrap: wrap; gap: 10px; }
+  .range-tabs { flex-wrap: wrap; }
+  .table-actions button { height: auto; min-height: 32px; }
+  .allocation-legend { width: 100%; min-width: 0; }
+}
