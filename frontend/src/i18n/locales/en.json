@@ -953,6 +953,7 @@
     "signalNotFound": "signal not found"
   },
   "login": {
+    "illustrativeMarketData": "Illustrative only · Not live",
     "title": "Welcome back",
     "subtitle": "Sign in to access your dashboard",
     "emailLabel": "Email address",

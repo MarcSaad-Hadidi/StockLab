@@ -142,13 +142,14 @@ export default function LoginPage() {
   return (
     <main className="login-page">
       <div className="page-frame">
+        {/* Static design samples, not quotes from a market-data provider. */}
         <div className="market-decoration market-decoration-left" aria-hidden="true">
-          <div className="quote-card quote-aapl"><strong>AAPL</strong><span>↗ {formatSignedPercent(1.35)}</span></div>
-          <div className="quote-card quote-tsla"><strong>TSLA</strong><span>↘ {formatSignedPercent(-0.41)}</span></div>
+          <div className="quote-card quote-aapl"><strong>AAPL</strong><span>↗ {formatSignedPercent(1.35)}</span><small>{t('login.illustrativeMarketData')}</small></div>
+          <div className="quote-card quote-tsla"><strong>TSLA</strong><span>↘ {formatSignedPercent(-0.41)}</span><small>{t('login.illustrativeMarketData')}</small></div>
         </div>
         <div className="market-decoration market-decoration-right" aria-hidden="true">
-          <div className="quote-card quote-msft"><strong>MSFT</strong><span>↗ {formatSignedPercent(0.82)}</span></div>
-          <div className="quote-card quote-nvda"><strong>NVDA</strong><span>↗ {formatSignedPercent(2.18)}</span></div>
+          <div className="quote-card quote-msft"><strong>MSFT</strong><span>↗ {formatSignedPercent(0.82)}</span><small>{t('login.illustrativeMarketData')}</small></div>
+          <div className="quote-card quote-nvda"><strong>NVDA</strong><span>↗ {formatSignedPercent(2.18)}</span><small>{t('login.illustrativeMarketData')}</small></div>
         </div>
         <svg className="background-chart" viewBox="0 0 560 330" preserveAspectRatio="none" aria-hidden="true">
           <defs>
