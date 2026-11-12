@@ -209,3 +209,22 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+@media (max-width: 760px) {
+  .alerts-heading p, .primary-button, .alert-tabs button, .panel-heading p,
+  .live-indicator, .alerts-search input, .filter-select select, .filter-select span,
+  .alert-asset strong, .alert-asset small, .alert-cell, .alert-cell.alert-number strong,
+  .condition-badge, .status-badge, .alert-date, .cell-label, .empty-state strong,
+  .empty-state p, .alerts-footer, .pagination button, .pagination b, .pagination select,
+  .create-alert-card p, .how-alerts-card > div p, .alert-form-field label,
+  .alert-form-field legend, .outline-button, .how-alerts-card li strong,
+  .how-alerts-card li small, .simulation-note, .toast, .alert-modal > p,
+  .alert-modal label, .alert-modal legend, .select-wrap select, .condition-option,
+  .price-input input, .notify-options label, .form-error, .cancel-button, .modal-primary {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .panel-heading h2, .create-alert-card h2, .how-alerts-card h2 { font-size: 14px; }
+  .panel-heading, .pagination, .simulation-note { flex-wrap: wrap; }
+  .condition-option { height: auto; min-height: 38px; padding-block: 6px; }
+}

@@ -356,3 +356,32 @@ h1 span { margin-left: 2px; color: #e4a857; font-size: .75em; }
   .watchlist-panel-actions .sort-control select { flex: 1; }
   .watchlist-filter { max-width: none; }
 }
+
+@media (max-width: 760px) {
+  .eyebrow, .welcome-copy, .summary-card-label, .summary-card small,
+  .summary-card small b, .panel-heading p, .panel-action, .sort-control,
+  .sort-control select, .watchlist-filter input, .watchlist-company span,
+  .watchlist-company small, .watchlist-cell .cell-label, .watchlist-change strong,
+  .watchlist-change small, .watchlist-trend .cell-label, .watchlist-footer,
+  .watchlist-footer strong, .empty-state p, .modal-stock-heading span,
+  .modal-stock-heading p, .modal-price span, .modal-price b,
+  .modal-detail-grid span, .modal-detail-grid strong, .modal-primary,
+  .alert-modal > p, .alert-modal label, .alert-input input, .cancel-button, .toast {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .primary-button, .watchlist-symbol strong, .watchlist-price strong { font-size: 14px; }
+  .watchlist-company span { white-space: normal; overflow-wrap: anywhere; }
+  .watchlist-cell, .watchlist-footer { flex-wrap: wrap; }
+  .panel-heading { gap: 12px; }
+}
+
+@media (max-width: 520px) {
+  .watchlist-row { grid-template-columns: minmax(90px, 1fr) minmax(0, 1.5fr); }
+  .watchlist-price { flex-wrap: wrap; }
+  .watchlist-price .cell-label { flex-basis: 100%; text-align: right; }
+  .watchlist-company { grid-column: 1 / -1; }
+  .watchlist-change { grid-column: 1 / -1; grid-row: 3; justify-content: flex-start; }
+  .watchlist-trend { grid-row: 4; }
+  .watchlist-actions { grid-row: 5; }
+}

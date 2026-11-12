@@ -1388,3 +1388,32 @@
 .stock-detail-tabs { gap: 4px; overflow-x: auto; }
 .stock-detail-tabs button { min-height: 42px; padding: 10px 14px; font-size: 13px; white-space: nowrap; }
 .stock-price-chart > [role="status"], .stock-price-chart > [role="alert"] { min-height: 240px; padding: 20px; }
+
+@media (max-width: 760px) {
+  .market-breadcrumb-copy, .stock-details-subtitle, .stock-details-status,
+  .stock-price-row span, .stock-outline-button, .stock-primary-button,
+  .stock-secondary-button, .stock-card-title h2 small, .stock-range-tabs button,
+  .stock-stat-card span, .stock-metric-item span, .stock-trade-field label,
+  .stock-trade-summary span, .stock-cash-row span, .stock-key-factors > span,
+  .stock-updated-pill, .stock-practice-pill, .stock-ai-summary strong,
+  .stock-ai-copy, .stock-key-factors > div span, .stock-trade-tabs button,
+  .stock-trade-field select, .stock-trade-input, .stock-trade-input input,
+  .stock-trade-input span, .stock-trade-submit, .stock-cash-row strong,
+  .stock-form-error, .stock-details-back, .stock-details-empty p, .stock-modal > p,
+  .stock-modal label, .stock-modal legend, .stock-choice-row button,
+  .stock-input-with-prefix, .stock-trade-confirmation-grid span,
+  .stock-trade-confirmation-grid strong, .stock-confirmation-list span,
+  .stock-confirmation-list strong, .stock-toast, .stock-bar-caption {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .stock-card-title h2, .stock-stat-card strong, .stock-metric-item strong,
+  .stock-trade-summary strong { font-size: 14px; }
+  .stock-card-heading, .stock-price-row, .stock-details-status { flex-wrap: wrap; }
+  .stock-card-heading { height: auto; min-height: 42px; gap: 10px; }
+  .stock-updated-pill, .stock-practice-pill { white-space: normal; }
+  .stock-stat-card, .stock-metric-item { min-width: 0; overflow-wrap: anywhere; }
+  .stock-stat-card strong, .stock-metric-item strong { white-space: normal; }
+  .stock-trade-field select, .stock-trade-input { min-height: 36px; }
+  .stock-range-tabs { flex-wrap: wrap; }
+}

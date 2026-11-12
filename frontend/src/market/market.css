@@ -1218,3 +1218,15 @@ input:focus-visible {
   .market-results-panel { padding: 14px; }
   .market-results-heading { flex-direction: row; align-items: center; }
 }
+
+@media (max-width: 760px) {
+  .market-stock-copy small, .market-stock-quote small, .market-results-meta,
+  .market-view-all, .market-market-select, .market-more-filter,
+  .market-checkbox-row, .market-clear-filters, .market-page-button,
+  .market-results-table th, .market-table-change, .market-card-empty {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .market-stock-copy strong, .market-stock-quote strong { font-size: 14px; }
+  .market-results-heading, .market-overview-heading { flex-wrap: wrap; gap: 10px; }
+}

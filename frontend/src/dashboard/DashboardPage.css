@@ -220,3 +220,27 @@ th:last-child, td:last-child { padding-right: 2px; text-align: right; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; transition: none !important; }
 }
+
+/* Mobile captions must remain readable without reducing the primary figures. */
+@media (max-width: 760px) {
+  .eyebrow, .welcome-copy, .metric-card p, .metric-change, .metric-change em,
+  .panel-heading p, .ai-heading p, .text-action, .range-tabs button,
+  .watchlist-filter input, .watchlist-name small, .transaction-name small,
+  .watchlist-price span, .add-watchlist, .empty-state, th, td, .asset-cell small,
+  .muted-line, .allocation-cell small, .change-pill, .transaction-type,
+  .transaction-amount small, .transaction-time, .ai-summary-notes,
+  .ai-stat span, .ai-stat small, .simulation-note, .toast {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .primary-button, .watchlist-name strong, .transaction-name strong,
+  .watchlist-price strong, .asset-cell strong, td > strong, .transaction-amount strong {
+    font-size: 14px;
+  }
+  .panel-heading, .ai-title, .simulation-note { flex-wrap: wrap; }
+  .watchlist-name small, .transaction-name small { white-space: normal; }
+  .ai-summary .ai-heading .text-action { margin-top: 0; }
+}
+@media (max-width: 520px) {
+  .transaction-row { grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr); padding-block: 10px; }
+}

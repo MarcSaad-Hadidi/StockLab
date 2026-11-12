@@ -45,3 +45,7 @@
 }
 
 .language-switch-sidebar button { flex: 1; }
+
+@media (max-width: 760px) {
+  .language-switch.language-switch button { font-size: 12px; }
+}

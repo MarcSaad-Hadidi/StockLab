@@ -629,3 +629,11 @@ input {
   }
 }
 
+@media (max-width: 760px) {
+  .login-card .label-row a, .login-card .field-error, .login-card .form-error,
+  .login-card .form-success, .login-card .form-divider, .login-card .register-prompt,
+  .login-card .google-button { font-size: 12px; line-height: 1.5; }
+  .login-card .field-group label, .login-card .input-wrap input { font-size: 14px; }
+  .login-card .label-row { flex-wrap: wrap; gap: 8px; }
+}
+

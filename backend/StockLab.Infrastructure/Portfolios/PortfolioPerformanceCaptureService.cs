@@ -62,7 +62,12 @@ public sealed class PortfolioPerformanceCaptureService(IDbContextFactory<StockLa
             await using var db = await factory.CreateDbContextAsync(cancellationToken);
             // Quotes are already obtained. Only the short consistency check and insert hold database locks.
             await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
-            existing = await db.PortfolioValuationSnapshots.AsNoTracking()
+            var slots = db.PortfolioValuationSnapshots.AsQueryable();
+            if (db.Database.IsSqlServer())
+                // Reserve even an absent slot before insert to avoid shared-range lock conversion deadlocks.
+                slots = db.PortfolioValuationSnapshots.FromSqlInterpolated(
+                    $"SELECT * FROM [PortfolioValuationSnapshots] WITH (UPDLOCK) WHERE [PortfolioId] = {original.Id} AND [SlotUtc] = {slot}");
+            existing = await slots.AsNoTracking()
                 .SingleOrDefaultAsync(row => row.PortfolioId == original.Id && row.SlotUtc == slot, cancellationToken);
             if (existing is not null) return existing;
             var current = await db.Portfolios.AsNoTracking().Include(row => row.Holdings)

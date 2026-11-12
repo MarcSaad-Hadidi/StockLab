@@ -245,3 +245,22 @@ a { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+
+@media (max-width: 760px) {
+  .profile-saved, .summary-identity p, .verified-badge, .security-badge,
+  .account-status-text, .summary-details span, .summary-details strong,
+  .summary-actions button, .panel-heading p, .profile-info-label,
+  .profile-info-row strong, .profile-info-row input, .profile-info-row select,
+  .form-actions button, .modal-actions button, .preference-row strong,
+  .preference-row small, .currency-select select, .security-item strong,
+  .security-item small, .session-count, .simulation-note, .toast,
+  .password-modal > p, .password-modal label, .password-modal input, .form-error {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .panel-heading h2 { font-size: 14px; }
+  .summary-actions, .form-actions, .modal-actions, .simulation-note { flex-wrap: wrap; }
+  .profile-info-label, .preference-row small, .security-item small { white-space: normal; }
+  .profile-info-row { gap: 10px; padding-block: 12px; }
+  .summary-actions button { min-height: 36px; }
+}

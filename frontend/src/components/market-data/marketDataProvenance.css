@@ -8,3 +8,9 @@
 .dashboard-page .watchlist-row { flex-wrap: wrap; padding-block: 7px; }
 .dashboard-page .watchlist-row > .market-data-provenance { flex: 0 0 100%; }
 td > .market-data-provenance { width: 170px; margin-top: 6px; align-items: flex-start; }
+
+@media (max-width: 760px) {
+  .stocklab-layout .market-data-provenance,
+  .stocklab-layout .market-data-source { font-size: 12px; line-height: 1.5; }
+  .stocklab-layout .market-data-provenance { overflow-wrap: anywhere; }
+}

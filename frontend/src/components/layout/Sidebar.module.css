@@ -56,3 +56,8 @@
 @media (prefers-reduced-motion: reduce) {
   .sidebar, .item, .backdrop { transition: none; }
 }
+
+@media (max-width: 760px) {
+  .label, .footer p { font-size: 12px; line-height: 1.5; }
+  .item { min-height: 40px; font-size: 14px; }
+}

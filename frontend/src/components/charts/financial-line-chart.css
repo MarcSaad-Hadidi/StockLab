@@ -17,3 +17,9 @@
 .financial-chart-date { fill: #c4d3e9; font-size: 11px; }
 .financial-chart-value { fill: white; font-size: 15px; font-weight: 700; }
 .financial-chart-announcement { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+@media (max-width: 760px) {
+  /* MUI supplies the desktop tick size as an inline style. */
+  .financial-line-chart .MuiChartsAxis-tickLabel { font-size: 12px !important; }
+  .financial-chart-date { font-size: 12px; }
+}

@@ -1098,3 +1098,19 @@ select:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+@media (max-width: 760px) {
+  .transactions-heading p, .summary-card p, .summary-detail, .table-search,
+  .date-range-control, .type-select, .filter-button, .action-filter,
+  .table-search input, .date-field > span, .type-select select, .filter-button b,
+  .filter-menu strong, .filter-menu p, .filter-menu button, .transactions-table th,
+  .transactions-table td, .date-cell span, .date-cell small, .symbol-cell,
+  .action-pill, .money-cell, .table-footer, .pagination button, .pagination-ellipsis,
+  .empty-state strong, .empty-state p, .simulation-note, .toast {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .action-filters, .simulation-note { flex-wrap: wrap; }
+  .summary-card { min-height: 120px; }
+  .pagination button { min-width: 28px; min-height: 28px; }
+}

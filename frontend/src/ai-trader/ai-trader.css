@@ -57,3 +57,26 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .ai-trader-page .data-table th { font-size: 9px; }
 .ai-trader-page .data-table td.positive { color: var(--green); }
 .ai-trader-page .data-table td.negative { color: var(--red); }
+
+@media (max-width: 760px) {
+  .ai-trader-heading p, .primary-button, .secondary-button, .bot-status,
+  .ai-tabs button, .metric-label, .metric-card > small, .panel-heading p,
+  .text-action, .range-tabs button, .ai-trader-page .data-table th,
+  .ai-trader-page .data-table td, .asset-cell strong, .asset-cell small,
+  .action-badge, .panel-footnote, .panel-footnote strong, .stat-list span,
+  .stat-list strong, .model-version-row strong, .model-version-row small,
+  .current-badge, .model-metrics span, .backtest-metrics span, .model-metrics strong,
+  .backtest-metrics strong, .ai-metrics dt, .ai-metrics dd, .ai-coverage-note,
+  .ai-backtest-select, .ai-trader-page .outline-button, .simulation-note, .toast {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .ai-trader-page .time-cell { font-size: 12px !important; }
+  .panel-heading h2 { font-size: 14px; }
+  .panel-heading, .panel-footnote, .simulation-note { flex-wrap: wrap; }
+  .range-tabs { max-width: 100%; flex-wrap: wrap; }
+  .range-tabs button { min-height: 30px; }
+  .ai-tabs { overflow-x: auto; }
+  .ai-tabs button { flex-shrink: 0; }
+  .ai-metrics > div { min-width: 0; overflow-wrap: anywhere; }
+}
