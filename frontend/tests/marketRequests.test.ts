@@ -283,7 +283,7 @@ test("chart clicks debounce to the selected period and cancel abandoned queued h
   }
 });
 
-test("alert draft search is debounced once and does not loop on result renders", async () => {
+test("read-only alert market search is debounced once and does not enable saving", async () => {
   Object.assign(globalThis, { React: await import("react") });
   const { default: AlertsPage } = await import("../src/alerts/AlertsPage.tsx");
   const { marketDataApi } = await import("../src/api/marketDataClient.ts");
@@ -305,7 +305,7 @@ test("alert draft search is debounced once and does not loop on result renders",
     assert.equal(calls, 1);
     await pause(1000);
     assert.equal(calls, 1);
-    assert.ok(document.querySelector('#create-alert-form button[type="submit"][disabled]'));
+    assert.ok(document.querySelector('#create-alert-form button.modal-primary[disabled]'));
   } finally {
     await act(async () => root.unmount());
     marketDataApi.search = original;
@@ -504,3 +504,4 @@ test("Stock Details tabs show distinct real data, with no duplicate Chart or pre
     Object.assign(marketDataApi, original);
   }
 });
+
