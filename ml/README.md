@@ -29,6 +29,10 @@ The separate [DCA / S&P 500 research](docs/dca-research.md) compares costed,
 chronological paper portfolios against an external SPY proxy and the user's
 20% annualized target. It records both favorable and unfavorable periods;
 research results do not activate a strategy or replace promotion evidence.
+The [longer-history calibrated study](docs/long-horizon-ml.md) extends inputs to
+2010, evaluates 2018–2026, and accounts for verified cash dividends. Its selected
+recipe reaches 19.40% CAGR versus 14.17% for SPY; the 20% compound-growth target
+remains unmet and the live model is unchanged.
 
 ## Requirements
 

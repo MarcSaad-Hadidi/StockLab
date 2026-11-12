@@ -2,6 +2,7 @@
 
 from fractions import Fraction
 import math
+from numbers import Integral
 
 import numpy as np
 import pandas as pd
@@ -19,8 +20,6 @@ from stocklab_ml.modeling.logistic import HYPERPARAMETERS as LOGISTIC_PARAMETERS
 from stocklab_ml.modeling.random_forest import HYPERPARAMETERS as FOREST_PARAMETERS
 
 INITIAL_CAPITAL = 100000.0
-FEE = Fraction(5, 10000)
-SLIPPAGE = Fraction(5, 10000)
 MONTHLY_COLUMNS = ["monthly_range_9", "monthly_range_12", "monthly_range_19",
                    "monthly_rsi", "monthly_multiplier"]
 RESEARCH_FEATURES = ["return_1d", "rsi_14", "momentum_10", "volatility_20",
@@ -54,10 +53,10 @@ def monthly_context(monthly: pd.DataFrame, cutoff: pd.Timestamp) -> pd.DataFrame
     return pd.concat(frames, ignore_index=True)
 
 
-def research_features(daily: pd.DataFrame, monthly: pd.DataFrame) -> pd.DataFrame:
+def research_features(daily: pd.DataFrame, monthly: pd.DataFrame, *, labeled_only: bool = True) -> pd.DataFrame:
     """Common rows for all candidates; no original artifact feature is redefined."""
     base = engineer_features(daily).dataframe
-    frame = build_supervised_dataset(base).dataframe
+    frame = build_supervised_dataset(base).dataframe if labeled_only else base
     context = monthly_context(monthly, daily.date.max())
     if set(context.symbol) != set(daily.symbol):
         raise ValueError("Daily and monthly symbols must match exactly.")
@@ -140,13 +139,53 @@ def _daily_market(prices: pd.DataFrame, start: str, end: str) -> pd.DataFrame:
     return market
 
 
-def simulate(prices: pd.DataFrame, decisions: pd.DataFrame, start: str, end: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Shared cash, next-open orders, 5bps fee +5bps slippage, unchanged risk caps.
+def _execution_costs(fee_bps: int, slippage_bps: int) -> tuple[Fraction, Fraction]:
+    if any(isinstance(value, (bool, np.bool_)) or not isinstance(value, Integral) or not 0 <= value < 10000
+           for value in (fee_bps, slippage_bps)):
+        raise ValueError("Fee/slippage assumptions must be integer basis points in0..9999.")
+    return Fraction(int(fee_bps), 10000), Fraction(int(slippage_bps), 10000)
+
+
+def _dividend_events(dividends: pd.DataFrame | None, prices: pd.DataFrame, start: str, end: str) -> dict:
+    if dividends is None:
+        return {}
+    if (not isinstance(dividends, pd.DataFrame) or list(dividends.columns) != ["symbol", "ex_date", "pay_date", "amount"]
+            or dividends.isna().any().any() or dividends.duplicated(["symbol", "ex_date"]).any()
+            or dividends.duplicated(["symbol", "pay_date"]).any()
+            or not set(dividends.symbol).issubset(set(prices.symbol))
+            or not pd.api.types.is_numeric_dtype(dividends.amount.dtype)
+            or pd.api.types.is_bool_dtype(dividends.amount.dtype)
+            or not np.isfinite(dividends.amount.to_numpy(dtype=float)).all() or not dividends.amount.gt(0).all()):
+        raise ValueError("Invalid or duplicate split-adjusted cash dividend events.")
+    for column in ("ex_date", "pay_date"):
+        if (str(dividends[column].dtype) != "datetime64[ns]"
+                or not dividends[column].eq(dividends[column].dt.normalize()).all()):
+            raise ValueError("Dividend dates must be timezone-naive daily dates.")
+    if not dividends.pay_date.ge(dividends.ex_date).all():
+        raise ValueError("Unsupported dividend payment before its ex-date.")
+    observed = set(zip(prices.date, prices.symbol))
+    events = {}
+    for row in dividends.itertuples(index=False):
+        if pd.Timestamp(start) < row.ex_date <= pd.Timestamp(end):
+            if (row.ex_date, row.symbol) not in observed:
+                raise ValueError("A dividend ex-date is absent from the observed stock calendar.")
+            events.setdefault(row.ex_date, []).append(row)
+    return events
+
+
+def simulate(prices: pd.DataFrame, decisions: pd.DataFrame, start: str, end: str, *,
+             fee_bps: int = 5, slippage_bps: int = 5,
+             dividends: pd.DataFrame | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Shared cash, next-open orders, default5bps fee +5bps slippage, unchanged caps.
 
     `allocation` is requested initial-capital fraction, bounded again at execution.
-    Rule baselines have no artificial ML confidence. No deposits or dividend cash.
+    Rule baselines have no artificial ML confidence. No deposits. Optional cash
+    dividends use current split-adjusted amounts, prior holdings at ex-date and
+    spendable cash strictly after the actual pay date; receivables are equity.
     """
+    fee_rate, slippage = _execution_costs(fee_bps, slippage_bps)
     market = _daily_market(prices, start, end)
+    cash_events = _dividend_events(dividends, prices, start, end)
     if (list(decisions.columns) != ["date", "symbol", "action", "allocation"]
             or decisions.duplicated(["date", "symbol"]).any()
             or not decisions.action.isin(["BUY", "SELL"]).all()
@@ -166,28 +205,46 @@ def simulate(prices: pd.DataFrame, decisions: pd.DataFrame, start: str, end: str
         if next_day is not None and next_day <= pd.Timestamp(end):
             scheduled.setdefault(next_day, []).append(row)
     cash, holdings = Fraction(str(INITIAL_CAPITAL)), {}
-    curve = [(pd.Timestamp(start), INITIAL_CAPITAL, INITIAL_CAPITAL)]
+    pending, earned, paid = [], Fraction(0), Fraction(0)
+    curve = [(pd.Timestamp(start), INITIAL_CAPITAL, INITIAL_CAPITAL, 0., 0., 0.)]
     trades = []
     for day, bars in market.groupby("date", sort=True):
+        remaining = []
+        for pay_date, amount in pending:
+            if pay_date < day:
+                cash += amount
+                paid += amount
+            else:
+                remaining.append((pay_date, amount))
+        pending = remaining
+        # A buyer at today's open has no right to today's detached dividend.
+        for event in cash_events.get(day, []):
+            amount = holdings.get(event.symbol, Fraction(0)) * Fraction(str(event.amount))
+            if amount:
+                pending.append((event.pay_date, amount))
+                earned += amount
+        receivable = earned - paid
+        if receivable != sum((amount for _, amount in pending), Fraction(0)):
+            raise ValueError("Dividend receivable accounting does not reconcile.")
         opens = {row.symbol: Fraction(str(row.open)) for row in bars.itertuples(index=False)}
         for row in sorted(scheduled.get(day, []), key=lambda row: row.symbol):
             old = holdings.get(row.symbol, Fraction(0))
-            total = cash + sum((q * opens[s] for s, q in holdings.items()), Fraction(0))
+            total = cash + receivable + sum((q * opens[s] for s, q in holdings.items()), Fraction(0))
             opening = opens[row.symbol]
             if row.action == "SELL":
                 if not old:
                     continue
                 quantity = old
-                fill = opening * (1 - SLIPPAGE)
-                fee = quantity * fill * FEE
+                fill = opening * (1 - slippage)
+                fee = quantity * fill * fee_rate
                 all_in = quantity * fill - fee
                 cash += all_in
                 del holdings[row.symbol]
             else:
                 if not old and len(holdings) >= 10:
                     continue
-                fill = opening * (1 + SLIPPAGE)
-                unit_cost = fill * (1 + FEE)
+                fill = opening * (1 + slippage)
+                unit_cost = fill * (1 + fee_rate)
                 friction = unit_cost - opening
                 # Exposure uses equity AFTER fee/slippage, so solve for its size.
                 quantity_cap = (total / 5 - old * opening) / (opening + friction / 5)
@@ -203,7 +260,7 @@ def simulate(prices: pd.DataFrame, decisions: pd.DataFrame, start: str, end: str
                     all_in = quantity * unit_cost
                 if quantity <= 0:
                     continue
-                fee = quantity * fill * FEE
+                fee = quantity * fill * fee_rate
                 cash -= all_in
                 holdings[row.symbol] = old + quantity
             if cash < 0:
@@ -211,17 +268,22 @@ def simulate(prices: pd.DataFrame, decisions: pd.DataFrame, start: str, end: str
             trades.append((row.date, day, row.symbol, row.action, float(quantity), float(fill),
                            float(fee), float(all_in), float(total)))
         closes = {row.symbol: Fraction(str(row.close)) for row in bars.itertuples(index=False)}
-        total = cash + sum((q * closes[s] for s, q in holdings.items()), Fraction(0))
+        total = cash + receivable + sum((q * closes[s] for s, q in holdings.items()), Fraction(0))
         if not math.isfinite(float(total)) or total <= 0:
             raise ValueError("Invalid research equity.")
-        curve.append((day, float(cash), float(total)))
-    return (pd.DataFrame(curve, columns=["date", "cash", "total_value"]),
+        curve.append((day, float(cash), float(total), float(receivable), float(earned), float(paid)))
+    equity = pd.DataFrame(curve, columns=["date", "cash", "total_value", "dividends_receivable", "dividends_earned", "dividends_paid"])
+    if dividends is None:
+        equity = equity[["date", "cash", "total_value"]]
+    return (equity,
             pd.DataFrame(trades, columns=["decision_date", "execution_date", "symbol", "action",
                                          "quantity", "price", "fee", "all_in", "equity_before"]))
 
 
-def spy_curve(prices: pd.DataFrame, dates: pd.DatetimeIndex | pd.Series) -> pd.DataFrame:
+def spy_curve(prices: pd.DataFrame, dates: pd.DatetimeIndex | pd.Series, *,
+              fee_bps: int = 5, slippage_bps: int = 5) -> pd.DataFrame:
     """SPY buy-and-hold total-return PROXY, not executable adjusted trade prices."""
+    fee_rate, slippage = _execution_costs(fee_bps, slippage_bps)
     _validate_input(prices)
     if set(prices.symbol) != {"SPY"}:
         raise ValueError("A single SPY source is required.")
@@ -229,8 +291,8 @@ def spy_curve(prices: pd.DataFrame, dates: pd.DatetimeIndex | pd.Series) -> pd.D
     rows = prices.loc[prices.date.isin(dates[1:])].sort_values("date")
     if rows.date.tolist() != dates[1:].tolist():
         raise ValueError("SPY and strategy observed sessions must match exactly.")
-    fill = Fraction(str(rows.open.iloc[0])) * (1 + SLIPPAGE)
-    cost = fill * (1 + FEE)
+    fill = Fraction(str(rows.open.iloc[0])) * (1 + slippage)
+    cost = fill * (1 + fee_rate)
     quantity, _ = _size_buy(Fraction(str(INITIAL_CAPITAL)), float(cost), 8)
     shares = Fraction(str(quantity))
     residual = Fraction(str(INITIAL_CAPITAL)) - shares * cost

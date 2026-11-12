@@ -1,5 +1,8 @@
 # DCA / S&P 500 research — 11 November 2026
 
+Follow-up: [longer-history calibrated ML and cash-dividend accounting](long-horizon-ml.md)
+retains this experiment and evaluates the subsequent hypotheses over 2018–2026.
+
 The target is **at least 20% compound annual growth (CAGR), exceeding an S&P 500 proxy after costs**. This experiment does **not** establish that the deployed ML model achieves that target. It adds an offline, reproducible evaluation; it does not change live inference, risk limits, the registry or promotion rules.
 
 ## Results and decision
