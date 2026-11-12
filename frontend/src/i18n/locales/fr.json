@@ -953,6 +953,7 @@
     "signalNotFound": "signal introuvable"
   },
   "login": {
+    "illustrativeMarketData": "Illustration · Pas en temps réel",
     "title": "Bon retour parmi nous",
     "subtitle": "Connectez-vous pour accéder à votre tableau de bord",
     "emailLabel": "Adresse e-mail",
