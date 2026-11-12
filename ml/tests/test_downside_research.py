@@ -143,7 +143,11 @@ def test_original_scores_and_audits_match_pre_extraction_reference(recipe, expec
     frame["target_date_20"] = frame.date + pd.offsets.BDay(21)
     frame.loc[frame.target_date_20 > frame.date.max(), ["target_20", "target_date_20"]] = [np.nan, pd.NaT]
     predictions, audits = swing.walk_forward_predict(frame, recipe, "2024-01-01", "2024-01-15")
-    np.testing.assert_array_equal(predictions.probability_up, expected)
+    if recipe == "rf_calibrated20":
+        # Frozen sigmoid literals can round one float64 ULP differently across platforms.
+        np.testing.assert_array_max_ulp(predictions.probability_up, expected, maxulp=1)
+    else:
+        np.testing.assert_array_equal(predictions.probability_up, expected)
     expected_audit = {"recipe": recipe, "label": "target_20", "first_fit": "2020-01-01", "last_fit": last_fit,
         "last_target": "2023-12-29", "first_prediction": "2024-01-01", "train_rows": rows}
     if recipe == "rf_calibrated20":
