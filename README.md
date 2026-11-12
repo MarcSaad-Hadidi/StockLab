@@ -351,6 +351,31 @@ Le réentraînement publie de nouvelles versions `Archived`. La promotion compar
 
 La persistance SQL et l’adaptateur S3 des modèles sont implémentés. Leur déploiement, leurs connexions et leurs droits d’accès restent propres à l’environnement. Le modèle de réentraînement dans `ml/aws/` prépare EventBridge Scheduler, ECS Fargate et un volume EFS partagé ; il n’atteste pas d’un déploiement AWS et son planning est désactivé par défaut. Les intégrations applicatives Azure Service Bus, AWS SQS et Lambda restent à développer. Aucun secret cloud ni chaîne de connexion ne doit être placé dans ce dépôt.
 
+### Configuration AWS IAM prévue
+
+Les noms ci-dessous sont des exemples de ressources à provisionner et à valider avant un déploiement AWS. Cette section ne crée aucun rôle ni aucune politique et ne confirme pas leur existence dans un compte AWS. Les prérequis et permissions du worker ECS sont détaillés dans [la documentation ML](ml/README.md#aws-execution-and-persistent-prerequisites-not-deployed).
+
+Rôles IAM proposés :
+
+- `StockLabLambdaExecutionRole` : exécution des futures fonctions Lambda et journalisation CloudWatch.
+- `StockLabMLTaskRole` : accès S3 limité aux artefacts ML et accès EFS nécessaires aux traitements sur ECS Fargate.
+- `StockLabMLTaskExecutionRole` : récupération des images de conteneurs, publication des logs et lecture du secret ML autorisé.
+
+Politiques IAM proposées :
+
+- `StockLabMLS3AccessPolicy` : lecture et écriture des objets uniquement dans le préfixe approuvé `<prefix>/models/*`.
+- `StockLabSQSSendPolicy` : envoi de messages vers la future queue StockLab.
+- `StockLabSQSConsumePolicy` : réception et suppression de messages dans cette queue.
+
+Exigences de sécurité à appliquer et à vérifier lors du provisionnement :
+
+- Respecter le principe du moindre privilège et limiter les permissions aux ressources nécessaires.
+- Ne pas accorder d'accès administrateur aux rôles applicatifs.
+- Activer et vérifier l'authentification MFA du compte root.
+- Ne jamais stocker de clé AWS dans le dépôt GitHub ; utiliser une configuration sécurisée.
+
+Aucune configuration IAM réelle ni activation MFA n'est attestée par ce dépôt. Le déploiement AWS reste à effectuer et à valider séparément.
+
 ## Commandes utiles
 
 Lancez ces commandes depuis la racine du dépôt :
