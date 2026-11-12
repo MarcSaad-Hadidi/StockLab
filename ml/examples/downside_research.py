@@ -71,18 +71,29 @@ def load_entry(root: Path, features: pd.DataFrame, commitment: dict) -> tuple:
         "original_drawdown": selection["original_incumbent"]["max_drawdown"]}, {name: sha256(root / name) for name in names}
 
 
-def forecast_report(frame: pd.DataFrame, predictions: pd.DataFrame, audits: list[dict], end: str) -> dict:
+def forecast_report(frame: pd.DataFrame, predictions: pd.DataFrame, audits: list[dict], end: str, *,
+                    refit_frequency: str = "annual") -> dict:
+    if refit_frequency not in ("annual", "monthly"):
+        raise ValueError("Refit frequency must be annual or monthly.")
     rows = predictions.merge(frame[["date", "symbol", downside.LABEL, downside.KNOWN_DATE]],
                              on=["date", "symbol"], how="left", validate="one_to_one")
     rows = rows.loc[rows[downside.KNOWN_DATE].le(pd.Timestamp(end)) & rows[downside.LABEL].notna()]
     rates = {}
+    monthly = refit_frequency == "monthly"
+    first_sessions = predictions.groupby(predictions.date.dt.to_period("M")).date.min().to_dict() if monthly else {}
     for audit in audits:
         first = pd.Timestamp(audit["first_prediction"])
+        period = first.to_period("M") if monthly else first.year
         rate = audit["training_positive_rate"]
-        if first.year in rates or not 0 < rate < 1 or not pd.Timestamp(audit["last_target"]) < first:
-            raise ValueError("Forecast references need one causal training prevalence per annual fit.")
-        rates[first.year] = rate
-    reference = rows.date.dt.year.map(rates)
+        if period in rates or not 0 < rate < 1 or not pd.Timestamp(audit["last_target"]) < first:
+            raise ValueError("Forecast references need one causal training prevalence per fit.")
+        if monthly and first != first_sessions.get(period):
+            raise ValueError("Monthly reference must start at its actual first prediction session.")
+        rates[period] = rate
+    if monthly and set(rates) != set(first_sessions):
+        raise ValueError("Every prediction month needs its own fitted reference.")
+    periods = rows.date.dt.to_period("M") if monthly else rows.date.dt.year
+    reference = periods.map(rates)
     if rows.empty or reference.isna().any():
         raise ValueError("Observed risk labels and causal reference forecasts are required.")
     labels, scores = rows[downside.LABEL], rows.probability_downside
@@ -92,7 +103,10 @@ def forecast_report(frame: pd.DataFrame, predictions: pd.DataFrame, audits: list
         "actual_positive_rate": float(labels.mean()), "mean_score": float(scores.mean())}
 
 
-def admissions(control: dict, dual: dict, forecast: dict, thresholds: dict) -> dict:
+def admissions(control: dict, dual: dict, forecast: dict, thresholds: dict, *, monthly: bool = False) -> dict:
+    dual_return_gate = (dual["annualized_return"] >= .20
+        and dual["annualized_return"] > dual["benchmark_annualized_return"] and dual["sells"] > 0
+        if monthly else dual["annualized_return"] > thresholds["protected_cagr"])
     return {"control": bool(control["annualized_return"] >= .20
                 and control["annualized_return"] > control["benchmark_annualized_return"]
                 and control["max_drawdown"] < thresholds["original_drawdown"] and control["sells"] > 0),
@@ -100,7 +114,7 @@ def admissions(control: dict, dual: dict, forecast: dict, thresholds: dict) -> d
             and dual["max_drawdown"] < control["max_drawdown"] and dual["downside_sells"] > 0
             and forecast["auc"] is not None and forecast["auc"] > .5
             and forecast["brier"] < forecast["reference_brier"]
-            and dual["annualized_return"] > thresholds["protected_cagr"]
+            and dual_return_gate
             and dual["max_drawdown"] < thresholds["original_drawdown"])}
 
 
@@ -143,14 +157,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("study-dir", "data-dir", "dividend-dir", "entry-dir", "out"):
         parser.add_argument(f"--{name}", type=Path, required=True)
+    parser.add_argument("--monthly", action="store_true", help="Refit both heads monthly; annual remains the default.")
     args = parser.parse_args()
+    frequency = {"refit_frequency": "monthly"} if args.monthly else {}
+    protocol_name = "monthly-dual-head-20261112-v1" if args.monthly else "dedicated-downside-20261112-v1"
     _, prices, spy, events, _, commitment = load_replay_inputs(args.study_dir, args.data_dir, args.dividend_dir)
     frames = load_snapshot(args.data_dir)
     features = swing.swing_features(frames["stocks.csv"], frames["monthly.csv"], frames["spy.csv"])
     up, thresholds, entry_hashes = load_entry(args.entry_dir, features, commitment)
     frame = downside.make_frame(features, prices, spy)
     args.out.mkdir(parents=True, exist_ok=False)
-    protocol = WORKSPACE / "docs/superpowers/plans/2026-11-12-downside-ml.md"
+    protocol = WORKSPACE / ("docs/superpowers/plans/2026-11-12-monthly-ml.md" if args.monthly
+                            else "docs/superpowers/plans/2026-11-12-downside-ml.md")
     (args.out / "protocol-plan.md").write_bytes(protocol.read_bytes())
     paths = [Path(__file__), Path(downside.__file__), Path(research.__file__), Path(swing.__file__)]
     paths += [Path(sys.modules[name].__file__) for name in ("dividend_replay", "risk_exit_replay", "swing_research")]
@@ -159,15 +177,23 @@ def main() -> None:
         archived.parent.mkdir(parents=True, exist_ok=True)
         archived.write_bytes(path.read_bytes())
         commitment["code_sha256"][str(path)] = sha256(archived)
-    commitment.update(protocol="dedicated-downside-20261112-v1", entry_sha256=entry_hashes,
+    commitment.update(protocol=protocol_name, entry_sha256=entry_hashes,
         plan_sha256=sha256(args.out / "protocol-plan.md"), thresholds=thresholds,
         environment={name: version(name) for name in ("numpy", "pandas", "scikit-learn")})
+    if args.monthly:
+        commitment.update(refit_frequency="monthly",
+            entry_forecast_role="contextual provenance only; monthly decisions use refitted upside scores")
     (args.out / "inputs.json").write_text(json.dumps(commitment, indent=2), encoding="utf-8")
 
-    def predict(label: str, start: str, end: str):
-        predictions, audits = downside.predict(frame, start, end)
-        predictions.to_csv(args.out / f"{label}-downside-predictions.csv", index=False)
-        (args.out / f"{label}-fits.json").write_text(json.dumps(audits, indent=2), encoding="utf-8")
+    def predict(label: str, start: str, end: str, *, upside: bool = False):
+        if upside:
+            predictions, audits = swing.walk_forward_predict(features, "rf_swing20", start, end, **frequency)
+        else:
+            predictions, audits = downside.predict(frame, start, end, **frequency)
+        head = "upside" if upside else "downside"
+        fit_name = f"{label}-upside-fits.json" if upside else f"{label}-fits.json"
+        predictions.to_csv(args.out / f"{label}-{head}-predictions.csv", index=False)
+        (args.out / fit_name).write_text(json.dumps(audits, indent=2), encoding="utf-8")
         return predictions, audits
 
     def evaluate(label: str, details: pd.DataFrame, start: str, end: str, cost: int = 5):
@@ -176,13 +202,16 @@ def main() -> None:
         return evaluate_account(prices, spy, events, details, args.out, label, start, end, cost)
 
     down, fits = predict("selection", "2018-01-01", "2020-12-31")
-    selection_up = up.loc[up.date.between("2018-01-01", "2020-12-31")]
+    if args.monthly:
+        selection_up, _ = predict("selection", "2018-01-01", "2020-12-31", upside=True)
+    else:
+        selection_up = up.loc[up.date.between("2018-01-01", "2020-12-31")]
     decisions = {"control": control_details(selection_up, features), "dual": downside.orders(selection_up, down, features)}
     for arm, details in decisions.items():
         details.to_csv(args.out / f"selection-{arm}-decisions.csv", index=False)
-    forecast = forecast_report(frame, down, fits, "2020-12-31")
+    forecast = forecast_report(frame, down, fits, "2020-12-31", **frequency)
     selection = {arm: evaluate(f"selection-{arm}", details, "2018-01-01", "2020-12-31") for arm, details in decisions.items()}
-    admitted = admissions(selection["control"], selection["dual"], forecast, thresholds)
+    admitted = admissions(selection["control"], selection["dual"], forecast, thresholds, monthly=args.monthly)
     selected = "dual" if admitted["dual"] else "control" if admitted["control"] else None
     selection_path = args.out / "selection.json"
     selection_path.write_text(json.dumps({"admissions": admitted, "selected_arm": selected, "reports": selection,
@@ -190,13 +219,17 @@ def main() -> None:
     print(f"Frozen admissions: {admitted}; selected={selected}; SHA256={sha256(selection_path)}", flush=True)
     results, forecasts = {}, {"selection": forecast}
     if selected:
+        if args.monthly:
+            later_up, _ = predict("later", "2021-01-01", "2026-11-11", upside=True)
+            up = pd.concat([selection_up, later_up], ignore_index=True)
+            up.to_csv(args.out / "full-upside-predictions.csv", index=False)
         controls = control_details(up, features)
         if selected == "dual":
             later, later_fits = predict("later", "2021-01-01", "2026-11-11")
             down = pd.concat([down, later], ignore_index=True)
             down.to_csv(args.out / "full-downside-predictions.csv", index=False)
-            forecasts["later"] = forecast_report(frame, later, later_fits, "2026-11-11")
-            forecasts["full"] = forecast_report(frame, down, fits + later_fits, "2026-11-11")
+            forecasts["later"] = forecast_report(frame, later, later_fits, "2026-11-11", **frequency)
+            forecasts["full"] = forecast_report(frame, down, fits + later_fits, "2026-11-11", **frequency)
             decisions = {"control": controls, "dual": downside.orders(up, down, features)}
         else:
             decisions = {"control": controls}
@@ -210,12 +243,14 @@ def main() -> None:
                 results[period][arm] = report
             results[period]["selected_higher_costs"] = evaluate(f"{period}-{selected}-higher-costs",
                 decisions[selected], start, "2026-11-11", 25)
-    summary = {"protocol": "dedicated-downside-20261112-v1", "selected_arm": selected, "admissions": admitted,
+    summary = {"protocol": protocol_name, "selected_arm": selected, "admissions": admitted,
         "selection_sha256": sha256(selection_path), "inputs_sha256": sha256(args.out / "inputs.json"),
         "results": results, "forecasts": forecasts,
         "all_objectives_met": bool(selected and all(results[p][selected]["all_objectives_met"] for p in results)),
         "costs_bps_per_side": {"fee": 5, "slippage": 5}, "higher_costs_bps_per_side": {"fee": 25, "slippage": 25},
         "limitations": "Adaptive five-surviving-stock history; raw scores are not calibrated probabilities. Price-risk labels exclude cash dividends. No pristine holdout, taxes, final liquidation or live promotion."}
+    if args.monthly:
+        summary["refit_frequency"] = "monthly"
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
 

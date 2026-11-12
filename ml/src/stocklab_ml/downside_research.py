@@ -41,10 +41,12 @@ def make_frame(features: pd.DataFrame, prices: pd.DataFrame, spy: pd.DataFrame) 
     return result.sort_values(["date", "symbol"]).reset_index(drop=True)
 
 
-def predict(frame: pd.DataFrame, start: str, end: str) -> tuple[pd.DataFrame, list[dict]]:
-    """Annual recent RF fits purge the complete path before first prediction."""
+def predict(frame: pd.DataFrame, start: str, end: str, *,
+            refit_frequency: str = "annual") -> tuple[pd.DataFrame, list[dict]]:
+    """Recent RF fits purge the complete path at every annual/monthly boundary."""
     return swing._walk_forward_predict(frame, "rf_price_downside20", start, end, "rf", LABEL,
-                                       KNOWN_DATE, DOWNSIDE_FEATURES, "probability_downside")
+                                       KNOWN_DATE, DOWNSIDE_FEATURES, "probability_downside",
+                                       refit_frequency=refit_frequency)
 
 
 def orders(up: pd.DataFrame, down: pd.DataFrame, features: pd.DataFrame) -> pd.DataFrame:

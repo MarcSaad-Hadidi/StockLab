@@ -38,6 +38,8 @@ missing entries in 2021-2025. The latest dedicated-downside ML trial produces
 advantage and underperforms SPY on the later reset. The report preserves these
 failures, costed comparisons and broader-universe data limits; no research
 candidate is promoted.
+An opt-in monthly refit of both heads is also tested and rejected on2018-2020
+selection (19.70% control/18.74% dual CAGR); no later monthly returns are inferred.
 
 ## Requirements
 

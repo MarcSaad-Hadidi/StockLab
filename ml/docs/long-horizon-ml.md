@@ -1,6 +1,8 @@
 # Longer-history ML evaluation
 
-**Latest dedicated-downside ML result:** 17.1013% compound annual growth,22.5372% maximum drawdown and17 simulated sales over2018-2026. Its paired raw-RF control earns18.8761% with29.5981% drawdown and3 sales. The downside head reduces risk but loses its selection-period return advantage; its later2021-2026 result underperforms both the control and SPY. **The 20% CAGR objective remains unmet; no research candidate is promoted.** See the dedicated-head section below.
+**Latest monthly-refit experiment is rejected on selection2018-2020:** control19.6974% CAGR/33.0899% drawdown; dual18.7428%/26.8159%. Neither passes the frozen20%/risk/paired-improvement admission, so no later/full monthly returns are calculated. **The 20% CAGR objective remains unmet; no research candidate is promoted.**
+
+The preceding annual dedicated-downside ML result is17.1013% compound annual growth,22.5372% maximum drawdown and17 simulated sales over2018-2026. Its paired raw-RF control earns18.8761% with29.5981% drawdown and3 sales. The downside head reduces risk but loses its selection-period return advantage; its later2021-2026 result underperforms both the control and SPY. See the dedicated-head section below.
 
 The earlier calibrated recipe's19.4043% aggregate result also remains unsuitable for commissioning: it permits no new purchases in2021-2025, and a fresh2021 reset earns only3.52% CAGR. Fixed protective exits and the later raw-entry ablation trade substantial return for lower drawdown. These are different research comparisons, not returns already earned by deployed RFv7.
 
@@ -190,3 +192,31 @@ Two bounded fallback-key reference requests on2026-11-12 return16,462 current US
 Every returned ISIN/CUSIP is the literal placeholder `request_access_via_add_ons`, not a usable identity. Among the11,669 extra rows, only3,856 have a nonempty FIGI matching the expected format;7,813 lack any such non-placeholder identifier. Format validation does not establish historical identity continuity. Neither snapshot contains historical eligibility dates, ticker-change lifetimes or terminal proceeds. These gaps cannot be filled by treating an earliest provider timestamp as an IPO date, interpolating prices or dropping failed symbols silently.
 
 The DCA project's6,586-instrument catalog and ETF constituent priorities are dated October2026, so they support prospective scanning but cannot be backcast as2010 membership. The larger current/delisted reference snapshot is a concrete starting point for broader data work, not certification of a survivorship-free historical universe. Original raw responses, acquisition parameters, source hashes and identifier audit are preserved privately in `models/downside-20261112/catalog-probe`; no paid resource or additional credential was used.
+
+## Monthly refit, fixed cadence experiment
+
+The [monthly protocol](../../docs/superpowers/plans/2026-11-12-monthly-ml.md) tests one additional learning-cadence hypothesis, not a cadence grid. In the annual procedure, late-year predictions can use a model whose last training-feature date is398 days earlier for upside and397 for downside. Current prediction inputs still use their actual current session: the stale component is the learned relationship, not the price feed. For example, the2024 annual downside fit stops at2023-11-30 but predicts through2024-12-31.
+
+Both heads are refitted at each month's first observed prediction session, retaining their own full known-date purge: t+21 open for upside,t+20 close for downside. Same four-year training window, estimators, features, thresholds, entry caps, decisions, fees and actual dividends; no API acquisition or universe change. Annual cached scores are provenance only and never become monthly decisions. Time-aware evaluation matters because successive observations are correlated; the [scikit-learn guidance](https://scikit-learn.org/stable/modules/cross_validation.html#time-series-split) explains why ordinary shuffled validation is unsuitable for time series.
+
+The same runner adds opt-in `--monthly`; omitted retains annual predictions/audit/output identities. It maps each risk forecast to that month's actual fitted training prevalence for causal Brier comparison. Missing, duplicate or wrong-start monthly references fail closed, including months whose latest future labels are unknown. This avoids silently carrying a previous month/year's reference.
+
+Selection uses2018-2020 only and executes36 fresh fits per head. Each admitted arm must already meet20% CAGR, beat SPY, respect the original32.6814% DD ceiling and execute model-approved sales; dual additionally needs incremental CAGR/DD improvement versus monthly control and its risk forecast gate. Admissions are frozen before any later fitting. Independent per-arm admission allows a qualifying dual even if control fails; control is not a prerequisite.
+
+|Selection2018-2020 only|CAGR|Maximum drawdown|Buys / sells|Dedicated-head sales|
+|---|---:|---:|---:|---:|
+|Monthly raw-RF control|19.6974%|33.0899%|49 /1|0|
+|Monthly dual|18.7428%|26.8159%|43 /8|8|
+|SPY proxy|13.8302%|33.7196%|One initial buy|—|
+
+The control fails20% and the DD ceiling. Dual fails20% and incremental return improvement; its8 sales are genuine dedicated-head executions. Its risk forecast AUC.5447/Brier.2296 beats the causal monthly-prevalence reference.2324, but that forecast gate is insufficient to qualify the portfolio. Mean invested exposure is91.99% control/81.08% dual, with longest entirely-cash stretches1/57 observed sessions. No cadence or threshold is altered after inspecting these results.19.6974% is not rounded up to20%.
+
+Maximum late-month training-feature age falls to64 upside/63 downside days on the observed selection data. Freshness improves, performance does not. Both admissions are false and results are empty: **no2021-2026/full monthly strategy returns or later models are produced**. These selection results must not be presented as a successful long-period result. The saved annual comparisons remain context, not a post-test alternative chosen to declare success.
+
+```powershell
+.\.venv\Scripts\python.exe examples/downside_research.py --monthly --study-dir models/long-horizon-20261111/run-v4 --data-dir models/long-horizon-20261111/dataset --dividend-dir models/long-horizon-20261111/dividend-dataset --entry-dir models/risk-exits-20261112/entry-run-v1 --out models/monthly-20261112/new-study
+```
+
+Evidence under `models/monthly-20261112/run-v1` includes original protocol/source copies,72 exact fit audits, fresh forecasts, both decision/ledger/executed-reason exports and the rejected selection hash.484 relevant tests pass, including139 research cases. A fresh reviewer verifies all hashes, exact monthly train rows/counts/prevalence/known-date purges, independent AUC/Brier, score-to-decision logic, two complete cost/dividend/account ledgers and absence of later outputs. Every exported ledger value matches at float precision. No Critical/Important finding.
+
+This is another adaptive experiment on the same five surviving stocks. It does not cure the universe/generalization limitation, validate future20% growth or commission a new production model. The live artifact/inference/promotion contracts still describe seven-feature one-day baselines; native paper execution uses a current quote rather than enforcing next-session opening execution, and recurring dividend settlement is not commissioned. Those remain explicit integration requirements after a model qualifies; changing a model name/config would not finish the ML.

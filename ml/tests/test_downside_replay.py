@@ -55,6 +55,44 @@ def test_forecast_brier_uses_causal_annual_rate_and_never_labels_beyond_period(r
     assert runner.forecast_report(changed, predictions, audits, "2020-12-31") == result
 
 
+def monthly_forecasts():
+    frame = pd.DataFrame({"date": pd.to_datetime(["2024-01-02", "2024-01-15", "2024-02-01", "2024-02-28"]),
+        "symbol": "AAPL", "target_price_downside20": [0., 1., 1., 1.],
+        "target_date_price_downside20": pd.to_datetime(["2024-01-30", "2024-02-12", "2024-02-28", "2024-03-28"])})
+    scores = frame[["date", "symbol"]].assign(probability_downside=[.1, .9, .9, .99])
+    audits = [{"first_prediction": day, "last_target": prior, "training_positive_rate": rate}
+              for day, prior, rate in [("2024-01-02", "2023-12-29", .2), ("2024-02-01", "2024-01-31", .8)]]
+    return frame, scores, audits
+
+
+def test_monthly_forecast_reference_uses_each_fitted_month_and_excludes_unknown_endpoints(runner):
+    frame, scores, audits = monthly_forecasts()
+    result = runner.forecast_report(frame, scores, audits, "2024-02-29", refit_frequency="monthly")
+    assert result["rows"] == 3
+    assert result["brier"] == pytest.approx(.01)
+    assert result["reference_brier"] == pytest.approx((.2**2 + .8**2 + .2**2) / 3)
+    frame.loc[3, "target_price_downside20"] = 0.
+    assert runner.forecast_report(frame, scores, audits, "2024-02-29", refit_frequency="monthly") == result
+
+
+@pytest.mark.parametrize("bad", ["missing", "duplicate", "future_reference", "boundary_target", "frequency"])
+def test_monthly_forecast_rejects_missing_duplicate_or_future_fit_references(runner, bad):
+    frame, scores, audits = monthly_forecasts()
+    frequency = "monthly"
+    if bad == "missing":
+        audits = audits[:1]
+    elif bad == "duplicate":
+        audits.append(dict(audits[-1]))
+    elif bad == "future_reference":
+        audits[-1]["first_prediction"] = "2024-02-15"
+    elif bad == "boundary_target":
+        audits[-1]["last_target"] = audits[-1]["first_prediction"]
+    else:
+        frequency = "weekly"
+    with pytest.raises(ValueError):
+        runner.forecast_report(frame, scores, audits, "2024-02-29", refit_frequency=frequency)
+
+
 def entry_fixture(runner, tmp_path, monkeypatch):
     monkeypatch.setattr(runner, "WORKSPACE", tmp_path)
     root = tmp_path / "entry"

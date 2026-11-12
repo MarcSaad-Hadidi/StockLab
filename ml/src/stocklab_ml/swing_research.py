@@ -104,15 +104,16 @@ def swing_features(prices: pd.DataFrame, monthly: pd.DataFrame, spy: pd.DataFram
     return add_targets(frame, prices, spy)
 
 
-def walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str) -> tuple[pd.DataFrame, list[dict]]:
-    """Annual fits purge every target boundary; latest inference needs no labels."""
+def walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str, *,
+                         refit_frequency: str = "annual") -> tuple[pd.DataFrame, list[dict]]:
+    """Annual by default; every observed refit boundary purges the full target."""
     specifications = RECIPES | CALIBRATED_RECIPES
     if recipe not in specifications:
         raise ValueError("Unknown frozen swing recipe.")
     kind, label, target_date = specifications[recipe]
     columns = FEATURE_COLUMNS if kind == "rf_baseline" else SWING_FEATURES
     predictions, audits = _walk_forward_predict(frame, recipe, start, end, kind, label, target_date,
-                                               columns, "probability_up")
+                                               columns, "probability_up", refit_frequency=refit_frequency)
     for audit in audits:
         audit.pop("training_positive_rate")
     return predictions, audits
@@ -120,8 +121,10 @@ def walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str)
 
 def _walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str, kind: str,
                           label: str, target_date: str, columns: list[str],
-                          score_column: str) -> tuple[pd.DataFrame, list[dict]]:
+                          score_column: str, *, refit_frequency: str = "annual") -> tuple[pd.DataFrame, list[dict]]:
     """Private fitting core shared with the separately named downside target."""
+    if refit_frequency not in ("annual", "monthly"):
+        raise ValueError("Refit frequency must be annual or monthly.")
     if (frame.duplicated(["date", "symbol"]).any()
             or not np.isfinite(frame[columns].to_numpy(dtype=float)).all()):
         raise ValueError("Unique finite feature rows are required.")
@@ -129,7 +132,8 @@ def _walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str
     if test.empty:
         raise ValueError("No evaluation rows.")
     predictions, audits = [], []
-    for _, rows in test.groupby(test.date.dt.year, sort=True):
+    periods = test.date.dt.to_period("M") if refit_frequency == "monthly" else test.date.dt.year
+    for _, rows in test.groupby(periods, sort=True):
         first = rows.date.min()
         train = frame.loc[(frame.date >= first - pd.DateOffset(years=4)) & (frame.date < first)
                           & (frame[target_date] < first) & frame[label].notna()]
