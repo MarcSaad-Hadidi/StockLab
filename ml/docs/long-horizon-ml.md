@@ -1,6 +1,8 @@
 # Longer-history ML evaluation
 
-**Latest broader-training experiment is rejected on selection2018-2020:** control22.5988% CAGR/26.8792% drawdown has no sales; dual20.6864%/26.9569% makes two downside sales but reduces return and slightly increases drawdown versus its control. Both admissions are false. No later/full broader returns or fits are produced, so20% compound growth on the long/later periods remains unverified. Production remains RFv7.
+**Latest completed boosted trial is rejected on selection2018-2020:** control20.0130% CAGR/33.2535% drawdown makes one model sale but exceeds the32.6814% drawdown ceiling. Dual8.1156%/22.3961% makes12 sales but fails20%/SPY/paired-return and forecast-quality gates. Neither is promoted and no later/full boosted result is calculated. The20% long-period objective remains unmet.
+
+**The preceding broader RF experiment is rejected on selection2018-2020:** control22.5988% CAGR/26.8792% drawdown has no sales; dual20.6864%/26.9569% makes two downside sales but reduces return and slightly increases drawdown versus its control. Both admissions are false. No later/full broader returns or fits are produced, so20% compound growth on the long/later periods remains unverified. Production remains RFv7.
 
 **Latest monthly-refit experiment is rejected on selection2018-2020:** control19.6974% CAGR/33.0899% drawdown; dual18.7428%/26.8159%. Neither passes the frozen20%/risk/paired-improvement admission, so no later/full monthly returns are calculated. **The 20% CAGR objective remains unmet; no research candidate is promoted.**
 
@@ -234,6 +236,31 @@ GitHub's backend/frontend/SQL/Python jobs all pass; Python repeats1,909 tests on
 ```powershell
 .\.venv\Scripts\python.exe examples/downside_research.py --training-panel models/broader-20261112/panel --study-dir models/long-horizon-20261111/run-v4 --data-dir models/long-horizon-20261111/dataset --dividend-dir models/long-horizon-20261111/dividend-dataset --entry-dir models/risk-exits-20261112/entry-run-v1 --out models/broader-20261112/new-study
 ```
+
+## Fixed boosted learners on the broader corpus
+
+The [boosted protocol](../../docs/superpowers/plans/2026-11-12-broader-boosted.md) changes only the learner for both heads to the existing fixed HistGradientBoostingClassifier:200 iterations,.05 learning rate,15 maximum leaves,L2=1,early stopping disabled,seed42. Same four-year annual purges,date weights,24/28 features,targets,thresholds,trend/veto/SELL priority,limits,costs and actual dividends. The same runner's opt-in`--boosted` requires`--training-panel`. Inputs bind the protocol,code,panel and process-local OMP_NUM_THREADS=1 before any fit; defaults remain unchanged.
+
+|Selection2018-2020 ONLY|CAGR|Maximum drawdown|Buys / sells|Dedicated-head sales|
+|---|---:|---:|---:|---:|
+|Broader boosted control|20.0130%|33.2535%|29 /1|0|
+|Broader boosted dual|8.1156%|22.3961%|40 /12|11|
+|SPY proxy|13.8302%|33.7196%|One initial buy|—|
+
+Control passes the20%/SPY/sale requirements but exceeds the original drawdown ceiling. Dual reduces drawdown, but return is below20%,SPY and its control. Downside AUC.5293 exceeds.5, while Brier.24235 is worse than the causal weighted-reference.22408; this also fails predictive admission. Upside AUC.4966/Brier.25202 trails its reference.24859. Neither a small excess over20% in this selection period nor more executed sales overrides the failed gates.
+
+Control's sole actual sale is JNJ,decided2018-07-02/filled2018-07-03. Dual has11 genuine downside sales and that same upside sale. Mean invested equity is93.07% control/51.74% dual; dual's2020 average is only9.11%, with91 fully-cash sessions from2020-08-24 through year-end. The dual vetoes17 otherwise eligible BUY decisions. Its extra activity does not supply better economic participation.
+
+Score reliability remains weak. Among350 known rows with downside>=.65, mean score is.8080 and realized path-loss frequency.5229. Among528 high-upside rows, mean.7112 accompanies realized positive frequency.5814;83 low-upside rows have realized positive frequency.6145. These overlapping selection targets are descriptive, not independent calibration validation or a reason to pick new cutoffs after testing.
+
+Both admissions are false,selected arm null,results empty. Frozen selection SHA256`51d00fd1af290fe3583f25847e2344acb6ea486fc8e32fa22e919e8f73334020` and all six annual fit audits/forecasts/decisions/account exports remain in`models/broader-boosted-20261112/run-v1`. No later/full models or returns are produced. Independent review verifies unchanged exact fit rows/date weights/priors,the frozen learner/OMP1/source commitments,forecasts,82 total trades and7,953 numeric ledger comparisons with maximum difference0.0. A new fixed four-feature market-risk hypothesis uses separately probed Cboe information; it has no performance result yet.
+
+```powershell
+$env:OMP_NUM_THREADS = '1'
+.\.venv\Scripts\python.exe examples/downside_research.py --boosted --training-panel models/broader-20261112/panel --study-dir models/long-horizon-20261111/run-v4 --data-dir models/long-horizon-20261111/dataset --dividend-dir models/long-horizon-20261111/dividend-dataset --entry-dir models/risk-exits-20261112/entry-run-v1 --out models/broader-boosted-20261112/new-study
+```
+
+Verification:134 focused checks pass; GitHub backend/frontend/SQL/Python jobs all pass, including1,927 Python tests. Research execution remains separate from production RFv7 and native commissioning. Retrospective current-survivor/identity limits and adaptive selection still apply.
 
 ## Monthly refit, fixed cadence experiment
 

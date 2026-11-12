@@ -29,5 +29,7 @@ Persist/hash admission BEFORE any2021-2026 fits/returns. Both rejected ->no late
 Independent review verifies source/panel/code/environment, exact weighted training sets/priors, saved forecasts/decisions, accounting/model-sales and no prohibited later artifacts. Report all outcomes and adaptive/current-survivor/identity limitations. Stop this fixed experiment if rejected, preserve evidence, and keep the overall ML objective active.
 
 - [x] Implement/test/review opt-in routing while preserving defaults and feature hashes.
-- [ ] Freeze source/protocol/input commitments, run single selection, obey later gating.
-- [ ] Independently audit results/ledgers, publish honest report and update draftPR290.
+- [x] Freeze source/protocol/input commitments, run single selection, obey later gating.
+- [x] Independently audit results/ledgers and record the rejected outcome; publish with the next draftPR290 update.
+
+Outcome: both rejected on2018-2020. Control20.0130%CAGR/33.2535%DD/one sale exceedsDD ceiling;dual8.1156%/22.3961%/12sales fails return/SPY/paired/Brier gates. No later/full fits or returns. Independent six-fit/forecast/account audit makes7953 numeric comparisons with zero difference. The broader ML objective remains incomplete; all evidence is retained under models/broader-boosted-20261112/run-v1.
