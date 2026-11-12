@@ -53,6 +53,9 @@ sales at13.49%/22.12%,below20% and SPY. Both fail admission; no later/full
 market-boosted results are inferred. Separate risk-only isotonic calibration
 falls to9.91% CAGR/22.12% drawdown with14 genuine sales and still fails the
 unchanged forecast gate. No later/full calibration result is calculated.
+Keeping raw risk but fitting only original-five histories reduces drawdown
+to18.10% while losing return to7.98% with29 sales; its Brier is worse than
+the unchanged broader reference. Both admissions fail; no later/full result.
 The same report preserves the
 forecast/participation failures and audited account evidence.
 

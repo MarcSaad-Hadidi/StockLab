@@ -27,6 +27,8 @@ Save/hash admission BEFORE later fits/returns. Both rejected means no later/full
 
 Only five correlated survivor histories may give fewer independent examples and more overfitting than broader fitting. Past training on the same stock identities is not future-label leakage,but does not establish transfer to new stocks. Retrospective split adjustments,index vintages,identity/survivorship limits and adaptive repeated selection remain. No pristine globally untouched holdout or future20% guarantee is implied; native artifact/inference/promotion/next-session/dividend/restart commissioning still follows historical qualification.
 
-- [ ] Implement/test and independently review the single opt-in domain route and reference preservation.
-- [ ] Freeze inputs/source/environment and execute the single gated study.
-- [ ] Independently audit and publish outcome; update draftPR290.
+- [x] Implement/test and independently review the single opt-in domain route and reference preservation.
+- [x] Freeze inputs/source/environment and execute the single gated study.
+- [x] Independently audit and publish outcome; update draftPR290.
+
+Completed selection outcome: original-five risk dual7.9818%CAGR/18.0993%DD/85BUY29 genuine downside SELL;raw control unchanged20.8998%/31.9147%/zero SELL. Risk AUC.53270/Brier.27138 versus unchanged broader reference.22408. Both admissionsfalse,selectednull,results empty;no later/full fits or returns. Source9b3d9a5,selection SHA4cf1f74f790c6a93717c9b505f9b03b15e8659f75a472af4e09931e9c293d459. Independent audit verifies exact fit/reference populations and8,215 numeric ledger comparisons with zero error.81 relevant tests pass;the six bound core modules remain unchanged. Archived prefit plan bytes remain bound in the study;this note is post-study.

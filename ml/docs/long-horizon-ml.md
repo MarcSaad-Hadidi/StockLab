@@ -1,6 +1,6 @@
 # Longer-history ML evaluation
 
-**Latest completed boosted risk calibration is rejected on selection2018-2020:** control remains20.8998% CAGR/31.9147% drawdown with no sales; the isotonic dual earns9.9142%/22.1154% with14 downside sales. The preceding raw market dual earns13.4933%/22.1165%. Neither passes20%/SPY/paired-return and forecast-quality gates; no later/full boosted result is calculated. The20% long-period objective remains unmet.
+**Latest completed boosted risk-domain ablation is rejected on selection2018-2020:** control remains20.8998% CAGR/31.9147% drawdown with no sales; original-five risk training earns7.9818%/18.0993% with29 downside sales. Previous isotonic/raw market duals earn9.9142%/13.4933%. Both frozen admissions fail; no later/full boosted result is calculated. The20% long-period objective remains unmet.
 
 **The preceding broader RF experiment is rejected on selection2018-2020:** control22.5988% CAGR/26.8792% drawdown has no sales; dual20.6864%/26.9569% makes two downside sales but reduces return and slightly increases drawdown versus its control. Both admissions are false. No later/full broader returns or fits are produced, so20% compound growth on the long/later periods remains unverified. Production remains RFv7.
 
@@ -306,7 +306,28 @@ Mean invested equity is63.33% dual versus94.94% control. Dual blocks302/606 cont
 
 Evidence is in`models/boosted-risk-calibration-20261112/run-v1`,source14bc247,frozen selection SHA256`74b6d6f1d665e0122815bf9aff44e34c9a2467d653190c56ecb04cbccdc16478`. Independent audit verifies exact base/calibration/reference populations,all forecasts,107 total trades and8,004 numeric ledger comparisons with maximum error0.0. Upside prediction CSV AND all five control exports are byte-identical to the raw parent. Full offline suite:2,023 passed,one Windows symlink skip;five visible FrozenEstimator weight warnings are checked against actual separate base/calibration weighting. No production change.
 
-The next [risk-training domain ablation](../../docs/superpowers/plans/2026-11-12-boosted-risk-domain.md) compares against the raw market parent,changing only risk training to original-five causal histories and retaining the broader Brier reference. It has no result yet. This does not claim the added corpus has a verified capitalization class,or that a five-stock result generalizes to the provider universe.
+The subsequent risk-training domain ablation is reported below. It compares against the raw market parent,not the isotonic trial. This does not claim the added corpus has a verified capitalization class,or that a five-stock result generalizes to the provider universe.
+
+## Raw risk training on original-five histories
+
+The [domain protocol](../../docs/superpowers/plans/2026-11-12-boosted-risk-domain.md) changes ONLY the raw risk head's training population versus the raw market parent. Raw upside,32 risk features,four-year annual fitting,HGBT parameters,thresholds,orders,costs and dividends remain fixed. The opt-in`--original-risk-history` requires the annual boosted market/panel mode and excludes isotonic. The same immutable recompiled panel still trains upside and supplies the causal forecast reference; all six source-module hashes remain unchanged.
+
+The prefit diagnostic compares the SAME776 pre2018 sessions: original-five versus added histories have20.08%/39.04% risk-event prevalence and1.1447%/2.2741% mean daily volatility20,with equal total weight per date. This marginal difference motivates the experiment; known volatility is already an input,so it does not prove a conditional transfer problem. No capitalization category is inferred from the unscreened catalog.
+
+|Selection2018-2020 ONLY|CAGR|Maximum drawdown|Buys / sells|Dedicated-head sales|
+|---|---:|---:|---:|---:|
+|Unchanged raw market control|20.8998%|31.9147%|42 /0|0|
+|Raw market dual,broader risk training|13.4933%|22.1165%|55 /15|15|
+|Raw market dual,original-five risk training|7.9818%|18.0993%|85 /29|29|
+|SPY proxy|13.8302%|33.7196%|One initial buy|—|
+
+All29 sales are genuine downside-model executions. Drawdown is lower,but CAGR trails20%,SPY,its unchanged control and the broader-risk parent. Risk AUC.53270 slightly exceeds the parent's.52845,while Brier worsens from.24160 to.27138 and remains worse than the EXACT unchanged broader reference.22408. Original-five fitted priors.19676/.21643/.19858 are recorded separately; substituting them for the agreed benchmark is forbidden. More activity and lower drawdown do not establish the requested economic improvement.
+
+Mean invested equity falls to52.13% versus94.94% control,with126 cash-only sessions,longest39 from2020-11-05 through year-end. High-risk524 known rows average.8466 versus realized event frequency.4370. These overlapping descriptive bins do not establish independent probability reliability. Both admissions are false,selectednull,results empty: **no later/full strategy fits or returns**. The smaller risk population changes both provenance and sample size; this test does not isolate either as a causal explanation. It supplies no evidence that discarding the broader corpus improves this model.
+
+Evidence is in`models/boosted-risk-domain-20261112/run-v1`,source9b3d9a5,selection SHA256`4cf1f74f790c6a93717c9b505f9b03b15e8659f75a472af4e09931e9c293d459`. The independent audit verifies all exact original-five fit sets and full-broader references,forecasts,156 total trades and8,215 numeric ledger comparisons with maximum error0.0. Raw upside and all five control exports are byte-identical to the raw parent. The new runner and adjacent modes pass81 targeted tests; the six bound source modules are byte-identical to14bc247. No provider requests or production changes.
+
+None of these boosted variants qualifies for long/later evaluation under the frozen protocol. Lower historical drawdown alone is insufficient; improved predictive information and economically effective exits remain unresolved. Further work must address that failure rather than loosen cutoffs,force transactions or relabel selection success as long-period proof.
 
 ## Monthly refit, fixed cadence experiment
 
