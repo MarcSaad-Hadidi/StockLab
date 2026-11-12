@@ -40,9 +40,11 @@ failures, costed comparisons and broader-universe data limits; no research
 candidate is promoted.
 An opt-in monthly refit of both heads is also tested and rejected on2018-2020
 selection (19.70% control/18.74% dual CAGR); no later monthly returns are inferred.
-The same research runner now accepts a validated broader training-only panel,
-with per-identity observed episodes and date-balanced annual fitting. Its frozen
-256-identity collection is in progress; no new performance result is claimed.
+The same research runner now accepts a source-validated broader training-only panel,
+with per-identity observed episodes and date-balanced annual fitting. The frozen
+256-identity collection yields111 usable current-survivor histories. Its2018-2020
+selection reaches22.60% control/20.69% dual CAGR, but fails sales/incremental risk
+gates; no later/full broader result is calculated or promoted.
 
 ## Requirements
 

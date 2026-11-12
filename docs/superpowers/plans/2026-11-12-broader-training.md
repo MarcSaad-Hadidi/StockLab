@@ -59,6 +59,8 @@ Extend the SAME example runner with mutually exclusive `--monthly` and `--traini
 
 - [x] Freeze catalog selection/protocol, run six bounded probes and retain all access/identity/coverage outcomes.
 - [x] Verify aggregate/native parity; implement/test episode/panel and separate training-frame fitting with red-green checks.
-- [ ] Acquire only frozen remaining identities when feasible, validate attrition/coverage and data-sufficiency gate before any model fit.
-- [ ] Run one fixed selection, preserve admissions before later evaluation, and report success/failure honestly.
-- [ ] Independent source/data/ledger/report review, final relevant checks/secret scan, commit/push and update draftPR290. Overall goal stays active unless fully verified.
+- [x] Acquire only frozen remaining identities when feasible, validate attrition/coverage and data-sufficiency gate before any model fit.
+- [x] Run one fixed selection, preserve admissions before later evaluation, and report success/failure honestly.
+- [x] Independent source/data/ledger/report review, final relevant checks/secret scan, commit/push and update draftPR290. Overall goal stays active unless fully verified.
+
+Outcome: both annual broader arms rejected on2018-2020 selection (control22.5988%CAGR/26.8792%DD/zero sales;dual20.6864%/26.9569%/two dedicated sales). No later/full fitting or returns. The compiled panel has111 usable identities/231667 rows, all current catalog survivors;all112 inclusive-only histories are unavailable. Source/fit/forecast/accounting audits pass, including7688 exact ledger comparisons. Model qualification and commissioning remain incomplete; see the public long-horizon report and immutable private run-v1 evidence.
