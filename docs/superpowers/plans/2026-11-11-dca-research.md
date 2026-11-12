@@ -45,7 +45,7 @@
 - [x] Verify Python monthly signals against the pinned original TypeScript DCA engine on all acquired monthly bars.
 - [x] Run the frozen2024 selection, save selection evidence, then run the selected recipe and baselines on2025–2026-11-11. Retain hashes, curves, orders and model fit boundaries privately.
 - [x] Publish aggregate results and limits; no promotion when target/evidence/compatibility fails.
-- [ ] Obtain a fresh review, address findings, commit and update the existing draft PR.
+- [x] Obtain a fresh review, address findings, commit and update the existing draft PR.
 
 ## Execution ledger
 
@@ -55,3 +55,4 @@
 - Ruling: add fixed-rule earlier-history and higher-cost stress checks after the primary run, without tuning or changing model selection — a favorable679-day DCA interval alone cannot support durable20% claims. Cost if omitted: overstated generalization. On2023–Nov2026 DCA returns18.898% CAGR vs SPY20.741%, failing the target. No promotion.
 - Latest develop8e9e177 integrated in merge2d52f9c. Targeted upstream integration checks:30 frontend auth/login tests and76 backend login tests pass; backend built in isolated artifacts. Existing live RFv7, API runtime and schedules remain unchanged by this research.
 - Fresh reviewer found no Critical/Important issue. Both minor input-integrity concerns were reproduced red and fixed: daily cycle manifest/hash validation; rejection of a truncated monthly history instead of indefinite stale asof carry-forward. Final220-case run and genuine-data rerun pass after those fixes. Final API5274 readiness/frontend5173 return200; API/cycle tasks run, retraining task is Ready between due runs.
+- Research commit93e4b34 pushed to the existing `codex/ml-local-completion` PR head. PR290 remains open/draft, with latest develop8e9e177 base and rewritten description reflecting actual scope/results/limits. Final reviewer independently confirmed19 research tests, identical run-v2/run-v3 metrics and all current code/input hashes. No new strategy promotion or paid resource was created.
