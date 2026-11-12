@@ -47,7 +47,10 @@ selection reaches22.60% control/20.69% dual CAGR, but fails sales/incremental ri
 gates; no later/full broader result is calculated or promoted.
 An opt-in fixed boosted learner on that corpus reaches20.01% control/8.12% dual
 CAGR on2018-2020, with33.25%/22.40% drawdown. Both fail unchanged admission gates,
-so there are no later/full boosted results. The same report preserves the
+so there are no later/full boosted results. Adding four fixed lagged VIX/VIX3M
+features reaches20.90%/31.91% drawdown for control without sales; dual makes15
+sales at13.49%/22.12%,below20% and SPY. Both fail admission; no later/full
+market-boosted results are inferred. The same report preserves the
 forecast/participation failures and audited account evidence.
 
 ## Requirements

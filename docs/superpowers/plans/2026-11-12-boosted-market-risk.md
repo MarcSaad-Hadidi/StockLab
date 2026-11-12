@@ -41,5 +41,7 @@ Same HGBT200/.05/15leaves/l2=1/earlystopFalse/seed42, four-year ANNUAL head-spec
 Persist/hash admission BEFORE later2021-2026 fits/returns. Both rejected:no later/full models or results. Control-only:later upside only. Dual:paired full/later accounts and selected25+25bps sensitivity. Overall pass still needs>=20%/SPY/sales fullANDlater, fullDD<original and laterDD<SPY. No post-test substitution, gate relaxation or deployment from historical success. Evaluation remains the same five survivors; added training remains retrospective current-survivor data. All previous adaptive experiments and source-vintage limits remain visible.
 
 - [x] Implement/test/review source features and opt-in runner; preserve bound sources and old defaults.
-- [ ] Freeze all source/input/code/environment commitments and run the single gated study.
+- [x] Freeze all source/input/code/environment commitments and run the single gated study.
 - [ ] Independently audit features/fit sets/forecast/ledger/admission; publish results and update draftPR290.
+
+Completed outcome: control20.8998%CAGR/31.9147%DD/zero sales; dual13.4933%/22.1165%/15 downside sales. Both rejected,selectednull,results empty,no later/full fits or returns. Risk AUC.52845/Brier.24160 versus unchanged reference.22408. Independent audit verifies3,269 market rows,six exact fit sets and8,025 numeric ledger comparisons with zero error. See the public long-horizon report; source commit629a07d's four CI jobs pass,including1,996 Python tests.
