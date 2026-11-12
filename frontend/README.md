@@ -63,7 +63,7 @@ Market document with a symbol query, for example `/market?symbol=AAPL`.
 | `/watchlist` | Authenticated | Load, add, remove and manually refresh saved symbols and their quotes. |
 | `/profile` | Authenticated | Load/save the name and email, display account dates/capital/currency, and change the password. |
 | `/ai-trader` | Authenticated | Seven sections backed by the system AI Trader's read APIs. |
-| `/alerts` | Authenticated | Existing layout and draft asset search; alert persistence is not connected to this screen yet. |
+| `/alerts` | Authenticated | Read-only preview and market search with disabled creation controls; alert persistence is not connected to this screen yet. |
 | `/not-found` | Public | Fallback for unknown page paths. |
 
 Trailing slashes and legacy HTML entry URLs remain supported, including their
@@ -275,8 +275,8 @@ operational verification; Vite startup does not commission an autonomous bot.
 
 ## Remaining integrations
 
-- Alerts has draft asset search and an existing layout, but its save action is
-  disabled until [#57](https://github.com/MarcSaad-Hadidi/StockLab/issues/57)
+- Alerts keeps an informational preview and read-only market search, with creation, condition, target and
+  notification controls disabled until [#57](https://github.com/MarcSaad-Hadidi/StockLab/issues/57)
   connects it to the backend. Backend alert CRUD and periodic monitoring exist;
   persistent triggering remains [#43](https://github.com/MarcSaad-Hadidi/StockLab/issues/43).
   The UI's email/push options do not provide notification delivery.
@@ -322,3 +322,4 @@ Pages stay in their own folders under `src/`; shared UI is in `src/components`,
 typed clients/decimal helpers in `src/api`, session management in `src/auth`,
 and EN/FR translations and formatters in `src/i18n`. Reuse these existing modules
 when extending an integration.
+
