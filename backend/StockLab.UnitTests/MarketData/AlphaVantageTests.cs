@@ -82,8 +82,26 @@ public sealed class AlphaVantageTests
     {
         using var f = new Fixture("{}");
         var active=0; var maximum=0;
-        f.Handler.Respond = async _ => { var n=Interlocked.Increment(ref active); maximum=Math.Max(maximum,n); await Task.Delay(10); Interlocked.Decrement(ref active); return Response("{}"); };
-        await Task.WhenAll(Enumerable.Range(0, 5).Select(i=>f.Provider.GetFundamentalsAsync("S"+i)));
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        f.Handler.Respond = async token =>
+        {
+            var n = Interlocked.Increment(ref active);
+            maximum = Math.Max(maximum, n);
+            try { await release.Task.WaitAsync(token); return Response("{}"); }
+            finally { Interlocked.Decrement(ref active); }
+        };
+        var calls = Enumerable.Range(0, 5).Select(i => f.Provider.GetFundamentalsAsync("S" + i)).ToArray();
+        try
+        {
+            // Keep the first response pending so serialization does not depend on scheduler timing.
+            Assert.Single(f.Handler.Requests);
+            Assert.All(calls, call => Assert.False(call.IsCompleted));
+        }
+        finally
+        {
+            release.TrySetResult();
+            await Task.WhenAll(calls);
+        }
         Assert.Equal(1, maximum); Assert.Equal(5, f.Handler.Requests.Count);
         await f.Provider.GetFundamentalsAsync("S0"); Assert.Equal(5, f.Handler.Requests.Count);
         f.Clock.Now=f.Clock.Now.AddHours(25);
@@ -132,7 +150,7 @@ public sealed class AlphaVantageTests
     [Fact]
     public async Task Network_timeout_and_pre_cancel_never_retry_or_leak_uri()
     {
-        using var f = new Fixture(Overview);
+        using var f = new Fixture(Overview, timeoutSeconds: 1);
         f.Handler.Respond=_=>throw new HttpRequestException("https://provider/query?apikey=ALPHA-TEST-KEY");
         var error=await Assert.ThrowsAsync<MarketEnrichmentException>(()=>f.Provider.GetFundamentalsAsync("MSFT"));
         Assert.DoesNotContain("ALPHA-TEST-KEY",error.ToString()); Assert.Single(f.Handler.Requests);
@@ -223,11 +241,11 @@ public sealed class AlphaVantageTests
     private sealed class Fixture:IDisposable
     {
         public Handler Handler; public Clock Clock=new(); public AlphaVantageProvider Provider;
-        public Fixture(string body,string media="application/json")
+        public Fixture(string body,string media="application/json",int timeoutSeconds=10)
         {
             Handler=new(){Respond=_=>Task.FromResult(Response(body,media))};
             var config=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{["AlphaVantage:ApiKey"]="ALPHA-TEST-KEY"}).Build();
-            Provider=new(new Factory(Handler),config,Options.Create(new AlphaVantageOptions{TimeoutSeconds=1}),Clock);
+            Provider=new(new Factory(Handler),config,Options.Create(new AlphaVantageOptions{TimeoutSeconds=timeoutSeconds}),Clock);
         }
         public void Dispose(){Provider.Dispose();Handler.Dispose();}
     }
