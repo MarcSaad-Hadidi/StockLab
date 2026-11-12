@@ -25,6 +25,11 @@ uses `python -m stocklab_ml.operational_cycle --config <private-config.json>` wi
 fresh immutable inputs and the exact existing database. The runner never trains
 or promotes automatically.
 
+The separate [DCA / S&P 500 research](docs/dca-research.md) compares costed,
+chronological paper portfolios against an external SPY proxy and the user's
+20% annualized target. It records both favorable and unfavorable periods;
+research results do not activate a strategy or replace promotion evidence.
+
 ## Requirements
 
 Use **Python 3.12.x** across the team, with pip and the standard-library `venv`
