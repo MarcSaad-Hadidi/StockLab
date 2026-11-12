@@ -50,7 +50,10 @@ CAGR on2018-2020, with33.25%/22.40% drawdown. Both fail unchanged admission gate
 so there are no later/full boosted results. Adding four fixed lagged VIX/VIX3M
 features reaches20.90%/31.91% drawdown for control without sales; dual makes15
 sales at13.49%/22.12%,below20% and SPY. Both fail admission; no later/full
-market-boosted results are inferred. The same report preserves the
+market-boosted results are inferred. Separate risk-only isotonic calibration
+falls to9.91% CAGR/22.12% drawdown with14 genuine sales and still fails the
+unchanged forecast gate. No later/full calibration result is calculated.
+The same report preserves the
 forecast/participation failures and audited account evidence.
 
 ## Requirements

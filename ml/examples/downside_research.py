@@ -300,7 +300,11 @@ def main() -> None:
     parser.add_argument("--boosted", action="store_true", help="Use both fixed boosted heads with --training-panel.")
     parser.add_argument("--market-risk-dir", type=Path, help="Verified lagged market features for both boosted heads.")
     parser.add_argument("--calibrate-risk", action="store_true", help="Isotonic-calibrate only the boosted market downside head.")
+    parser.add_argument("--original-risk-history", action="store_true", help="Fit raw market downside only on the original stock histories.")
     args = parser.parse_args()
+    if args.original_risk_history and (not args.boosted or args.market_risk_dir is None
+            or args.training_panel is None or args.monthly or args.calibrate_risk):
+        parser.error("--original-risk-history requires --boosted, --market-risk-dir and --training-panel and cannot be combined with --monthly or --calibrate-risk.")
     if args.calibrate_risk and (not args.boosted or args.market_risk_dir is None or args.training_panel is None or args.monthly):
         parser.error("--calibrate-risk requires --boosted, --market-risk-dir and --training-panel and cannot be combined with --monthly.")
     if args.market_risk_dir is not None and (not args.boosted or args.training_panel is None or args.monthly):
@@ -311,7 +315,8 @@ def main() -> None:
     broader = args.training_panel is not None
     market_risk = args.market_risk_dir is not None
     refit_upside = args.monthly or broader
-    protocol_name = ("broader-boosted-isotonic-market-risk-20261112-v1" if args.calibrate_risk else
+    protocol_name = ("boosted-original-risk-market-20261112-v1" if args.original_risk_history else
+                     "broader-boosted-isotonic-market-risk-20261112-v1" if args.calibrate_risk else
                      "broader-boosted-market-risk-20261112-v1" if market_risk else
                      "broader-boosted-model-20261112-v1" if args.boosted else
                      "broader-training-model-20261112-v1" if broader else
@@ -333,7 +338,8 @@ def main() -> None:
             combined = market.attach(combined, macro)
         fit_options.update(training_frame=combined, date_weighted=True)
     args.out.mkdir(parents=True, exist_ok=False)
-    protocol = WORKSPACE / ("docs/superpowers/plans/2026-11-12-boosted-risk-calibration.md" if args.calibrate_risk else
+    protocol = WORKSPACE / ("docs/superpowers/plans/2026-11-12-boosted-risk-domain.md" if args.original_risk_history else
+        "docs/superpowers/plans/2026-11-12-boosted-risk-calibration.md" if args.calibrate_risk else
         "docs/superpowers/plans/2026-11-12-boosted-market-risk.md" if market_risk else
         "docs/superpowers/plans/2026-11-12-broader-boosted.md" if args.boosted else
         "docs/superpowers/plans/2026-11-12-broader-training.md" if broader else
@@ -368,6 +374,8 @@ def main() -> None:
         commitment["market_risk"] = market_commitment
     if args.calibrate_risk:
         commitment["risk_calibration"] = "isotonic"
+    if args.original_risk_history:
+        commitment["risk_training_population"] = "original_five"
     (args.out / "inputs.json").write_text(json.dumps(commitment, indent=2), encoding="utf-8")
 
     def predict(label: str, start: str, end: str, *, upside: bool = False):
@@ -375,6 +383,25 @@ def main() -> None:
             predictions, audits = swing._walk_forward_predict(features, "boosted_market_swing20", start, end,
                 "boosted", "target_20", "target_date_20", swing.SWING_FEATURES + market.FEATURES,
                 "probability_up", **fit_options)
+        elif args.original_risk_history:
+            predictions, audits = swing._walk_forward_predict(frame, "boosted_original_market_price_downside20", start, end,
+                "boosted", downside.LABEL, downside.KNOWN_DATE, downside.DOWNSIDE_FEATURES + market.FEATURES,
+                "probability_downside", training_frame=frame, date_weighted=True)
+            for audit in audits:
+                first = pd.Timestamp(audit["first_prediction"])
+                reference = combined.loc[(combined.date >= first - pd.DateOffset(years=4)) & (combined.date < first)
+                    & (combined[downside.KNOWN_DATE] < first) & combined[downside.LABEL].notna()]
+                if reference.empty or set(reference[downside.LABEL]) != {0, 1}:
+                    raise ValueError("A purged broader forecast reference with both classes is required.")
+                weights = 1. / reference.groupby("date").date.transform("size")
+                weights = weights / weights.mean()
+                audit.update(forecast_reference_positive_rate=float(np.average(reference[downside.LABEL], weights=weights)),
+                    forecast_reference_unweighted_positive_rate=float(reference[downside.LABEL].mean()),
+                    forecast_reference_first_fit=reference.date.min().date().isoformat(),
+                    forecast_reference_last_fit=reference.date.max().date().isoformat(),
+                    forecast_reference_last_target=reference[downside.KNOWN_DATE].max().date().isoformat(),
+                    forecast_reference_rows=len(reference), forecast_reference_dates=int(reference.date.nunique()),
+                    forecast_reference_identities=int(reference.symbol.nunique()), forecast_reference_date_weighted=True)
         elif args.calibrate_risk:
             predictions, audits = swing._walk_forward_predict(frame, "isotonic_boosted_market_price_downside20", start, end,
                 "calibrated_boosted", downside.LABEL, downside.KNOWN_DATE, downside.DOWNSIDE_FEATURES + market.FEATURES,
@@ -465,6 +492,8 @@ def main() -> None:
         summary["risk_calibration"] = "isotonic"
         summary["limitations"] = summary["limitations"].replace("; raw scores are not calibrated probabilities.",
             ". Raw upside scores are uncalibrated; downside isotonic uses a shorter purged base and separate correlated holdout, without prospective reliability proof.")
+    if args.original_risk_history:
+        summary["risk_training_population"] = "original_five"
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
 

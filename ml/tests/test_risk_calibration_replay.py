@@ -82,6 +82,7 @@ def test_calibration_routes_only_downside_and_preserves_frozen_admissions(
         pd.testing.assert_frame_equal(options["training_frame"], panel.merge(macro, on="date", validate="many_to_one"))
         inputs = json.loads((output / "inputs.json").read_text())
         assert inputs["risk_calibration"] == "isotonic" and inputs["training_panel"] == panel_commitment
+        assert "risk_training_population" not in inputs
         assert inputs["protocol"] == "broader-boosted-isotonic-market-risk-20261112-v1"
         assert inputs["market_risk"] == source_commitment | {"features_sha256": runner.sha256(output / "market-risk-features.csv")}
         if start == "2021-01-01":
@@ -112,6 +113,7 @@ def test_calibration_routes_only_downside_and_preserves_frozen_admissions(
     runner.main()
     summary = json.loads((output / "summary.json").read_text())
     assert summary["risk_calibration"] == "isotonic"
+    assert "risk_training_population" not in summary
     assert "Raw upside scores are uncalibrated; downside isotonic uses a shorter purged base and separate correlated holdout, without prospective reliability proof." in summary["limitations"]
     assert "raw scores are not calibrated probabilities" not in summary["limitations"]
     assert summary["protocol"] == "broader-boosted-isotonic-market-risk-20261112-v1"

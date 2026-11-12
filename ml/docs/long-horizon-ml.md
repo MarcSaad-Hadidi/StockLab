@@ -1,6 +1,6 @@
 # Longer-history ML evaluation
 
-**Latest completed boosted trial adds lagged market information and is rejected on selection2018-2020:** control20.8998% CAGR/31.9147% drawdown makes no sales; dual13.4933%/22.1165% makes15 downside sales but fails20%/SPY/paired-return and forecast-quality gates. Neither is promoted and no later/full boosted result is calculated. The20% long-period objective remains unmet.
+**Latest completed boosted risk calibration is rejected on selection2018-2020:** control remains20.8998% CAGR/31.9147% drawdown with no sales; the isotonic dual earns9.9142%/22.1154% with14 downside sales. The preceding raw market dual earns13.4933%/22.1165%. Neither passes20%/SPY/paired-return and forecast-quality gates; no later/full boosted result is calculated. The20% long-period objective remains unmet.
 
 **The preceding broader RF experiment is rejected on selection2018-2020:** control22.5988% CAGR/26.8792% drawdown has no sales; dual20.6864%/26.9569% makes two downside sales but reduces return and slightly increases drawdown versus its control. Both admissions are false. No later/full broader returns or fits are produced, so20% compound growth on the long/later periods remains unverified. Production remains RFv7.
 
@@ -9,6 +9,8 @@
 The preceding annual dedicated-downside ML result is17.1013% compound annual growth,22.5372% maximum drawdown and17 simulated sales over2018-2026. Its paired raw-RF control earns18.8761% with29.5981% drawdown and3 sales. The downside head reduces risk but loses its selection-period return advantage; its later2021-2026 result underperforms both the control and SPY. See the dedicated-head section below.
 
 The earlier calibrated recipe's19.4043% aggregate result also remains unsuitable for commissioning: it permits no new purchases in2021-2025, and a fresh2021 reset earns only3.52% CAGR. Fixed protective exits and the later raw-entry ablation trade substantial return for lower drawdown. These are different research comparisons, not returns already earned by deployed RFv7.
+
+Historical commands using`models/broader-20261112/panel` refer to archived source629a07d,whose six feature-source hashes match that immutable panel. The subsequent shared fitting-core change deliberately makes that old panel fail current-source validation. Current calibration/domain trials use the separately recompiled,byte-identical`panel-isotonic`; no manifest is rebound in place. Reproduce a historical study with its committed sources and bound private inputs.
 
 ## Results on the common long period
 
@@ -276,7 +278,7 @@ The control meets return/risk requirements but has no actual sale. Dual lowers d
 
 Mean invested equity is94.94% control/64.52% dual; dual's2020 average is24.23%. Dual has101 entirely-cash sessions,the longest39 from2020-11-05 through year-end. It vetoes265 of606 control BUY candidates;121 coincide with high-risk scores. High-risk known rows355 average.8103 while realized downside-event frequency is.5493. High-upside known rows1,268 average.7434 with realized positive frequency.5584;76 low-upside rows have positive frequency.6053. These overlapping observations diagnose reliability and participation; they do not justify new cutoffs after testing.
 
-Evidence remains in`models/market-risk-20261112/run-v1`,with frozen selection SHA256`b13ee8476810cfc0740af816eca78d8e0c150e652acaeb03edf237e2d8dd6610`. Independent review rebuilds the market features,checks all six exact fit sets/weights/priors and forecasts,and verifies112 total trades plus8,025 numeric ledger comparisons with maximum difference0.0. Source and invocation commitments are verified against629a07d. GitHub's four jobs pass,including1,996 Python tests. The new risk-only isotonic [calibration protocol](../../docs/superpowers/plans/2026-11-12-boosted-risk-calibration.md) addresses the probability failure; it has no result yet.
+Evidence remains in`models/market-risk-20261112/run-v1`,with frozen selection SHA256`b13ee8476810cfc0740af816eca78d8e0c150e652acaeb03edf237e2d8dd6610`. Independent review rebuilds the market features,checks all six exact fit sets/weights/priors and forecasts,and verifies112 total trades plus8,025 numeric ledger comparisons with maximum difference0.0. Source and invocation commitments are verified against629a07d. GitHub's four jobs pass,including1,996 Python tests. The subsequent risk-only isotonic trial is reported below.
 
 ```powershell
 $env:OMP_NUM_THREADS = '1'
@@ -284,6 +286,27 @@ $env:OMP_NUM_THREADS = '1'
 ```
 
 Current Cboe files permit retrospective corrections; delayed observations do not certify historical first-publication/vintage availability. Current-survivor training,selected evaluation stocks and adaptive selection remain limitations. Production RFv7 and native commissioning are unchanged.
+
+## Risk-only isotonic calibration
+
+The [calibration protocol](../../docs/superpowers/plans/2026-11-12-boosted-risk-calibration.md) holds raw upside unchanged and reserves the latest year for a separately date-weighted risk calibration. Base labels must be known before the first actual calibration session; calibration labels before the annual prediction boundary. Installed FrozenEstimator/isotonic calibration never refits the base. This changes both its fitting subset and mapping; it does not isolate calibration alone. Approximately231 correlated calibration dates do not establish thousands of independent observations.
+
+A new panel is legitimately compiled from the same256 frozen raw sources and current exact six source hashes. Its231,667 training rows,all256 per-identity reports,coverage and attrition remain byte-identical; no loader guard changes. Panel manifest SHA256`a01614f6f569546022dda76a535b0915d8eb84bdd8562a90a934a9f7839f2c1a`. Its exact original data digest is preserved. Selection Brier keeps the FULL four-year broader reference rates.3347044508/.3971779222/.3955985256; base/calibration prevalences cannot replace them.
+
+|Selection2018-2020 ONLY|CAGR|Maximum drawdown|Buys / sells|Dedicated-head sales|
+|---|---:|---:|---:|---:|
+|Unchanged raw market control|20.8998%|31.9147%|42 /0|0|
+|Raw market dual,prior trial|13.4933%|22.1165%|55 /15|15|
+|Isotonic risk dual|9.9142%|22.1154%|51 /14|14|
+|SPY proxy|13.8302%|33.7196%|One initial buy|—|
+
+Risk AUC falls to.51805; Brier improves only from.24160 to.23983,still worse than unchanged reference.22408. The new dual loses return versus the prior raw dual and remains below20%,SPY and its unchanged control. All14 actual sales are genuine downside-model exits. Both admissions are false,selected null,results empty: **no later/full fits or returns**. No cutoff/method fallback follows the result.
+
+Mean invested equity is63.33% dual versus94.94% control. Dual blocks302/606 control BUY candidates; it has115 cash-only sessions,longest57 from2020-10-12 through year-end. High-risk324 known rows average.7701 versus realized event frequency.5617;low-risk1,601 average.2349 versus realized.3373. These overlapping selection targets remain descriptive. Monotone within-fit calibration cannot manufacture missing predictive information or guarantee monotone pooled annual outcome bins.
+
+Evidence is in`models/boosted-risk-calibration-20261112/run-v1`,source14bc247,frozen selection SHA256`74b6d6f1d665e0122815bf9aff44e34c9a2467d653190c56ecb04cbccdc16478`. Independent audit verifies exact base/calibration/reference populations,all forecasts,107 total trades and8,004 numeric ledger comparisons with maximum error0.0. Upside prediction CSV AND all five control exports are byte-identical to the raw parent. Full offline suite:2,023 passed,one Windows symlink skip;five visible FrozenEstimator weight warnings are checked against actual separate base/calibration weighting. No production change.
+
+The next [risk-training domain ablation](../../docs/superpowers/plans/2026-11-12-boosted-risk-domain.md) compares against the raw market parent,changing only risk training to original-five causal histories and retaining the broader Brier reference. It has no result yet. This does not claim the added corpus has a verified capitalization class,or that a five-stock result generalizes to the provider universe.
 
 ## Monthly refit, fixed cadence experiment
 

@@ -131,6 +131,7 @@ def test_market_heads_keep_feature_sets_purges_provenance_and_frozen_admissions(
             inputs = json.loads((output / "inputs.json").read_text())
             assert inputs["training_panel"] == panel_commitment
             assert "risk_calibration" not in inputs
+            assert "risk_training_population" not in inputs
             assert inputs["refit_frequency"] == "annual" and inputs["date_weighted"] is True
             assert inputs["boosted"] is True and inputs["omp_num_threads"] == "1"
             assert inputs["plan_sha256"] == runner.sha256(output / "protocol-plan.md")

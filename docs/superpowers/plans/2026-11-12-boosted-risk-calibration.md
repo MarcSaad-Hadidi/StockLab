@@ -37,6 +37,8 @@ Selection2018-2020 runs first. Each arm needs>=20%CAGR,SPY outperformance,DD<ori
 
 Evaluation remains five selected survivors, broader training is retrospectively available/current-survivor data, and Cboe history may contain revisions. Earlier adaptive experiments reuse selection years; the later period is not a pristine globally untouched holdout. Historical success alone would not commission the native inference/artifact/promotion/execution interfaces.
 
-- [ ] Implement and verify shared core and opt-in runner; independently review causal splits and source lineage.
-- [ ] Freeze inputs/code/environment, compile byte-identical new panel and execute the single gated study.
+- [x] Implement and verify shared core and opt-in runner; independently review causal splits and source lineage.
+- [x] Freeze inputs/code/environment, compile byte-identical new panel and execute the single gated study.
 - [ ] Independently audit and publish the observed result, including failure; update draftPR290.
+
+Completed outcome: unchanged raw control20.8998%CAGR/31.9147%DD/zero sales; isotonic dual9.9142%/22.1154%/14 genuine downside sales. Risk AUC.51805/Brier.23983 still misses unchanged reference.22408. Both rejected;selectednull,results empty,no later/full fits or returns. Source14bc247,selection SHA74b6d6f1d665e0122815bf9aff44e34c9a2467d653190c56ecb04cbccdc16478. Independent audit verifies6 exact fits/partitions/priors,107 trades and8,004 numeric ledger comparisons with zero error;raw upside and all5 control exports byte-identical. Full offline suite2,023pass/1Windows skip. Archived prefit plan bytes remain bound in the panel/study; this outcome note is post-study.
