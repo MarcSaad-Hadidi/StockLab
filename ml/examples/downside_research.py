@@ -221,7 +221,7 @@ def forecast_report(frame: pd.DataFrame, predictions: pd.DataFrame, audits: list
     for audit in audits:
         first = pd.Timestamp(audit["first_prediction"])
         period = first.to_period("M") if monthly else first.year
-        rate = audit["training_positive_rate"]
+        rate = audit.get("forecast_reference_positive_rate", audit["training_positive_rate"])
         if period in rates or not 0 < rate < 1 or not pd.Timestamp(audit["last_target"]) < first:
             raise ValueError("Forecast references need one causal training prevalence per fit.")
         if monthly and first != first_sessions.get(period):
@@ -299,7 +299,10 @@ def main() -> None:
     modes.add_argument("--training-panel", type=Path, help="Verified broader training-only panel; both heads refit annually.")
     parser.add_argument("--boosted", action="store_true", help="Use both fixed boosted heads with --training-panel.")
     parser.add_argument("--market-risk-dir", type=Path, help="Verified lagged market features for both boosted heads.")
+    parser.add_argument("--calibrate-risk", action="store_true", help="Isotonic-calibrate only the boosted market downside head.")
     args = parser.parse_args()
+    if args.calibrate_risk and (not args.boosted or args.market_risk_dir is None or args.training_panel is None or args.monthly):
+        parser.error("--calibrate-risk requires --boosted, --market-risk-dir and --training-panel and cannot be combined with --monthly.")
     if args.market_risk_dir is not None and (not args.boosted or args.training_panel is None or args.monthly):
         parser.error("--market-risk-dir requires --boosted and --training-panel and cannot be combined with --monthly.")
     if args.boosted and (args.training_panel is None or args.monthly):
@@ -308,7 +311,8 @@ def main() -> None:
     broader = args.training_panel is not None
     market_risk = args.market_risk_dir is not None
     refit_upside = args.monthly or broader
-    protocol_name = ("broader-boosted-market-risk-20261112-v1" if market_risk else
+    protocol_name = ("broader-boosted-isotonic-market-risk-20261112-v1" if args.calibrate_risk else
+                     "broader-boosted-market-risk-20261112-v1" if market_risk else
                      "broader-boosted-model-20261112-v1" if args.boosted else
                      "broader-training-model-20261112-v1" if broader else
                      "monthly-dual-head-20261112-v1" if args.monthly else "dedicated-downside-20261112-v1")
@@ -329,7 +333,8 @@ def main() -> None:
             combined = market.attach(combined, macro)
         fit_options.update(training_frame=combined, date_weighted=True)
     args.out.mkdir(parents=True, exist_ok=False)
-    protocol = WORKSPACE / ("docs/superpowers/plans/2026-11-12-boosted-market-risk.md" if market_risk else
+    protocol = WORKSPACE / ("docs/superpowers/plans/2026-11-12-boosted-risk-calibration.md" if args.calibrate_risk else
+        "docs/superpowers/plans/2026-11-12-boosted-market-risk.md" if market_risk else
         "docs/superpowers/plans/2026-11-12-broader-boosted.md" if args.boosted else
         "docs/superpowers/plans/2026-11-12-broader-training.md" if broader else
         "docs/superpowers/plans/2026-11-12-monthly-ml.md" if args.monthly else "docs/superpowers/plans/2026-11-12-downside-ml.md")
@@ -361,6 +366,8 @@ def main() -> None:
         macro.to_csv(args.out / "market-risk-features.csv", index=False)
         market_commitment["features_sha256"] = sha256(args.out / "market-risk-features.csv")
         commitment["market_risk"] = market_commitment
+    if args.calibrate_risk:
+        commitment["risk_calibration"] = "isotonic"
     (args.out / "inputs.json").write_text(json.dumps(commitment, indent=2), encoding="utf-8")
 
     def predict(label: str, start: str, end: str, *, upside: bool = False):
@@ -368,6 +375,10 @@ def main() -> None:
             predictions, audits = swing._walk_forward_predict(features, "boosted_market_swing20", start, end,
                 "boosted", "target_20", "target_date_20", swing.SWING_FEATURES + market.FEATURES,
                 "probability_up", **fit_options)
+        elif args.calibrate_risk:
+            predictions, audits = swing._walk_forward_predict(frame, "isotonic_boosted_market_price_downside20", start, end,
+                "calibrated_boosted", downside.LABEL, downside.KNOWN_DATE, downside.DOWNSIDE_FEATURES + market.FEATURES,
+                "probability_downside", **fit_options)
         elif market_risk:
             predictions, audits = swing._walk_forward_predict(frame, "boosted_market_price_downside20", start, end,
                 "boosted", downside.LABEL, downside.KNOWN_DATE, downside.DOWNSIDE_FEATURES + market.FEATURES,
@@ -450,6 +461,10 @@ def main() -> None:
     if market_risk:
         summary["market_risk"] = market_commitment
         summary["limitations"] += " Market indices use current vintages subject to historical corrections; historical first-publication times are unknown, so the lag does not certify point-in-time availability."
+    if args.calibrate_risk:
+        summary["risk_calibration"] = "isotonic"
+        summary["limitations"] = summary["limitations"].replace("; raw scores are not calibrated probabilities.",
+            ". Raw upside scores are uncalibrated; downside isotonic uses a shorter purged base and separate correlated holdout, without prospective reliability proof.")
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
 

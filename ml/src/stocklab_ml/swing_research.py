@@ -132,8 +132,8 @@ def _walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str
         raise ValueError("Refit frequency must be annual or monthly.")
     if not isinstance(date_weighted, bool):
         raise ValueError("Date weighting must be a boolean.")
-    if date_weighted and kind not in ("rf_baseline", "rf", "boosted"):
-        raise ValueError("Date weighting requires an uncalibrated tree recipe.")
+    if date_weighted and kind not in ("rf_baseline", "rf", "boosted", "calibrated_boosted"):
+        raise ValueError("Date weighting requires a supported tree recipe.")
     if (frame.duplicated(["date", "symbol"]).any()
             or not np.isfinite(frame[columns].to_numpy(dtype=float)).all()):
         raise ValueError("Unique finite feature rows are required.")
@@ -158,8 +158,24 @@ def _walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str
                            & (source[target_date] < first) & source[label].notna()]
         if train.empty or set(train[label]) != {0, 1}:
             raise ValueError("A purged training set with both classes is required.")
+        reference = {}
+        if kind == "calibrated_boosted":
+            reference_weights = None
+            if date_weighted:
+                reference_weights = 1. / train.groupby("date").date.transform("size")
+                reference_weights = reference_weights / reference_weights.mean()
+            reference = {
+                "forecast_reference_positive_rate": float(train[label].mean() if reference_weights is None
+                    else np.average(train[label], weights=reference_weights)),
+                "forecast_reference_unweighted_positive_rate": float(train[label].mean()),
+                "forecast_reference_first_fit": train.date.min().date().isoformat(),
+                "forecast_reference_last_fit": train.date.max().date().isoformat(),
+                "forecast_reference_last_target": train[target_date].max().date().isoformat(),
+                "forecast_reference_rows": len(train), "forecast_reference_dates": int(train.date.nunique()),
+                "forecast_reference_identities": int(train.symbol.nunique()),
+                "forecast_reference_date_weighted": date_weighted}
         calibration = None
-        if kind == "calibrated_rf":
+        if kind in ("calibrated_rf", "calibrated_boosted"):
             calibration = train.loc[train.date >= first - pd.DateOffset(years=1)]
             if calibration.empty or set(calibration[label]) != {0, 1}:
                 raise ValueError("Separate calibration history needs both classes.")
@@ -180,6 +196,10 @@ def _walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str
         if date_weighted:
             weights = 1. / train.groupby("date").date.transform("size")
             weights = weights / weights.mean()
+        calibration_weights = None
+        if kind == "calibrated_boosted" and date_weighted:
+            calibration_weights = 1. / calibration.groupby("date").date.transform("size")
+            calibration_weights = calibration_weights / calibration_weights.mean()
         with warnings.catch_warnings():
             warnings.simplefilter("error", ConvergenceWarning)
             # Uniform weights preserve the original forest bootstrap RNG path.
@@ -188,8 +208,17 @@ def _walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str
             else:
                 model.fit(train[columns], train[label].astype("int64"), sample_weight=weights)
             if calibration is not None:
-                model = CalibratedClassifierCV(FrozenEstimator(model), method="sigmoid")
-                model.fit(calibration[columns], calibration[label].astype("int64"))
+                if kind == "calibrated_boosted":
+                    positions = np.arange(len(calibration))
+                    # The frozen base cannot fit on calibration rows; score the holdout once.
+                    model = CalibratedClassifierCV(FrozenEstimator(model), method="isotonic",
+                        cv=[(positions, positions)])
+                else:
+                    model = CalibratedClassifierCV(FrozenEstimator(model), method="sigmoid")
+                if calibration_weights is None or calibration_weights.nunique() == 1:
+                    model.fit(calibration[columns], calibration[label].astype("int64"))
+                else:
+                    model.fit(calibration[columns], calibration[label].astype("int64"), sample_weight=calibration_weights)
         p = model.predict_proba(rows[columns])[:, list(model.classes_).index(1)]
         if not np.isfinite(p).all() or not ((p >= 0) & (p <= 1)).all():
             raise ValueError("Invalid model probabilities.")
@@ -210,6 +239,17 @@ def _walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str
             audit.update(base_last_target=audit["last_target"],
                 calibration_start=calibration.date.min().date().isoformat(), calibration_rows=len(calibration),
                 last_target=calibration[target_date].max().date().isoformat())
+        if kind == "calibrated_boosted":
+            audit.update(reference)
+            audit.update(calibration_method="isotonic", calibration_last_fit=calibration.date.max().date().isoformat(),
+                calibration_last_target=audit["last_target"], calibration_dates=int(calibration.date.nunique()),
+                calibration_identities=int(calibration.symbol.nunique()), calibration_date_weighted=date_weighted,
+                calibration_unweighted_positive_rate=float(calibration[label].mean()),
+                calibration_weighted_positive_rate=float(calibration[label].mean() if calibration_weights is None
+                    else np.average(calibration[label], weights=calibration_weights)),
+                calibration_weight_sum=float(len(calibration) if calibration_weights is None else calibration_weights.sum()),
+                calibration_weight_min=float(1. if calibration_weights is None else calibration_weights.min()),
+                calibration_weight_max=float(1. if calibration_weights is None else calibration_weights.max()))
         audits.append(audit)
     return pd.concat(predictions, ignore_index=True), audits
 
