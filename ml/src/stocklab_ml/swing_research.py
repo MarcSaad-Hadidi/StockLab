@@ -111,6 +111,17 @@ def walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str)
         raise ValueError("Unknown frozen swing recipe.")
     kind, label, target_date = specifications[recipe]
     columns = FEATURE_COLUMNS if kind == "rf_baseline" else SWING_FEATURES
+    predictions, audits = _walk_forward_predict(frame, recipe, start, end, kind, label, target_date,
+                                               columns, "probability_up")
+    for audit in audits:
+        audit.pop("training_positive_rate")
+    return predictions, audits
+
+
+def _walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str, kind: str,
+                          label: str, target_date: str, columns: list[str],
+                          score_column: str) -> tuple[pd.DataFrame, list[dict]]:
+    """Private fitting core shared with the separately named downside target."""
     if (frame.duplicated(["date", "symbol"]).any()
             or not np.isfinite(frame[columns].to_numpy(dtype=float)).all()):
         raise ValueError("Unique finite feature rows are required.")
@@ -152,11 +163,12 @@ def walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str)
         if not np.isfinite(p).all() or not ((p >= 0) & (p <= 1)).all():
             raise ValueError("Invalid model probabilities.")
         output = rows[["date", "symbol"]].copy()
-        output["probability_up"] = p
+        output[score_column] = p
         predictions.append(output)
         audit = {"recipe": recipe, "label": label, "first_fit": train.date.min().date().isoformat(),
             "last_fit": train.date.max().date().isoformat(), "last_target": train[target_date].max().date().isoformat(),
-            "first_prediction": first.date().isoformat(), "train_rows": len(train)}
+            "first_prediction": first.date().isoformat(), "train_rows": len(train),
+            "training_positive_rate": float(train[label].mean())}
         if calibration is not None:
             audit.update(base_last_target=audit["last_target"],
                 calibration_start=calibration.date.min().date().isoformat(), calibration_rows=len(calibration),

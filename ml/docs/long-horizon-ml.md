@@ -1,8 +1,8 @@
 # Longer-history ML evaluation
 
-The selected research recipe reaches **19.4043% compound annual growth versus 14.1669% for the SPY proxy**, after simulated trading costs and with actual stock cash dividends, from 2018-01-01 through 2026-11-11. **The predefined 20% CAGR target remains unmet.** This is an improvement over the comparable one-day RF recipe, not evidence that the deployed RFv7 has already earned these returns. The candidate is not promoted or deployed.
+**Latest dedicated-downside ML result:** 17.1013% compound annual growth,22.5372% maximum drawdown and17 simulated sales over2018-2026. Its paired raw-RF control earns18.8761% with29.5981% drawdown and3 sales. The downside head reduces risk but loses its selection-period return advantage; its later2021-2026 result underperforms both the control and SPY. **The 20% CAGR objective remains unmet; no research candidate is promoted.** See the dedicated-head section below.
 
-**November 12 robustness finding:** that candidate produces no eligible new purchases in 2021-2025. A fresh-capital 2021 reset earns only 3.52% CAGR. Added protective exits halve long-period drawdown but reduce CAGR to 6.43%. Neither candidate is ready for deployment; see the diagnosis and fixed follow-up below.
+The earlier calibrated recipe's19.4043% aggregate result also remains unsuitable for commissioning: it permits no new purchases in2021-2025, and a fresh2021 reset earns only3.52% CAGR. Fixed protective exits and the later raw-entry ablation trade substantial return for lower drawdown. These are different research comparisons, not returns already earned by deployed RFv7.
 
 ## Results on the common long period
 
@@ -141,7 +141,52 @@ The full account's 40 sales comprise 39 protective exits and one model-approved 
 Compared with the protected calibrated candidate, this ablation improves full CAGR from 6.43% to 10.23% and DD from 16.88% to 15.15%. Compared with the original unprotected candidate it sacrifices return (19.40% to 10.23%) for lower DD (32.68% to 15.15%). It still underperforms SPY and fails 20%. Its later DD also exceeds the mostly-cash original reset's 5.00%. **Neither later nor full performance passes all objectives. No research candidate is promoted.** Raw directional scores remain unvalidated as probabilities, and model-approved recurring sales remain weak.
 
 ```powershell
-.\.venv\Scripts\python.exe examples/entry_signal_replay.py --study-dir models/long-horizon-20261111/run-v4 --data-dir models/long-horizon-20261111/dataset --dividend-dir models/long-horizon-20261111/dividend-dataset --risk-dir models/risk-exits-20261112/run-v1 --out models/risk-exits-20261112/new-entry-study
+.\.venv\Scripts\python.exe examples/entry_signal_replay.py --study-dir models/long-horizon-20261111/run-v4 --data-dir models/long-horizon-20261111/dataset --dividend-dir models/long-horizon-20261111/dividend-dataset --risk-dir models/risk-exits-20261112/new-risk-study --out models/risk-exits-20261112/new-entry-study
 ```
 
+Generate `new-risk-study` with the preceding command first: the entry ablation intentionally requires the same current core-source hashes as its risk baseline. The later fitting-core extraction preserves numerical behavior but changes source identity, so current code correctly rejects old `run-v1` as that ablation's baseline. Use archived commit9691da4 sources for an exact original replay; do not remove the source guard. The dedicated-head runner below instead explicitly verifies and consumes archived old entry evidence.
+
 The retained entry evidence is `models/risk-exits-20261112/entry-run-v1`: original source/code/protocol hashes, exact prior reports, selection commitment, nine purged annual fit audits, per-year score/eligibility counts, frozen predictions and costed cash/equity/trades. Later/full accounts start independently with $100,000 and no deposits. Across the previous 12 variants, these two risk policies and one entry ablation are **15 adaptively developed variants**, not independent evidence. This work closes the missing protective-sale simulation and reveals the entry defect; it does not finish the ML performance/deployment objective. Further model validation needs a stronger entry/exit signal and a broader defensible universe, followed by compatible artifacts, audited paper promotion and prospective operation.
+
+## Dedicated downside ML head
+
+The [separate frozen protocol](../../docs/superpowers/plans/2026-11-12-downside-ml.md) tests one combined hypothesis: a dedicated20-session price-risk target, direct trailing SPY context and two-head decisions. Control and challenger use identical previously frozen recent raw RF20 forecasts. Both omit the optional hard trailing/SPY regime/cooldown policies, so the paired comparison measures the learned head rather than another layer of hard exits. Confidence floors, entry limits, actual next opens, fees and real cash dividends remain unchanged.
+
+The dedicated label asks whether `min(close[t+1],...,close[t+20])/open[t+1]-1 <= -.05`, known only at `date[t+20]`. Unknown future paths remain NaN, never negative labels. This excludes the entry overnight gap and measures split-adjusted **price risk**, not dividend-inclusive wealth loss: complete historical cash events before2018 are unavailable. Four direct SPY features are trailing20/63-session momentum,close/SMA200-1 and20-session return volatility. The regularized RF, four-year annual training and full known-date purge reuse existing fitting code without changing original upside recipes, predictions or audits.
+
+Downside score>=.65 overrides other signals with a next-open SELL. BUY needs the original upside/trend approval plus downside<=.35; intermediate risk holds existing positions and blocks new purchases. No cooldown timer or hard stop is added. Raw scores are kept separate; they are not demonstrated calibrated probabilities or a joint probability of profitable trading. Executed sales are joined back to saved actual model reasons and scores.
+
+The earlier recent entry head's pooled AUC is only.5078/Brier.2555. Among1,320 eligible BUY observations its average score is.7195, but its realized20-session endpoint hit rate is.5515. These are retrospective, correlated outcomes, not portfolio returns. A positive endpoint can still include a5% interim decline; this motivated testing an independent path-risk target rather than interpreting `1-p_up` as loss risk.
+
+Selection2018-2020 favors the dual model at24.0452% CAGR/22.5372% DD/8 sales, versus control22.0407%/29.5981%/1 sale. It passes the predeclared incremental return/DD/sales gates and forecast gate (AUC.5505,Brier.2251 versus a causal annual training-prevalence baseline.2347). Both arms' admissions are persisted and hashed before later fitting or returns. The Brier reference uses only known training labels before each prediction year; selection labels extending beyond2020 are excluded.
+
+|Independent account / arm|CAGR|Maximum drawdown|Buys / sells|Dedicated-head sales|
+|---|---:|---:|---:|---:|
+|Full2018-2026 control|18.8761%|29.5981%|115 /3|0|
+|Full2018-2026 selected dual|17.1013%|22.5372%|132 /17|15|
+|Full dual,25+25bps costs|16.7122%|22.5684%|133 /17|15|
+|Later2021-2026 fresh control|19.4525%|17.0526%|59 /2|0|
+|Later2021-2026 fresh dual|13.6672%|13.5635%|64 /8|7|
+|Later dual,25+25bps costs|13.3867%|13.6299%|63 /8|7|
+
+SPY CAGR remains14.1669% full/14.2527% later. The full dual account beats SPY with lower DD, but not20%; its later reset underperforms SPY. Full drawdown is lower than the paired control and original32.6814% candidate, but higher than the earlier fixed-protection ablation's15.1500% drawdown. This is a return/risk trade-off, not a uniform improvement across every strategy.
+
+The downside head does not generalize: later AUC drops to.4827, and Brier.2299 is worse than causal-reference.2137. Full AUC is.5024/Brier.2299 versus reference.2198. Mean invested equity is78.10% full/76.30% later; the longest entirely cash-only stretches are147/148 observed sessions, so entry-veto participation remains a concern. The selected model is **rejected for commissioning**, and the control also fails20%. No arm is silently reselected after the test and no threshold is loosened to pass.
+
+Unlike the earlier mostly-cash reset comparison, this protocol explicitly compares later drawdown against same-period SPY. It retains the full-period original32.6814% ceiling and20%/SPY/sales objectives on both intervals. This changed risk reference is documented before calculation; it does not change the failed return result.
+
+```powershell
+.\.venv\Scripts\python.exe examples/downside_research.py --study-dir models/long-horizon-20261111/run-v4 --data-dir models/long-horizon-20261111/dataset --dividend-dir models/long-horizon-20261111/dividend-dataset --entry-dir models/risk-exits-20261112/entry-run-v1 --out models/downside-20261112/new-study
+```
+
+`models/downside-20261112/run-v1` preserves exact input/protocol/source copies, cached-entry provenance, causal forecast references, nine new annual risk fits, decisions, executed-model reasons, participation and every equity/trade/benchmark curve. This adds a dual-model hypothesis and paired control to already adaptive historical research, not untouched prospective evidence. The simulator, live inference/artifact contracts, RFv7, native tasks and databases are unchanged.
+
+Final relevant verification:458 tests pass, including113 research cases. Independent review verifies exact old public predictions/audits, label-window brute-force checks, all source/selection/protocol hashes, nine cached entry and nine downside fits with exact training rows/prevalence, causal forecast scores, decision priority and six complete daily cash/dividend/equity ledgers. All exported ledger values match at float precision. No Critical/Important finding; this verifies implementation, not return predictability.
+
+## Broader universe feasibility
+
+Two bounded fallback-key reference requests on2026-11-12 return16,462 current US-common-stock `(symbol,mic_code)` identities and28,131 including delisted identifiers:11,669 extra, with none of the active identities missing. Reference plan metadata advertises Basic for16,461/28,130 respectively; this is **not verified historical price coverage**. No stock prices were acquired or added to this experiment. The [official stocks catalog](https://twelvedata.com/docs/asset-catalogs/stocks-list) documents the catalog options and access metadata.
+
+Every returned ISIN/CUSIP is the literal placeholder `request_access_via_add_ons`, not a usable identity. Among the11,669 extra rows, only3,856 have a nonempty FIGI matching the expected format;7,813 lack any such non-placeholder identifier. Format validation does not establish historical identity continuity. Neither snapshot contains historical eligibility dates, ticker-change lifetimes or terminal proceeds. These gaps cannot be filled by treating an earliest provider timestamp as an IPO date, interpolating prices or dropping failed symbols silently.
+
+The DCA project's6,586-instrument catalog and ETF constituent priorities are dated October2026, so they support prospective scanning but cannot be backcast as2010 membership. The larger current/delisted reference snapshot is a concrete starting point for broader data work, not certification of a survivorship-free historical universe. Original raw responses, acquisition parameters, source hashes and identifier audit are preserved privately in `models/downside-20261112/catalog-probe`; no paid resource or additional credential was used.
