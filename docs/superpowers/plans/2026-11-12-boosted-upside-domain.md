@@ -33,8 +33,10 @@ An independent reviewer must verify fit populations, source/input commitments, p
 
 ## Tasks
 
-- [ ] Prepare and review the private driver; pass synthetic checks and freeze plan/source/input/environment commitments.
-- [ ] Execute exactly nine candidate fits and the three fixed accounts; preserve all reference bytes.
-- [ ] Independently audit and publish the comparison and limits; update the existing draft PR without changing runtime.
+- [x] Prepare and review the private driver; pass synthetic checks and freeze plan/source/input/environment commitments.
+- [x] Execute exactly nine candidate fits and the three fixed accounts; preserve all reference bytes.
+- [x] Independently audit and publish the comparison and limits; update the existing draft PR without changing runtime.
+
+Post-study outcome: full18.625926% CAGR /24.765767% DD,223 buys/29 sales; higher costs18.042159%; fresh2021 17.577790% /14.677112% DD. All nine fit populations and both priors pass independent checks;32,344 numeric ledger comparisons have max error0.0. Eight synthetic checks pass. Full Brier .28525 remains worse than both causal priors; >20% flags are false. This becomes a stronger research reference, with no qualification or promotion. Prefit bytes remain archived and committed at abe1777; this outcome note does not change that protocol.
 
 All periods have already been inspected adaptively. Five correlated survivors, current adjusted-price/index vintages and retrospectively available training identities limit generalization. No future return guarantee or completed ML commissioning is implied.

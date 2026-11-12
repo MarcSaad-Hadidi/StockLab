@@ -24,6 +24,8 @@ Report full >20% and SPY/binary-reference outperformance, full DD below the bina
 
 This is the THIRD newly specified diagnostic after DCA: training-domain ablation, continuous-price-return strategy, then this leaf ablation. All historical periods have already been inspected; none is a pristine holdout. Existing rejections remain unchanged, and `classification='adaptive_diagnostic'`, `research_qualified=False`, `promotion_authorized=False` throughout. Five survivors, dependent outcomes, current adjusted-price/index vintages and repeated research limit generalization. No prospective 20% guarantee or completed commissioning is implied.
 
-- [ ] Prepare/review the private loop and pass synthetic checks; freeze commitments before fitting.
-- [ ] Execute exactly nine fits and all three fixed accounts without changing references.
-- [ ] Independently audit and publish all results and limits in the existing draft PR.
+- [x] Prepare/review the private loop and pass synthetic checks; freeze commitments before fitting.
+- [x] Execute exactly nine fits and all three fixed accounts without changing references.
+- [x] Independently audit and publish all results and limits in the existing draft PR.
+
+Post-study outcome: full16.236981% CAGR /25.992698% DD,236 buys/28 sales; higher costs15.609181%; fresh2021 16.362849% /14.946195% DD. Full Brier .29018 also deteriorates. Complete effective parameters differ ONLY in minimum leaf size; all nine fit/prior dictionaries match the binary parent apart from recipe. Independent review verifies32,539 numeric ledger comparisons with max error0.0; eight synthetic checks pass. The18.625926% original-five reference remains stronger; no >20%, qualification or promotion. Prefit bytes remain archived and committed at c5063f5; this post-study note does not retune them.

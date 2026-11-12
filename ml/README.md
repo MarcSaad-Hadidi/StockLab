@@ -29,6 +29,14 @@ The separate [DCA / S&P 500 research](docs/dca-research.md) compares costed,
 chronological paper portfolios against an external SPY proxy and the user's
 20% annualized target. It records both favorable and unfavorable periods;
 research results do not activate a strategy or replace promotion evidence.
+The [subsequent boosted improvement studies](docs/boosted-improvement.md) raise
+the original-five upside candidate to **18.63% CAGR / 24.77% maximum drawdown**
+on 2018–2026, with 223 buys/29 sales, versus SPY 14.17%/33.72%. A fresh 2021
+start earns 17.58%. Continuous-return regression and minimum-leaf regularization
+perform worse and remain documented. All 24 synthetic checks and 98,283 independent
+ledger comparisons pass with zero ledger error. The >20% target remains unmet;
+probability calibration is weak and production remains RFv7.
+
 The user-requested long comparison of the unchanged market-boosted reference
 now covers2018-01-01 through2026-11-11:16.17% CAGR versus SPY14.17%,31.91%
 versus33.72% maximum drawdown,and88 buys/8 sales.100000USD grows to377444USD

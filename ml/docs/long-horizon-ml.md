@@ -1,5 +1,7 @@
 # Longer-history ML evaluation
 
+**Subsequent audited boosted improvement:** original-five upside training earns **18.6259% CAGR / 24.7658% maximum drawdown**, with 223 buys and 29 sales, versus the unchanged broader reference's 16.1739% and SPY's 14.1669%. A fresh 2021 account earns 17.5778%. Continuous-return regression (13.1082%) and stronger leaf regularization (16.2370%) perform worse. The [complete three-trial comparison](boosted-improvement.md) records all results, 98,283 independent zero-error ledger checks and weak forecast calibration. The >20% target remains unmet; no model is promoted. Earlier admissions and evidence below remain unchanged.
+
 **User-requested boosted reference comparison,2018-01-01 to2026-11-11:**16.1739% CAGR versus SPY14.1669%,maximum drawdown31.9147% versus33.7196%,88 buys and8 sales.100000USD grows to377444USD versus323443USD. The20.8998% figure applied only to2018-2020. This separate diagnostic extension does not alter the earlier rejected admissions or promote a model. **The20% CAGR target remains unmet.**
 
 **Latest completed boosted risk-domain ablation is rejected on selection2018-2020:** original-five risk training earns7.9818%/18.0993% with29 downside sales. Previous isotonic/raw market duals earn9.9142%/13.4933%. Both frozen admissions fail; their gated studies produce no later/full result. The user-requested reference-only extension below is a separate comparison.

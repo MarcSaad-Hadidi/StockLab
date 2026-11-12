@@ -30,6 +30,8 @@ Report full/later observed-outcome MAE/RMSE against each annual causal training-
 
 Everything remains `classification='adaptive_diagnostic'`, `research_qualified=False`, `promotion_authorized=False`. All years have already been inspected; the old binary excess classifier was also tested previously. Continuous absolute net-price regression changes target magnitude/loss/score-policy units, not the historical data's independence. Five correlated survivors, squared-loss outliers, overlapping outcomes, current adjusted-price/index vintages, annual staleness and missing old dividend targets remain limitations. No future 20% guarantee or completed native commissioning is implied.
 
-- [ ] Prepare/review the private driver and pass synthetic checks; freeze commitments before fitting.
-- [ ] Execute exactly nine fits and the three fixed accounts without reference changes.
-- [ ] Independently audit and publish every result, favorable or unfavorable, in the existing draft PR.
+- [x] Prepare/review the private driver and pass synthetic checks; freeze commitments before fitting.
+- [x] Execute exactly nine fits and the three fixed accounts without reference changes.
+- [x] Independently audit and publish every result, favorable or unfavorable, in the existing draft PR.
+
+Post-study outcome: full13.108232% CAGR /23.950460% DD,301 buys/49 sales; higher costs12.142410%; fresh2021 16.277670% /13.727303% DD. Return RMSE/MAE trail both causal-mean and zero baselines. Independent review verifies actual open-based targets, all nine fits and33,400 numeric ledger comparisons with max error0.0; eight synthetic checks pass. Both >20% flags fail and the original-five binary reference is retained. No qualification or promotion. Prefit bytes remain archived and committed at6c6a97e; this outcome note changes no frozen rule.
