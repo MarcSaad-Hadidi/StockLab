@@ -36,9 +36,13 @@ Review overlapping-horizon target purge; next-open/exit timing; unlabeled latest
 - [x] Implement minimal research helpers and run focused/adjacent checks.
 - [x] Run frozen selection, then only selected/baseline final evaluation; record all fit boundaries and reproducible inputs.
 - [x] Assess target and robustness. Integrate a winning compatible model only through audited promotion; otherwise preserve active model and record the unmet criterion.
-- [ ] Fresh review, final verification, commit and update existing PR 290 with the actual outcome.
+- [x] Fresh review, final verification, commit and update existing PR 290 with the actual outcome.
 
 ## Execution ledger / second bounded hypothesis
+
+Final verification: 54 research tests and 255 research/adjacent cases pass. The quarterly candidate is rejected on validation drawdown; retained predictions match the prior run byte-for-byte. Final cash-dividend replay repeats 19.4043% CAGR versus SPY 14.1669%, with 32.6814% drawdown; the 20% CAGR objective remains unmet. Fresh review independently reconciled all daily cash/receivable/equity balances and approved the final report's claims/limitations. No strategy was promoted. API/frontend return HTTP200; native API/cycle tasks run and retraining is Ready between due runs. Latest develop remains8e9e177.
+
+Implementation f2bf102 was pushed to the existing PR290 head and its description rewritten for the actual final scope/results. PR290 remains open/draft, unmerged, with no automatic issue closure. Configured-secret-value scan and exact10-file staging scope passed. Only this bounded research plan is complete; the overall ML performance/deployment objective is not.
 
 - Eleven requests succeeded; all overlaps match within the declared 1e-5 absolute price precision and exact volumes. Common actual calendar:4241 sessions per stock/SPY,2010-01-04–2026-11-11;203 native monthly rows per stock. No bars fabricated or rescaled.
 - TDD red→green:34 research tests and 235 research/adjacent cases pass. Earlier DCA defaults preserved. Explicit fee/slippage sensitivity replaces reliance on mutable module globals; original private stress helper was preserved and updated to call the explicit arguments.
