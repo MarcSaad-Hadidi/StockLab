@@ -1,12 +1,12 @@
 import { MarketRequestStatus } from '../market/MarketRequestStatus'
-import { StockLogo, LogoAttribution } from '../market/StockLogo'
 import { marketDataApi } from '../api/marketDataClient'
 import { useMarketRequest } from '../market/useMarketRequest'
+import { StockLogo, LogoAttribution } from '../market/StockLogo'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
 import { formatCurrency, formatDate } from '../i18n/formatters'
 import { useTranslation } from 'react-i18next'
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { assetOptions, initialAlerts, type AlertCondition, type AlertStatus, type PriceAlert } from './alertsData'
 import './alerts.css'
 
@@ -83,7 +83,7 @@ function StatusBadge({ status }: { status: AlertStatus }) {
   return <span className={`status-badge status-${status}`}><i />{t(`alerts.statuses.${status}`)}</span>
 }
 
-function AlertRow({ alert, onEdit, onToggle, onDelete }: { alert: PriceAlert; onEdit: (alert: PriceAlert) => void; onToggle: (alert: PriceAlert) => void; onDelete: (alert: PriceAlert) => void }) {
+function AlertRow({ alert }: { alert: PriceAlert }) {
   const { t } = useTranslation()
   const toggleLabel = alert.status === 'active' ? t('alerts.disableAlert', { symbol: alert.symbol }) : t('alerts.enableAlert', { symbol: alert.symbol })
   return <article className="alert-row">
@@ -93,62 +93,49 @@ function AlertRow({ alert, onEdit, onToggle, onDelete }: { alert: PriceAlert; on
     <div className="alert-cell alert-number"><span className="cell-label">{t('alerts.lastPrice')}</span><strong>{formatCurrency(alert.lastPrice)}</strong></div>
     <div className="alert-cell"><span className="cell-label">{t('common.status')}</span><StatusBadge status={alert.status} /></div>
     <div className="alert-cell alert-date"><span className="cell-label">{t('common.created')}</span><span>{formatDate(alert.createdAt)}</span></div>
-    <div className="alert-actions"><button aria-label={t('alerts.editAlert', { symbol: alert.symbol })} className="table-action" onClick={() => onEdit(alert)} title={t('common.edit')} type="button"><Icon name="edit" size={14} /></button><button aria-label={toggleLabel} className={`table-action ${alert.status === 'active' ? 'action-disable' : 'action-enable'}`} onClick={() => onToggle(alert)} title={toggleLabel} type="button"><Icon name={alert.status === 'active' ? 'pause' : 'play'} size={14} /></button><button aria-label={t('alerts.deleteAlert', { symbol: alert.symbol })} className="table-action action-delete" onClick={() => onDelete(alert)} title={t('common.delete')} type="button"><Icon name="trash" size={14} /></button></div>
+    <div className="alert-actions"><button aria-label={t('alerts.editAlert', { symbol: alert.symbol })} className="table-action" disabled aria-describedby="alerts-unavailable-description" title={t('common.edit')} type="button"><Icon name="edit" size={14} /></button><button aria-label={toggleLabel} className={`table-action ${alert.status === 'active' ? 'action-disable' : 'action-enable'}`} disabled aria-describedby="alerts-unavailable-description" title={toggleLabel} type="button"><Icon name={alert.status === 'active' ? 'pause' : 'play'} size={14} /></button><button aria-label={t('alerts.deleteAlert', { symbol: alert.symbol })} className="table-action action-delete" disabled aria-describedby="alerts-unavailable-description" title={t('common.delete')} type="button"><Icon name="trash" size={14} /></button></div>
   </article>
 }
 
-type AlertDraft = { symbol: string; condition: AlertCondition; targetPrice: number }
-
-type AlertFormProps = {
-  alert?: PriceAlert | null
-  formId?: string
-  idPrefix: string
-  onCancel?: () => void
-  onSave: (draft: AlertDraft) => void
-}
-
-function AlertForm({ alert, formId, idPrefix, onCancel, onSave }: AlertFormProps) {
+// This screen is a preview until the alerts API integration is implemented.
+// Native disabled controls prevent keyboard, pointer and implicit submissions.
+function AlertForm() {
   const { t } = useTranslation()
-  const [symbol, setSymbol] = useState(alert?.symbol ?? '')
-  const [condition, setCondition] = useState<AlertCondition>(alert?.condition ?? 'above')
-  const [targetPrice, setTargetPrice] = useState(alert ? String(alert.targetPrice) : '')
-  const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const loadSearch = useCallback((signal: AbortSignal) => marketDataApi.search(search, signal), [search])
   const results = useMarketRequest(search.trim(), loadSearch, search.trim().length > 0, 450)
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const parsedPrice = Number(targetPrice)
-    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) { setError('stockDetails.errors.targetPrice'); return }
-    onSave({ symbol, condition, targetPrice: parsedPrice })
-  }
-  return <form className="alert-form" id={formId} onSubmit={submit}>
-    <div className="alert-form-grid">
-      <div className="alert-form-field">
-        <label htmlFor={`${idPrefix}-asset`}>{t('alerts.selectAsset')}</label>
-        <input aria-label={t('common.searchStocks')} placeholder={t('common.searchStocks')} value={search} onChange={event => { setSearch(event.target.value); setSymbol('') }} /><MarketRequestStatus {...results} />{search.trim() && !results.loading && !results.error && results.data?.length === 0 && <p>{t('market.noStocksFound')}</p>}<div className="select-wrap"><select id={`${idPrefix}-asset`} onChange={(event) => setSymbol(event.target.value)} value={symbol}><option value="">—</option>{(results.data ?? []).map((asset) => <option key={asset.symbol} value={asset.symbol}>{asset.symbol} — {asset.companyName}</option>)}</select><Icon name="chevron-down" size={14} /></div>
-      </div>
-      <fieldset className="alert-form-field alert-form-condition">
-        <legend>{t('common.condition')}</legend>
-        <div className="condition-options"><button aria-pressed={condition === 'above'} className={`condition-option ${condition === 'above' ? 'selected' : ''}`} onClick={() => setCondition('above')} type="button"><span>↑</span> {t('common.above')}</button><button aria-pressed={condition === 'below'} className={`condition-option ${condition === 'below' ? 'selected' : ''}`} onClick={() => setCondition('below')} type="button"><span>↓</span> {t('common.below')}</button></div>
-      </fieldset>
-      <div className="alert-form-field alert-form-target">
-        <label htmlFor={`${idPrefix}-target`}>{t('common.targetPrice')}</label>
-        <div className="price-input"><span>$</span><input id={`${idPrefix}-target`} inputMode="decimal" min="0.01" onChange={(event) => { setTargetPrice(event.target.value); setError('') }} required step="0.01" type="number" value={targetPrice} /></div>
-      </div>
-      <fieldset className="alert-form-field notify-fieldset">
-        <legend>{t('alerts.notifyVia')}</legend>
-        <div className="notify-options"><label><input defaultChecked type="checkbox" /> <span>{t('alerts.inApp')}</span></label><label><input defaultChecked type="checkbox" /> <span>{t('common.email')}</span></label><label><input type="checkbox" /> <span>{t('alerts.pushNotification')}</span></label></div>
-      </fieldset>
+  return <div className="alert-form" id="create-alert-form">
+    <div className="alert-form-field alert-preview-search">
+      <label htmlFor="alert-market-search">{t('common.searchStocks')}</label>
+      <p id="alert-search-description">{t('alerts.searchPreviewHint')}</p>
+      <input id="alert-market-search" aria-label={t('common.searchStocks')} aria-describedby="alert-search-description" placeholder={t('common.searchStocks')} value={search} onChange={event => setSearch(event.target.value)} />
+      <MarketRequestStatus {...results} />
+      {search.trim() && !results.loading && !results.error && results.data?.length === 0 && <p>{t('market.noStocksFound')}</p>}
+      {results.data && results.data.length > 0 && <ul className="alert-preview-results">{results.data.map(asset => <li key={asset.symbol}>{asset.symbol} — {asset.companyName}</li>)}</ul>}
     </div>
-    {error && <p className="form-error" role="alert">{t(error)}</p>}
-    <div className="alert-form-actions">{onCancel && <button className="cancel-button" onClick={onCancel} type="button">{t('common.cancel')}</button>}<p role="status">{t('businessData.backendPending')}</p><button className="modal-primary" disabled title={t('businessData.unavailable')} type="submit">{alert ? t('common.saveChanges') : t('alerts.createAlert')}</button></div>
-  </form>
-}
-
-function AlertModal({ alert, onClose, onSave }: { alert: PriceAlert | null; onClose: () => void; onSave: (draft: AlertDraft) => void }) {
-  const { t } = useTranslation()
-  return <div className="modal-backdrop" onClick={onClose} role="presentation"><section aria-labelledby="alert-modal-title" aria-modal="true" className="alert-modal" onClick={(event) => event.stopPropagation()} role="dialog"><button aria-label={t('alerts.closeDialog')} className="modal-close" onClick={onClose} type="button"><Icon name="x" size={17} /></button><div className="alert-modal-icon"><Icon name="bell" size={20} /></div><h2 id="alert-modal-title">{alert ? t('alerts.editAlertTitle') : t('alerts.createAlert')}</h2><p>{t('alerts.modalDescription')}</p><AlertForm alert={alert} idPrefix="modal-alert" onCancel={onClose} onSave={onSave} /></section></div>
+    <fieldset aria-describedby="alerts-unavailable-description" className="alert-preview-fields" disabled>
+      <legend className="visually-hidden">{t('alerts.createAlert')}</legend>
+      <div className="alert-form-grid">
+        <div className="alert-form-field">
+          <label htmlFor="inline-alert-asset">{t('alerts.selectAsset')}</label>
+          <div className="select-wrap"><select id="inline-alert-asset" defaultValue=""><option value="">—</option></select><Icon name="chevron-down" size={14} /></div>
+        </div>
+        <fieldset className="alert-form-field alert-form-condition">
+          <legend>{t('common.condition')}</legend>
+          <div className="condition-options"><button className="condition-option" type="button"><span>↑</span> {t('common.above')}</button><button className="condition-option" type="button"><span>↓</span> {t('common.below')}</button></div>
+        </fieldset>
+        <div className="alert-form-field alert-form-target">
+          <label htmlFor="inline-alert-target">{t('common.targetPrice')}</label>
+          <div className="price-input"><span>$</span><input id="inline-alert-target" inputMode="decimal" type="number" /></div>
+        </div>
+        <fieldset className="alert-form-field notify-fieldset">
+          <legend>{t('alerts.notifyVia')}</legend>
+          <div className="notify-options"><label><input type="checkbox" /> <span>{t('alerts.inApp')}</span></label><label><input type="checkbox" /> <span>{t('common.email')}</span></label><label><input type="checkbox" /> <span>{t('alerts.pushNotification')}</span></label></div>
+        </fieldset>
+      </div>
+      <div className="alert-form-actions"><button className="modal-primary" disabled type="button">{t('alerts.createAlert')}</button></div>
+    </fieldset>
+  </div>
 }
 
 export default function AlertsPage() {
@@ -156,20 +143,12 @@ export default function AlertsPage() {
   useEffect(() => {
     document.title = `${t('alerts.pageTitle')} | StockLab`
   }, [i18n.language, t])
-  const [alerts, setAlerts] = useState<PriceAlert[]>(initialAlerts)
+  const alerts = initialAlerts
   const [query, setQuery] = useState('')
   const [conditionFilter, setConditionFilter] = useState<'all' | AlertCondition>('all')
   const [assetFilter, setAssetFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState<'all' | AlertStatus>('active')
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [toast, setToast] = useState<{ key: string; values?: Record<string, string> } | null>(null)
-  const [modalAlert, setModalAlert] = useState<PriceAlert | null | undefined>(undefined)
-
-  const showToast = (key: string, values?: Record<string, string>) => {
-    setToast({ key, values })
-    window.setTimeout(() => setToast(null), 2300)
-  }
-
   const counts = useMemo(() => ({
     active: alerts.filter((alert) => alert.status === 'active').length,
     triggered: alerts.filter((alert) => alert.status === 'triggered').length,
@@ -187,24 +166,6 @@ export default function AlertsPage() {
     })
   }, [alerts, assetFilter, conditionFilter, query, statusFilter])
 
-  const saveAlert = () => { showToast('businessData.unavailable') }
-
-  const toggleAlert = (alert: PriceAlert) => {
-    const nextStatus: AlertStatus = alert.status === 'active' ? 'disabled' : 'active'
-    setAlerts((current) => current.map((candidate) => candidate.id === alert.id ? { ...candidate, status: nextStatus } : candidate))
-    showToast(nextStatus === 'active' ? 'alerts.alertEnabled' : 'alerts.alertDisabled', { symbol: alert.symbol })
-  }
-
-  const deleteAlert = (alert: PriceAlert) => {
-    setAlerts((current) => current.filter((candidate) => candidate.id !== alert.id))
-    showToast('alerts.alertDeleted', { symbol: alert.symbol })
-  }
-
-  const focusCreateAlert = () => {
-    document.getElementById('create-alert-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    document.getElementById('inline-alert-asset')?.focus()
-  }
-
   return <div className="alerts-page stocklab-layout">
     <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
     <main className="alerts-main">
@@ -212,8 +173,9 @@ export default function AlertsPage() {
       <div className="alerts-content">
         <section className="alerts-heading">
           <div><h1>{t('alerts.pageTitle')}</h1><p>{t('alerts.pageSubtitle')}</p></div>
-          <button aria-controls="create-alert-form" className="primary-button" onClick={focusCreateAlert} type="button"><Icon name="plus" size={15} /> {t('alerts.createAlert')}</button>
+          <button aria-describedby="alerts-unavailable-description" className="primary-button" disabled type="button"><Icon name="plus" size={15} /> {t('alerts.createAlert')}</button>
         </section>
+        <p className="alerts-availability" id="alerts-unavailable-description" role="status">{t('alerts.unavailablePreview')}</p>
         <div aria-label={t('alerts.alertStatus')} className="alert-tabs" role="tablist">
           <button aria-selected={statusFilter === 'active'} className={statusFilter === 'active' ? 'selected' : ''} onClick={() => setStatusFilter('active')} role="tab" type="button">{t('alerts.statuses.active')} <span>({counts.active})</span></button>
           <button aria-selected={statusFilter === 'triggered'} className={statusFilter === 'triggered' ? 'selected' : ''} onClick={() => setStatusFilter('triggered')} role="tab" type="button">{t('alerts.statuses.triggered')} <span>({counts.triggered})</span></button>
@@ -226,20 +188,17 @@ export default function AlertsPage() {
             <label className="filter-select"><span>{t('common.condition')}</span><select aria-label={t('common.condition')} onChange={(event) => setConditionFilter(event.target.value as 'all' | AlertCondition)} value={conditionFilter}><option value="all">{t('alerts.allConditions')}</option><option value="above">{t('alerts.conditions.above')}</option><option value="below">{t('alerts.conditions.below')}</option></select><Icon name="chevron-down" size={13} /></label>
             <label className="filter-select"><span>{t('common.asset')}</span><select aria-label={t('common.asset')} onChange={(event) => setAssetFilter(event.target.value)} value={assetFilter}><option value="all">{t('alerts.allAssets')}</option>{assetOptions.map((asset) => <option key={asset.symbol} value={asset.symbol}>{asset.symbol}</option>)}</select><Icon name="chevron-down" size={13} /></label>
             <label className="filter-select"><span>{t('common.status')}</span><select aria-label={t('common.status')} onChange={(event) => setStatusFilter(event.target.value as 'all' | AlertStatus)} value={statusFilter}><option value="all">{t('alerts.allStatuses')}</option><option value="active">{t('alerts.statuses.active')}</option><option value="triggered">{t('alerts.statuses.triggered')}</option><option value="disabled">{t('alerts.statuses.disabled')}</option></select><Icon name="chevron-down" size={13} /></label>
-            <button aria-label={t('alerts.moreFilters')} className="filter-button" onClick={() => showToast('alerts.allFiltersShown')} type="button"><Icon name="filter" size={15} /></button>
           </div>
           <div className="alert-table-header" aria-hidden="true">{Object.values({ asset: 'asset', condition: 'condition', targetPrice: 'targetPrice', lastPrice: 'lastPrice', status: 'status', created: 'created', actions: 'actions' }).map((key) => <span key={key}>{t(`alerts.columns.${key}`)}</span>)}</div>
-          <div className="alert-list">{filteredAlerts.length > 0 ? filteredAlerts.map((alert) => <AlertRow alert={alert} key={alert.id} onDelete={deleteAlert} onEdit={(target) => setModalAlert(target)} onToggle={toggleAlert} />) : <div className="empty-state"><span><Icon name="bell" size={18} /></span><strong>{t('businessData.alerts')}</strong><p>{t('businessData.backendPending')}</p></div>}</div>
-          <div className="alerts-footer"><span>{t('alerts.showing', { shown: filteredAlerts.length, total: alerts.length })}</span><span className="pagination"><button aria-label={t('common.previousPage')} disabled type="button">‹</button><b>1</b><button aria-label={t('common.nextPage')} disabled type="button">›</button><label>{t('alerts.rowsPerPage')} <select aria-label={t('alerts.rowsPerPage')} defaultValue="25"><option>10</option><option>25</option><option>50</option></select></label></span></div>
+          <div className="alert-list">{filteredAlerts.length > 0 ? filteredAlerts.map((alert) => <AlertRow alert={alert} key={alert.id} />) : <div className="empty-state"><span><Icon name="bell" size={18} /></span><strong>{t('businessData.alerts')}</strong><p>{t('businessData.backendPending')}</p></div>}</div>
+          <div className="alerts-footer"><span>{t('alerts.showing', { shown: filteredAlerts.length, total: alerts.length })}</span><span className="pagination"><button aria-label={t('common.previousPage')} disabled type="button">‹</button><b>1</b><button aria-label={t('common.nextPage')} disabled type="button">›</button><label>{t('alerts.rowsPerPage')} <select aria-label={t('alerts.rowsPerPage')} disabled defaultValue="25"><option>10</option><option>25</option><option>50</option></select></label></span></div>
         </section>
         <div className="alerts-bottom-grid">
-          <section aria-labelledby="create-alert-title" className="panel create-alert-card"><div className="create-alert-card-header"><div className="card-icon blue-icon"><Icon name="bell" size={19} /></div><div><h2 id="create-alert-title">{t('alerts.createAlert')}</h2><p>{t('alerts.createAlertDescription')}</p></div></div><AlertForm formId="create-alert-form" idPrefix="inline-alert" onSave={saveAlert} /></section>
+          <section aria-labelledby="create-alert-title" className="panel create-alert-card"><div className="create-alert-card-header"><div className="card-icon blue-icon"><Icon name="bell" size={19} /></div><div><h2 id="create-alert-title">{t('alerts.createAlert')}</h2><p>{t('alerts.createAlertDescription')}</p></div></div><AlertForm /></section>
           <section className="panel how-alerts-card"><div className="card-icon purple-icon"><Icon name="shield" size={19} /></div><div><h2>{t('alerts.howAlertsWork')}</h2><p>{t('alerts.howAlertsWorkDescription')}</p></div><ul><li><span className="how-icon"><Icon name="activity" size={14} /></span><span><strong>{t('alerts.realTimeMonitoring')}</strong><small>{t('alerts.realTimeMonitoringDescription')}</small></span></li><li><span className="how-icon"><Icon name="bell" size={14} /></span><span><strong>{t('alerts.multipleDeliveryChannels')}</strong><small>{t('alerts.multipleDeliveryChannelsDescription')}</small></span></li><li><span className="how-icon"><Icon name="settings" size={14} /></span><span><strong>{t('alerts.manageAnytime')}</strong><small>{t('alerts.manageAnytimeDescription')}</small></span></li></ul></section>
         </div>
         <p className="simulation-note"><Icon name="activity" size={13} /> {t('businessData.backendPending')}</p>
       </div>
     <LogoAttribution /></main>
-    <div aria-live="polite" className={`toast ${toast ? 'visible' : ''}`}>{toast ? t(toast.key, toast.values) : ''}</div>
-    {modalAlert !== undefined && <AlertModal alert={modalAlert} onClose={() => setModalAlert(undefined)} onSave={saveAlert} />}
   </div>
 }
