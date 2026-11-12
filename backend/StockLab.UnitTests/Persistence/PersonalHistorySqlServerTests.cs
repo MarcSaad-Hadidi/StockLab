@@ -38,8 +38,11 @@ public sealed class PersonalHistorySqlServerTests
         Assert.Equal(user, (await db.Users.AsNoTracking().SingleAsync()).Id);
     }
 
-    [LocalDbFact]
-    public async Task Concurrent_captures_preserve_one_original_and_existing_history_cannot_be_edited_or_rolled_back()
+    [LocalDbTheory]
+    [InlineData(2)]
+    [InlineData(4)]
+    [InlineData(8)]
+    public async Task Concurrent_captures_preserve_one_original_and_existing_history_cannot_be_edited_or_rolled_back(int captureCount)
     {
         await using var fixture = new Fixture();
         await fixture.MigrateAsync();
@@ -49,19 +52,28 @@ public sealed class PersonalHistorySqlServerTests
         var calls = 0;
         var quotes = new Quotes(async symbol =>
         {
-            if (Interlocked.Increment(ref calls) == 2) arrived.TrySetResult();
+            if (Interlocked.Increment(ref calls) == captureCount) arrived.TrySetResult();
             await release.Task.WaitAsync(TimeSpan.FromSeconds(30));
             return fixture.Quote(symbol);
         });
-        await using var firstDb = fixture.Context();
-        await using var secondDb = fixture.Context();
-        var first = fixture.Capture(firstDb, quotes).CaptureAsync(user, default);
-        var second = fixture.Capture(secondDb, quotes).CaptureAsync(user, default);
-        await arrived.Task.WaitAsync(TimeSpan.FromSeconds(30));
-        release.SetResult();
-        var captured = await Task.WhenAll(first, second);
-        Assert.NotNull(captured[0]);
-        Assert.Equal(captured[0]!.Id, captured[1]!.Id);
+        async Task<PortfolioValuationSnapshot?> Capture()
+        {
+            await using var context = fixture.Context();
+            return await fixture.Capture(context, quotes).CaptureAsync(user, default);
+        }
+        var captures = Enumerable.Range(0, captureCount).Select(_ => Capture()).ToArray();
+        PortfolioValuationSnapshot?[] captured;
+        try { await arrived.Task.WaitAsync(TimeSpan.FromSeconds(30)); }
+        finally
+        {
+            release.TrySetResult();
+            captured = await Task.WhenAll(captures);
+        }
+        Assert.All(captured, point =>
+        {
+            Assert.NotNull(point);
+            Assert.Equal(captured[0]!.Id, point.Id);
+        });
         Assert.Equal(100000.05555m, captured[0]!.TotalValue);
         await using var db = fixture.Context();
         var stored = await db.PortfolioValuationSnapshots.SingleAsync();
