@@ -6,6 +6,8 @@ import json
 import logging
 from uuid import UUID, uuid4, uuid5
 
+import pandas as pd
+
 from stocklab_ml.artifacts import S3ModelArtifactStore, save_model_artifact
 from stocklab_ml.artifacts.local_storage import artifact_paths, read_local
 from stocklab_ml.data.storage import save_processed
@@ -223,7 +225,19 @@ def _failure(error):
     return type(error).__name__
 
 
-def _train(config, state, run, features, needs):
+def _training_inputs(config, features):
+    if config.training_profile is None:
+        return features, config.test_fraction
+    dates = build_supervised_dataset(features).dataframe.date.drop_duplicates().sort_values()
+    if len(dates) <= 50:
+        raise ModelDatasetError("Recent training requires more than fifty supervised dates.")
+    boundary = dates.iloc[-50]
+    selected = features.loc[features.date >= boundary - pd.DateOffset(years=4)].reset_index(drop=True)
+    count = build_supervised_dataset(selected).dataframe.date.nunique()
+    return selected, 49.5 / count
+
+
+def _train(config, state, run, features, needs, *, test_fraction):
     results = {}
     for family in needs:
         if run["models"][family]["payload"] is None:
@@ -231,7 +245,7 @@ def _train(config, state, run, features, needs):
     _checkpoint(config, state, run)
     if "random_forest" in needs:
         try:
-            forest = train_random_forest(features, test_fraction=config.test_fraction)
+            forest = train_random_forest(features, test_fraction=test_fraction)
             results["random_forest"] = forest
             if "logistic_regression" in needs and forest.baseline_result is not None:
                 results["logistic_regression"] = forest.baseline_result
@@ -239,7 +253,7 @@ def _train(config, state, run, features, needs):
             run["models"]["random_forest"].update(status="FAILED", failure_category=_failure(error))
     if "logistic_regression" in needs and "logistic_regression" not in results:
         try:
-            results["logistic_regression"] = train_logistic_regression(features, test_fraction=config.test_fraction)
+            results["logistic_regression"] = train_logistic_regression(features, test_fraction=test_fraction)
         except Exception as error:
             run["models"]["logistic_regression"].update(status="FAILED", failure_category=_failure(error))
     _checkpoint(config, state, run)
@@ -368,13 +382,14 @@ def _execute(config, dependencies, now, cutoff, clock, retry_run_id, trigger_sou
                 else:
                     features = engineer_features(frozen).dataframe
                     try:
+                        features, fraction = _training_inputs(config, features)
                         chronological_holdout_split(build_supervised_dataset(features).dataframe,
-                                                    test_fraction=config.test_fraction)
+                                                    test_fraction=fraction)
                     except (ModelDatasetError, ModelTrainingError):
                         run["status"] = "SKIPPED_INSUFFICIENT_DATA"
                     else:
                         run["feature_rows"] = len(features)
-                        results = _train(config, state, run, features, needs)
+                        results = _train(config, state, run, features, needs, test_fraction=fraction)
             if run["status"] != "SKIPPED_INSUFFICIENT_DATA":
                 for family, model in run["models"].items():
                     try:

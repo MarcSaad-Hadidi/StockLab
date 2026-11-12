@@ -43,6 +43,15 @@ its existing daily trigger and three-day cadence remain. This avoids competing
 five-request ML batches against the same eight-credit-per-minute Fallback key.
 The general retraining CLI still supports its explicit provider-backed workflow.
 
+The optional retraining config `"training_profile": "recent-history-v1"` reserves
+the latest 50 supervised observation dates for evaluation and fits the preceding
+four calendar years. It computes features from the complete immutable snapshot
+before selecting fitted rows, preserving causal indicator warm-up and the full
+bootstrap. Its holdout replaces the configured `test_fraction`; omitted/null
+profiles retain the original fraction and legacy journal identity. Too little
+history skips publication, and unknown profiles fail configuration validation.
+Published versions remain Archived until a separately audited promotion.
+
 After an explicit historical assessment, a private cycle config may select
 `"risk_profile": "daily-multi-asset-v1"`. This pins a 0.65 directional-score floor,
 20% symbol exposure, 10% per-order allocation, ten positions and no shorts in that
