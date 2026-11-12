@@ -1,22 +1,157 @@
 """One dedicated downside head, frozen entry forecasts and a paired control."""
 
 import argparse
+import hashlib
 from importlib.metadata import version
 import json
 from pathlib import Path
+import platform
+import re
 import sys
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics import brier_score_loss, roc_auc_score
 
-from stocklab_ml import downside_research as downside, research, swing_research as swing
+from stocklab_ml import downside_research as downside, research, swing_research as swing, training_panel
+from stocklab_ml.data.validation import SYMBOL_PATTERN
 from dividend_replay import load_replay_inputs
 from risk_exit_replay import evaluate_replay
-from swing_research import load_snapshot, sha256
+from swing_research import SYMBOLS, load_snapshot, sha256
 
 WORKSPACE = Path(__file__).resolve().parents[2]
 SIM_COLUMNS = ["date", "symbol", "action", "allocation"]
+TRAINING_COLUMNS = ["date", "symbol"] + downside.DOWNSIDE_FEATURES + [
+    "target_20", "target_date_20", downside.LABEL, downside.KNOWN_DATE]
+PANEL_FEATURE_SOURCES = [f"ml/src/stocklab_ml/{name}.py" for name in (
+    "research", "swing_research", "downside_research", "training_panel", "features/engineering", "features/models")]
+
+
+def load_training_panel(root: Path, frame: pd.DataFrame, spy: pd.DataFrame, spy_sha256: str) -> tuple[pd.DataFrame, dict]:
+    """Verify a completed retrospective training sample before any model fit."""
+    root = root.resolve()
+    acquisition = root.parent
+    manifest_path, csv_path = root / "manifest.json", root / "training.csv"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    expected = {"schema_version": 1, "protocol": "broader-training-20261112-v1", "role": "training_only",
+        "price_basis": "splits", "monthly_provenance": "daily_derived_complete_months", "sample_count": 256,
+        "columns": TRAINING_COLUMNS, "spy_sha256": spy_sha256}
+    if (any(manifest.get(key) != value for key, value in expected.items())
+            or manifest.get("training_sha256") != sha256(csv_path)):
+        raise ValueError("Incompatible or changed training-only panel manifest/CSV.")
+    sources = manifest.get("feature_code_sha256", {})
+    if (set(sources) != set(PANEL_FEATURE_SOURCES)
+            or any(sha256(WORKSPACE / name) != digest for name, digest in sources.items())):
+        raise ValueError("Training panel feature sources differ from the current implementation.")
+    files = manifest.get("root_files", {})
+    prefix = root.name + "/"
+    required = {"selection.json", "protocol-plan.md", "probe-results.json", "acquisition-progress.json",
+                "acquisition-results.json", "compile-panel.py", prefix + "attrition.csv", prefix + "build-protocol.md",
+                prefix + "environment.json"}
+    required.update(prefix + "source-snapshot/" + name for name in PANEL_FEATURE_SOURCES)
+    if not isinstance(files, dict) or not required.issubset(files):
+        raise ValueError("Training panel is missing required acquisition/build evidence.")
+    for relative, digest in files.items():
+        if not isinstance(relative, str) or Path(relative).is_absolute():
+            raise ValueError("Training panel evidence paths must be relative to the acquisition root.")
+        path = (acquisition / relative).resolve()
+        if not path.is_relative_to(acquisition) or not path.is_file() or sha256(path) != digest:
+            raise ValueError("Training panel evidence path escapes its root or its hash changed.")
+    if (sum(name.startswith(prefix + "reports/") and name.endswith(".json") for name in files) != 256
+            or any(files[prefix + "source-snapshot/" + name] != digest for name, digest in sources.items())):
+        raise ValueError("Training panel needs all sampled reports and matching archived feature sources.")
+    environment = {"python": platform.python_version()} | {name: version(name) for name in ("numpy", "pandas", "scikit-learn")}
+    if json.loads((root / "environment.json").read_text(encoding="utf-8")) != environment:
+        raise ValueError("Training panel feature-generator environment differs from the current runtime.")
+    selection = json.loads((acquisition / "selection.json").read_text(encoding="utf-8"))
+    progress = json.loads((acquisition / "acquisition-progress.json").read_text(encoding="utf-8"))
+    outcomes = json.loads((acquisition / "acquisition-results.json").read_text(encoding="utf-8"))
+    frozen = {name: files[name] for name in ("selection.json", "protocol-plan.md", "probe-results.json")}
+    frozen["spy.csv"] = spy_sha256
+    sample = selection.get("sample", [])
+    if (selection.get("protocol") != expected["protocol"]
+            or selection.get("salt") != "stocklab-broad-training-20261112-v1|"
+            or selection.get("start") != "2013-04-01" or selection.get("end") != "2026-11-11"
+            or selection.get("protocol_sha256") != files["protocol-plan.md"]
+            or len(sample) != 256 or [record.get("sample_index") for record in sample] != list(range(1, 257))
+            or progress.get("status") != "complete" or progress.get("terminal_outcomes") != 256
+            or progress.get("pending_indices") != [] or progress.get("frozen_inputs_sha256") != frozen
+            or progress.get("outcomes_sha256") != files["acquisition-results.json"]
+            or not isinstance(outcomes, list) or len(outcomes) != 256
+            or [item.get("sample_index") for item in outcomes] != list(range(1, 257))):
+        raise ValueError("Training panel requires the unchanged frozen sample and all 256 terminal outcomes.")
+    identities, ranks, observed = set(), [], set()
+    source_manifests = {}
+    for record, outcome in zip(sample, outcomes):
+        symbol, mic = record.get("symbol", ""), record.get("mic_code", "")
+        identity = mic + "|" + symbol
+        rank = hashlib.sha256((selection["salt"] + identity).encode()).hexdigest()
+        if (not re.fullmatch(SYMBOL_PATTERN, symbol + ":" + record.get("exchange", ""))
+                or not re.fullmatch(r"[A-Z0-9]{4}", mic) or record.get("exchange") not in ("NYSE", "NASDAQ")
+                or symbol in SYMBOLS or record.get("currency") != "USD" or record.get("type") != "Common Stock"
+                or record.get("access", {}).get("plan") != "Basic" or record.get("rank_sha256") != rank
+                or identity in identities or type(record.get("catalog_active")) is not bool):
+            raise ValueError("Invalid, duplicate or evaluation identity in the frozen training sample.")
+        identities.add(identity)
+        ranks.append((rank, mic, symbol))
+        folder = "sources/" + hashlib.sha256(identity.encode()).hexdigest()[:16] + "/"
+        source = folder + "manifest.json"
+        params = {"symbol": symbol, "interval": "1day", "start_date": "2013-04-01",
+            "end_date": "2026-11-11T23:59:59", "order": "asc", "format": "JSON", "adjust": "splits",
+            "exchange": record["exchange"], "outputsize": "5000", "mic_code": mic, "country": "US", "type": "Common Stock"}
+        if (source not in files or outcome.get("identity") != identity or outcome.get("params") != params
+                or outcome.get("catalog_active") != record["catalog_active"]
+                or outcome.get("status") not in ("observed_history", "rejected_response", "quarantined_identity_metadata")
+                or json.loads((acquisition / source).read_text(encoding="utf-8")) != outcome):
+            raise ValueError("A sampled training outcome differs from its bound source manifest or request.")
+        source_manifests[source] = files[source]
+        for key, filename in (("raw_sha256", "raw.json"), ("cleaned_sha256", "cleaned.csv")):
+            name = folder + filename
+            if (key in outcome and files.get(name) != outcome[key]) or ((acquisition / name).exists() and name not in files):
+                raise ValueError("A training response/cleaned source is missing its hash binding.")
+        if outcome["status"] == "observed_history":
+            if not {"raw_sha256", "cleaned_sha256"}.issubset(outcome):
+                raise ValueError("An observed training identity needs both raw and cleaned source hashes.")
+            training_panel.validate_identity(record, outcome.get("response_metadata"))
+            observed.add(symbol + ":" + mic)
+    probe_ids = [record["sample_index"] for active in (True, False)
+                 for record in [r for r in sample if r["catalog_active"] == active][:3]]
+    if (ranks != sorted(ranks) or progress.get("manifest_sha256") != source_manifests
+            or selection.get("probe_ids") != probe_ids
+            or json.loads((acquisition / "probe-results.json").read_text(encoding="utf-8")) != [outcomes[i - 1] for i in probe_ids]):
+        raise ValueError("Training sample ordering, original probes or source completion changed.")
+    dates = ["date", "target_date_20", downside.KNOWN_DATE]
+    added = pd.read_csv(csv_path, parse_dates=dates, float_precision="round_trip",
+        dtype={"symbol": "string"} | {name: "float64" for name in downside.DOWNSIDE_FEATURES + ["target_20", downside.LABEL]})
+    added = added.astype({name: "datetime64[ns]" for name in dates})
+    if (list(added) != TRAINING_COLUMNS or type(manifest.get("rows")) is not int or len(added) != manifest["rows"]
+            or added[["date", "symbol"]].isna().any().any() or added.duplicated(["date", "symbol"]).any()
+            or not set(added.symbol).issubset(observed) or not added.date.eq(added.date.dt.normalize()).all()
+            or not np.isfinite(added[downside.DOWNSIDE_FEATURES].to_numpy()).all()
+            or not added.equals(added.sort_values(["date", "symbol"]).reset_index(drop=True))):
+        raise ValueError("Training CSV must contain canonical finite chronological added-only feature rows.")
+    calendar = pd.DatetimeIndex(spy.date)
+    if (set(spy.symbol) != {"SPY"} or calendar.hasnans or calendar.has_duplicates or not calendar.is_monotonic_increasing
+            or not calendar.equals(calendar.normalize()) or set(frame.symbol) != set(SYMBOLS)):
+        raise ValueError("Training requires the original five-stock evaluation and verified SPY calendar.")
+    positions = calendar.get_indexer(added.date)
+    if (positions < 0).any():
+        raise ValueError("A training feature date is absent from the SPY calendar.")
+    for label, known, horizon in (("target_20", "target_date_20", 21), (downside.LABEL, downside.KNOWN_DATE, 20)):
+        complete = added[label].notna()
+        endpoints = calendar.get_indexer(added.loc[complete, known])
+        if (not complete.eq(added[known].notna()).all() or not added.loc[complete, label].isin([0., 1.]).all()
+                or (endpoints < 0).any() or not np.array_equal(endpoints - positions[complete], np.full(complete.sum(), horizon))):
+            raise ValueError("Known training labels need joint binary/date values and exact full-session horizons.")
+    pre2018 = added.loc[added.target_date_20.lt(pd.Timestamp("2018-01-01"))
+        & added[downside.KNOWN_DATE].lt(pd.Timestamp("2018-01-01")), "symbol"].nunique()
+    if pre2018 < 20:
+        raise ValueError("At least 20 added identities need both fully known pre2018 targets before fitting.")
+    combined = pd.concat([frame[TRAINING_COLUMNS], added], ignore_index=True).sort_values(["date", "symbol"]).reset_index(drop=True)
+    return combined, {"role": "training_only", "manifest_sha256": sha256(manifest_path),
+        "training_sha256": manifest["training_sha256"], "spy_sha256": spy_sha256,
+        "root_files": files, "feature_code_sha256": sources, "rows": len(added),
+        "added_identities": int(added.symbol.nunique()), "pre2018_identities": int(pre2018)}
 
 
 def load_entry(root: Path, features: pd.DataFrame, commitment: dict) -> tuple:
@@ -103,10 +238,10 @@ def forecast_report(frame: pd.DataFrame, predictions: pd.DataFrame, audits: list
         "actual_positive_rate": float(labels.mean()), "mean_score": float(scores.mean())}
 
 
-def admissions(control: dict, dual: dict, forecast: dict, thresholds: dict, *, monthly: bool = False) -> dict:
+def admissions(control: dict, dual: dict, forecast: dict, thresholds: dict, *, strict_target: bool = False) -> dict:
     dual_return_gate = (dual["annualized_return"] >= .20
         and dual["annualized_return"] > dual["benchmark_annualized_return"] and dual["sells"] > 0
-        if monthly else dual["annualized_return"] > thresholds["protected_cagr"])
+        if strict_target else dual["annualized_return"] > thresholds["protected_cagr"])
     return {"control": bool(control["annualized_return"] >= .20
                 and control["annualized_return"] > control["benchmark_annualized_return"]
                 and control["max_drawdown"] < thresholds["original_drawdown"] and control["sells"] > 0),
@@ -157,21 +292,34 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("study-dir", "data-dir", "dividend-dir", "entry-dir", "out"):
         parser.add_argument(f"--{name}", type=Path, required=True)
-    parser.add_argument("--monthly", action="store_true", help="Refit both heads monthly; annual remains the default.")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--monthly", action="store_true", help="Refit both heads monthly; annual remains the default.")
+    modes.add_argument("--training-panel", type=Path, help="Verified broader training-only panel; both heads refit annually.")
     args = parser.parse_args()
     frequency = {"refit_frequency": "monthly"} if args.monthly else {}
-    protocol_name = "monthly-dual-head-20261112-v1" if args.monthly else "dedicated-downside-20261112-v1"
+    broader = args.training_panel is not None
+    refit_upside = args.monthly or broader
+    protocol_name = ("broader-training-model-20261112-v1" if broader else
+                     "monthly-dual-head-20261112-v1" if args.monthly else "dedicated-downside-20261112-v1")
     _, prices, spy, events, _, commitment = load_replay_inputs(args.study_dir, args.data_dir, args.dividend_dir)
     frames = load_snapshot(args.data_dir)
     features = swing.swing_features(frames["stocks.csv"], frames["monthly.csv"], frames["spy.csv"])
     up, thresholds, entry_hashes = load_entry(args.entry_dir, features, commitment)
     frame = downside.make_frame(features, prices, spy)
+    fit_options = frequency.copy()
+    if broader:
+        combined, panel_commitment = load_training_panel(args.training_panel, frame, frames["spy.csv"],
+                                                        commitment["price_inputs_sha256"]["spy.csv"])
+        fit_options.update(training_frame=combined, date_weighted=True)
     args.out.mkdir(parents=True, exist_ok=False)
-    protocol = WORKSPACE / ("docs/superpowers/plans/2026-11-12-monthly-ml.md" if args.monthly
-                            else "docs/superpowers/plans/2026-11-12-downside-ml.md")
+    protocol = WORKSPACE / ("docs/superpowers/plans/2026-11-12-broader-training.md" if broader else
+        "docs/superpowers/plans/2026-11-12-monthly-ml.md" if args.monthly else "docs/superpowers/plans/2026-11-12-downside-ml.md")
     (args.out / "protocol-plan.md").write_bytes(protocol.read_bytes())
     paths = [Path(__file__), Path(downside.__file__), Path(research.__file__), Path(swing.__file__)]
     paths += [Path(sys.modules[name].__file__) for name in ("dividend_replay", "risk_exit_replay", "swing_research")]
+    if broader:
+        paths += [WORKSPACE / name for name in PANEL_FEATURE_SOURCES]
+        paths.append(WORKSPACE / "ml/src/stocklab_ml/modeling/random_forest.py")
     for path in paths:
         archived = args.out / "source-snapshot" / path.resolve().relative_to(WORKSPACE)
         archived.parent.mkdir(parents=True, exist_ok=True)
@@ -183,13 +331,16 @@ def main() -> None:
     if args.monthly:
         commitment.update(refit_frequency="monthly",
             entry_forecast_role="contextual provenance only; monthly decisions use refitted upside scores")
+    elif broader:
+        commitment.update(refit_frequency="annual", date_weighted=True, training_panel=panel_commitment,
+            entry_forecast_role="contextual provenance only; broader decisions use refitted upside scores")
     (args.out / "inputs.json").write_text(json.dumps(commitment, indent=2), encoding="utf-8")
 
     def predict(label: str, start: str, end: str, *, upside: bool = False):
         if upside:
-            predictions, audits = swing.walk_forward_predict(features, "rf_swing20", start, end, **frequency)
+            predictions, audits = swing.walk_forward_predict(features, "rf_swing20", start, end, **fit_options)
         else:
-            predictions, audits = downside.predict(frame, start, end, **frequency)
+            predictions, audits = downside.predict(frame, start, end, **fit_options)
         head = "upside" if upside else "downside"
         fit_name = f"{label}-upside-fits.json" if upside else f"{label}-fits.json"
         predictions.to_csv(args.out / f"{label}-{head}-predictions.csv", index=False)
@@ -202,7 +353,7 @@ def main() -> None:
         return evaluate_account(prices, spy, events, details, args.out, label, start, end, cost)
 
     down, fits = predict("selection", "2018-01-01", "2020-12-31")
-    if args.monthly:
+    if refit_upside:
         selection_up, _ = predict("selection", "2018-01-01", "2020-12-31", upside=True)
     else:
         selection_up = up.loc[up.date.between("2018-01-01", "2020-12-31")]
@@ -211,7 +362,7 @@ def main() -> None:
         details.to_csv(args.out / f"selection-{arm}-decisions.csv", index=False)
     forecast = forecast_report(frame, down, fits, "2020-12-31", **frequency)
     selection = {arm: evaluate(f"selection-{arm}", details, "2018-01-01", "2020-12-31") for arm, details in decisions.items()}
-    admitted = admissions(selection["control"], selection["dual"], forecast, thresholds, monthly=args.monthly)
+    admitted = admissions(selection["control"], selection["dual"], forecast, thresholds, strict_target=refit_upside)
     selected = "dual" if admitted["dual"] else "control" if admitted["control"] else None
     selection_path = args.out / "selection.json"
     selection_path.write_text(json.dumps({"admissions": admitted, "selected_arm": selected, "reports": selection,
@@ -219,7 +370,7 @@ def main() -> None:
     print(f"Frozen admissions: {admitted}; selected={selected}; SHA256={sha256(selection_path)}", flush=True)
     results, forecasts = {}, {"selection": forecast}
     if selected:
-        if args.monthly:
+        if refit_upside:
             later_up, _ = predict("later", "2021-01-01", "2026-11-11", upside=True)
             up = pd.concat([selection_up, later_up], ignore_index=True)
             up.to_csv(args.out / "full-upside-predictions.csv", index=False)
@@ -251,6 +402,9 @@ def main() -> None:
         "limitations": "Adaptive five-surviving-stock history; raw scores are not calibrated probabilities. Price-risk labels exclude cash dividends. No pristine holdout, taxes, final liquidation or live promotion."}
     if args.monthly:
         summary["refit_frequency"] = "monthly"
+    elif broader:
+        summary.update(refit_frequency="annual", date_weighted=True, training_panel=panel_commitment)
+        summary["limitations"] += " Broader training is a retrospective provider-available sample; historical identity continuity and terminal proceeds are unverified."
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
 

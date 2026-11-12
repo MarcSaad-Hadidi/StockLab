@@ -105,7 +105,8 @@ def swing_features(prices: pd.DataFrame, monthly: pd.DataFrame, spy: pd.DataFram
 
 
 def walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str, *,
-                         refit_frequency: str = "annual") -> tuple[pd.DataFrame, list[dict]]:
+                         refit_frequency: str = "annual", training_frame: pd.DataFrame | None = None,
+                         date_weighted: bool = False) -> tuple[pd.DataFrame, list[dict]]:
     """Annual by default; every observed refit boundary purges the full target."""
     specifications = RECIPES | CALIBRATED_RECIPES
     if recipe not in specifications:
@@ -113,21 +114,39 @@ def walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str,
     kind, label, target_date = specifications[recipe]
     columns = FEATURE_COLUMNS if kind == "rf_baseline" else SWING_FEATURES
     predictions, audits = _walk_forward_predict(frame, recipe, start, end, kind, label, target_date,
-                                               columns, "probability_up", refit_frequency=refit_frequency)
-    for audit in audits:
-        audit.pop("training_positive_rate")
+        columns, "probability_up", refit_frequency=refit_frequency,
+        training_frame=training_frame, date_weighted=date_weighted)
+    if training_frame is None and not date_weighted:
+        for audit in audits:
+            audit.pop("training_positive_rate")
     return predictions, audits
 
 
 def _walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str, kind: str,
                           label: str, target_date: str, columns: list[str],
-                          score_column: str, *, refit_frequency: str = "annual") -> tuple[pd.DataFrame, list[dict]]:
+                          score_column: str, *, refit_frequency: str = "annual",
+                          training_frame: pd.DataFrame | None = None,
+                          date_weighted: bool = False) -> tuple[pd.DataFrame, list[dict]]:
     """Private fitting core shared with the separately named downside target."""
     if refit_frequency not in ("annual", "monthly"):
         raise ValueError("Refit frequency must be annual or monthly.")
+    if not isinstance(date_weighted, bool):
+        raise ValueError("Date weighting must be a boolean.")
+    if date_weighted and kind not in ("rf_baseline", "rf", "boosted"):
+        raise ValueError("Date weighting requires an uncalibrated tree recipe.")
     if (frame.duplicated(["date", "symbol"]).any()
             or not np.isfinite(frame[columns].to_numpy(dtype=float)).all()):
         raise ValueError("Unique finite feature rows are required.")
+    source = frame if training_frame is None else training_frame
+    if training_frame is not None:
+        required = ["date", "symbol", label, target_date] + columns
+        if (not isinstance(source, pd.DataFrame) or not set(required).issubset(source.columns)
+                or source.columns.duplicated().any() or source[["date", "symbol"]].isna().any().any()
+                or str(source.date.dtype) != "datetime64[ns]"
+                or not source.date.eq(source.date.dt.normalize()).all()
+                or source.duplicated(["date", "symbol"]).any()
+                or not np.isfinite(source[columns].to_numpy(dtype=float)).all()):
+            raise ValueError("Separate training requires unique finite feature rows and observed dates/symbols.")
     test = frame.loc[frame.date.between(start, end)]
     if test.empty:
         raise ValueError("No evaluation rows.")
@@ -135,8 +154,8 @@ def _walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str
     periods = test.date.dt.to_period("M") if refit_frequency == "monthly" else test.date.dt.year
     for _, rows in test.groupby(periods, sort=True):
         first = rows.date.min()
-        train = frame.loc[(frame.date >= first - pd.DateOffset(years=4)) & (frame.date < first)
-                          & (frame[target_date] < first) & frame[label].notna()]
+        train = source.loc[(source.date >= first - pd.DateOffset(years=4)) & (source.date < first)
+                           & (source[target_date] < first) & source[label].notna()]
         if train.empty or set(train[label]) != {0, 1}:
             raise ValueError("A purged training set with both classes is required.")
         calibration = None
@@ -157,9 +176,17 @@ def _walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str
         else:
             model = HistGradientBoostingClassifier(max_iter=200, learning_rate=.05,
                 max_leaf_nodes=15, l2_regularization=1., early_stopping=False, random_state=42)
+        weights = None
+        if date_weighted:
+            weights = 1. / train.groupby("date").date.transform("size")
+            weights = weights / weights.mean()
         with warnings.catch_warnings():
             warnings.simplefilter("error", ConvergenceWarning)
-            model.fit(train[columns], train[label].astype("int64"))
+            # Uniform weights preserve the original forest bootstrap RNG path.
+            if weights is None or weights.nunique() == 1:
+                model.fit(train[columns], train[label].astype("int64"))
+            else:
+                model.fit(train[columns], train[label].astype("int64"), sample_weight=weights)
             if calibration is not None:
                 model = CalibratedClassifierCV(FrozenEstimator(model), method="sigmoid")
                 model.fit(calibration[columns], calibration[label].astype("int64"))
@@ -172,7 +199,13 @@ def _walk_forward_predict(frame: pd.DataFrame, recipe: str, start: str, end: str
         audit = {"recipe": recipe, "label": label, "first_fit": train.date.min().date().isoformat(),
             "last_fit": train.date.max().date().isoformat(), "last_target": train[target_date].max().date().isoformat(),
             "first_prediction": first.date().isoformat(), "train_rows": len(train),
-            "training_positive_rate": float(train[label].mean())}
+            "training_positive_rate": float(train[label].mean() if weights is None
+                                            else np.average(train[label], weights=weights))}
+        if training_frame is not None or date_weighted:
+            audit.update(date_weighted=date_weighted, training_unweighted_positive_rate=float(train[label].mean()),
+                training_weighted_positive_rate=audit["training_positive_rate"],
+                training_dates=int(train.date.nunique()), training_identities=int(train.symbol.nunique()),
+                training_rows=len(train))
         if calibration is not None:
             audit.update(base_last_target=audit["last_target"],
                 calibration_start=calibration.date.min().date().isoformat(), calibration_rows=len(calibration),

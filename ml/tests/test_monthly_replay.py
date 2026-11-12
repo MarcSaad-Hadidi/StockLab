@@ -30,11 +30,11 @@ def test_monthly_dual_cannot_pass_below_twenty_percent_or_spy(runner):
     forecast = {"auc": .7, "brier": .18, "reference_brier": .25}
     limits = {"protected_cagr": .0977, "original_drawdown": .3268}
     assert runner.admissions(control, dual, forecast, limits)["dual"]
-    assert runner.admissions(control, dual, forecast, limits, monthly=True) == {"control": False, "dual": False}
+    assert runner.admissions(control, dual, forecast, limits, strict_target=True) == {"control": False, "dual": False}
     dual = report(.25, .20, 2)
-    assert runner.admissions(control, dual, forecast, limits, monthly=True)["dual"]
+    assert runner.admissions(control, dual, forecast, limits, strict_target=True)["dual"]
     dual["benchmark_annualized_return"] = .26
-    assert not runner.admissions(control, dual, forecast, limits, monthly=True)["dual"]
+    assert not runner.admissions(control, dual, forecast, limits, strict_target=True)["dual"]
 
 
 @pytest.mark.parametrize("mode", ["reject", "control", "dual"])

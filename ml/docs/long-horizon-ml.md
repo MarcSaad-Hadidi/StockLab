@@ -1,5 +1,7 @@
 # Longer-history ML evaluation
 
+A fixed broader **training-only** corpus is being acquired and validated under the [new protocol](../../docs/superpowers/plans/2026-11-12-broader-training.md). No broader-model returns have been calculated; the completed performance results below remain unchanged.
+
 **Latest monthly-refit experiment is rejected on selection2018-2020:** control19.6974% CAGR/33.0899% drawdown; dual18.7428%/26.8159%. Neither passes the frozen20%/risk/paired-improvement admission, so no later/full monthly returns are calculated. **The 20% CAGR objective remains unmet; no research candidate is promoted.**
 
 The preceding annual dedicated-downside ML result is17.1013% compound annual growth,22.5372% maximum drawdown and17 simulated sales over2018-2026. Its paired raw-RF control earns18.8761% with29.5981% drawdown and3 sales. The downside head reduces risk but loses its selection-period return advantage; its later2021-2026 result underperforms both the control and SPY. See the dedicated-head section below.
@@ -192,6 +194,24 @@ Two bounded fallback-key reference requests on2026-11-12 return16,462 current US
 Every returned ISIN/CUSIP is the literal placeholder `request_access_via_add_ons`, not a usable identity. Among the11,669 extra rows, only3,856 have a nonempty FIGI matching the expected format;7,813 lack any such non-placeholder identifier. Format validation does not establish historical identity continuity. Neither snapshot contains historical eligibility dates, ticker-change lifetimes or terminal proceeds. These gaps cannot be filled by treating an earliest provider timestamp as an IPO date, interpolating prices or dropping failed symbols silently.
 
 The DCA project's6,586-instrument catalog and ETF constituent priorities are dated October2026, so they support prospective scanning but cannot be backcast as2010 membership. The larger current/delisted reference snapshot is a concrete starting point for broader data work, not certification of a survivorship-free historical universe. Original raw responses, acquisition parameters, source hashes and identifier audit are preserved privately in `models/downside-20261112/catalog-probe`; no paid resource or additional credential was used.
+
+## Broader training-only panel, acquisition in progress
+
+One frozen sample contains256 metadata-eligible identities,144 currently active and112 inclusive-only, from9,676 Basic/USD/NYSE-or-NASDAQ/Common-Stock catalog rows. Ranking is SHA256 of a fixed salt plus MIC/ticker; it excludes the five evaluation tickers and never screens on returns, capitalization, liquidity, retrieval success or history length. Failed/short histories are retained in attrition without replacement. The fallback credential acquires one split-adjusted daily history per identity for2013-04-01–2026-11-11, with a bounded transient-retry budget. Global provider/quota errors pause pending work rather than masquerade as unavailable stocks. The sample is retrospective/provider-available, not certified point-in-time or survivorship-free. Provider class labels and historical identity continuity remain unverified.
+
+The new training-only builder splits each history at missing SPY sessions and resets feature warmup. Monthly candles use actual daily OHLCV only when every observed SPY session of a closed month is present; partial/current months are excluded. It reuses existing indicators/labels and independently censors the last21 upside/20 downside outcomes. No missing terminal price becomes a negative label or an invented payout. Evaluation calendars and five-stock cash/dividend execution remain unchanged.
+
+Optional separate training data and date balancing reuse the existing annual RF fitter. After each head's four-year/full-known-date purge, each date receives equal total weight; fitted weighted prevalence supplies the causal forecast reference. Catalog status is absent from model features and weights. Omitting these options preserves legacy scores, fit calls and audits, including the unweighted bootstrap RNG route for uniform weights.
+
+The same runner adds `--training-panel <panel-dir>`, mutually exclusive with `--monthly`. It checks all256 source outcomes, raw/clean/report/protocol hashes, canonical34 columns, exact21/20-session target dates, six feature-source archives and exact generator environment before any fit. At least20 added identities need both targets known before2018. Both heads refit annually on the combined training panel; predictions and transaction returns still concern only AAPL/JNJ/JPM/MSFT/XOM. Imported RF parameters are archived with the study.
+
+Selection remains2018-2020 with strict20%/SPY/drawdown/model-sale admission. Both rejected means no later fitting or returns. The selected arm must subsequently meet the same long/later objectives; data expansion does not bypass qualification. Collection and the data-sufficiency gate are pending, so no new CAGR, drawdown or promotion is claimed.
+
+Verification: the full offline ML suite passes1,909 tests outside the sandbox with actual NTFS hard-link publication. Three additional reject/control/dual checks pass after binding the imported RF-parameter source. Independent source review resolves feature/parameter lineage gaps before any new models; a cached PLG check reproduces3,024 feature rows with exact21/20-session censoring. Actual full-panel and strategy-output auditing remain pending.
+
+```powershell
+.\.venv\Scripts\python.exe examples/downside_research.py --training-panel models/broader-20261112/panel --study-dir models/long-horizon-20261111/run-v4 --data-dir models/long-horizon-20261111/dataset --dividend-dir models/long-horizon-20261111/dividend-dataset --entry-dir models/risk-exits-20261112/entry-run-v1 --out models/broader-20261112/new-study
+```
 
 ## Monthly refit, fixed cadence experiment
 

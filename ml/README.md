@@ -40,6 +40,9 @@ failures, costed comparisons and broader-universe data limits; no research
 candidate is promoted.
 An opt-in monthly refit of both heads is also tested and rejected on2018-2020
 selection (19.70% control/18.74% dual CAGR); no later monthly returns are inferred.
+The same research runner now accepts a validated broader training-only panel,
+with per-identity observed episodes and date-balanced annual fitting. Its frozen
+256-identity collection is in progress; no new performance result is claimed.
 
 ## Requirements
 
