@@ -964,13 +964,17 @@
     "prompt": "Vous n’avez pas encore de compte ?",
     "register": "Créer un compte",
     "registrationSuccess": "Votre compte a été créé. Vous pouvez maintenant vous connecter.",
+    "retryCountdown": "Réessayez dans {{count}} secondes.",
+    "retryCountdown_one": "Réessayez dans {{count}} seconde.",
+    "retryCountdown_other": "Réessayez dans {{count}} secondes.",
+    "retryReady": "Vous pouvez réessayer de vous connecter.",
     "errors": {
       "email": "Saisissez votre adresse e-mail.",
       "emailInvalid": "Saisissez une adresse e-mail valide.",
       "password": "Saisissez votre mot de passe.",
       "invalidCredentials": "L’adresse e-mail ou le mot de passe est incorrect.",
       "invalidRequest": "Vérifiez les champs signalés, puis réessayez.",
-      "rateLimited": "Trop de tentatives. Réessayez plus tard.",
+      "rateLimited": "Trop de tentatives de connexion.",
       "offline": "StockLab est inaccessible. Vérifiez que le backend est démarré.",
       "server": "Le service d’authentification est temporairement indisponible.",
       "sessionStorage": "Votre navigateur bloque le stockage sécurisé de la session. Activez-le, puis réessayez."

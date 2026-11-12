@@ -96,3 +96,54 @@ test('rejects malformed successful responses', async () => {
   await assert.rejects(api.login({ email: 'alex@example.com', password: 'password' }),
     (error: unknown) => error instanceof AuthApiError && error.code === 'invalid_response')
 })
+
+for (const [header, expected] of [['12', 12], ['0', 0], ['86400', 86400]] as const) {
+  test(`429 exposes Retry-After ${header} ahead of the JSON delay`, async () => {
+    const api = createAuthApi('', async () => new Response(JSON.stringify({ error: 'invalid_credentials', retryAfterSeconds: 99 }),
+      { status: 429, headers: { 'Retry-After': header } }))
+    await assert.rejects(api.login({ email: 'alex@example.com', password: 'password' }),
+      (error: unknown) => error instanceof AuthApiError && error.code === 'rate_limited' && error.retryAfterSeconds === expected)
+  })
+}
+
+test('HTTP-date Retry-After uses the server Date header despite browser clock skew', async t => {
+  t.mock.method(Date, 'now', () => Date.parse('2030-01-01T00:00:00Z'))
+  const api = createAuthApi('', async () => new Response('', { status: 429, headers: {
+    Date: 'Wed, 11 Nov 2026 12:00:00 GMT', 'Retry-After': 'Wed, 11 Nov 2026 12:00:25 GMT',
+  } }))
+  await assert.rejects(api.login({ email: 'alex@example.com', password: 'password' }),
+    (error: unknown) => error instanceof AuthApiError && error.retryAfterSeconds === 25)
+})
+
+test('HTTP-date without server Date rounds up from the browser clock, and expired dates allow immediate retry', async t => {
+  t.mock.method(Date, 'now', () => Date.parse('2026-11-11T12:00:00.250Z'))
+  for (const [date, expected] of [['Wed, 11 Nov 2026 12:00:02 GMT', 2], ['Wed, 11 Nov 2026 11:59:59 GMT', 0]] as const) {
+    const api = createAuthApi('', async () => new Response('', { status: 429, headers: { 'Retry-After': date } }))
+    await assert.rejects(api.login({ email: 'alex@example.com', password: 'password' }),
+      (error: unknown) => error instanceof AuthApiError && error.retryAfterSeconds === expected)
+  }
+})
+
+for (const header of ['', 'invalid', '-1', '1.5', 'Infinity', '86401']) {
+  test(`missing or invalid Retry-After ${JSON.stringify(header)} falls back to the JSON delay`, async () => {
+    const api = createAuthApi('', async () => new Response(JSON.stringify({ retryAfterSeconds: 17 }),
+      { status: 429, headers: { 'Retry-After': header } }))
+    await assert.rejects(api.login({ email: 'alex@example.com', password: 'password' }),
+      (error: unknown) => error instanceof AuthApiError && error.retryAfterSeconds === 17)
+  })
+}
+
+for (const delay of [undefined, null, -1, 1.5, '30', 86401]) {
+  test(`invalid JSON retry delay ${JSON.stringify(delay)} remains unavailable`, async () => {
+    const api = createAuthApi('', async () => jsonResponse({ retryAfterSeconds: delay }, 429))
+    await assert.rejects(api.login({ email: 'alex@example.com', password: 'password' }),
+      (error: unknown) => error instanceof AuthApiError && error.retryAfterSeconds === null)
+  })
+}
+
+test('other authentication errors do not start a rate-limit cooldown', async () => {
+  const api = createAuthApi('', async () => new Response(JSON.stringify({ retryAfterSeconds: 60 }),
+    { status: 401, headers: { 'Retry-After': '60' } }))
+  await assert.rejects(api.login({ email: 'alex@example.com', password: 'password' }),
+    (error: unknown) => error instanceof AuthApiError && error.code === 'invalid_credentials' && error.retryAfterSeconds === null)
+})

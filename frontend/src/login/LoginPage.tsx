@@ -5,7 +5,7 @@ import { AuthApiError, authApi } from '../api/authApi'
 import { saveAuthSession } from '../auth/authStorage'
 import { setLanguage } from '../i18n/i18n'
 import { useTranslation } from 'react-i18next'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import './login.css'
 
@@ -68,11 +68,32 @@ export default function LoginPage() {
   const [errors, setErrors] = useState<FieldErrors>({})
   const [serverError, setServerError] = useState<string>()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const submitting = useRef(false)
+  const [retryUntil, setRetryUntil] = useState<number | null>(null)
+  const [retrySeconds, setRetrySeconds] = useState(0)
   const [registrationComplete, setRegistrationComplete] = useState(() =>
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('registered') === '1')
 
+  useEffect(() => {
+    if (retryUntil === null) return
+    const update = () => {
+      const seconds = Math.max(0, Math.ceil((retryUntil - Date.now()) / 1000))
+      setRetrySeconds(seconds)
+      if (seconds === 0) setRetryUntil(null)
+    }
+    const timer = window.setInterval(update, 1000)
+    window.addEventListener('focus', update)
+    document.addEventListener('visibilitychange', update)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', update)
+      document.removeEventListener('visibilitychange', update)
+    }
+  }, [retryUntil])
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (submitting.current || (retryUntil !== null && Date.now() < retryUntil)) return
     const form = new FormData(event.currentTarget)
     const email = String(form.get('email') ?? '').trim()
     const password = String(form.get('password') ?? '')
@@ -87,7 +108,10 @@ export default function LoginPage() {
     setErrors(nextErrors)
     if (Object.keys(nextErrors).length > 0) return
 
+    submitting.current = true
     setIsSubmitting(true)
+    setRetryUntil(null)
+    setRetrySeconds(0)
     try {
       const session = await authApi.login({ email, password })
       if (!saveAuthSession(session)) {
@@ -100,10 +124,17 @@ export default function LoginPage() {
       if (error instanceof AuthApiError) {
         setServerError(loginErrorKey(error.code))
         setErrors(serverFieldErrors(error.fieldErrors))
+        if (error.code === 'rate_limited') {
+          // A legacy/proxy response without a hint uses the default one-minute window.
+          const seconds = error.retryAfterSeconds ?? 60
+          setRetrySeconds(seconds)
+          setRetryUntil(seconds > 0 ? Date.now() + seconds * 1000 : null)
+        }
       } else {
         setServerError('login.errors.server')
       }
     } finally {
+      submitting.current = false
       setIsSubmitting(false)
     }
   }
@@ -138,10 +169,14 @@ export default function LoginPage() {
           <header className="card-heading"><h1 id="login-heading">{t('login.title')}</h1><p>{t('login.subtitle')}</p></header>
           {registrationComplete && <p className="form-success" role="status">{t('login.registrationSuccess')}</p>}
           <form aria-busy={isSubmitting} className="login-form" onSubmit={handleSubmit} noValidate>
-            {serverError && <p className="form-error" role="alert">{t(serverError)}</p>}
+            {serverError && (serverError === 'login.errors.rateLimited'
+              ? retrySeconds > 0
+                ? <p className="form-error" id="login-retry-status" role="alert">{t(serverError)}{' '}<span role="timer" aria-live="off">{t('login.retryCountdown', { count: retrySeconds })}</span></p>
+                : <p className="form-success" role="status">{t('login.retryReady')}</p>
+              : <p className="form-error" role="alert">{t(serverError)}</p>)}
             <div className="field-group"><label htmlFor="email">{t('login.emailLabel')}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={t('login.emailPlaceholder')} autoComplete="email" aria-invalid={Boolean(errors.email)} /></div>{errors.email && <p className="field-error">{t(errors.email)}</p>}</div>
             <div className="field-group"><div className="label-row"><label htmlFor="password">{t('login.passwordLabel')}</label><a href="#forgot-password">{t('login.forgot')}</a></div><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={t('login.passwordPlaceholder')} autoComplete="current-password" aria-invalid={Boolean(errors.password)} /><button className="visibility-button" type="button" aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{t(errors.password)}</p>}</div>
-            <button className="primary-button" disabled={isSubmitting} type="submit">{t('login.signIn')}</button>
+            <button className="primary-button" disabled={isSubmitting || retrySeconds > 0} aria-describedby={retrySeconds > 0 ? 'login-retry-status' : undefined} type="submit">{t('login.signIn')}</button>
           </form>
           <div className="form-divider"><span>{t('login.divider')}</span></div>
           <button className="google-button" type="button"><Icon name="google" /><span>{t('login.google')}</span></button>

@@ -86,6 +86,14 @@ Validation, duplicate email, invalid credentials, rate limits and service errors
 are surfaced through localized messages. Editing the registration email clears
 errors belonging to its previous value while preserving other relevant errors.
 
+After a login `429`, the page shows a localized countdown from `Retry-After`
+(seconds or an HTTP date), falling back to the response's `retryAfterSeconds`.
+Missing or invalid retry metadata uses a one-minute client wait. The countdown
+uses an absolute deadline, refreshes on focus/visibility changes, and disables
+both button and form submissions until expiry. Expiry enables a manual retry;
+it never resubmits credentials automatically. A new `429` replaces the previous
+deadline, and the backend's per-IP protection remains authoritative.
+
 Login saves the returned Bearer token, expiry and user identity in the
 `stocklab-auth` localStorage entry. A storage failure does not report a successful
 login. Private clients send that token in the `Authorization` header; the backend
