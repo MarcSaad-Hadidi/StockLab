@@ -1,0 +1,51 @@
+# DCA next-session port and funded25% trim comparison
+
+## User request and verified source
+
+The user requests their monthly2x/3x/4x DCA strategy with the named next-session execution and a25% sale on entering STRONG_TRIM. They explicitly choose the SAME100000USD initial capital for DCA,boosted reference and S&P500 proxy,not variable external contributions. Comparison dates remain2018-01-01 through2026-11-11,the final common frozen session;2026 is partial. No live task/model/database/broker/site changes or new price acquisition.
+
+The supplied specification identifies DCA Cercle published version50,sourcea7a850c1dc2358241758a6fdf89c1940b2685801. Sites metadata and an isolated source checkout verify that exact commit. The old public GitHubd0c8f31 source must not substitute for its new scheduler. Five specified Git blobs match: signals4d25962ca690b04944401fb872ff55aa9ecd7855,next-sessione3be3bc8a15c9cedb96244b8e80decc44556d8d0,scheduled-referenceeb2f43fc3adae02cafb868bff4132eaccfa672bf,reference-backtest33acd210dcc92e3b85ea6f11809ce6c92a44bc90,data56d2259ff13fd5acee68208f8906f30d004f779c. Source access only; no Site publication or credential persistence.
+
+The specification's StockLabdevelop8c0dcb9 inspection lacks this branch's identified boosted research model. Use the already audited raw reference forecast SHA9eb037ed4921c45f4b6ee99628d346b7be78321ad7b61ac03174620bc7be4fc7 and full account377444.36USD/16.1739%CAGR. No missing-model inference or new training is needed. Existing six bound feature/fitting modules and panel-isotonic remain unchanged.
+
+## Source parity precedes adaptation
+
+Port the scalar range_rsi_v1 engine in a separate offline module,including exact Wilder14 initialization/operation order,profile12/24/36 windows9/12/19,current complete bar in high/low range,strict inclusive thresholds and RSI>=80 priority. Preserve chronology,invalid/provisional/history-gap resets,zero-range unavailability and retrospective touch metadata. Do not use daily RSI,ewm,Heikin Ashi or unfinished-period touches for trades.
+
+Port v50 next_open_v1/next_confirmed_session_open_v1 separately from the funded comparison. Native monthly dates are month-start labels;availability/periodEnd are calendar month-end. referencePeriods filters point.date>=startDate: December2017 cannot cause a January2018 trade. Each eligible confirmed monthly multiplier2/3/4 schedules its fullB*m purchase at the first EXPECTED validated session strictly after max(availableDate,periodEnd). Persistent buy zones can buy each month;ADD1x never buys in2to4. Missing/excluded expected open or insufficient confirmed coverage fails,never silently advances to the next observed price. Preserve distinct events sharing an open and pending final cash.
+
+Exact source-parity accounts have initial0,externalB*m credited at availableDate,zero costs/no dividends/no exposure caps and floating quantityamount/open. Their retained C/N same-close DCA comparator is retrospective and depends on the full window;it is reproduced only as a parity output,never used as the SPY comparator or as a causal performance claim. Source synthetic fixtures and identical-input TypeScript/Python signals/schedules must match before any funded result. The2010 cached prefix is supplied identically to both engines;parity is not a claim about an unavailable personal-chart prefix/provider.
+
+## Frozen funded comparison policy
+
+These are explicitly NEW funded adaptations,not v50's original contribution model:
+
+- Fixed same five evaluation survivors AAPL/JNJ/JPM/MSFT/XOM,USD,profileStandard24 on confirmed MONTHLY bars,strategy2to4. No new universe,parameter/profile/cadence grid or survivor filtering.
+-100000USD initial cash split into FIVE independent20000USD buckets. No cross-asset borrowing,no later external deposits,no leverage/shorts. Base requested all-in purchase budget per asset B=20000/12,chosen from initial capital and calendar months BEFORE returns;never divide by future signal counts/multipliers. Each eligible buy requestsB*m and spends min(request,bucket spendable cash),with a skipped reason if below the minimum representable quantity. Original v50 full-budget externally funded behavior remains only in its separate parity function.
+- Comparison buys and sells use5bps proportional fee plus5bps adverse slippage per executed side,same split-adjusted opens/marks and all176 actual gross dividend events as the boosted comparison. Quantity floors at8 decimal places. Dividend entitlement uses holdings BEFORE ex-date orders;receivables count as equity immediately,cash becomes spendable at the first observed session strictly AFTER payment. No final hypothetical liquidation,tax,cash interest,or double split adjustment.
+- Funds remain in their original asset bucket. Sale proceeds and paid dividends may fund futureB*m purchases;they are internal cash,not external contributions,and do not enlarge the requested base budget. Bucket caps differ explicitly from boosted's current-equity10% trade/20% symbol limits;this is a common-capital comparison,not an exposure-matched experiment.
+- Two arms share identical inputs and accounting: funded_next_open_buy_only_v1 and funded_next_open_trim25_entry_v1. The first is the control. No fake ML confidence field is assigned to a deterministic rule.
+
+## Explicit new trim state
+
+STRONG_TRIM is monthlyRSI>=80 AND K>=90. The user selected25%;v50 itself never sells. The trim variant seeds prior category from the full valid known warmup before the test. Unknown/first STRONG does not invent an entry. UNAVAILABLE/missing periods neither rearm nor masquerade as exits;hold the prior valid state. A valid non-STRONG category,including LIGHT_TRIM,rearms. Only a new confirmed valid non-STRONG→STRONG transition within the eligible test period creates one SELL25% event. Persistent STRONG creates no further sale.
+
+At the first validated next open,sell25% of the quantity actually held just before that fill,with8dp floor. Zero position/zero rounded quantity is recorded as skipped;no fabricated trade. Release acquisition cost proportionally and credit net proceeds to the same bucket. No boundary-antidated/forced end fill. Distinct delayed events at one open remain separate;execute SELL before BUY,then stable availability/period/symbol/event-id order. Event IDs are unique and processed once;duplicates are rejected or already-processed events skipped without applying twice. Entry state is based on signals,not on whether a sale happened to execute.
+
+## Calendar and source evidence
+
+Use a declared calendar validated independently of stock price-row existence. Reconcile the complete frozen SPY sessions against the actual v50 fallback calendar,retaining all differences. The source fallback is not a universal closure list. Official NYSE notices confirm [2018-12-05](https://ir.theice.com/press/news-details/2018/New-York-Stock-Exchange-to-Honor-President-George-H-W-Bush/default.aspx) and [2025-01-09](https://ir.theice.com/press/news-details/2024/The-New-York-Stock-Exchange-Will-Close-Markets-on-January-9-to-Honor-the-Passing-of-Former-President-Jimmy-Carter-on-National-Day-of-Mourning/default.aspx) closures. Nasdaq's primary notices confirm Hurricane Sandy closures on [2012-10-29](https://www.nasdaqtrader.com/TraderNews.aspx?id=ETA2012-44) and [2012-10-30](https://www.nasdaqtrader.com/TraderNews.aspx?id=ETA2012-45). Actual reconciliation finds exactly those2012 dates and2018-12-05 as fallback-only sessions,with no SPY-only dates. Remove only these three independently documented exceptions from the separately declared comparison calendar;the result must exactly match all4241 frozen SPY sessions. Do not repair the DCA source silently;retain the original fallback list and mismatch evidence. All five price calendars must match. A missing expected trade open fails even if a later price exists.
+
+## Minimal scope and verification
+
+New offline dca_signals.py and dca_next_open.py plus focused synthetic tests;private source snapshots/oracles/comparison driver/auditor under models/dca-next-open-20261112. Do not edit the six source-bound research/engineering modules,legacy APIs,production inference or old studies. Reuse existing validation,price/dividend inputs and Fraction/accounting patterns without mutating their constants. No new dependency.
+
+Before returns,bind this plan,source/spec/fixture hashes,new modules/environment,canonical monthly signal inputs,validated calendar,all raw/clean manifests and exact boosted/SPY outputs. Run source TypeScript tests without network;cross-language categories/dates/order counts exact,numeric tolerances explicit only for indicator/quantity float representations without moving business cutoffs. Test all inclusive boundaries,RSI seed/update,resets,future invariance,start filter,pending last budget,strict holiday/open resolution,multiple same-open orders,zeroeligible case,and all new trim/rearm/gap/no-position/rounding/cashflow/idempotence cases.
+
+Run the two fixed funded arms once on2018-2026. Compare CAGR,total return,ending wealth,maxDD,annual returns,exposure,buy/sell counts,costs,dividends and realized/unrealized P&L against frozen boosted/SPY. Preserve unfavorable results. No post-result budget,calendar,trim,cost,allocation or model substitution. Independently reconstruct full cash/dividend/position/cost-basis/execution ledgers and metrics without calling the new production-of-results ledger. Source-parity results and funded-strategy results remain distinctly named.
+
+Survivorship/current-price vintages,unknown original arrival timestamps,a limited five-stock evaluation and adaptive repeated exploration remain limitations. This is a historical strategy comparison,not a reliable probability or future20% guarantee. DCA strategy execution alone does not commission a new active ML artifact/inference/promotion pipeline.
+
+- [ ] Verify v50 source and exact signal/next-open parity;implement/test new modules.
+- [ ] Freeze canonical inputs/calendar/code/environment and execute the two fixed funded arms.
+- [ ] Independently audit and publish comparison,including limitations and rejected outcomes.
