@@ -42,7 +42,7 @@ Root owns protocol, private single-run evidence, final report/README, review/tes
 - [x] Observe failing monthly boundary/purge/default/reference tests; implement minimal optional cadence and pass relevant checks.
 - [x] Observe failing runner admission/order/provenance tests; implement monthly mode and pass focused checks.
 - [x] Execute once, freeze admissions before later fitting, and assess exact target without post-test adjustments.
-- [ ] Independently review source/data/ledger/report, run final checks and secret scan, commit/push and update draft PR290. Keep whole goal active unless every real requirement is verified.
+- [x] Independently review source/data/ledger/report, run final checks and secret scan, commit/push and update draft PR290. Keep whole goal active unless every real requirement is verified.
 
 ## Observed outcome
 
@@ -51,3 +51,5 @@ The72selection fits complete. Control19.697381%CAGR/DD33.089897%,49BUY1SELL; dua
 Risk forecast AUC.5446784201/Brier.2296220461/reference.2323991489 on3680knownselectionlabels. Meaninvestment91.9875%/81.0767%, longestallcash1/57observedsessions. Monthly training-feature maximum age64days(up)/63(risk), versus398/397annual, without a performance qualification.
 
 484relevant tests pass,139research. Independent review verifies source/protocol/input archives, exact36up+36risktraining sets/counts/feature/known boundaries/prevalence, causal reference statistics, decision joins, both daily fee/dividend/cap/cash/equity ledgers and absence of later artifacts. All exported ledger values match at float precision. No Critical/Important findings. Production RFv7/native tasks/config/DB remain unchanged; target and full ML commissioning remain incomplete.
+
+Implementation1323387 is published to origin/codex/ml-local-completion. PR290 body/head verified, still open/draft/unmerged; latest develop8e9e177 unchanged. Exact nine-public-file staging/configured-secret scan/diff checks passed, and final report/reproduction/commissioning wording reviewed against source. This bounded cadence test is complete; the overall ML goal stays active and incomplete.
