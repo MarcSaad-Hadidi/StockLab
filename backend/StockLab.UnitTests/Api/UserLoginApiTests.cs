@@ -223,11 +223,19 @@ public sealed partial class UserLoginApiTests
             }))
         };
         request.Headers.TryAddWithoutValidation("X-Forwarded-For", "203.0.113.9");
+        request.Headers.Add("Origin", "https://frontend.example.test");
         using var throttled = await fixture.Client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.TooManyRequests, throttled.StatusCode);
         using var body = JsonDocument.Parse(await throttled.Content.ReadAsStringAsync());
         Assert.Equal("too_many_requests", body.RootElement.GetProperty("error").GetString());
+        var retryAfter = Assert.IsType<TimeSpan>(throttled.Headers.RetryAfter?.Delta);
+        Assert.InRange(retryAfter.TotalSeconds, 1, 60);
+        Assert.Equal(retryAfter.TotalSeconds, body.RootElement.GetProperty("retryAfterSeconds").GetInt32());
+        var exposedHeaders = string.Join(',', throttled.Headers.GetValues("Access-Control-Expose-Headers"))
+            .Split(',', StringSplitOptions.TrimEntries);
+        Assert.Contains("Retry-After", exposedHeaders, StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("Date", exposedHeaders, StringComparer.OrdinalIgnoreCase);
         Assert.Equal(2, hasher.VerifyCount);
 
         using var health = await fixture.Client.GetAsync("/health");
@@ -544,6 +552,7 @@ public sealed partial class UserLoginApiTests
                         ["Jwt:SigningKey"] = signingKey,
                         ["LoginRateLimit:PermitLimit"] = loginPermitLimit.ToString(),
                         ["LoginRateLimit:Window"] = loginWindow,
+                        ["Cors:AllowedOrigins:0"] = "https://frontend.example.test",
                         ["ForwardedHeaders:KnownProxies:0"] = trustedProxyAddress
                     };
                     if (accessTokenMinutes is not null) values["Jwt:AccessTokenMinutes"] = accessTokenMinutes;

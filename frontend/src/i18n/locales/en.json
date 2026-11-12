@@ -964,13 +964,17 @@
     "prompt": "Don’t have an account yet?",
     "register": "Create an account",
     "registrationSuccess": "Your account was created. You can now sign in.",
+    "retryCountdown": "Try again in {{count}} seconds.",
+    "retryCountdown_one": "Try again in {{count}} second.",
+    "retryCountdown_other": "Try again in {{count}} seconds.",
+    "retryReady": "You can try signing in again.",
     "errors": {
       "email": "Please enter your email address.",
       "emailInvalid": "Please enter a valid email address.",
       "password": "Please enter your password.",
       "invalidCredentials": "The email or password is invalid.",
       "invalidRequest": "Check the highlighted fields and try again.",
-      "rateLimited": "Too many attempts. Try again later.",
+      "rateLimited": "Too many sign-in attempts.",
       "offline": "StockLab is unreachable. Check that the backend is running.",
       "server": "The authentication service is temporarily unavailable.",
       "sessionStorage": "Your browser blocked secure session storage. Enable storage and try again."

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 using System.Threading.RateLimiting;
 using System.Net;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -187,8 +188,14 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.OnRejected = async (context, cancellationToken) =>
     {
+        var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var delay)
+            ? delay
+            : context.HttpContext.RequestServices
+                .GetRequiredService<Microsoft.Extensions.Options.IOptions<LoginRateLimitOptions>>().Value.Window;
+        var retryAfterSeconds = (int)Math.Max(1, Math.Ceiling(retryAfter.TotalSeconds));
+        context.HttpContext.Response.Headers.RetryAfter = retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
         await context.HttpContext.Response.WriteAsJsonAsync(
-            new ApiErrorResponse("too_many_requests", "Too many login attempts. Try again later."),
+            new ApiRateLimitErrorResponse("too_many_requests", "Too many login attempts. Try again later.", retryAfterSeconds),
             cancellationToken);
     };
     options.AddPolicy(LoginRateLimitOptions.PolicyName, httpContext =>
@@ -262,7 +269,8 @@ builder.Services.AddCors(options =>
 
         policy.WithOrigins(allowedOrigins)
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .WithExposedHeaders("Retry-After", "Date");
     });
 });
 

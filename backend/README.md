@@ -1086,6 +1086,13 @@ and wrong password both return `401 Unauthorized` with the same
 `validation_error` response.
 Login attempts are limited to five requests per minute per client IP by default;
 excess requests receive `429 Too Many Requests` with a `too_many_requests` error.
+The response includes a whole-second `Retry-After` header and the same numeric
+`retryAfterSeconds` JSON field. The interval comes from the limiter's retry
+metadata, rounded up (at least one second); the configured window is the fallback
+when metadata is unavailable. `Retry-After` and `Date` are exposed to allowed CORS
+origins so clients can also interpret HTTP-date retry hints without clock skew.
+This is a retry interval, not a guarantee of admission: the per-IP limiter remains
+authoritative when the next attempt arrives.
 Configure `LoginRateLimit:PermitLimit` and `LoginRateLimit:Window` to adjust this
 limit. The in-process limit is applied independently by each API instance. When
 running behind a reverse proxy, configure its address under

@@ -32,13 +32,15 @@ export class AuthApiError extends Error {
   readonly status: number
   readonly code: AuthApiErrorCode
   readonly fieldErrors: Record<string, string[]>
+  readonly retryAfterSeconds: number | null
 
-  constructor(status: number, code: AuthApiErrorCode, message: string, fieldErrors: Record<string, string[]> = {}) {
+  constructor(status: number, code: AuthApiErrorCode, message: string, fieldErrors: Record<string, string[]> = {}, retryAfterSeconds: number | null = null) {
     super(message)
     this.name = 'AuthApiError'
     this.status = status
     this.code = code
     this.fieldErrors = fieldErrors
+    this.retryAfterSeconds = retryAfterSeconds
   }
 }
 
@@ -48,10 +50,10 @@ const string = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0
 
 function errorCode(status: number, value: unknown): AuthApiErrorCode {
+  if (status === 429) return 'rate_limited'
   if (value === 'validation_error') return 'validation_error'
   if (value === 'email_already_registered') return 'email_already_registered'
   if (value === 'invalid_credentials') return 'invalid_credentials'
-  if (status === 429) return 'rate_limited'
   if (status >= 500) return 'server_error'
   if (status === 401) return 'invalid_credentials'
   if (status === 400) return 'validation_error'
@@ -77,6 +79,22 @@ function fieldErrors(value: unknown): Record<string, string[]> {
     const safe = messages.filter(string).map(message => message.trim())
     return safe.length > 0 ? [[key, safe]] : []
   }))
+}
+
+function retryDelay(response: Response, body: Record<string, unknown>): number | null {
+  // Match the backend's maximum configured login window; reject invalid or unbounded hints.
+  const valid = (value: unknown): value is number => typeof value === 'number'
+    && Number.isSafeInteger(value) && value >= 0 && value <= 86400
+  const header = response.headers.get('Retry-After')?.trim()
+  if (header && /^\d+$/.test(header)) {
+    const seconds = Number(header)
+    if (valid(seconds)) return seconds
+  } else if (header && /^[a-z]{3}, \d{2} [a-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$/i.test(header)) {
+    const serverDate = Date.parse(response.headers.get('Date') ?? '')
+    const seconds = Math.max(0, Math.ceil((Date.parse(header) - (Number.isFinite(serverDate) ? serverDate : Date.now())) / 1000))
+    if (valid(seconds)) return seconds
+  }
+  return valid(body.retryAfterSeconds) ? body.retryAfterSeconds : null
 }
 
 function validUser(value: unknown): value is AuthUser {
@@ -123,6 +141,7 @@ export function createAuthApi(baseUrl: string, fetcher: typeof fetch = fetch) {
         code,
         defaultMessage(code),
         fieldErrors(details.errors),
+        response.status === 429 ? retryDelay(response, details) : null,
       )
     }
     if (!valid(body)) throw new AuthApiError(502, 'invalid_response', defaultMessage('invalid_response'))
