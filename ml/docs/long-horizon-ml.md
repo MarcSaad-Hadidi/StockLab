@@ -2,6 +2,8 @@
 
 The selected research recipe reaches **19.4043% compound annual growth versus 14.1669% for the SPY proxy**, after simulated trading costs and with actual stock cash dividends, from 2018-01-01 through 2026-11-11. **The predefined 20% CAGR target remains unmet.** This is an improvement over the comparable one-day RF recipe, not evidence that the deployed RFv7 has already earned these returns. The candidate is not promoted or deployed.
 
+**November 12 robustness finding:** that candidate produces no eligible new purchases in 2021-2025. A fresh-capital 2021 reset earns only 3.52% CAGR. Added protective exits halve long-period drawdown but reduce CAGR to 6.43%. Neither candidate is ready for deployment; see the diagnosis and fixed follow-up below.
+
 ## Results on the common long period
 
 All accounts start with $100,000, have no deposits/withdrawals/leverage, and share exactly the same observed valuation dates. The interval is 3236 calendar days (nearly 9 years). Costs are 5 bps proportional fee plus 5 bps adverse slippage per executed side. Dividends are gross cash income; taxes/withholding and interest are excluded. Open holdings are marked at the last close without hypothetical final liquidation costs.
@@ -81,4 +83,65 @@ Focused/adjacent verification:255 tests pass, including 54 research cases. A rev
 
 **Production remains RFv7.** This study does not alter the native worker, API runtime, registry, personal portfolio or schedules. New horizon/feature/calibration artifacts are intentionally separate from legacy one-day artifacts. Deployment would additionally require explicit compatible artifact/inference contracts, audited promotion, tested paper execution/restart and prospective observation. The historical 20% CAGR criterion has not passed, and recurring live dividend ingestion is not commissioned by this offline source snapshot.
 
-The next substantive work is portfolio selection/exit validation and a broader defensible instrument universe, rather than another threshold sweep on these same five stocks. This experiment does not mark the ML performance objective complete.
+The following exit and entry diagnostics supersede treating that aggregate result as evidence of deployment readiness. This experiment does not mark the ML performance objective complete.
+
+## Protective exits and fresh-capital diagnosis (November 12)
+
+The [risk-exit protocol](../../docs/superpowers/plans/2026-11-12-ml-risk-exits.md) freezes two additional restrictive recipes before their return calculations. Both retain original .65/.35 model thresholds, trend confirmation, fees and purchase limits. They add an independent risk-sale reason rather than inventing a model SELL confidence:
+
+- `trailing15`: a confirmed close 15% below the held position's peak schedules full liquidation at the actual next observed open. The held-price signal compounds ex-dividend cash into returns, so dividend detachment alone cannot trigger a false loss. Initial peak is the entry open; additional buys retain it. Opening gaps can exceed the nominal threshold.
+- `trailing15_spy200`: additionally block purchases and exit positions after SPY has three closes below its 200-session moving average; three above restore eligibility. Confirmations use pre-start history and affect the next open. Both recipes wait 20 observed opens after every executed risk sale before re-entry.
+
+Selection uses 2018-2020, choosing the higher CAGR among protective variants with lower drawdown than the original same-period candidate and actual risk sales. This constrained comparison does **not** require an increase in CAGR. It is frozen before computing the chosen variant's later 2021-2026 returns. Previously inspected history remains adaptive research, not a pristine holdout. Unselected later-policy returns are not calculated.
+
+|Selection 2018-2020|CAGR|Maximum drawdown|Buys / sells|
+|---|---:|---:|---:|
+|Original calibrated20/trend200|21.2314%|32.6814%|62 /0|
+|Trailing15|6.4460%|25.2595%|131 /14|
+|Trailing15 + SPY200, frozen selection|8.1474%|16.8810%|108 /14|
+
+|Period and independent account|CAGR|Maximum drawdown|Buys / sells|
+|---|---:|---:|---:|
+|Full 2018-2026 original|19.4043%|32.6814%|75 /0|
+|Full selected protection|6.4274%|16.8810%|144 /25|
+|Full selected, 25+25bps costs|5.9092%|17.7534%|140 /25|
+|Later reset 2021-2026 original|3.5202%|5.0041%|23 /0|
+|Later reset selected protection|2.7479%|3.0048%|36 /6|
+|Later reset selected, 25+25bps costs|2.5284%|3.0068%|37 /6|
+
+SPY CAGR is 14.1669% for the full interval and 14.2527% for the later reset. The later account starts with fresh $100,000; it does not inherit earlier shares. Its drawdown cannot be compared directly to a continuous account holding pre-2021 positions. The overlay creates 25 real simulated sales (14 trailing /11 regime); 12 sales have positive realized price profit after costs, excluding dividend income. Nevertheless, it sacrifices too much return and is **not promoted**.
+
+The original candidate's lack of sales is structural: none of its 11,140 frozen forecasts reaches `p_up<=.35`. Exact reconstruction of all annual models reproduces saved scores without difference. In 2020, every score is >=.65, even during the crash; the sigmoid can only map raw RF scores into approximately .679-.710 that year. More critically, the original candidate permits **no purchases at all in 2021-2025**: 2021-2024 never reach .65; the 13 JNJ hits in 2025 fail the unchanged trend filter. The fresh-capital account remains entirely cash until 2026. Its aggregate 19.4% result relies on the appreciation of positions acquired earlier and does not establish robust entry behavior for a new deployment.
+
+Annual calibration reverses raw score ranking in 2019/2021/2023/2024. Over available historical labels, pooled raw/calibrated ROC AUC is .5169/.4698, and later-period AUC .5312/.4956. These raw diagnostics describe the **same older core estimators before their sigmoid**, not a new tradable strategy. Reserving the latest year exclusively for calibration also leaves the core estimator about 13 months behind current feature dates. Overlapping 20-session outcomes and shared market exposure are correlated; these descriptive metrics are not independent significance tests or sufficient calibration evidence. See the [scikit-learn calibration discussion](https://scikit-learn.org/stable/modules/calibration.html) for the distinction between fitted calibration and reliable future probabilities.
+
+Private commitments, source snapshots, original hashed protocol, chosen-policy hash, predictions and complete equity/trade curves are preserved under `models/risk-exits-20261112/run-v1`. Full default baseline exports are byte-identical to the earlier dividend replay. A fresh reviewer independently reconciled every daily cash/holdings/dividend/equity balance for both selected accounts within $1.2e-10, including actual fills, fees and entry limits. No live operation changed.
+
+Reproduce this fixed exit comparison from `ml`, with the prior price/dividend/forecast snapshots present and `PYTHONPATH=src`:
+
+```powershell
+.\.venv\Scripts\python.exe examples/risk_exit_replay.py --study-dir models/long-horizon-20261111/run-v4 --data-dir models/long-horizon-20261111/dataset --dividend-dir models/long-horizon-20261111/dividend-dataset --replay-dir models/long-horizon-20261111/dividend-run-v2 --out models/risk-exits-20261112/new-risk-study
+```
+
+## Single entry-signal ablation
+
+Before its calculation, one additional hypothesis was recorded in the same protocol: reuse existing `rf_swing20` with the frozen `trend200` confirmation and `trailing15_spy200` protection. This removes the sigmoid **and** includes the latest eligible year in the base fit, so it is not a pure calibration-transform comparison. Hyperparameters, features, thresholds, risk limits, data and cash timing stay fixed. There is no new model family or parameter search.
+
+The new runner first fits only 2018-2020. Admission requires higher CAGR than the protected incumbent's exact saved selection result, lower DD than the original unprotected selection result, and genuine protective sales. It passes at **9.7730% CAGR/15.1500% DD**, versus protected 8.1474%/16.8810%. Selection and its hash are saved before later fits or returns. Failure would have stopped the later calculation. This admission gate is an experimental comparison, not production approval or the 20% performance criterion.
+
+|Raw RF20 + fixed protective exits|CAGR|SPY CAGR|Maximum drawdown|Buys / sells|
+|---|---:|---:|---:|---:|
+|Full 2018-2026|10.2292%|14.1669%|15.1500%|181 /40|
+|Full, 25+25bps costs|9.4155%|14.1154%|15.7101%|186 /40|
+|Later fresh-capital 2021-2026|9.6625%|14.2527%|9.3782%|114 /25|
+|Later, 25+25bps costs|8.8704%|14.1748%|10.7206%|116 /25|
+
+The full account's 40 sales comprise 39 protective exits and one model-approved sale. Eligible BUY observations return in every later year:204/289/128/48/25/135 for 2021-2026. These are signal observations, not promises to purchase: actual execution still checks cash, entry caps, regime and cooldown. The five-year cash lock is removed. The earlier pooled raw-AUC diagnostic used the old, older core fits; it must not be attributed to this more recent refitted recipe.
+
+Compared with the protected calibrated candidate, this ablation improves full CAGR from 6.43% to 10.23% and DD from 16.88% to 15.15%. Compared with the original unprotected candidate it sacrifices return (19.40% to 10.23%) for lower DD (32.68% to 15.15%). It still underperforms SPY and fails 20%. Its later DD also exceeds the mostly-cash original reset's 5.00%. **Neither later nor full performance passes all objectives. No research candidate is promoted.** Raw directional scores remain unvalidated as probabilities, and model-approved recurring sales remain weak.
+
+```powershell
+.\.venv\Scripts\python.exe examples/entry_signal_replay.py --study-dir models/long-horizon-20261111/run-v4 --data-dir models/long-horizon-20261111/dataset --dividend-dir models/long-horizon-20261111/dividend-dataset --risk-dir models/risk-exits-20261112/run-v1 --out models/risk-exits-20261112/new-entry-study
+```
+
+The retained entry evidence is `models/risk-exits-20261112/entry-run-v1`: original source/code/protocol hashes, exact prior reports, selection commitment, nine purged annual fit audits, per-year score/eligibility counts, frozen predictions and costed cash/equity/trades. Later/full accounts start independently with $100,000 and no deposits. Across the previous 12 variants, these two risk policies and one entry ablation are **15 adaptively developed variants**, not independent evidence. This work closes the missing protective-sale simulation and reveals the entry defect; it does not finish the ML performance/deployment objective. Further model validation needs a stronger entry/exit signal and a broader defensible universe, followed by compatible artifacts, audited paper promotion and prospective operation.

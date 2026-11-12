@@ -173,19 +173,48 @@ def _dividend_events(dividends: pd.DataFrame | None, prices: pd.DataFrame, start
     return events
 
 
+def _spy_risk_states(spy: pd.DataFrame | None, prices: pd.DataFrame, start: str, end: str) -> dict:
+    """Confirmed regime known BEFORE each open; no same-close execution."""
+    if spy is None:
+        raise ValueError("SPY history is required for the regime policy.")
+    _validate_input(spy)
+    rows = spy.loc[spy.date <= pd.Timestamp(end)].sort_values("date")
+    calendar = prices.loc[prices.date <= pd.Timestamp(end), "date"].drop_duplicates().sort_values()
+    if (set(spy.symbol) != {"SPY"} or len(calendar.loc[calendar <= pd.Timestamp(start)]) < 200
+            or rows.loc[rows.date >= calendar.min(), "date"].tolist() != calendar.tolist()):
+        raise ValueError("SPY needs matching observed sessions and 200-session pre-start context.")
+    average = rows.close.rolling(200).mean()
+    bearish, below, above, states = False, 0, 0, {}
+    for day, close, mean in zip(rows.date, rows.close, average):
+        states[day] = bearish
+        below = below + 1 if close < mean else 0
+        above = above + 1 if close > mean else 0
+        if below >= 3:
+            bearish = True
+        elif above >= 3:
+            bearish = False
+    return states
+
+
 def simulate(prices: pd.DataFrame, decisions: pd.DataFrame, start: str, end: str, *,
              fee_bps: int = 5, slippage_bps: int = 5,
-             dividends: pd.DataFrame | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+             dividends: pd.DataFrame | None = None, risk_policy: str | None = None,
+             spy: pd.DataFrame | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Shared cash, next-open orders, default5bps fee +5bps slippage, unchanged caps.
 
     `allocation` is requested initial-capital fraction, bounded again at execution.
     Rule baselines have no artificial ML confidence. No deposits. Optional cash
     dividends use current split-adjusted amounts, prior holdings at ex-date and
     spendable cash strictly after the actual pay date; receivables are equity.
+    Optional protective exits are next-open risk orders, not ML forecasts. Stops
+    use dividend-aware held-close returns; every risk sale blocks 20 later opens.
     """
     fee_rate, slippage = _execution_costs(fee_bps, slippage_bps)
     market = _daily_market(prices, start, end)
     cash_events = _dividend_events(dividends, prices, start, end)
+    if risk_policy not in (None, "trailing15", "trailing15_spy200"):
+        raise ValueError("Unknown fixed research risk policy.")
+    bearish = _spy_risk_states(spy, prices, start, end) if risk_policy == "trailing15_spy200" else {}
     if (list(decisions.columns) != ["date", "symbol", "action", "allocation"]
             or decisions.duplicated(["date", "symbol"]).any()
             or not decisions.action.isin(["BUY", "SELL"]).all()
@@ -208,7 +237,8 @@ def simulate(prices: pd.DataFrame, decisions: pd.DataFrame, start: str, end: str
     pending, earned, paid = [], Fraction(0), Fraction(0)
     curve = [(pd.Timestamp(start), INITIAL_CAPITAL, INITIAL_CAPITAL, 0., 0., 0.)]
     trades = []
-    for day, bars in market.groupby("date", sort=True):
+    stops, peaks, signal, previous_close, blocked_until = {}, {}, {}, {}, {}
+    for session, (day, bars) in enumerate(market.groupby("date", sort=True)):
         remaining = []
         for pay_date, amount in pending:
             if pay_date < day:
@@ -227,11 +257,20 @@ def simulate(prices: pd.DataFrame, decisions: pd.DataFrame, start: str, end: str
         if receivable != sum((amount for _, amount in pending), Fraction(0)):
             raise ValueError("Dividend receivable accounting does not reconcile.")
         opens = {row.symbol: Fraction(str(row.open)) for row in bars.itertuples(index=False)}
-        for row in sorted(scheduled.get(day, []), key=lambda row: row.symbol):
-            old = holdings.get(row.symbol, Fraction(0))
+        risk_orders = dict(stops)
+        if bearish.get(day, False):
+            # The confirmed regime takes priority over any simultaneous stop.
+            prior = prices.loc[prices.date < day, "date"].max()
+            risk_orders.update({symbol: (prior, "spy_regime") for symbol in holdings})
+        normal = [(row.date, row.symbol, row.action, row.allocation, "decision")
+                  for row in sorted(scheduled.get(day, []), key=lambda row: row.symbol)]
+        executions = [(decision_day, symbol, "SELL", 1., reason)
+                      for symbol, (decision_day, reason) in sorted(risk_orders.items())] + normal
+        for decision_day, symbol, action, allocation, reason in executions:
+            old = holdings.get(symbol, Fraction(0))
             total = cash + receivable + sum((q * opens[s] for s, q in holdings.items()), Fraction(0))
-            opening = opens[row.symbol]
-            if row.action == "SELL":
+            opening = opens[symbol]
+            if action == "SELL":
                 if not old:
                     continue
                 quantity = old
@@ -239,8 +278,16 @@ def simulate(prices: pd.DataFrame, decisions: pd.DataFrame, start: str, end: str
                 fee = quantity * fill * fee_rate
                 all_in = quantity * fill - fee
                 cash += all_in
-                del holdings[row.symbol]
+                del holdings[symbol]
+                if risk_policy is not None:
+                    for state in (peaks, signal, previous_close):
+                        state.pop(symbol, None)
+                    if reason != "decision":
+                        blocked_until[symbol] = session + 20
             else:
+                if (symbol in risk_orders or bearish.get(day, False)
+                        or session <= blocked_until.get(symbol, -1)):
+                    continue
                 if not old and len(holdings) >= 10:
                     continue
                 fill = opening * (1 + slippage)
@@ -248,7 +295,7 @@ def simulate(prices: pd.DataFrame, decisions: pd.DataFrame, start: str, end: str
                 friction = unit_cost - opening
                 # Exposure uses equity AFTER fee/slippage, so solve for its size.
                 quantity_cap = (total / 5 - old * opening) / (opening + friction / 5)
-                budget = min(cash, total / 10, Fraction(str(INITIAL_CAPITAL)) * Fraction(str(row.allocation)),
+                budget = min(cash, total / 10, Fraction(str(INITIAL_CAPITAL)) * Fraction(str(allocation)),
                              max(Fraction(0), quantity_cap) * unit_cost)
                 quantity_float, _ = _size_buy(budget, float(unit_cost), 8)
                 quantity = Fraction(str(quantity_float))
@@ -262,12 +309,27 @@ def simulate(prices: pd.DataFrame, decisions: pd.DataFrame, start: str, end: str
                     continue
                 fee = quantity * fill * fee_rate
                 cash -= all_in
-                holdings[row.symbol] = old + quantity
+                holdings[symbol] = old + quantity
+                if risk_policy is not None and not old:
+                    signal[symbol] = peaks[symbol] = opening
             if cash < 0:
                 raise ValueError("Negative research cash.")
-            trades.append((row.date, day, row.symbol, row.action, float(quantity), float(fill),
-                           float(fee), float(all_in), float(total)))
+            trade = (decision_day, day, symbol, action, float(quantity), float(fill),
+                     float(fee), float(all_in), float(total))
+            trades.append(trade + (reason,) if risk_policy is not None else trade)
         closes = {row.symbol: Fraction(str(row.close)) for row in bars.itertuples(index=False)}
+        stops = {}
+        if risk_policy is not None:
+            detached = {event.symbol: Fraction(str(event.amount)) for event in cash_events.get(day, [])}
+            for symbol in holdings:
+                if symbol not in previous_close:
+                    signal[symbol] = closes[symbol]
+                else:
+                    signal[symbol] *= (closes[symbol] + detached.get(symbol, Fraction(0))) / previous_close[symbol]
+                peaks[symbol] = max(peaks[symbol], signal[symbol])
+                if signal[symbol] <= peaks[symbol] * Fraction(85, 100):
+                    stops[symbol] = (day, "trailing_stop")
+                previous_close[symbol] = closes[symbol]
         total = cash + receivable + sum((q * closes[s] for s, q in holdings.items()), Fraction(0))
         if not math.isfinite(float(total)) or total <= 0:
             raise ValueError("Invalid research equity.")
@@ -277,7 +339,8 @@ def simulate(prices: pd.DataFrame, decisions: pd.DataFrame, start: str, end: str
         equity = equity[["date", "cash", "total_value"]]
     return (equity,
             pd.DataFrame(trades, columns=["decision_date", "execution_date", "symbol", "action",
-                                         "quantity", "price", "fee", "all_in", "equity_before"]))
+                                         "quantity", "price", "fee", "all_in", "equity_before"]
+                         + (["reason"] if risk_policy is not None else [])))
 
 
 def spy_curve(prices: pd.DataFrame, dates: pd.DatetimeIndex | pd.Series, *,
