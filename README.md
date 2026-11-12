@@ -289,23 +289,30 @@ Le fournisseur ML Python lit uniquement TWELVE_DATA_ML_API_KEY. Définissez-la d
 
 La couche Entity Framework Core est configurée pour Azure SQL. L’inscription, la connexion et la lecture privée du portefeuille sont présentes; les performances du portefeuille, les migrations additionnelles et les autres services de compte restent à faire. Azure Service Bus, AWS S3, AWS SQS, AWS Lambda et IAM sont des intégrations prévues. Aucun secret cloud ni chaîne de connexion ne doit être placé dans ce dépôt, et les tests hors ligne n’en ont pas besoin.
 
-### Configuration AWS IAM
-Rôles IAM créés :
-StockLabLambdaExecutionRole : exécution des fonctions Lambda et journalisation CloudWatch.
-StockLabMLTaskRole : accès S3 limité pour les traitements ML sur ECS Fargate.
-StockLabMLTaskExecutionRole : récupération des images de conteneurs et publication des logs.
+### Configuration AWS IAM prévue
 
-Politiques IAM personnalisées :
-StockLabMLS3AccessPolicy : lecture et écriture dans le préfixe S3 ml/.
-StockLabSQSSendPolicy : envoi de messages vers la future queue StockLab.
-StockLabSQSConsumePolicy : réception et suppression de messages dans cette queue.
+Les noms ci-dessous sont des exemples de ressources à provisionner et à valider avant un déploiement AWS. Cette section ne crée aucun rôle ni aucune politique et ne confirme pas leur existence dans un compte AWS. Les prérequis et permissions du worker ECS sont détaillés dans [la documentation ML](ml/README.md#aws-execution-and-persistent-prerequisites-not-deployed).
 
-Sécurité :
-Principe du moindre privilège.
-Aucun accès administrateur accordé aux rôles applicatifs.
-Authentification MFA activée pour le compte root.
-Aucune clé AWS stockée dans le dépôt GitHub.
+Rôles IAM proposés :
 
+- `StockLabLambdaExecutionRole` : exécution des futures fonctions Lambda et journalisation CloudWatch.
+- `StockLabMLTaskRole` : accès S3 limité aux artefacts ML et accès EFS nécessaires aux traitements sur ECS Fargate.
+- `StockLabMLTaskExecutionRole` : récupération des images de conteneurs, publication des logs et lecture du secret ML autorisé.
+
+Politiques IAM proposées :
+
+- `StockLabMLS3AccessPolicy` : lecture et écriture des objets uniquement dans le préfixe approuvé `<prefix>/models/*`.
+- `StockLabSQSSendPolicy` : envoi de messages vers la future queue StockLab.
+- `StockLabSQSConsumePolicy` : réception et suppression de messages dans cette queue.
+
+Exigences de sécurité à appliquer et à vérifier lors du provisionnement :
+
+- Respecter le principe du moindre privilège et limiter les permissions aux ressources nécessaires.
+- Ne pas accorder d'accès administrateur aux rôles applicatifs.
+- Activer et vérifier l'authentification MFA du compte root.
+- Ne jamais stocker de clé AWS dans le dépôt GitHub ; utiliser une configuration sécurisée.
+
+Aucune configuration IAM réelle ni activation MFA n'est attestée par ce dépôt. Le déploiement AWS reste à effectuer et à valider séparément.
 
 ## Commandes utiles
 
