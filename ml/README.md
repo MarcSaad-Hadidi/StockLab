@@ -29,6 +29,12 @@ The separate [DCA / S&P 500 research](docs/dca-research.md) compares costed,
 chronological paper portfolios against an external SPY proxy and the user's
 20% annualized target. It records both favorable and unfavorable periods;
 research results do not activate a strategy or replace promotion evidence.
+The user-requested long comparison of the unchanged market-boosted reference
+now covers2018-01-01 through2026-11-11:16.17% CAGR versus SPY14.17%,31.91%
+versus33.72% maximum drawdown,and88 buys/8 sales.100000USD grows to377444USD
+versus323443USD. The earlier20.90% applied only to2018-2020. This diagnostic
+extension preserves the old rejected admissions and does not promote a model;
+the20% target remains unmet. See the [full comparison](docs/long-horizon-ml.md).
 The [longer-history calibrated study](docs/long-horizon-ml.md) extends inputs to
 2010, evaluates 2018–2026, and accounts for verified cash dividends. Its selected
 recipe reaches 19.40% CAGR versus 14.17% for SPY; the 20% compound-growth target
@@ -47,10 +53,10 @@ selection reaches22.60% control/20.69% dual CAGR, but fails sales/incremental ri
 gates; no later/full broader result is calculated or promoted.
 An opt-in fixed boosted learner on that corpus reaches20.01% control/8.12% dual
 CAGR on2018-2020, with33.25%/22.40% drawdown. Both fail unchanged admission gates,
-so there are no later/full boosted results. Adding four fixed lagged VIX/VIX3M
+so that gated trial produces no later/full results. Adding four fixed lagged VIX/VIX3M
 features reaches20.90%/31.91% drawdown for control without sales; dual makes15
-sales at13.49%/22.12%,below20% and SPY. Both fail admission; no later/full
-market-boosted results are inferred. Separate risk-only isotonic calibration
+sales at13.49%/22.12%,below20% and SPY. Both fail admission; their original gated
+trial stops before later/full evaluation. Separate risk-only isotonic calibration
 falls to9.91% CAGR/22.12% drawdown with14 genuine sales and still fails the
 unchanged forecast gate. No later/full calibration result is calculated.
 Keeping raw risk but fitting only original-five histories reduces drawdown

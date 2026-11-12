@@ -1,6 +1,8 @@
 # Longer-history ML evaluation
 
-**Latest completed boosted risk-domain ablation is rejected on selection2018-2020:** control remains20.8998% CAGR/31.9147% drawdown with no sales; original-five risk training earns7.9818%/18.0993% with29 downside sales. Previous isotonic/raw market duals earn9.9142%/13.4933%. Both frozen admissions fail; no later/full boosted result is calculated. The20% long-period objective remains unmet.
+**User-requested boosted reference comparison,2018-01-01 to2026-11-11:**16.1739% CAGR versus SPY14.1669%,maximum drawdown31.9147% versus33.7196%,88 buys and8 sales.100000USD grows to377444USD versus323443USD. The20.8998% figure applied only to2018-2020. This separate diagnostic extension does not alter the earlier rejected admissions or promote a model. **The20% CAGR target remains unmet.**
+
+**Latest completed boosted risk-domain ablation is rejected on selection2018-2020:** original-five risk training earns7.9818%/18.0993% with29 downside sales. Previous isotonic/raw market duals earn9.9142%/13.4933%. Both frozen admissions fail; their gated studies produce no later/full result. The user-requested reference-only extension below is a separate comparison.
 
 **The preceding broader RF experiment is rejected on selection2018-2020:** control22.5988% CAGR/26.8792% drawdown has no sales; dual20.6864%/26.9569% makes two downside sales but reduces return and slightly increases drawdown versus its control. Both admissions are false. No later/full broader returns or fits are produced, so20% compound growth on the long/later periods remains unverified. Production remains RFv7.
 
@@ -12,7 +14,47 @@ The earlier calibrated recipe's19.4043% aggregate result also remains unsuitable
 
 Historical commands using`models/broader-20261112/panel` refer to archived source629a07d,whose six feature-source hashes match that immutable panel. The subsequent shared fitting-core change deliberately makes that old panel fail current-source validation. Current calibration/domain trials use the separately recompiled,byte-identical`panel-isotonic`; no manifest is rebound in place. Reproduce a historical study with its committed sources and bound private inputs.
 
-## Results on the common long period
+## Requested boosted reference versus SPY,2018-2026
+
+The user explicitly requested the unchanged20.8998% selection-period reference on the longer interval. The [fixed comparison protocol](../../docs/superpowers/plans/2026-11-12-boosted-reference-long.md) authorizes a diagnostic extension despite its earlier no-sale rejection,without weakening the admission code or making a promotion decision. It is not a new untouched holdout or an admitted challenger.
+
+Reuse the exact raw market upside model and original2018-2020 predictions/three fit audits. Replay must match all five parent control exports byte-for-byte before the six fresh2021-2026 annual upside fits. Keep the same28 features,full four-year purges,date weights,HGBT parameters,trend200 orders,thresholds,caps,176 genuine dividend events and5bps fee+5bps slippage per side. No downside head,calibration,DCA sale rule,new source request or model reselection. Evaluation remains AAPL/JNJ/JPM/MSFT/XOM.
+
+|2018-01-01 through2026-11-11|Boosted reference|SPY adjusted total-return proxy|
+|---|---:|---:|
+|Compound annual growth|16.1739%|14.1669%|
+|Total gain|277.4444%|223.4434%|
+|Maximum drawdown|31.9147%|33.7196%|
+|Ending equity from100000USD|377444.36USD|323443.40USD|
+|Executed buys / sells|88 /8|One initial purchase|
+
+The boosted reference exceeds SPY by2.0070 percentage points of CAGR,ending about54001USD ahead on the same initial capital. Its maximum drawdown is1.8049 points lower. It earns25710.92USD gross cash dividends,already included in equity,and stays82.17% invested on average. This is a positive historical comparison,but **16.1739% is below the requested20%**,and a31.91% drawdown remains substantial. No result is substituted for the earlier rejected trial.
+
+|Calendar period|Boosted reference|SPY proxy|
+|---|---:|---:|
+|2018|-3.48%|-5.02%|
+|2019|43.17%|31.21%|
+|2020|27.83%|18.32%|
+|2021|35.66%|28.72%|
+|2022|-13.40%|-18.18%|
+|2023|32.04%|26.17%|
+|2024|8.47%|24.88%|
+|2025|10.85%|17.71%|
+|2026 through November11 only|14.54%|12.29%|
+
+The2026 row is partial. Calendar returns include the prior year-end gap; they are not averaged to claim compound growth. The continuous account underperforms SPY in2024 and2025 even though aggregate CAGR is higher.
+
+The fixed higher-cost sensitivity uses the SAME forecasts and25bps fee+25bps slippage per side:15.9880% CAGR,31.9049% drawdown and372126.55USD ending equity,versus SPY14.1154%/322154.14USD at matching costs. Execution affordability changes actual purchase counts to84;there are still8 sales. No new fits or parameter tuning are used for sensitivity.
+
+The secondary fresh-capital reset starts2021-01-01 with the SAME forecasts:14.9254% CAGR versus SPY14.2527%,13.0059% maximum drawdown versus24.4997%,and225935.34USD versus218296.20USD ending equity. It executes67 buys/8 sales and averages72.00% invested. This is a distinct account diagnostic,not the continuous account's isolated2021-2026 return or a replacement primary result. Both remain below20% CAGR.
+
+Evidence is retained in`models/boosted-reference-long-20261112/run-v1`,including the prefit inputs/source/plan archives,parent parity,six later/three cached fit audits,full forecasts,three account ledgers,daily positions and annual-return exports. The shared reference sources remain byte-identical toe4aa86e; the prefit plan is committed at8516140. This diagnostic does not produce deployable fitted artifacts or change production RFv7. DCA zones/25% STRONG_TRIM await the original assistant's precise specification and are not part of this comparison.
+
+Independent review verifies all nine exact fit populations/weights/priors,3269 market-feature rows,forecast coverage,all five parent control-file parities and four complete account/position/annual ledgers.34,668 numeric ledger comparisons have maximum absolute error0.0; the reviewer performs zero model fits. Full forecast SHA256`9eb037ed4921c45f4b6ee99628d346b7be78321ad7b61ac03174620bc7be4fc7`. Synthetic driver checks and two source reviews pass; existing shared code is unchanged.
+
+The positive account result does not establish reliable probability forecasts. On known full-period20-session outcomes,upside AUC is.47860 and Brier.26546 versus causal-reference.25065;later outcomes give.46494/.26932 versus.25213. Both score diagnostics trail their reference or chance ranking. Survivorship,adaptive inspection,current source vintages and the delayed dividend-cash convention remain limitations; no future20% growth or completed ML commissioning is implied.
+
+## Earlier calibrated strategy on the common long period
 
 All accounts start with $100,000, have no deposits/withdrawals/leverage, and share exactly the same observed valuation dates. The interval is 3236 calendar days (nearly 9 years). Costs are 5 bps proportional fee plus 5 bps adverse slippage per executed side. Dividends are gross cash income; taxes/withholding and interest are excluded. Open holdings are marked at the last close without hypothetical final liquidation costs.
 

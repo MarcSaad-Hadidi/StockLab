@@ -22,6 +22,8 @@ During preparation,the user requested their DCA strategy: buy zones2x/3x/4x and 
 
 Retrospective survivor sampling,current adjusted-price/index vintages and repeated adaptive inspection limit conclusions. A high simulated CAGR is not a future-return guarantee or completed native ML commissioning.
 
-- [ ] Prepare/review private script and immutable commitments; verify selection parity before new fits.
-- [ ] Execute the fixed long comparison and secondary diagnostics.
-- [ ] Independently audit and publish exact2018-2026/SPY comparison without changing old admissions or production.
+- [x] Prepare/review private script and immutable commitments; verify selection parity before new fits.
+- [x] Execute the fixed long comparison and secondary diagnostics.
+- [x] Independently audit and publish exact2018-2026/SPY comparison without changing old admissions or production.
+
+Completed diagnostic: full2018-01-01..2026-11-11 reference16.1738903%CAGR versus SPY14.1668909%,DD31.9147308% versus33.7196494%,377444.36USD versus323443.40USD from100000USD,88buys/8sales. Higher-cost reference15.9879853%CAGR. Fresh2021 account14.9253717% versus SPY14.2526785%,DD13.0059232% versus24.4997192%. Both accounts miss20%. Independent review verifies3 cached+6 new annual fit sets,3269 market rows,all forecast coverage,all5parent-file bytes and34,668 numeric ledger comparisons with zero error. Full forecast SHA9eb037ed4921c45f4b6ee99628d346b7be78321ad7b61ac03174620bc7be4fc7. Old admissions,research qualificationFalse and promotionFalse remain unchanged. This outcome note is post-study; prefit protocol bytes remain bound in the output and commit8516140.
