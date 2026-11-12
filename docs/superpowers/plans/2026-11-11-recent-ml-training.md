@@ -42,7 +42,7 @@ Five completed live sessions generated two BUYs, both below 0.65. The existing v
 - [x] If explicitly accepted, save a new audited evaluation with the accepted tolerance and apply only APPROVED evidence. Preserve the rejected audits.
 - [x] Retire the completed old cycle scope; configure a disjoint new model-version scope and the new training profile.
 - [x] Run a genuine native cycle and replay; inspect actual orders/refusals and unchanged personal data. Native result: four HOLD/one rejected SELL, zero purchases. Replay preserved every SQL table count/checksum and personal records remained unchanged.
-- [ ] Commit/push the reviewed public change and update the existing draft PR with exact validation and limits.
+- [x] Commit/push the reviewed public change and update the existing draft PR with exact validation and limits. PR #290 remains a draft and has not been merged.
 
 Integration preserves the prior unmerged ML work while incorporating current
 develop. Backend verification: 1,389 passed with 77 opt-in skips, then 116 real
