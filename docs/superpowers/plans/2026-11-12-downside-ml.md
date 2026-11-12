@@ -47,7 +47,7 @@ Review and test: label window endpoints/missing future/symbol boundaries/gap exc
 - [x] Observe failing target/feature/purge/decision tests, implement minimal shared-core/head and pass focused checks.
 - [x] Observe failing runner admission/ordering/source-binding tests, implement runner and pass focused checks.
 - [x] Run once, freeze admissions before later evaluation, and record exact success/failure without post-test parameter changes.
-- [ ] Independent code/data/report review, final relevant checks, secret scan, commit/push and update existing PR. Keep overall goal active unless every actual requirement is verified.
+- [x] Independent code/data/report review, final relevant checks, secret scan, commit/push and update existing PR. Keep overall goal active unless every actual requirement is verified.
 
 ## Observed outcome and verification
 
@@ -58,3 +58,5 @@ The dedicated forecast fails later generalization: AUC.4827, Brier.2299 versus c
 458 relevant tests pass, including113research. Fresh review independently verifies sources and archived protocol, exact cached-entry/fitted-risk training rows/counts/prevalence and full horizon purges, causal forecast statistics, admissions before later fits, yearly participation, actual model-sale reasons, and every daily value in six full/later/control/dual/high-cost ledgers. Exported ledgers match exactly at float precision. Public defaults remain unchanged. Final report and publication checks follow.
 
 Separately, two bounded fallback-only catalog requests assess next data feasibility; they do not change this experiment's stock universe. CurrentUScommonstock snapshot16,462identities; inclusive-delisted28,131;11,669extra. ISIN/CUSIP fields are all addon placeholders, not usable identifiers; only3,856extraFIGIs match the expected format, without establishing identity continuity. No historical lifetimes/terminalproceeds are supplied. Private source/hash/identifier audits are retained under `models/downside-20261112/catalog-probe`; no paid resource or prices acquired.
+
+Implementation `f2d3b97` is published to `origin/codex/ml-local-completion`; PR290 title/body/head are verified, open/draft and unmerged. Exact eight-public-file staging, configured-secret scan and diff checks pass; latest develop remains8e9e177. Final report review corrected identifier wording and the earlier entry-replay command to regenerate a source-compatible risk baseline without weakening guards. This bounded experiment is complete; the overall20%/robust-signal/deployment goal remains active and incomplete.
