@@ -46,6 +46,8 @@ Run the two fixed funded arms once on2018-2026. Compare CAGR,total return,ending
 
 Survivorship/current-price vintages,unknown original arrival timestamps,a limited five-stock evaluation and adaptive repeated exploration remain limitations. This is a historical strategy comparison,not a reliable probability or future20% guarantee. DCA strategy execution alone does not commission a new active ML artifact/inference/promotion pipeline.
 
-- [ ] Verify v50 source and exact signal/next-open parity;implement/test new modules.
-- [ ] Freeze canonical inputs/calendar/code/environment and execute the two fixed funded arms.
-- [ ] Independently audit and publish comparison,including limitations and rejected outcomes.
+- [x] Verify v50 source and exact signal/next-open parity;implement/test new modules.
+- [x] Freeze canonical inputs/calendar/code/environment and execute the two fixed funded arms.
+- [x] Independently audit and publish comparison,including limitations and rejected outcomes.
+
+Completed outcome (post-study): sourcev50exactsignal/next-session parity passes3045cases;91sourceTSand109targetedPython tests pass. Sharedsource/core remains unchanged;newmodules committed0174242. Fundedbuyonly13.0501859%CAGR,17.2812593%DD,296467.07USD,46buys/0sales. Fundedtrim25 12.7722211%,sameDD,290070.77USD,46buys/2sales. Frozenboosted16.1738903%/31.9147308% andSPY14.1668909%/33.7196494% remain unchanged. Allstart100000USDandend2026-11-11. Independentproducer-freeFraction audit verifies353216numericledger checks bit-exact/maxerror0 andall94executions/125orders. The two quarter-sales are AAPL2020-09-01 andJNJ2026-03-02;neitherpredates the2020maximumdrawdown. Trimfinishes6396.30USDbelowbuyonly;no budgets/thresholds are retuned. Bothmiss20%,andqualification/promotion remainFalse. Prefit plan bytes remain archived and bound;this outcome note does not overwrite them.

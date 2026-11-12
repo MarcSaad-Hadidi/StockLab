@@ -35,6 +35,15 @@ versus33.72% maximum drawdown,and88 buys/8 sales.100000USD grows to377444USD
 versus323443USD. The earlier20.90% applied only to2018-2020. This diagnostic
 extension preserves the old rejected admissions and does not promote a model;
 the20% target remains unmet. See the [full comparison](docs/long-horizon-ml.md).
+
+The [v50 next-open DCA port and 25% trim study](docs/dca-next-open-trim25.md)
+uses the user-chosen same 100,000 USD initial capital, Standard24 monthly 2x–4x
+signals and the same fees/dividends. Funded buy-only earns 13.05% CAGR; entry-only
+trim25 earns 12.77%, both with 17.28% maximum drawdown, versus boosted 16.17%/31.91%
+and SPY 14.17%/33.72%. The new funded strategy is explicitly distinct from
+original v50's variable external deposits. All 91 source tests, 109 targeted Python
+tests and 353,216 independent exact ledger checks pass; no model is promoted.
+
 The [longer-history calibrated study](docs/long-horizon-ml.md) extends inputs to
 2010, evaluates 2018–2026, and accounts for verified cash dividends. Its selected
 recipe reaches 19.40% CAGR versus 14.17% for SPY; the 20% compound-growth target
