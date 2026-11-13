@@ -18,9 +18,11 @@ New module(s) and focused tests only. Verify exact parity to the existing core u
 
 Existing registry, artifact dispatch, catalog, native configuration, Active RFv7, database, scheduled tasks and paper execution are not changed by this additive stage. They remain required integration work before full commissioning. Existing paper current-quote fills are not equivalent to the studied next-session opens/costs/dividends; this limitation must remain explicit.
 
-- [ ] Implement/review minimal new helpers and meaningful synthetic checks without changing the frozen source closure.
-- [ ] Run focused tests after monthly fitting and verify the source closure again.
+- [x] Implement/review minimal new helpers and meaningful synthetic checks without changing the frozen source closure.
+- [x] Run focused tests after monthly fitting and verify the source closure again.
 - [ ] Reproduce one chosen frozen snapshot only after a concrete export commitment; independently verify scores and immutable bytes.
 - [ ] Integrate the verified profile into real catalog/inference and paper execution in a subsequent concrete implementation stage; do not declare the ML complete here.
 
 Scheduling clarification before actual monthly fitting: run the small synthetic HGBT checks first while the financial driver is being prepared, then serialize the real monthly run. This changes no market-data recipe, study outcome or source commitment.
+
+Post-implementation evidence: genuine reproduction/policy/immutable snapshot helpers and48 focused tests pass. Registry integration adds22 focused cases; all70 new cases also pass with OMP absent in the parent environment using a restoring test fixture. The full corrected production-source suite passes2183 tests/one Windows skip, with five known warnings in older calibration tests. The source-bound prospective helper remains deliberately PENDING on the old frame. Real export and full commissioning remain separate unchecked work above.

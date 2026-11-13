@@ -27,7 +27,7 @@ from stocklab_ml.modeling.contracts import (
 )
 from stocklab_ml.signals.contracts import BUY_THRESHOLD, SELL_THRESHOLD, TradingSignalError
 from stocklab_ml.signals.validation import _validate_policy
-from .contracts import ModelVersionError, ModelVersionRecord, ModelStatus
+from .contracts import BoostedModelVersionRecord, ModelVersionError, ModelVersionRecord, ModelStatus
 
 MODEL_CONTRACTS = {
     "logistic_regression": (LogisticRegressionReport, "logistic_regression_baseline"),
@@ -128,6 +128,9 @@ def validate_metrics(metrics: ModelEvaluationMetrics, name: str) -> None:
 
 
 def validate_report(model_type: str, report: dict, metrics: ModelEvaluationMetrics) -> None:
+    if model_type == "hist_gradient_boosting":
+        validate_boosted_report(report, metrics)
+        return
     if model_type not in MODEL_CONTRACTS:
         raise ModelVersionError("Unsupported model_type.")
     report_class, model_name = MODEL_CONTRACTS[model_type]
@@ -204,6 +207,19 @@ def validate_report(model_type: str, report: dict, metrics: ModelEvaluationMetri
             raise ModelVersionError("Random Forest comparison metadata is inconsistent.")
 
 
+def validate_boosted_report(report: dict, metrics=None) -> None:
+    """Reuse the snapshot's closed metadata contract, importing only at dispatch."""
+    from stocklab_ml.boosted_snapshot import _metadata
+    try:
+        if (not isinstance(report, dict) or set(report) != {"snapshot_metadata", "estimator_sha256"}
+                or metrics is not None or not isinstance(report["estimator_sha256"], str)
+                or re.fullmatch(r"[0-9a-f]{64}", report["estimator_sha256"]) is None):
+            raise ValueError("A retained snapshot digest and null pending holdout metrics are required.")
+        _metadata(report["snapshot_metadata"])
+    except (ModelingError, AttributeError, TypeError, ValueError, KeyError, OverflowError) as error:
+        raise ModelVersionError("Invalid closed HGBT28 snapshot report.") from error
+
+
 def training_payload(result) -> dict:
     """Snapshot the existing run; validate identity and evaluate only its supplied holdout."""
     try:
@@ -221,7 +237,16 @@ def training_payload(result) -> dict:
                 raise ModelVersionError("A fitted RandomForestClassifier is required.")
             classifier = estimator
         else:
-            raise ModelVersionError("An existing LogisticRegressionResult or RandomForestResult is required.")
+            from stocklab_ml.boosted_snapshot import BoostedSnapshot
+            if type(result) is not BoostedSnapshot:
+                raise ModelVersionError("An existing supported training result or verified HGBT28 snapshot is required.")
+            result._validate()
+            metadata = result.metadata
+            report = {"snapshot_metadata": metadata,
+                "estimator_sha256": hashlib.sha256(result._model_bytes).hexdigest()}
+            validate_boosted_report(report)
+            return {"model_name": metadata["model_name"], "model_type": metadata["model_type"],
+                "training_report": report, "metrics": None, "holdout_sha256": None}
         if type(result.report) is not report_class:
             raise ModelVersionError("Training result and report model_type differ.")
         check_is_fitted(classifier)
@@ -273,6 +298,15 @@ def decode_record(payload: dict) -> ModelVersionRecord:
             timestamps[key] = value
         if timestamps["registered_at_utc"] < timestamps["trained_at_utc"]:
             raise ModelVersionError("Registration timestamp precedes training completion.")
+        if payload["model_type"] == "hist_gradient_boosting":
+            report = payload["training_report"]
+            validate_boosted_report(report, payload["metrics"])
+            metadata = report["snapshot_metadata"]
+            if (payload["model_name"] != metadata["model_name"] or payload["holdout_sha256"] is not None
+                    or payload["trained_at_utc"] != metadata["trained_at_utc"]
+                    or payload["status"] != ModelStatus.ARCHIVED.value):
+                raise ModelVersionError("HGBT28 snapshots require their actual training time and Archived pending identity.")
+            return BoostedModelVersionRecord(**(payload | timestamps | {"status": ModelStatus.ARCHIVED}))
         _keys(payload["metrics"], ModelEvaluationMetrics)
         metrics = ModelEvaluationMetrics(**payload["metrics"])
         validate_report(payload["model_type"], payload["training_report"], metrics)

@@ -36,6 +36,10 @@ Synthetic checks: four versus five eligible sessions, HOLD/failed trend/score re
 
 Five-session confirmation can delay crash exits or miss useful transient signals. Different holdings/cash can change future affordability, so returns need not lie between immediate and no-SELL controls. All inspected history is adaptive; five correlated survivors, current adjusted-price/index vintages and repeated research limit generalization. `classification='adaptive_diagnostic'`, `research_qualified=False`, `promotion_authorized=False`. Production RFv7/inference/artifacts/API/native tasks/database/broker state are unchanged. No future20% guarantee or completed commissioning.
 
-- [ ] Prepare/review the minimal cached-policy driver and pass synthetic checks; freeze before financial replay.
-- [ ] Execute the three fixed candidate accounts with zero new fits and unchanged references.
+- [x] Prepare/review the minimal cached-policy driver and pass synthetic checks; freeze before financial replay.
+- [x] Execute the three fixed candidate accounts with zero new fits and unchanged references.
 - [ ] Independently audit and publish every outcome, paired effect and remaining limitation.
+
+## Post-study outcome
+
+The pre-replay protocol committed as`a5174a1` remains archived unchanged. All three accounts completed with zero new fits. Eight synthetic checks and31,841 independent numeric ledger comparisons pass with zero ledger error; audit SHA`8b9c122eba2be8792c095d77affbda69c11871c6aabe3b99137df3977967c482`. Full CAGR increases to19.1415%, but drawdown worsens to29.6675%; fresh2021 earns19.6365%/15.6482%. Every BUY intent is identical and SELL intents are an189→32 subset. Both20% flags fail. The [complete outcome report](../../../ml/docs/boosted-exit-controls.md) records the risk/return tradeoff and unfavorable2022, without activating the policy.

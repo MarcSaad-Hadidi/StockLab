@@ -40,6 +40,10 @@ Synthetic tests cover107-month boundary validation, per-month own priors versus 
 
 All history is researcher-adaptive, with five correlated survivors, overlapping labels/fits and current adjusted-price/index vintages. Frequent refits can increase variance, boundary jumps, churn and cost, and do not guarantee forecasting skill or20%. `classification='adaptive_diagnostic'`, `research_qualified=False`, `promotion_authorized=False`. No runtime activation; newly fitted snapshots cannot borrow recipe-level validation as their own heldout outcomes. Genuine artifact/registry/inference/catalog support and truthful pending forward evidence remain separate full-ML commissioning work.
 
-- [ ] Prepare/review the minimal monthly driver and pass synthetic checks; freeze commitments.
-- [ ] Execute exactly107 causal candidate fits, verify January invariants, then all six fixed accounts.
+- [x] Prepare/review the minimal monthly driver and pass synthetic checks; freeze commitments.
+- [x] Execute exactly107 causal candidate fits, verify January invariants, then all six fixed accounts.
 - [ ] Independently audit and publish every result, prior, month diagnostic and exit effect.
+
+## Post-study outcome
+
+The prefit protocol committed as`1942c53` remains archived unchanged. All107 fits and six accounts completed once. Eight synthetic checks and63,830 independent numeric ledger comparisons pass with zero ledger error; audit SHA`b8393bd58c059e64e75e0ff5094869101309cdfcb56bb99a263462cf4db7a28e`. All915 January scores are bit-identical with zero error and exact action parity before replay. Full monthly earns16.6715% CAGR /33.8450% drawdown; fresh2021 earns16.3994%/15.1208%. Both are worse than annual28 on return and drawdown. Full enabled DD also exceeds SPY. All107 month diagnostics remain, including November's40 forecasts/zero known outcomes/null losses. The [complete report](../../../ml/docs/boosted-exit-controls.md) preserves every result. No20% pass or promotion; retain the annual reference.

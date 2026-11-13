@@ -4,6 +4,8 @@ The user requested continued improvement toward more than 20% annual compound gr
 
 **Outcome:** original-five binary training remains the strongest boosted candidate in this batch, at **18.6259% CAGR / 24.7658% maximum drawdown**, versus the preceding broader reference's 16.1739% / 31.9147% and SPY's 14.1669% / 33.7196%. Neither subsequent strategy improves it. The >20% compound-growth objective remains unmet on both full and fresh-2021 accounts. Production remains RFv7.
 
+The [following horizon, exit, SPY-context and cadence studies](boosted-exit-controls.md) preserve this batch unchanged. Five-session exit confirmation increases full CAGR to19.1415% while worsening drawdown to29.6675%; direct SPY inputs lower drawdown to23.0973% while reducing CAGR to17.9741% and failing fresh-account SPY outperformance. Monthly refitting falls to16.6715%/33.8450%. These disclosed outcomes do not fulfill the joint objective.
+
 ## Original-five upside training
 
 Change only the upside training population from the broader corpus to AAPL/JNJ/JPM/MSFT/XOM. Keep the same 28 features, executable 20-session label, annual four-year known-date purges, date weighting, fixed HGBT parameters, .65/.35 thresholds, trend confirmations and account rules. The [protocol](../../docs/superpowers/plans/2026-11-12-boosted-upside-domain.md) was committed before the nine new fits. Prior experiments and rejected admissions remain unchanged.

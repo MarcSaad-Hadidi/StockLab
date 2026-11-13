@@ -42,6 +42,10 @@ Synthetic checks must reject reordered/duplicate/extra/target columns, changed o
 
 An independent auditor performs zero fitting or producer simulations, verifies old28 bit parity and all four new causal fields, all nine fit sets/priors, probability-to-order mapping, complete SIX ledgers/positions/dividends/fees/caps/SPY/annual returns and all paired comparison arithmetic. Publish every result. All history remains researcher-adaptive with five correlated survivors, dependent outcomes and current adjusted-price/index vintages. `classification='adaptive_diagnostic'`, `research_qualified=False`, `promotion_authorized=False`; no runtime change or future20% guarantee.
 
-- [ ] Prepare/review the minimal private representation driver and pass synthetic checks; freeze commitments.
-- [ ] Execute exactly nine fits and six fixed accounts, preserving every reference.
+- [x] Prepare/review the minimal private representation driver and pass synthetic checks; freeze commitments.
+- [x] Execute exactly nine fits and six fixed accounts, preserving every reference.
 - [ ] Independently audit and publish all outcomes, exit effects and commissioning limitations.
+
+## Post-study outcome
+
+The prefit protocol committed as`4fc4429` remains archived unchanged. Nine fits and six accounts completed once. Eight synthetic checks and63,435 independent numeric ledger comparisons pass with zero ledger error; audit SHA`c839b38dc380e597564907ebff92440df34d7213919762a4f1c542e3c63ff06a`. Full earns17.9741% CAGR /23.0973% drawdown, reducing risk while losing return versus original28. Fresh2021 earns13.8524%/14.1838% and underperforms SPY. Neither20% flag passes and no model is promoted. The [complete outcome report](../../../ml/docs/boosted-exit-controls.md) records every paired comparison and weak forecast scores.

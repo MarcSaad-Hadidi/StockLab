@@ -48,6 +48,10 @@ Synthetic checks: genuine64-session labels/censoring, strict known-date purge in
 
 All inspected2018–2026 history remains researcher-adaptive. Longer purging discards more recent training outcomes; overlapping63-session labels are highly dependent, fewer effective observations and higher positive prevalence may suppress sales. A positive63-session endpoint can still contain severe interim loss. Five surviving assets and current adjusted-price/index vintages limit generalization. `classification='adaptive_diagnostic'`, `research_qualified=False`, `promotion_authorized=False`; no future20% guarantee or runtime change.
 
-- [ ] Prepare/review the minimal private driver and pass synthetic checks; freeze all commitments before fitting.
-- [ ] Execute exactly nine causal63-session fits and all nine fixed accounts; preserve the cached20 reference.
+- [x] Prepare/review the minimal private driver and pass synthetic checks; freeze all commitments before fitting.
+- [x] Execute exactly nine causal63-session fits and all nine fixed accounts; preserve the cached20 reference.
 - [ ] Independently audit all accounts, priors and exit effects; publish every result in the existing draft PR.
+
+## Post-study outcome
+
+The prefit protocol committed as`97bb00b` remains archived unchanged in private evidence. Nine fits and nine accounts completed once. Eight synthetic checks and95,282 independent numeric ledger comparisons pass with zero ledger error; audit SHA`d9972a7e3fa4f2870f9dff17736c8e17ff638faf8c940310690946d77a8da3d9`. New63 full earns18.1581% CAGR /32.9671% drawdown, worse than the retained20 reference on both measures. Full no-SELL controls remain below20%; the fresh20 no-SELL20.4581% result is a shorter, zero-sale control. No promotion. The [complete outcome report](../../../ml/docs/boosted-exit-controls.md) preserves every account and effect.

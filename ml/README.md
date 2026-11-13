@@ -25,6 +25,12 @@ uses `python -m stocklab_ml.operational_cycle --config <private-config.json>` wi
 fresh immutable inputs and the exact existing database. The runner never trains
 or promotes automatically.
 
+The [experimental boosted28 snapshot workflow](docs/boosted-snapshot.md) adds real
+fitted HGBT reproduction, immutable save/load and explicit Archived registration
+through the existing artifact APIs. It preserves genuine scores and binds policy
+context to its prediction version. Historical evidence and prospective PENDING
+remain separate; this path does not activate or commission the native worker.
+
 The separate [DCA / S&P 500 research](docs/dca-research.md) compares costed,
 chronological paper portfolios against an external SPY proxy and the user's
 20% annualized target. It records both favorable and unfavorable periods;
@@ -36,6 +42,15 @@ start earns 17.58%. Continuous-return regression and minimum-leaf regularization
 perform worse and remain documented. All 24 synthetic checks and 98,283 independent
 ledger comparisons pass with zero ledger error. The >20% target remains unmet;
 probability calibration is weak and production remains RFv7.
+
+The [subsequent horizon, exit, SPY-context and cadence controls](docs/boosted-exit-controls.md)
+record the remaining tradeoffs: five-session exit confirmation reaches19.14%
+CAGR with29.67% drawdown, while direct SPY inputs reach17.97%/23.10% and
+underperform SPY on a fresh2021 start. The63-session horizon also fails to
+improve the retained original28 reference. Monthly refitting also worsens both
+full measures to16.67%/33.85%. All32 new synthetic checks and254,388
+independent ledger comparisons pass with zero ledger error; none of these
+studies meets the full20%/lower-drawdown objective or activates a model.
 
 The user-requested long comparison of the unchanged market-boosted reference
 now covers2018-01-01 through2026-11-11:16.17% CAGR versus SPY14.17%,31.91%
