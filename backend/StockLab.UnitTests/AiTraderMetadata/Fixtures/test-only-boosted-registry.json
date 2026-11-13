@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "models": [
+    {
+      "model_name": "hgb_swing20_market28",
+      "model_version": "v000001",
+      "version_number": 1,
+      "training_run_id": "50000000-0000-4000-8000-000000000001",
+      "model_type": "hist_gradient_boosting",
+      "trained_at_utc": "2026-10-14T14:00:00+00:00",
+      "registered_at_utc": "2026-10-14T14:00:00+00:00",
+      "status": "Archived",
+      "training_report": {
+        "snapshot_metadata": {
+          "schema_version": 1,
+          "model_name": "hgb_swing20_market28",
+          "model_type": "hist_gradient_boosting",
+          "feature_columns": [
+            "return_1d",
+            "rsi_14",
+            "momentum_10",
+            "volatility_20",
+            "close_ma5",
+            "close_ma20",
+            "ma_ratio",
+            "relative_volume",
+            "monthly_range_9",
+            "monthly_range_12",
+            "monthly_range_19",
+            "monthly_rsi",
+            "monthly_multiplier",
+            "momentum_20",
+            "momentum_63",
+            "momentum_126",
+            "momentum_252",
+            "close_ma50",
+            "close_ma200",
+            "volatility_63",
+            "drawdown_252",
+            "relative_momentum_20",
+            "relative_momentum_63",
+            "relative_momentum_252",
+            "vix_level",
+            "vix_change5",
+            "vix_term_ratio",
+            "vix_term_change5"
+          ],
+          "target_definition": "open[t+21]/open[t+1]-1 > .002",
+          "known_date_offset_sessions": 21,
+          "promotion_authorized": false,
+          "fit_audit": {
+            "recipe": "boosted_synthetic_swing20",
+            "label": "target_20",
+            "first_fit": "2020-01-02",
+            "last_fit": "2023-11-20",
+            "last_target": "2023-12-20",
+            "first_prediction": "2024-01-02",
+            "train_rows": 10,
+            "training_positive_rate": 0.6,
+            "date_weighted": true,
+            "training_unweighted_positive_rate": 0.6,
+            "training_weighted_positive_rate": 0.6,
+            "training_dates": 2,
+            "training_identities": 5,
+            "training_rows": 10
+          },
+          "refit_frequency": "annual",
+          "period_key": "2024",
+          "last_prediction": "2024-12-31",
+          "frame_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "reference_predictions_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "fit_rows_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "prediction_features_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "sources_sha256": {
+            "C:/TEST_ONLY_PRIVATE_SOURCE/market.csv": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          },
+          "parameters": {
+            "categorical_features": "from_dtype",
+            "class_weight": null,
+            "early_stopping": false,
+            "interaction_cst": null,
+            "l2_regularization": 1,
+            "learning_rate": 0.05,
+            "loss": "log_loss",
+            "max_bins": 255,
+            "max_depth": null,
+            "max_features": 1,
+            "max_iter": 200,
+            "max_leaf_nodes": 15,
+            "min_samples_leaf": 20,
+            "monotonic_cst": null,
+            "n_iter_no_change": 10,
+            "random_state": 42,
+            "scoring": "loss",
+            "tol": 1e-7,
+            "validation_fraction": 0.1,
+            "verbose": 0,
+            "warm_start": false
+          },
+          "environment": {
+            "python": "3.14.0",
+            "scikit_learn": "1.8.0",
+            "numpy": "2.4.0",
+            "scipy": "1.17.0",
+            "joblib": "1.5.3"
+          },
+          "trained_at_utc": "2026-10-14T14:00:00+00:00",
+          "omp_num_threads": "1",
+          "evidence": {
+            "recipe": "frozen_period_parity",
+            "historical": "known-date purge on supplied current-vintage frame; past publication not certified",
+            "prospective": {
+              "status": "PENDING",
+              "metrics": null
+            }
+          }
+        },
+        "estimator_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "metrics": null,
+      "holdout_sha256": null
+    }
+  ]
+}

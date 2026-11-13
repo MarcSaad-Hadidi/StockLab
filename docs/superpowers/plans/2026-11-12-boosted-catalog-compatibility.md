@@ -20,7 +20,9 @@ Use synthetic public fixtures only, not the private registry or fitted binary. F
 
 After code validation, an explicitly isolated read-only parser proof may load the actual privately verified HGBT registry without changing application config, registering/activating anything or touching the database. A real authenticated UI/worker commissioning claim requires later dedicated proof. Native28-feature/vintage preparation, next-session costs/dividends and prospective paper/restart work remain required, as does improved financial performance.
 
-- [ ] Implement/review the closed C# projection and safe nullable response with focused fixtures.
-- [ ] Implement/review strict frontend handling and localized pending rendering.
-- [ ] Verify final compatibility checks and actual isolated read-only catalog projection.
+- [x] Implement/review the closed C# projection and safe nullable response with focused fixtures.
+- [x] Implement/review strict frontend handling and localized pending rendering.
+- [x] Verify final compatibility checks and actual isolated read-only catalog projection.
 - [ ] Publish evidence while retaining the full financial and native commissioning objective.
+
+Post-implementation evidence:14 public files implement the closed reader/projection and localized pending UI. Independent review is clear after fixing reserved HGBT-name/wrong-type fallback. Local verification:74 focused backend cases,1419 full backend passes/one existing skip,662 frontend passes, lint/build and zero backend build warnings/errors. Actual isolated read-only service/API-mapper proof passes with registry SHA unchanged`ce99ed92…cff8e` and proof SHA`b0781c65…25e05a`; no host, database, provider, estimator load, config or registry write. Sandbox MSBuild/loopback restrictions were verified separately from assertion failures and final checks ran outside those restrictions. An initial fallback touched generated files in an old build cache; it was stopped and left in place, with subsequent verification isolated. Private evidence records this incident without claiming byte preservation. No Python/research-source change, promotion or full commissioning is claimed.
