@@ -24,7 +24,7 @@ The manifest records exact original-five/SPY identities, split-adjusted stocks/m
 
 Require aware UTC `as_of_utc` no later than the real clock. The decision cutoff is the last expected session strictly before its UTC date; the independent calendar's declared coverage must include the as-of date. Reject a stale/incomplete calendar, weekends/duplicate/unsorted session keys and any later OHLCV rows. Stock/SPY histories must cover precisely the same expected sessions from their declared daily prefix through cutoff, include all five stock identities/SPY, and end at cutoff. No filling, sorting repair or silently dropped invalid rows. Completeness is relative to the supplied attested calendar; it does not independently prove an official session list.
 
-Monthly input must contain native consecutive month-start candles for all five from the declared complete prefix, only fully completed months, ending exactly at the calendar month before cutoff. A partial current month is rejected. Daily and monthly RSI use the entire supplied, explicitly attested seed history;252 bars/four years cannot replace the recursive prefix. Incomplete/stale/gapped context fails instead of carrying old values.
+Monthly input must contain native consecutive month-start candles for all five from the declared complete prefix, only fully completed months, ending exactly at the calendar month before cutoff. A partial current month is rejected. The only supported existing profile pins daily/monthly prefix starts to2010-01-04/2010-01-01; redefining the manifest after truncating history is a different recipe and fails. Daily and monthly RSI use the entire supplied, explicitly attested seed history;252 bars/four years cannot replace the recursive prefix. Incomplete/stale/gapped context fails instead of carrying old values.
 
 Volatility input uses strict positive finite dated OHLC and original source order. Retain/index on the actual SPY calendar BEFORE lagging; index-only dates cannot become trading sessions. Require every necessary calendar observation, no filling and no future source bars. Preserve the research availability floor2013-11-01 and exact shifts2/7: VIX/100,5-session change, VIX/VIX3M−1 term ratio and its5-session difference.
 
@@ -47,3 +47,5 @@ Return only ordered `date,symbol` plus the exact28 model features, sorted and fi
 5. Matching score values with substituted trend context is insufficient: invoke existing version-bound policy on exactly the same prepared frame and compare every action/reason.
 
 The >20%/lower-drawdown financial objective remains unchanged and unmet until separately demonstrated. This preparer enables real inputs; it does not qualify/promote a strategy or commission the authenticated UI/worker.
+
+Keep this pre-proof protocol unchanged after the actual proof. Completion and observed test outcomes belong in the public guide/results, not in these bound preregistration bytes.
