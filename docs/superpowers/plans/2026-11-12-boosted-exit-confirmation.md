@@ -38,7 +38,7 @@ Five-session confirmation can delay crash exits or miss useful transient signals
 
 - [x] Prepare/review the minimal cached-policy driver and pass synthetic checks; freeze before financial replay.
 - [x] Execute the three fixed candidate accounts with zero new fits and unchanged references.
-- [ ] Independently audit and publish every outcome, paired effect and remaining limitation.
+- [x] Independently audit and publish every outcome, paired effect and remaining limitation.
 
 ## Post-study outcome
 

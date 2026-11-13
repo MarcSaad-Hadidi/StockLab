@@ -42,7 +42,7 @@ All history is researcher-adaptive, with five correlated survivors, overlapping 
 
 - [x] Prepare/review the minimal monthly driver and pass synthetic checks; freeze commitments.
 - [x] Execute exactly107 causal candidate fits, verify January invariants, then all six fixed accounts.
-- [ ] Independently audit and publish every result, prior, month diagnostic and exit effect.
+- [x] Independently audit and publish every result, prior, month diagnostic and exit effect.
 
 ## Post-study outcome
 

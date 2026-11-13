@@ -50,7 +50,7 @@ All inspected2018–2026 history remains researcher-adaptive. Longer purging dis
 
 - [x] Prepare/review the minimal private driver and pass synthetic checks; freeze all commitments before fitting.
 - [x] Execute exactly nine causal63-session fits and all nine fixed accounts; preserve the cached20 reference.
-- [ ] Independently audit all accounts, priors and exit effects; publish every result in the existing draft PR.
+- [x] Independently audit all accounts, priors and exit effects; publish every result in the existing draft PR.
 
 ## Post-study outcome
 

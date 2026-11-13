@@ -44,7 +44,7 @@ An independent auditor performs zero fitting or producer simulations, verifies o
 
 - [x] Prepare/review the minimal private representation driver and pass synthetic checks; freeze commitments.
 - [x] Execute exactly nine fits and six fixed accounts, preserving every reference.
-- [ ] Independently audit and publish all outcomes, exit effects and commissioning limitations.
+- [x] Independently audit and publish all outcomes, exit effects and commissioning limitations.
 
 ## Post-study outcome
 
