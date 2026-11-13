@@ -72,6 +72,17 @@ portfolio. Retain retired scopes only as recovery archives after checking their
 terminal outcomes and stopping their workers. A new scope requires disjoint
 decision identities; concurrent different-scope execution is unsupported.
 
+Operational input publication keeps its complete `.partial` evidence and session
+destination under the same parent and existing writer lock. On Windows only,
+`PermissionError` 5 or 32 can retry directory publication up to four attempts,
+with waits of 20, 40 and 80 ms. Every attempt requires the source directory and
+an absent destination. A destination appearing at any point stops publication;
+neither directory is overwritten, merged, repaired or deleted. Exhaustion
+re-raises the first original denial and retains the partial evidence. Other
+errors and non-Windows denials are not retried. This handles an observed Windows
+publication refusal; its underlying cause is unverified. It does not change
+data validation, model selection, risk policy or authorization to operate a task.
+
 ## Windows tasks
 
 The commissioned local setup uses two ML tasks under the current user's identity,

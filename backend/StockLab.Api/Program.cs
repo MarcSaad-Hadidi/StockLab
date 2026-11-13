@@ -28,6 +28,12 @@ using StockLab.Infrastructure.AiTraderMetadata;
 using StockLab.Api.Operations;
 using StockLab.Api.Health;
 
+if (args.Any(argument => argument == "--diagnose-boosted" || argument.StartsWith("--diagnose-boosted=", StringComparison.Ordinal)))
+{
+    Environment.ExitCode = await BoostedDiagnosticCommand.RunAsync(args, Console.Out, Console.Error);
+    return;
+}
+
 var initializeAiTrader = args.Contains("--initialize-ai-trader", StringComparer.Ordinal);
 var checkAiTrader = args.Contains("--check-ai-trader", StringComparer.Ordinal);
 var runAiDecisions = args.Contains("--run-ai-decisions", StringComparer.Ordinal);
