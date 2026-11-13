@@ -16,7 +16,7 @@ registerHooks({ load(url, context, nextLoad) {
     return { format: 'commonjs', shortCircuit: true, source: readFileSync(fileURLToPath(url), 'utf8') }
   return nextLoad(url, context)
 } })
-const dom = new JSDOM('', { url: 'http://localhost/dashboard' })
+const dom = new JSDOM('', { url: 'http://localhost/dashboard', pretendToBeVisual: true })
 Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true })
 const { createRoot } = await import('react-dom/client')
 const { i18n } = await import('../src/i18n/i18n.ts')
@@ -234,6 +234,7 @@ for (const trigger of ['remount', 'focus', 'visibility', 'bfcache'] as const) {
         }
         if (trigger === 'bfcache') window.dispatchEvent(new dom.window.PageTransitionEvent('pageshow', { persisted: true }))
       })
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)) })
       assert.match(view.card().textContent!, /MSFT/)
       assert.doesNotMatch(view.card().textContent!, /AAPL/)
     } finally { await view.close() }

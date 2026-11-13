@@ -16,7 +16,7 @@ registerHooks({ load(url, context, nextLoad) {
     return { format: 'commonjs', shortCircuit: true, source: readFileSync(fileURLToPath(url), 'utf8') }
   return nextLoad(url, context)
 } })
-const dom = new JSDOM('', { url: 'http://localhost/market?symbol=AAPL' })
+const dom = new JSDOM('', { url: 'http://localhost/market?symbol=AAPL', pretendToBeVisual: true })
 Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true })
 const { createRoot } = await import('react-dom/client')
 const { i18n } = await import('../src/i18n/i18n.ts')
@@ -113,7 +113,7 @@ for (const operation of ['add', 'remove'] as const) {
       await act(async () => window.dispatchEvent(new dom.window.Event('focus')))
       assert.equal(get.mock.callCount(), 1, 'focus must not cancel a pending mutation')
       assert.equal(signal.aborted, false)
-      await act(async () => response.resolve(member('AAPL')))
+      await act(async () => { persisted = operation === 'add' ? [member('AAPL')] : []; response.resolve(member('AAPL')) })
       selected(view, operation === 'add')
     } finally { await view.close() }
   })
@@ -224,6 +224,7 @@ for (const trigger of ['focus', 'visibility', 'bfcache'] as const) {
         if (trigger === 'visibility') { t.mock.getter(document, 'visibilityState', () => 'visible'); document.dispatchEvent(new dom.window.Event('visibilitychange')) }
         if (trigger === 'bfcache') window.dispatchEvent(new dom.window.PageTransitionEvent('pageshow', { persisted: true }))
       })
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 200)) })
       selected(view, false)
     } finally { await view.close() }
   })
