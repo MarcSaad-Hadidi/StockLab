@@ -34,6 +34,11 @@ The [source-bound target-free input preparer](docs/boosted-vintage.md) now build
 the exact28 inputs from explicit closed local vintages. Its real Archived-artifact
 proof matches457,660 feature cells and all1,085 retained2026 scores/actions with
 zero fits/replays; native acquisition/cycle integration still remains.
+The separate [read-only .NET/Python diagnostic](docs/boosted-diagnostic.md) now
+passes two actual operator invocations against that Archived artifact. Independent
+review finds all40 latest scores/trends bit-exact and all actions/reasons correct,
+with zero fitting/replay/provider calls. This historical bridge does not enable
+the automatic trading cycle or provide prospective evidence.
 
 The separate [DCA / S&P 500 research](docs/dca-research.md) compares costed,
 chronological paper portfolios against an external SPY proxy and the user's
@@ -66,6 +71,15 @@ comparisons pass. Across these six continuation diagnostics there are51 syntheti
 checks and655,106 independent numeric ledger comparisons,134 base-model fits,
 nine additional isotonic calibrations and33 new accounts; the separate snapshot
 reproduction remains one further fit/no account. The joint20%/risk objective fails.
+
+The subsequent [relative-to-SPY event study](docs/boosted-excess-target.md) earns
+only8.06% full CAGR despite252 buys/51 sales, versus SPY14.17%. Its fresh2021
+account also fails, so the18.63% reference remains retained. All eleven synthetic
+checks and267,977 independent numeric comparisons pass, with maximum absolute
+difference5.82e-11 under the unchanged tolerance. Across seven continuation
+diagnostics:62 synthetic checks,923,083 independent numeric comparisons,
+143 base fits/nine isotonic calibrations/39 accounts. Financial equality is not
+claimed bit-exact for this last study; the20% goal remains unmet.
 
 The [broader-data readiness assessment](docs/broader-data-readiness.md) records
 why the111-name training panel cannot yet substitute for execution data: missing
