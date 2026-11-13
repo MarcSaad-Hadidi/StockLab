@@ -30,6 +30,10 @@ fitted HGBT reproduction, immutable save/load and explicit Archived registration
 through the existing artifact APIs. It preserves genuine scores and binds policy
 context to its prediction version. Historical evidence and prospective PENDING
 remain separate; this path does not activate or commission the native worker.
+The [source-bound target-free input preparer](docs/boosted-vintage.md) now builds
+the exact28 inputs from explicit closed local vintages. Its real Archived-artifact
+proof matches457,660 feature cells and all1,085 retained2026 scores/actions with
+zero fits/replays; native acquisition/cycle integration still remains.
 
 The separate [DCA / S&P 500 research](docs/dca-research.md) compares costed,
 chronological paper portfolios against an external SPY proxy and the user's
@@ -53,6 +57,15 @@ full measures to16.67%/33.85%. Entry-quarter exits earn18.93%/30.91% full and
 All40 new synthetic checks and403,169
 independent ledger comparisons pass with zero ledger error; none of these
 studies meets the full20%/lower-drawdown objective or activates a model.
+
+The following [upside-only isotonic diagnostic](docs/boosted-upside-calibration.md)
+earns19.28% full CAGR but worsens drawdown to32.57% and loses to SPY from fresh2021
+capital(13.77% versus14.25%). It executes only one sale and is not retained as a
+replacement. Eleven synthetic checks and251,937 independent zero-error ledger
+comparisons pass. Across these six continuation diagnostics there are51 synthetic
+checks and655,106 independent numeric ledger comparisons,134 base-model fits,
+nine additional isotonic calibrations and33 new accounts; the separate snapshot
+reproduction remains one further fit/no account. The joint20%/risk objective fails.
 
 The [broader-data readiness assessment](docs/broader-data-readiness.md) records
 why the111-name training panel cannot yet substitute for execution data: missing

@@ -80,3 +80,19 @@ The returned metadata records actual internally generated `prepared_at_utc`, sup
 ## Verification boundary
 
 Synthetic tests cover the closed input contract, exact matrix parity, causal prefix invariance, UTC/month/calendar/macro boundaries, and unchanged source bytes/environment. A separately authorized zero-fit actual-artifact proof must compare every eligible 28-feature cell and all 1,085 retained 2026 probabilities and policy rows on the same context. No real-data proof or model export is performed by this guide or by preparation itself.
+
+## Completed historical artifact proof
+
+At source commit `68cbb78`, one private proof prepares **16,345 rows / 457,660 feature cells**, all bit-identical to the frozen reference projection. The full feature digest is `493cab6362614bfbc534b35715b7e208822049b874db370c71c207844bbbd08d`; its 2026 subset is 1,085 rows / 217 sessions, digest `c5430a5f3c4e6c115f4fd9f23f362079c0a2e0f508c01e61174bdd8821d3cb1c`.
+
+The existing real Archived artifact then returns every 2026 probability exactly and reproduces all policy rows using the SAME prepared context: 215 BUY, 14 SELL and 856 HOLD. These are historical signal rows, not newly executed portfolio trades. Explicit failing guards on HGBT fitting, calibration fitting and account simulation observe **zero calls**. The original binary, isolated registry, RFv7 registry/two inspected configs, all 53 earlier research sources and 84 snapshot bindings remain unchanged.
+
+The source-bound normalized bundle retains the original daily/monthly recursive prefixes. Its 1,010 native monthly bars end October 2026; five incomplete November bars are excluded explicitly. Re-serialization of the actual legacy-decoded OHLCV values is independently recorded, with zero numerical differences versus the new round-trip decoder on these inputs. No feature or score is rounded to make parity pass. The external normalized manifest SHA is `6861452a69eddae7fc58a9742cb7d744fa1b99f4c825392d8fb4a62c3ba5c646`.
+
+The old validated calendar remains byte-identical and covers only November 11. A NEW derived calendar adds November 12 as a scheduled Thursday under the current [official NYSE calendar](https://www.nyse.com/trade/hours-calendars), retained with actual November 13 UTC capture hashes. This is an explicit schedule inference, not extraordinary-closure or executable-open certification. The historical as-of November 12 uses the strict cutoff November 11; a November 13 as-of with this unchanged bundle is rejected as stale.
+
+Actual training occurred November 13 at 02:01:59.101472 UTC, AFTER the historical November 12 as-of. Preparation/capture timestamps are current UTC, never backdated. This is historical reproduction, **not prospective evidence**; PENDING remains appropriate. No current worker, active model, acquisition process or authenticated UI is commissioned by this proof.
+
+Local new-plus-adjacent verification passes 138 tests with two Windows symlink skips and no warnings. The complete ML suite passes **2,251 tests with three Windows skips and five known older calibration warnings**, in 550.93 seconds; source/test hashes are unchanged.
+
+The independent proof audit passes at its first execution. It recalculates all28 features from normalized OHLCV/monthly/volatility sources, checks all457,660 cells against both the new output and old export, verifies1085 scores against both export and original annual forecasts, and derives every policy action/reason independently. Raw-to-normalized/manifest/proof bindings, current NYSE capture, complete calendar, actual UTC timestamps,105 unknown-outcome tails,53/84 sources and seven protected files pass. There are zero auditor fits, account simulations, preparer/producer calls or joblib/pickle loads. Private evidence is under `models/boosted-vintage-20261112/proof-v1`; independent-audit SHA `6a4bb12b9a162851ee0309d0773c442979e5214f9b0a6512a94d9145cdf519f6`. The pre-proof protocol remains unchanged.
