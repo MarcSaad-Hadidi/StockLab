@@ -165,6 +165,37 @@ Eight synthetic checks and the independent audit pass. The auditor reconstructs 
 
 Private evidence is under`models/boosted-monthly-upside-20261112`, with driver SHA`dcefa970fa55c17a90ccbf76e8900242bb0ff3588023190f1df4253251446b25`, forecast SHA`57c69af4490c3267e2440784540b7f26fa18b5ad1e24da31131ed646e23ef708` and independent-audit SHA`b8393bd58c059e64e75e0ff5094869101309cdfcb56bb99a263462cf4db7a28e`. Across these four completed studies, **32 synthetic checks and254,388 independent numeric ledger comparisons pass**. They add125 fitted models and24 account replays, with no qualification, promotion or runtime change. The annual18.6259%/24.7658% reference remains retained; the19.1415% persistence point remains a disclosed higher-risk tradeoff. The full20% objective is unmet.
 
+## Entry-only quarter exits on the same annual28 forecasts
+
+The [fixed quarter-exit protocol](../../docs/superpowers/plans/2026-11-12-boosted-quarter-exit.md) reuses the exact annual20 scores and every BUY intent. Its preregistration stays unchanged; completed evidence is reported here. The first observed row seeds each symbol's SELL eligibility; subsequent complete-predicate false-to-true entries schedule one25% sale at the next actual open. State runs continuously across years/refits and before the fresh2021 slice. A sale uses floor8(actual fill-time shares/4), leaving at least75%; unheld/dust entries are consumed without fees and terminal unexecuted orders are explicit. This is the model's SELL predicate, not the monthly DCA STRONG_TRIM rule.
+
+The account preserves pooled cash, symbol execution order, original BUY caps/sizing, costs and dividend timing. The DCA bucket engine is not substituted. Partial basis/remainders are separate accounting sidecars; original nine trade/six equity columns remain unchanged. There are zero model fits, benchmark replays or reference-account replays.
+
+|Quarter-exit account|CAGR|Maximum drawdown|Ending equity|Buys / sells|
+|---|---:|---:|---:|---:|
+|Full2018–2026,5+5bps|18.9329%|30.9147%|464,693.47 USD|209 /86|
+|Full2018–2026,25+25bps|18.5646%|30.9592%|452,096.65 USD|208 /86|
+|Fresh2021,5+5bps|19.3892%|14.0444%|282,454.17 USD|128 /67|
+
+The fresh account improves both CAGR and drawdown versus immediate exits. The full account improves return only .3070 percentage point while worsening drawdown6.1490 points. It is also worse on both full-period measures than the previous19.1415%/29.6675% confirmation variant. Neither full nor fresh return exceeds20%; the lower-risk annual reference is retained.
+
+|Quarter policy compared with|CAGR difference, percentage points|Ending wealth difference|Drawdown reduction, percentage points|
+|---|---:|---:|---:|
+|Immediate20, full baseline|+0.3070|+10,520.24 USD|-6.1490|
+|No-SELL20, full baseline|-0.7384|-26,195.01 USD|+1.8733|
+|Immediate20, full higher costs|+0.5224|+17,346.74 USD|-6.0739|
+|No-SELL20, full higher costs|-1.0443|-36,526.88 USD|+1.8261|
+|Immediate20, fresh2021|+1.8114|+24,201.75 USD|+0.6327|
+|No-SELL20, fresh2021|-1.0689|-15,142.29 USD|+2.9850|
+
+Mean full investment rises from88.00% to95.27%; fees fall536.74 USD versus immediate exits. More retained exposure helps explain the different risk profile, not improved forecast calibration. The full account reconciles100,000 initial capital +173,975.50 net realized P&L +155,256.48 unrealized P&L +35,461.49 gross dividends to464,693.47 equity. Fees are already included in cost basis/net proceeds and are not subtracted twice. Positive realized profit alone cannot prove sale alpha: matched no-SELL wealth remains higher. This tests episode entry and sale size jointly, not an isolated25% quantity effect.
+
+Eight synthetic checks pass. Independent review reconstructs all11,140 entry rows/105 unknown-label tails, all2,344 unchanged BUY intents and189→86 SELL-intent subset, three partial-sale ledgers and every order/basis/position/dividend/cost/cap/SPY/annual sidecar. It verifies24 annual-return rows, six effects,362 reference files, all51 old source paths and later proof bindings. **148,781 numeric comparisons have maximum error0.0** with zero auditor fits, producer simulations or control replays. One checker column-order mismatch was corrected before ledger comparisons, preserving the original checker/failure evidence; no financial values, producer outputs or strategy were changed/replayed.
+
+Private evidence: `models/boosted-quarter-exit-20261112`, pre-replay plan commit`10a3f61`, driver SHA beginning`cc8ae488`, replay helper SHA beginning`16782079`, independent-audit SHA`9f3dd020b00ecba61fe68c4c54051c7dfbacabc6517e315cf3773616e9672a23`. Across these five completed diagnostics,40 synthetic checks and403,169 independent numeric ledger comparisons pass;125 research fits and27 new account replays were calculated. The separate genuine snapshot reproduction remains one additional fit/no account replay. The >20%/lower-drawdown objective is unmet, and all failed/frontier points remain recorded.
+
 ## Operating limits
 
-Five surviving evaluation stocks, dependent overlapping outcomes, current adjusted-price/index vintages and repeated inspection limit generalization. Neither exact accounting nor a new protocol restores untouched validation or guarantees future20% growth. The [genuine boosted28 snapshot/registry workflow](boosted-snapshot.md) now reproduces all1085 frozen2026 scores and saves/loads the actual model through an isolated Archived registry, with independent zero-fit verification. Its historical50 Brier remains worse than its fitting prior; prospective evidence is PENDING. Backend/frontend target-aware catalogs, native28-feature inputs, next-session execution/cost/dividend parity and prospective paper/restart checks still remain. Production RFv7 and the API, schedules, database and broker state remain unchanged. All studies retain `research_qualified=False` and `promotion_authorized=False`.
+Five surviving evaluation stocks, dependent overlapping outcomes, current adjusted-price/index vintages and repeated inspection limit generalization. Neither exact accounting nor a new protocol restores untouched validation or guarantees future20% growth. The [genuine boosted28 snapshot/registry/catalog workflow](boosted-snapshot.md) reproduces all1085 frozen2026 scores, saves/loads the actual model through an isolated Archived registry and projects its metadata through the read-only application catalog. Its historical50 Brier remains worse than its fitting prior; prospective evidence is PENDING. Native28-feature/vintage inputs, expected-session execution/cost/dividend parity and prospective paper/restart checks still remain. RFv7 selection, schedules, database and broker state remain unchanged. All studies retain `research_qualified=False` and `promotion_authorized=False`.
+
+The [broader-data readiness assessment](broader-data-readiness.md) also prevents substituting an unverified111-name account: existing broader sources have no certified cash-event/zero-dividend coverage, historical membership/lifetime or terminal proceeds, and include missing sessions/zero-volume candles. The19.67% no-SELL result is a tested reference point, not a mathematical ceiling on five-stock strategies. More names alone do not establish better returns or executable fills.

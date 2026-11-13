@@ -48,9 +48,16 @@ record the remaining tradeoffs: five-session exit confirmation reaches19.14%
 CAGR with29.67% drawdown, while direct SPY inputs reach17.97%/23.10% and
 underperform SPY on a fresh2021 start. The63-session horizon also fails to
 improve the retained original28 reference. Monthly refitting also worsens both
-full measures to16.67%/33.85%. All32 new synthetic checks and254,388
+full measures to16.67%/33.85%. Entry-quarter exits earn18.93%/30.91% full and
+19.39%/14.04% from fresh2021 capital, improving the recent interval but failing20%.
+All40 new synthetic checks and403,169
 independent ledger comparisons pass with zero ledger error; none of these
 studies meets the full20%/lower-drawdown objective or activates a model.
+
+The [broader-data readiness assessment](docs/broader-data-readiness.md) records
+why the111-name training panel cannot yet substitute for execution data: missing
+cash-event coverage, unresolved identity/terminal information, session gaps and
+zero-volume candles. No broader return is invented from these records.
 
 The user-requested long comparison of the unchanged market-boosted reference
 now covers2018-01-01 through2026-11-11:16.17% CAGR versus SPY14.17%,31.91%
