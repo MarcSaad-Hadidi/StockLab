@@ -72,6 +72,7 @@ def test_operator_composes_preflight_fresh_inputs_and_guarded_backend_without_le
     state = Path(config["state_directory"])
     calls = [json.loads(line) for line in (state / "backend-calls.jsonl").read_text().splitlines()]
     assert calls[0]["AiTradingCycle:CheckOnly"] == "true"
+    assert all(call['AiTradingCycle:RiskPolicy'] == 'baseline-v1' and 'AiTrader:Risk:MinimumConfidence' not in call for call in calls)
     assert calls[1]["AiTradingCycle:DecisionDate"] == "2026-10-26"
     assert calls[1]["AiTradingCycle:PreparedUtcDate"] == "2026-10-27"
     assert calls[1]["AiDecisionPipeline:DatasetPath"].endswith("2026-10-26/cleaned.csv") or calls[1]["AiDecisionPipeline:DatasetPath"].endswith("2026-10-26\\cleaned.csv")
@@ -128,6 +129,35 @@ def test_busy_owner_and_stop_request_do_not_start_another_pass(config, transport
     request_stop(config)
     assert run(config)["status"] == "STOPPED"
     assert not transport.calls
+
+
+def test_daily_multi_asset_profile_is_explicit_and_scoped_to_backend_child(config):
+    config['risk_profile'] = 'daily-multi-asset-v1'
+    assert run(config)['status'] == 'COMPLETED'
+    calls = [json.loads(line) for line in (Path(config['state_directory']) / 'backend-calls.jsonl').read_text().splitlines()]
+    assert len(calls) == 2
+    assert all(call['AiTradingCycle:RiskPolicy'] == 'daily-multi-asset-v1' for call in calls)
+    assert all(call['AiTrader:Risk:MinimumConfidence'] == '0.65' for call in calls)
+    assert all(call['AiTrader:Risk:MaxPositionExposurePercent'] == '0.20' for call in calls)
+    assert all(call['AiTrader:Risk:MaxCashAllocationPerTradePercent'] == '0.10' for call in calls)
+    assert 'AiTrader__Risk__MinimumConfidence' not in os.environ
+
+
+def test_unnamed_cycle_pins_baseline_despite_conflicting_ambient_policy(config, monkeypatch):
+    monkeypatch.setenv('AiTradingCycle__RiskPolicy', 'daily-multi-asset-v1')
+    monkeypatch.setenv('AiTrader__Risk__MinimumConfidence', '0.65')
+    assert run(config)['status'] == 'COMPLETED'
+    calls = [json.loads(line) for line in (Path(config['state_directory']) / 'backend-calls.jsonl').read_text().splitlines()]
+    assert all(call['AiTradingCycle:RiskPolicy'] == 'baseline-v1' for call in calls)
+    assert all('AiTrader:Risk:MinimumConfidence' not in call for call in calls)
+
+
+@pytest.mark.parametrize('profile', [None, False, .65, '', 'unknown', 'daily-multi-asset-v1\n'])
+def test_unknown_risk_profile_fails_before_provider_or_backend(config, transport, profile):
+    config['risk_profile'] = profile
+    assert run(config) == {'status': 'FAILED', 'stage': 'CONFIGURATION'}
+    assert not transport.calls
+    assert not (Path(config['state_directory']) / 'backend-calls.jsonl').exists()
 
 
 @pytest.mark.parametrize("bad", ["unknown-field", "untrusted", "same-directory", "relative", "interval", "symbols"])

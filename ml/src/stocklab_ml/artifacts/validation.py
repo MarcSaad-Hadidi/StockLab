@@ -90,6 +90,9 @@ def decode_manifest(content: bytes, *, model_name: str, model_version: str, regi
                 raise ArtifactIntegrityError("Invalid SHA-256 in artifact manifest.")
         if payload["metadata_sha256"] != metadata_digest(record):
             raise ArtifactIntegrityError("Manifest immutable metadata digest differs.")
+        if (record.model_type == "hist_gradient_boosting"
+                and payload["artifact_sha256"] != record.training_report["estimator_sha256"]):
+            raise ArtifactIntegrityError("Artifact bytes differ from the registered retained HGBT28 snapshot.")
         size = payload["artifact_size_bytes"]
         if type(size) is not int or not 0 < size <= max_artifact_bytes:
             raise ArtifactIntegrityError("Invalid artifact size or configured limit exceeded.")
@@ -123,6 +126,11 @@ def validate_estimator(estimator, record) -> None:
     """Validate the supported fitted object itself, without inventing a training result."""
     try:
         report = record.to_dict()["training_report"]
+        if record.model_type == "hist_gradient_boosting":
+            from stocklab_ml.boosted_snapshot import _metadata, _model
+            _metadata(report["snapshot_metadata"])
+            _model(estimator, report["snapshot_metadata"])
+            return
         if record.model_type == "logistic_regression":
             if (type(estimator) is not Pipeline or list(estimator.named_steps) != ["scaler", "classifier"]
                     or type(estimator.named_steps["scaler"]) is not StandardScaler

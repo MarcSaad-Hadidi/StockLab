@@ -152,7 +152,15 @@ export function ModelPanel({ resources, retry, detailed = false, onDetails }: Da
         <Metrics entries={[
           ['accuracy', formatPercent(fractionPoints(model.accuracy), i18n.language, 1)], ['precision', formatPercent(fractionPoints(model.precision), i18n.language, 1)],
           ['recall', formatPercent(fractionPoints(model.recall), i18n.language, 1)], ['f1Score', formatPercent(fractionPoints(model.f1), i18n.language, 1)],
-          ['trainedOn', formatAiTimestamp(model.trainedAtUtc, i18n.language)], ['evaluationPeriod', `${formatDate(model.evaluationPeriod.startDate, i18n.language)} – ${formatDate(model.evaluationPeriod.endDate, i18n.language)}`],
+          ['trainedOn', formatAiTimestamp(model.trainedAtUtc, i18n.language)], ['evaluationPeriod', model.evaluationPeriod ? `${formatDate(model.evaluationPeriod.startDate, i18n.language)} – ${formatDate(model.evaluationPeriod.endDate, i18n.language)}` : '—'],
+          ...(model.forecast ? [
+            ['prospectiveEvidence', t('aiTrader.prospectivePending')],
+            ['forecastTarget', `${model.forecast.targetName}: ${model.forecast.targetDefinition}`],
+            ['forecastHorizon', t('aiTrader.observedSessions', { count: model.forecast.horizonSessions })],
+            ['refitFrequency', t(`aiTrader.refitCadences.${model.forecast.refitFrequency}`)],
+            ['historicalFitBoundary', formatDate(model.forecast.fitBoundary, i18n.language)],
+            ...(detailed ? [['forecastFeatures', model.forecast.featureColumns.join(', ')]] : []),
+          ] as Array<[string, ReactNode]> : []),
           ...(detailed ? [['trainingPeriod', `${formatDate(model.trainingPeriod.startDate, i18n.language)} – ${formatDate(model.trainingPeriod.endDate, i18n.language)}`], ['trainingRunId', model.trainingRunId]] as Array<[string, ReactNode]> : []),
         ]} /></article>)}</section>)}<p className="ai-coverage-note">{t('aiTrader.familyStatusNote')}</p>
     </>}</ResourceContent>

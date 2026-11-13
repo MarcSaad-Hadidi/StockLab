@@ -262,8 +262,10 @@ Tests use isolated databases and explicit Mock/controlled quotes, never a broker
 The local operator runner composes the existing #257 decision pipeline, #258
 risk/paper execution and an idempotent valuation capture. Normal HTTP startup
 does not launch it. It never submits an order to a real broker or changes a
-user portfolio. One loop owns its passes sequentially; all invocations for the
-same local portfolio must use the same private state directory.
+user portfolio. One loop owns its passes sequentially; invocations for the active
+local portfolio scope must share its private state directory. Retire that worker
+before commissioning a new model/universe scope, preserve the original journals,
+and require disjoint decision identities as described in local operation.
 
 1. Keep the intended SQL database and its history. Apply reviewed migrations
    explicitly if needed, initialize the system paper portfolio through the
@@ -287,6 +289,10 @@ same local portfolio must use the same private state directory.
    1–10 USD US-equity symbols on the supported exchange calendar. The history
    start must preserve the fitted feature history. Set `trusted_artifacts=true`
    only after verifying ownership and provenance of that fitted joblib.
+   An independently assessed multi-asset paper strategy can explicitly select
+   `risk_profile="daily-multi-asset-v1"`; see the scoped policy and schema-v2
+   journal rules in [local operation](../ml/docs/local-operation.md). Leaving this
+   field out preserves the original cycle's minimum 0.70 confidence requirement.
 5. Configure the dedicated `TWELVE_DATA_ML_API_KEY`. Sharing the configured website
    credential is an explicit alternative: set `share_website_quota=true` and add
    `website_secrets_path` with the absolute path of the existing Development

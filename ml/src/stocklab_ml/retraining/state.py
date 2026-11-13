@@ -47,7 +47,8 @@ def read_json(path: Path, limit=8 * 1024 * 1024):
 
 def config_identity(config) -> dict:
     return {key: str(value) if isinstance(value, Path) else list(value) if isinstance(value, tuple) else value
-            for key, value in asdict(config).items() if key not in {"dry_run", "enabled"}}
+            for key, value in asdict(config).items() if key not in {"dry_run", "enabled"}
+            and not (key == "training_profile" and value is None)}
 
 
 def identity_digest(identity) -> str:

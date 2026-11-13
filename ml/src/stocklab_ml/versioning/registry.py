@@ -131,6 +131,9 @@ class ModelVersionRegistry:
         payload = training_payload(training_result) | {
             "training_run_id": training_run_id, "trained_at_utc": trained_at_utc.isoformat(),
         }
+        if (payload["model_type"] == "hist_gradient_boosting"
+                and payload["trained_at_utc"] != payload["training_report"]["snapshot_metadata"]["trained_at_utc"]):
+            raise ModelVersionError("Registration must use the snapshot's actual UTC training timestamp.")
         with self._locked():
             records = self._read()
             for record in records:
@@ -181,6 +184,9 @@ class ModelVersionRegistry:
                         raise ActiveVersionConflictError("Evaluated model metadata/status changed before activation.")
             if not any(r.model_name == model_name and r.model_version == model_version for r in records):
                 raise ModelVersionNotFoundError(f"Model version not registered: {model_name}/{model_version}.")
+            if status == ModelStatus.ACTIVE and any(r.model_name == model_name and r.model_version == model_version
+                    and r.model_type == "hist_gradient_boosting" for r in records):
+                raise ModelVersionError("Activation/promotion of experimental HGBT28 snapshots is unsupported.")
             updated = []
             for record in records:
                 if record.model_name == model_name:
