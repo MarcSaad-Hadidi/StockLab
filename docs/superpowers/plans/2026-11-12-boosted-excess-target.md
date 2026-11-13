@@ -12,7 +12,7 @@
 - The existing event is `(stock_open[t+21]/stock_open[t+1]-1) - (SPY_open[t+21]/SPY_open[t+1]-1) > .002`. The genuine known date is observed t+21; retain105 unknown tails. All fit row/date keys remain identical to the original absolute-target population. Labels/priors/learners change, not feature cells or calendar.
 - Exactly nine actual HGBT fits, zero calibration fits and six stock-account simulations: enabled/no-SELL × full5+5bps/full25+25bps/fresh2021 5+5bps. Copy SPY/reference files without replay. Instrument actual calls with preserved method signatures, refuse excess calls before execution and require exact budget completion.
 - Same100,000 USD initial funding/no deposits, actual next opens, pooled cash,10% purchase/20% symbol purchase caps,8-decimal quantities,176 verified gross dividends and original basis/fees/slippage/receivable timing. No leverage, shorts, taxes, cash interest or invented final liquidation.
-- Same .65 BUY/.35 SELL cutoffs and immediate trend200 policy. A SELL means predicted relative underperformance, not necessarily a negative absolute return/crash. No forced orders or post-result changes to exposure, execution order or policy.
+- Same .65 BUY/.35 SELL cutoffs and immediate trend200 policy. Low p means a low estimated probability of beating SPY by MORE THAN20bps: class0 also includes positive excess returns up to .002. A SELL therefore predicts neither necessarily negative excess nor a negative absolute return/crash. No forced orders or post-result changes to exposure, execution order or policy.
 
 ## Event semantics and evidence
 
