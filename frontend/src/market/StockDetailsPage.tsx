@@ -304,18 +304,6 @@ export function StockDetailsPage({
     void (isWatchlisted ? watchlist.remove(symbol) : watchlist.add(symbol));
   }
 
-  useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === "visible") reloadWatchlist(); };
-    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) reloadWatchlist(); };
-    window.addEventListener("focus", reloadWatchlist);
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("pageshow", onPageShow);
-    return () => {
-      window.removeEventListener("focus", reloadWatchlist);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("pageshow", onPageShow);
-    };
-  }, [reloadWatchlist]);
   const [tradeSide, setTradeSide] = useState<TradeSide>("BUY");
   const [orderType, setOrderType] = useState<TradeOrderType>("market");
   const [limitPrice, setLimitPrice] = useState("");

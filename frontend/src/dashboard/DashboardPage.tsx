@@ -214,20 +214,6 @@ export function DashboardPage() {
     return startDashboardGreetingTimer(() => setGreetingPeriod(getGreetingPeriod(new Date())), dashboardUserName)
   }, [])
 
-  useEffect(() => {
-    // Other pages persist mutations; revalidate when returning to this Dashboard.
-    const onVisible = () => { if (document.visibilityState === 'visible') reloadWatchlist() }
-    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) reloadWatchlist() }
-    window.addEventListener('focus', reloadWatchlist)
-    document.addEventListener('visibilitychange', onVisible)
-    window.addEventListener('pageshow', onPageShow)
-    return () => {
-      window.removeEventListener('focus', reloadWatchlist)
-      document.removeEventListener('visibilitychange', onVisible)
-      window.removeEventListener('pageshow', onPageShow)
-    }
-  }, [reloadWatchlist])
-
   const greeting = t(`businessData.greeting.${greetingPeriod}`)
 
   const filteredWatchlist = useMemo(() => {
