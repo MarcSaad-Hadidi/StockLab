@@ -1,6 +1,9 @@
 {
   "common": {
     "languageLabel": "Choose language",
+    "languageSaveError": "The language is applied here, but it could not be synced with your account. Try again.",
+    "languageSessionExpired": "Your session is no longer valid. Sign in again to save your language.",
+    "languageSessionStorageError": "Your language was saved to your account, but the browser session could not be updated. Sign in again.",
     "closeNavigation": "Close navigation",
     "primaryNavigation": "Primary navigation",
     "preview": "StockLab preview",
@@ -980,7 +983,8 @@
       "rateLimited": "Too many sign-in attempts.",
       "offline": "StockLab is unreachable. Check that the backend is running.",
       "server": "The authentication service is temporarily unavailable.",
-      "sessionStorage": "Your browser blocked secure session storage. Enable storage and try again."
+      "sessionStorage": "Your browser blocked secure session storage. Enable storage and try again.",
+      "languageSave": "Sign-in could not be completed because your chosen language could not be saved. Try again."
     },
     "showPassword": "Show password",
     "hidePassword": "Hide password"

@@ -146,7 +146,7 @@ export default function RegisterPage() {
         </svg>
 
         <section className="register-card" aria-labelledby="register-heading">
-          <div className="card-topline"><Brand /><LanguageSelector /></div>
+          <div className="card-topline"><Brand /><LanguageSelector persistToAccount={false} /></div>
           <header className="card-heading"><h1 id="register-heading">{t('register.title')}</h1><p>{t('register.subtitle')}</p></header>
           <form aria-busy={isSubmitting} className="register-form" onSubmit={handleSubmit} noValidate>
             {serverError && <p className="form-error" role="alert">{t(serverError)}</p>}

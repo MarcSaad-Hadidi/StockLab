@@ -49,7 +49,7 @@ export function useMobileNavigation(open: boolean, onClose: () => void) {
         const controls = focusable()
         const first = controls[0] ?? panel
         const last = controls.at(-1) ?? panel
-        if (!panel.contains(document.activeElement) || document.activeElement === panel
+        if (!controls.includes(document.activeElement as HTMLElement)
           || document.activeElement === (event.shiftKey ? first : last)) {
           event.preventDefault()
           const target = event.shiftKey ? last : first

@@ -1,3 +1,8 @@
+.language-control { min-width: 0; }
+.language-control .language-save-error { color: #b42335; font-size: 12px; line-height: 1.5; margin: 0 0 12px; }
+.language-save-error button { background: transparent; border: 0; color: inherit; cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
+.language-switch button:disabled { cursor: wait; opacity: .65; }
+
 .language-switch {
   display: inline-flex;
   flex: none;

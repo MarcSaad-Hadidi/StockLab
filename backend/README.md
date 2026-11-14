@@ -1232,6 +1232,17 @@ and a rowversion conflict 409 (`profile_update_conflict`). User IDs supplied in
 the body cannot select another account. The existing name/email endpoint leaves
 the language preference unchanged.
 
+Profile GET and successful profile/language PUT responses expose a strong `ETag`
+header containing the quoted base64 SQL rowversion, without changing the JSON
+profile fields. Send that exact token as `If-Match` on language PUT to reject a
+delayed write after a newer profile change: a mismatch or concurrent save returns
+`412 profile_update_conflict`. Refresh the profile before retrying the current
+language choice. Weak tags, wildcards, lists, and malformed or noncanonical
+rowversion tags return `400 validation_error`. Omitting `If-Match` preserves the
+legacy `409` concurrency response. Every successful language choice advances the
+existing rowversion, including choosing the already saved language with an
+unchanged timestamp; no migration is required.
+
 Apply `AddUserPreferredLanguage` before deploying the new API. It backfills existing
 users with `en`, matching the previous application default, and constrains stored
 codes to the supported languages. Rolling this migration back drops the preference
@@ -1239,12 +1250,20 @@ column; identity, password and portfolio data are preserved, and a later upgrade
 defaults the preference to `en` again.
 
 Profile's language setting applies the saved response to i18n without reloading;
-failures retain the previous preference and display localized errors. Login applies
-the account language before redirecting, replacing a previous browser choice.
+failures retain the previous preference and display localized errors. Without an
+explicit Register/Login choice, Login restores the account language. A manual
+choice in that tab takes priority and is saved through the authenticated language
+endpoint with the newly issued token before the browser session is stored.
+Connected global selectors apply the manual display choice immediately and save
+it to the account; failures remain visible with a retry action. Loading Profile
+never reapplies an older stored language over the current display choice.
+
 The shared local language cache is used on every page and storage events update
-already open tabs. The existing public language selectors still control the
-browser display; persistent account preference changes use Profile. This issue
-does not add a mandatory initial-language prompt or a top-bar language button.
+already open tabs. Pending account choices survive page navigation and resume in
+the next authenticated document. The client reads a fresh ETag, checks the latest
+per-account intent before writing, and retries a 412 only for the latest intent
+(three attempts maximum). An old document's completion cannot replace a newer
+intent. Missing or malformed ETags never fall back to an unconditional write.
 
 ## Portfolio API
 

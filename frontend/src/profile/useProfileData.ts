@@ -3,8 +3,9 @@ import { profileApi, ProfileApiError, type ProfileErrorCode, type UpdateProfileR
 import { portfolioApi } from '../api/portfolioApi'
 import { clearAuthSession, getAuthSession, saveAuthSession, type AuthSession } from '../auth/authStorage'
 import { subscribeAuthSession } from '../auth/useAuthUser'
-import { setLanguage } from '../i18n/i18n'
-import { isSupportedLanguage, type Language } from '../i18n/languages'
+import { getLanguageRevision, setLanguage } from '../i18n/i18n'
+import type { Language } from '../i18n/languages'
+import { isSupersededLanguageChange, saveLanguagePreference } from '../i18n/languagePreference'
 
 // Keep the token check for responses issued before a new login.
 const sameSession = (expected: AuthSession | null) => {
@@ -72,7 +73,6 @@ export function useProfileData() {
           || current.user.preferredLanguage !== result.preferredLanguage)
           setSessionWarning(!saveAuthSession({ ...current, user: { id: result.id, displayName: result.displayName, email: result.email, preferredLanguage: result.preferredLanguage } }))
         sessionRef.current = getAuthSession()
-        if (isSupportedLanguage(result.preferredLanguage)) void setLanguage(result.preferredLanguage)
       }).catch(error => {
         if (!controller.signal.aborted) {
           if (!sameSession(session)) { invalidateSession(); return }
@@ -119,6 +119,7 @@ export function useProfileData() {
       return false
     }
     const controller = new AbortController()
+    const languageRevision = getLanguageRevision()
     saveController.current = controller
     savingRef.current = true
     setSaving(true)
@@ -126,7 +127,7 @@ export function useProfileData() {
     setFieldErrors({})
     try {
       const result = 'preferredLanguage' in request
-        ? await profileApi.updateLanguage(request.preferredLanguage, controller.signal)
+        ? await saveLanguagePreference(request.preferredLanguage, session!, controller.signal)
         : await profileApi.updateProfile(request, controller.signal)
       if (controller.signal.aborted) return false
       if (!sameSession(session)) {
@@ -143,9 +144,10 @@ export function useProfileData() {
       setProfile(result)
       setSessionWarning(!saveAuthSession({ ...current, user: { id: result.id, displayName: result.displayName, email: result.email, preferredLanguage: result.preferredLanguage } }))
       sessionRef.current = getAuthSession()
-      if ('preferredLanguage' in request) await setLanguage(result.preferredLanguage)
+      if ('preferredLanguage' in request && getLanguageRevision() === languageRevision) await setLanguage(result.preferredLanguage)
       return true
     } catch (error) {
+      if (isSupersededLanguageChange(error)) return false
       if (!controller.signal.aborted) {
         if (!sameSession(session)) { synchronizeSession.current?.(); return false }
         if (errorCode(error) === 'unauthorized') {
