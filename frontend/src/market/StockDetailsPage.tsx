@@ -19,6 +19,7 @@ import { MarketIcon } from "./marketIcons";
 import { StockLogo } from "./StockLogo";
 import { MarketRequestStatus } from "./MarketRequestStatus";
 import { useOrderCash } from "./useOrderCash";
+import { useOrderConfirmationFocus } from "./useOrderConfirmationFocus";
 import type { PortfolioApiError } from "../api/portfolioApi";
 import { StockDataPanel } from "./StockDataPanel";
 import { MarketDataProvenance } from '../components/market-data/MarketDataProvenance';
@@ -548,10 +549,12 @@ export function StockDetailsPage({
     }
   };
   const dismissTrade = () => {
+    if (activeRequest.current) return;
     if (pendingTrade?.outcomeUncertain) setHasUncertainOrder(true);
     setPendingTrade(null);
     setTradeError(null);
   };
+  const confirmationRef = useOrderConfirmationFocus(pendingTrade !== null, isSubmitting, dismissTrade);
   const points = history.data ? historyPoints(history.data, locale) : [];
   const change = quote.data?.changePercent;
   const tone =
@@ -909,10 +912,13 @@ export function StockDetailsPage({
       )}
       {pendingTrade && (
         <div
+          ref={confirmationRef}
           aria-labelledby="trade-confirmation-title"
+          aria-busy={isSubmitting || undefined}
           aria-modal="true"
           className="stock-modal-backdrop"
           role="dialog"
+          tabIndex={-1}
         >
           <section className="stock-modal">
             <button
