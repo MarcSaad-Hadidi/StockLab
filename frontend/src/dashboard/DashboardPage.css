@@ -214,7 +214,7 @@ th:last-child, td:last-child { padding-right: 2px; text-align: right; }
 }
 
 @media (max-width: 520px) {
-  .dashboard-topbar { height: 62px; padding-left: 14px; padding-right: 14px; }.dashboard-content { padding: 22px 14px 20px; }.global-search { display: none; }.welcome-row { margin-bottom: 22px; }.welcome-copy { line-height: 1.45; }.metrics-grid { gap: 10px; }.metric-card { min-height: 132px; padding: 14px; }.metric-icon { margin-bottom: 10px; }.metric-card > strong { font-size: 17px; }.metric-change { align-items: flex-start; flex-wrap: wrap; line-height: 1.35; }.metric-change em { flex-basis: 100%; margin-left: 16px; }.dashboard-grid { gap: 12px; }.dashboard-grid-top, .dashboard-grid-bottom { margin-bottom: 12px; }.panel-heading p { max-width: 180px; line-height: 1.35; }.watchlist-list { display: block; }.watchlist-row { min-height: 51px; }.ai-heading { align-items: flex-start; flex-direction: column; gap: 12px; }.ai-heading .text-action { align-self: flex-end; margin-top: -31px; }.ai-content { gap: 0 0; }.ai-stat { padding-right: 12px; }.ai-stat strong { font-size: 16px; }.transaction-row { grid-template-columns: 28px minmax(80px, 1fr) auto; }.transaction-type { display: none; }.simulation-note { justify-content: flex-start; line-height: 1.4; }
+  .dashboard-topbar { height: 62px; padding-left: 14px; padding-right: 14px; }.dashboard-content { padding: 22px 14px 20px; }.global-search { display: none; }.welcome-row { margin-bottom: 22px; }.welcome-copy { line-height: 1.45; }.metrics-grid { gap: 10px; }.metric-card { min-height: 132px; padding: 14px; }.metric-icon { margin-bottom: 10px; }.metric-card > strong { font-size: 17px; }.metric-change { align-items: flex-start; flex-wrap: wrap; line-height: 1.35; }.metric-change em { flex-basis: 100%; margin-left: 16px; }.dashboard-grid { gap: 12px; }.dashboard-grid-top, .dashboard-grid-bottom { margin-bottom: 12px; }.panel-heading p { max-width: 180px; line-height: 1.35; }.watchlist-list { display: block; }.watchlist-row { min-height: 51px; }.ai-heading { align-items: flex-start; flex-direction: column; gap: 12px; }.ai-heading .text-action { align-self: flex-end; margin-top: -31px; }.ai-content { gap: 0 0; }.ai-stat { padding-right: 12px; }.ai-stat strong { font-size: 16px; }.simulation-note { justify-content: flex-start; line-height: 1.4; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -242,5 +242,6 @@ th:last-child, td:last-child { padding-right: 2px; text-align: right; }
   .ai-summary .ai-heading .text-action { margin-top: 0; }
 }
 @media (max-width: 520px) {
-  .transaction-row { grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr); padding-block: 10px; }
+  .transaction-row { grid-template-columns: 28px minmax(0, 1fr) auto minmax(0, 1fr); padding-block: 10px; }
+  .transaction-name { overflow-wrap: anywhere; }
 }
