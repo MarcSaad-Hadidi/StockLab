@@ -30,7 +30,7 @@ L’état ci-dessous reflète le code fusionné dans `develop` au **23 octobre 2
 Le produit aide l’utilisateur à explorer les données de marché et à s’exercer à prendre des décisions de portefeuille sans envoyer d’ordres à un courtier.
 
 - **Marché** : recherche, cotations, historique OHLCV, valeurs en mouvement, fondamentaux, résultats et actualités. Le fournisseur `Mock` est sélectionné par défaut pour le développement et ses données sont explicitement signalées comme simulées ; les adaptateurs externes nécessitent leurs clés et leurs budgets. Les cours affichent leur source et leur date d’observation, distincte de l’heure de réception de la réponse affichée dans la liste de suivi et le détail d’une action.
-- **Compte** : inscription, connexion JWT, déconnexion locale, identité du top bar, lecture/modification du nom et de l’email, changement réel du mot de passe. Les pages affichent les erreurs de validation et les échecs de l’API.
+- **Compte** : inscription, connexion JWT, déconnexion locale, identité du top bar, lecture/modification du nom et de l’email, changement réel du mot de passe et récupération par lien email temporaire à usage unique. La récupération nécessite un serveur SMTP configuré. Les pages affichent les erreurs de validation et les échecs de l’API.
 - **Paper trading personnel** : préparation et confirmation d’un achat ou d’une vente, exécution simulée, mise à jour atomique du cash et des positions, historique et valorisation. Les données privées sont liées à l’utilisateur authentifié.
 - **Watchlist** : consultation, ajout et suppression des symboles enregistrés pour le compte.
 - **AI Trader** : consultation du portefeuille système, des décisions originales et des rejets du risque, des transactions, des performances, des modèles et des backtests. `--run-ai-decisions` produit les décisions versionnées (#257) ; `--execute-ai-decisions` applique le risque et exécute les décisions explicitement désignées en paper trading, avec journal des tentatives (#258). `--capture-ai-performance` et le worker optionnel `AiPerformanceCycle` enregistrent la valorisation et le contexte des trades/modèles par créneau UTC (#259). La page ne déclenche ni entraînement ni ordre ; l'enchaînement automatique inférence/exécution reste une configuration opérationnelle distincte.
@@ -40,7 +40,7 @@ Le produit aide l’utilisateur à explorer les données de marché et à s’ex
 
 | Fonctionnalité | État livré et limites |
 | --- | --- |
-| Authentification et compte | Login/Register reliés à l’API, session JWT, profil GET/PUT, changement du mot de passe avec vérification de l’ancien et confirmation de sauvegarde réelle. OAuth Google et récupération de mot de passe non implémentés. |
+| Authentification et compte | Login/Register reliés à l’API, session JWT, profil GET/PUT, changement du mot de passe et récupération sécurisée depuis Login. Les emails de récupération nécessitent la configuration SMTP ; OAuth Google reste à implémenter. |
 | Trading personnel | Ordres BUY/SELL `market` et `limit`, contrôles de cash/positions, confirmation, déduplication par `orderId`, persistance transactionnelle et gestion des changements de session. |
 | Dashboard, Portfolio, Transactions | Données du compte, valorisation actuelle avec cotations, observations de performance personnelles persistées, transactions récentes et historique filtré/paginé. Chargement, absence de données et erreurs restent des états distincts. |
 | Watchlist | API et intégration frontend livrées. |
@@ -242,6 +242,8 @@ En environnement `Development`, OpenAPI est disponible à `/openapi/v1.json`. Le
 | POST | /api/auth/login | Vérifier les identifiants et recevoir un jeton Bearer |
 | GET / PUT | /api/profile | Lire ou modifier le nom et l’email |
 | PUT | /api/auth/password | Changer le mot de passe après validation de l’ancien |
+| POST | /api/auth/password/forgot | Demander un lien de récupération sans révéler si le compte existe |
+| POST | /api/auth/password/reset | Définir un nouveau mot de passe avec un lien temporaire valide et révoquer les anciennes sessions |
 | GET | /api/portfolio | Lire le cash, les positions et les valeurs au coût d’acquisition du compte authentifié |
 | GET | /api/portfolio/performance | Valorisation et performance avec les cotations du fournisseur configuré |
 | POST | /api/portfolio/trades | Exécuter un ordre de paper trading personnel |
@@ -251,7 +253,9 @@ En environnement `Development`, OpenAPI est disponible à `/openapi/v1.json`. Le
 | GET / POST / PUT / DELETE | /api/alerts et /api/alerts/{id} | Gestion des alertes ; désactivation par POST /api/alerts/{id}/disable |
 | GET | /api/ai-trader/* | Treize lectures protégées : portefeuille, performances/cycles, décisions, transactions, modèles et backtests |
 
-Après connexion, les routes privées utilisent `Authorization: Bearer <token>`. La session frontend est conservée dans `localStorage`, vérifiée à l’expiration et actualisée lors des changements de session. La déconnexion efface la session locale. Chaque requête privée vérifie aussi la version de session du compte en base : un changement de mot de passe révoque tous ses anciens JWT, y compris celui de la session courante. Une nouvelle connexion avec le nouveau mot de passe fournit un token valide. Appliquer la migration `AddUserSessionVersion` avant le déploiement ; les sessions émises avant cette évolution doivent se reconnecter une fois.
+Après connexion, les routes privées utilisent `Authorization: Bearer <token>`. La session frontend est conservée dans `localStorage`, vérifiée à l’expiration et actualisée lors des changements de session. La déconnexion efface la session locale. Chaque requête privée vérifie aussi la version de session du compte en base : un changement ou une réinitialisation de mot de passe révoque tous ses anciens JWT, y compris celui de la session courante. Une nouvelle connexion avec le nouveau mot de passe fournit un token valide. Appliquer les migrations avant le déploiement ; les sessions émises avant `AddUserSessionVersion` doivent se reconnecter une fois.
+
+Le parcours `/forgot-password` → email → `/reset-password` est disponible en français et en anglais. Les liens expirent après 30 minutes par défaut et deviennent inutilisables après une réinitialisation, un changement de mot de passe ou d'adresse email. Le serveur conserve uniquement l'empreinte du jeton, jamais le jeton ni un mot de passe en clair. La demande affiche une confirmation conditionnelle identique pour une adresse connue ou inconnue ; elle ne garantit pas la livraison de l'email. Le service reste indisponible tant que SMTP n'est pas configuré et activé. La configuration, la migration et la limite de la file d'envoi en mémoire sont détaillées dans le [README backend](backend/README.md).
 
 #### Portfolio API
 
@@ -443,7 +447,7 @@ Ne poussez pas directement vers main ou develop. Gardez les changements liés à
 - Déployer les commandes d’inférence (#257) et de risque/exécution simulée (#258), puis compléter la synchronisation des données et exports, la planification périodique et les captures de performance (#259). Un bot autonome opérationnel reste à déployer.
 - Intégrer les événements de domaine/Azure Service Bus et les tâches AWS SQS/Lambda. Le stockage S3 des modèles est déjà disponible ; les autres usages cloud et leur exploitation doivent être traités séparément.
 - Lever, si nécessaire, le plafond de vingt cotations de la page Portfolio. Au-delà, ses agrégats de marché restent indisponibles ; les positions et les montants comptables restent consultables.
-- Implémenter les parcours OAuth Google et mot de passe oublié, actuellement sans service connecté.
+- Implémenter OAuth Google et configurer l'envoi SMTP pour exploiter le parcours de récupération de mot de passe livré.
 
 Le mode `Mock` et les fixtures de tests sont des outils de développement. Ils ne prouvent pas la disponibilité de données réelles en production. Les champs sans API et les services indisponibles doivent conserver un état explicite ; aucune donnée de compte inventée ne doit les remplacer.
 

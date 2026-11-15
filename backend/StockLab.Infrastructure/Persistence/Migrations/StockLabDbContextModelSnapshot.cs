@@ -703,6 +703,16 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("nvarchar(1024)");
 
+                    b.Property<DateTime?>("PasswordResetExpiresAtUtc")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<DateTime?>("PasswordResetRequestedAtUtc")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<byte[]>("PasswordResetTokenHash")
+                        .HasMaxLength(32)
+                        .HasColumnType("varbinary(32)");
+
                     b.Property<string>("PreferredLanguage")
                         .IsRequired()
                         .ValueGeneratedOnAdd()

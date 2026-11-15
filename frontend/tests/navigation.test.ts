@@ -47,6 +47,14 @@ test('account aliases use existing pages without authentication', () => {
   assert.equal(routeFor('AI Trader'), '/ai-trader')
 })
 
+test('password recovery routes resolve publicly to their MPA documents', () => {
+  for (const id of ['forgot-password', 'reset-password']) {
+    assert.equal(routeFor(id), `/${id}`)
+    assert.equal(pageForPath(`/${id}`), id)
+    assert.equal(documentUrl(`/${id}/?language=fr`), `/${id}/index.html?language=fr`)
+  }
+})
+
 test('active navigation recognizes clean and legacy paths', () => {
   assert.equal(isCurrentPage('Market', '/market.html'), true)
   assert.equal(isCurrentPage('Market', '/market/'), true)

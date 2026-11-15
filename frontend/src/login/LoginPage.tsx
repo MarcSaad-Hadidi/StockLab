@@ -1,4 +1,5 @@
 import { routeFor } from '../navigation/routes'
+import { AuthBrand } from '../components/AuthBrand'
 import { LanguageSelector } from '../components/LanguageSelector'
 import { formatSignedPercent } from '../i18n/formatters'
 import { AuthApiError, authApi } from '../api/authApi'
@@ -55,10 +56,6 @@ function Icon({ name }: { name: 'mail' | 'lock' | 'eye' | 'eyeOff' | 'google' })
   }
 
   return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
-}
-
-function Brand() {
-  return <div className="brand" aria-label="StockLab"><span className="brand-mark" aria-hidden="true"><i /><i /><i /></span><span>Stock<span>Lab</span></span></div>
 }
 
 export default function LoginPage() {
@@ -176,7 +173,7 @@ export default function LoginPage() {
 
         <section className="login-card" aria-labelledby="login-heading">
           <div className="card-topline">
-            <Brand />
+            <AuthBrand />
             <LanguageSelector persistToAccount={false} disabled={isSubmitting} />
           </div>
           <header className="card-heading"><h1 id="login-heading">{t('login.title')}</h1><p>{t('login.subtitle')}</p></header>
@@ -188,7 +185,7 @@ export default function LoginPage() {
                 : <p className="form-success" role="status">{t('login.retryReady')}</p>
               : <p className="form-error" role="alert">{t(serverError)}</p>)}
             <div className="field-group"><label htmlFor="email">{t('login.emailLabel')}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={t('login.emailPlaceholder')} autoComplete="email" aria-invalid={Boolean(errors.email)} /></div>{errors.email && <p className="field-error">{t(errors.email)}</p>}</div>
-            <div className="field-group"><div className="label-row"><label htmlFor="password">{t('login.passwordLabel')}</label><a href="#forgot-password">{t('login.forgot')}</a></div><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={t('login.passwordPlaceholder')} autoComplete="current-password" aria-invalid={Boolean(errors.password)} /><button className="visibility-button" type="button" aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{t(errors.password)}</p>}</div>
+            <div className="field-group"><div className="label-row"><label htmlFor="password">{t('login.passwordLabel')}</label><a href={routeFor('forgot-password')}>{t('login.forgot')}</a></div><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={t('login.passwordPlaceholder')} autoComplete="current-password" aria-invalid={Boolean(errors.password)} /><button className="visibility-button" type="button" aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{t(errors.password)}</p>}</div>
             <button className="primary-button" disabled={isSubmitting || retrySeconds > 0} aria-describedby={retrySeconds > 0 ? 'login-retry-status' : undefined} type="submit">{t('login.signIn')}</button>
           </form>
           <div className="form-divider"><span>{t('login.divider')}</span></div>
