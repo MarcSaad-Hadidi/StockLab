@@ -64,6 +64,11 @@ public sealed class UserProfileService(
         }
 
         user.DisplayName = trimmedDisplayName;
+        if (user.NormalizedEmail != normalizedEmail)
+        {
+            user.PasswordResetTokenHash = null;
+            user.PasswordResetExpiresAtUtc = null;
+        }
         user.Email = trimmedEmail;
         user.NormalizedEmail = normalizedEmail;
         user.UpdatedAtUtc = timeProvider.GetUtcNow().UtcDateTime;

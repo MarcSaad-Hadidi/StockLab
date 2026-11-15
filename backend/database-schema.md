@@ -68,6 +68,9 @@ and Transactions; AI accounting is defined separately below.
 | PasswordHash | `nvarchar(1024)`; only the encoded output of the chosen password hasher |
 | PreferredLanguage | `nvarchar(2)`, default `en`, CHECK in (`en`, `fr`); SQL Server binary collation keeps the stored codes lowercase |
 | SessionVersion | `bigint`, default `0`, CHECK >= 0; monotonic JWT revocation counter, also an optimistic concurrency token |
+| PasswordResetTokenHash | Nullable `varbinary(32)`; SHA-256 digest of a random 32-byte recovery token; plaintext is never stored |
+| PasswordResetExpiresAtUtc | Nullable `datetime2(7)`; token expiry, 30 minutes by default and at most 60 |
+| PasswordResetRequestedAtUtc | Nullable `datetime2(7)`; last persisted issuance, with a 60-second per-account cooldown |
 | CreatedAtUtc | `datetime2(7)` |
 | UpdatedAtUtc | `datetime2(7)`, >= CreatedAtUtc |
 | Version | `rowversion` |
@@ -75,6 +78,16 @@ and Transactions; AI accounting is defined separately below.
 Registration normalizes email consistently before lookup and insert. The unique
 index prevents concurrent duplicate registrations. Hash format, validation and
 authentication are implemented by #16/#17, not by this document.
+
+Password recovery (#298) persists a new token digest before SMTP delivery. Each
+new issuance replaces the previous digest. Reset verifies expiry and the digest
+in constant time, then updates the password hash, clears the token/expiry and
+increments SessionVersion in one rowversion-protected save. Concurrent uses of
+one token can commit only once. An authenticated password change or normalized
+email change also clears the token and expiry. Existing rows receive nullable columns
+without changing passwords, sessions, profiles or financial data. Migration
+`AddPasswordRecovery` Down drops only these three columns, invalidating outstanding
+links; it preserves existing password hashes and session revocations.
 
 ### Portfolios
 

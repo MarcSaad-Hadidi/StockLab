@@ -1142,6 +1142,48 @@
     "downsampled_other": "{{count}} actual points displayed.",
     "refresh": "Refresh history"
   },
+  "recovery": {
+    "emailLabel": "Email address",
+    "newPasswordLabel": "New password",
+    "confirmPasswordLabel": "Confirm new password",
+    "passwordHint": "Use at least 8 characters.",
+    "backToLogin": "Back to sign in",
+    "requestNewLink": "Request a new reset link",
+    "submitting": "Please wait…",
+    "retryCountdown": "Try again in {{count}} seconds.",
+    "retryCountdown_one": "Try again in {{count}} second.",
+    "retryCountdown_other": "Try again in {{count}} seconds.",
+    "retryReady": "You can try again now.",
+    "forgot": {
+      "title": "Forgot your password?",
+      "subtitle": "Enter the email address associated with your StockLab account.",
+      "submit": "Request reset link",
+      "accepted": "If an account exists for this email address, we will attempt to send a password reset link. Check your inbox and spam folder, and wait at least one minute before requesting another link."
+    },
+    "reset": {
+      "title": "Reset your password",
+      "subtitle": "Choose a new password for your StockLab account.",
+      "submit": "Reset password",
+      "success": "Your password has been reset. Sign in with your new password."
+    },
+    "errors": {
+      "emailRequired": "Enter your email address.",
+      "emailInvalid": "Enter a valid email address.",
+      "passwordRequired": "Enter a new password.",
+      "passwordShort": "Use a password with at least 8 characters.",
+      "passwordLong": "Use a password with at most 1024 characters.",
+      "passwordInvalid": "Use a non-blank password with 8 to 1024 characters.",
+      "confirmRequired": "Confirm your new password.",
+      "mismatch": "The passwords must match.",
+      "validation": "Check the highlighted fields and try again.",
+      "invalidLink": "This reset link is invalid or has expired. Request a new link to continue.",
+      "rateLimited": "Too many attempts. Please wait before trying again.",
+      "unavailable": "Password recovery is temporarily unavailable. Please try again later.",
+      "conflict": "Your password could not be updated because the account changed. Please try again.",
+      "offline": "StockLab could not be reached. Check your connection and try again.",
+      "server": "Your request could not be completed. Please try again later."
+    }
+  },
   "businessData": {
     "unavailable": "Not available yet",
     "backendPending": "This account service is not connected yet. No account data is displayed.",

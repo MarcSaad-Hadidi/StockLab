@@ -9,6 +9,8 @@ export const pages = {
   profile: { path: '/profile', entry: 'profile/index.html' },
   login: { path: '/login', entry: 'login/index.html' },
   register: { path: '/register', entry: 'register/index.html' },
+  'forgot-password': { path: '/forgot-password', entry: 'forgot-password/index.html' },
+  'reset-password': { path: '/reset-password', entry: 'reset-password/index.html' },
   'not-found': { path: '/not-found', entry: 'not-found/index.html' },
 } as const
 

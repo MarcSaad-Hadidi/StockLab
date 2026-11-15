@@ -53,6 +53,67 @@ USD
 paper-trading portfolio. Login verifies the stored password hash and returns a
 signed JWT access token whose session version is checked against the account on each protected request.
 
+## Password recovery (#298)
+
+Apply migration `20261115004323_AddPasswordRecovery` before enabling recovery.
+`POST /api/auth/password/forgot` accepts `{ "email": "person@example.com", "language": "en" }`
+(`en` or `fr`) and returns an empty **202** for known and unknown accounts. This
+means the request was accepted for processing; it does not promise email delivery.
+Email lookup and SMTP run in a bounded background queue independently of the HTTP response.
+The queue holds 100 requests in memory, so restarting the process can discard
+pending requests. Users can explicitly request another email; there is no
+automatic resend. A persisted issuance suppresses further emails to that account
+for 60 seconds, including when SMTP subsequently fails. Multiple API instances
+use SQL rowversion to reject overlapping issuance, but IP limits are per process.
+
+`POST /api/auth/password/reset` accepts `userId`, `token`, `newPassword` and
+`confirmPassword`. Passwords require 8–1024 characters and matching confirmation.
+It returns empty **204** only after persisting the new hash, consuming the token
+and revoking existing JWT sessions together. Expired, used, malformed, incorrect
+and nonexistent-account links return **400** `invalid_reset_token`. Invalid email
+or password fields use **400** `validation_error`. Persistence failures return
+**500**, never success. Forgot and reset each allow 10 requests per client IP per
+15 minutes, independently of login; **429** includes `Retry-After`. Trusted proxy
+configuration applies to these policies as it does to login.
+
+Recovery is disabled by default. Disabled recovery or a full queue returns **503**
+`password_recovery_unavailable` for every forgot request without account lookup.
+Already issued links can still reset passwords while email delivery is disabled.
+When enabled, invalid configuration prevents API startup. Configure all values
+through environment variables or API User Secrets; store SMTP credentials outside
+tracked configuration:
+
+| `PasswordRecovery` setting | Value |
+| --- | --- |
+| `Enabled` | `true` to send recovery email; default `false` |
+| `FrontendBaseUrl` | Trusted absolute HTTPS frontend URL, without query, fragment or credentials; trailing slash is accepted |
+| `TokenLifetimeMinutes` | 1–60, default 30 |
+| `SmtpHost`, `SmtpPort` | Real SMTP host and port; port defaults to 587 |
+| `FromEmail` | Valid sender email address authorized by the SMTP service |
+| `Username`, `Password` | SMTP credentials, either both configured or both omitted for an explicitly configured relay |
+| `Security` | `StartTls` (required upgrade), `SslOnConnect`, or development-only `None` |
+
+For example, `PasswordRecovery__Enabled=true` sets the environment variable form.
+Unencrypted SMTP (`None`) is accepted only in Development to a loopback host;
+HTTP frontend links are likewise allowed only for Development loopback. Local QA
+can use a real SMTP capture service on `127.0.0.1:1025` with an HTTP frontend at
+`http://127.0.0.1:5189`. Production must use a verified SMTP provider and HTTPS.
+SMTP connection, authentication and delivery have a bounded 20-second deadline.
+Transport errors are logged generically without email addresses, credentials,
+tokens or message bodies.
+
+English and French plain-text MIME emails link to
+`<FrontendBaseUrl>/reset-password#userId=<guid>&token=<token>`. Keeping secrets in
+the fragment prevents them from entering HTTP request paths or referrer headers.
+Tokens contain 32 cryptographically random bytes; only their SHA-256 digest and
+expiry are stored. Password or normalized-email edits invalidate issued tokens.
+Requesting a new email after the cooldown invalidates the preceding link.
+
+Run the backend suite with `dotnet test backend/StockLab.sln`. On Windows with
+LocalDB installed, set `STOCKLAB_TEST_LOCALDB=1` to include SQL Server migration,
+single-use token and rowversion concurrency checks. Tests use isolated databases
+and injected email capture transports; browser QA can use the local SMTP sink.
+
 ## Entity Framework Core
 
 `StockLab.Infrastructure/Persistence/StockLabDbContext.cs` owns the personal account

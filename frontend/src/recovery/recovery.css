@@ -1,0 +1,20 @@
+#recovery-root { width: 100%; height: 100%; min-height: 100%; }
+.recovery-page { overflow-y: auto; }
+.recovery-page .page-frame { height: auto; min-height: 100%; padding: 32px 0; overflow: visible; }
+.recovery-page .recovery-card { min-height: 0; padding-block: 32px; }
+.recovery-card .card-heading { margin: 32px 0 24px; }
+.recovery-card .card-heading p { color: #616b80; font-size: 14px; line-height: 1.6; }
+.recovery-card .login-form { gap: 18px; }
+.recovery-card .input-wrap { min-height: 46px; }
+.recovery-card .input-wrap input { height: 44px; font-size: 15px; }
+.recovery-card .field-group label { font-size: 14px; }
+.recovery-card .primary-button { min-height: 46px; font-size: 14px; }
+.recovery-card .form-error, .recovery-card .form-success, .recovery-card .field-error { font-size: 13px; line-height: 1.6; margin: 0; }
+.recovery-card .form-success { color: #16734e; }
+.recovery-card .form-error, .recovery-card .field-error { color: #ac3345; }
+.recovery-card .register-prompt { margin-top: 26px; font-size: 13px; }
+.recovery-hint { color: #616b80; font-size: 12px; line-height: 1.5; margin: 0; }
+.recovery-resend { text-align: center; font-size: 14px; line-height: 1.6; margin: 16px 0 0; }
+.recovery-resend a { color: var(--blue); font-weight: 700; }
+.recovery-card a:focus-visible { outline: 3px solid #a5adff; outline-offset: 4px; }
+@media (max-width: 390px) { .recovery-page .recovery-card { padding-inline: 20px; } }

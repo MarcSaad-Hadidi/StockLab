@@ -27,7 +27,14 @@ public sealed class PersonalHistorySqlServerTests
         await using var fixture = new Fixture();
         await using var db = fixture.Context();
         await db.GetService<IMigrator>().MigrateAsync(PreviousMigration);
-        var user = await fixture.SeedAsync(holding: true);
+        // Seed the historical schema explicitly instead of using the current User model.
+        var user = Guid.NewGuid();
+        var portfolioId = Guid.NewGuid();
+        var holdingId = Guid.NewGuid();
+        var now = fixture.Clock.Now.UtcDateTime;
+        await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO Users (Id, DisplayName, Email, NormalizedEmail, PasswordHash, CreatedAtUtc, UpdatedAtUtc) VALUES ({user}, N'SQL history account', N'history@example.com', N'HISTORY@EXAMPLE.COM', N'test-only-not-a-login-hash', {now}, {now})");
+        await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO Portfolios (Id, UserId, Currency, InitialCapital, CashBalance, CreatedAtUtc) VALUES ({portfolioId}, {user}, N'USD', {100000m}, {99999.38275m}, {now})");
+        await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO Holdings (Id, PortfolioId, Symbol, Quantity, AverageCost, UpdatedAtUtc) VALUES ({holdingId}, {portfolioId}, N'MSFT', {0.5m}, {1.2345m}, {now})");
         var cash = (await db.Portfolios.AsNoTracking().SingleAsync()).CashBalance;
         await db.Database.MigrateAsync();
         Assert.Empty(await db.PortfolioValuationSnapshots.ToArrayAsync());
@@ -35,7 +42,7 @@ public sealed class PersonalHistorySqlServerTests
         Assert.Equal(0.5m, (await db.Holdings.AsNoTracking().SingleAsync()).Quantity);
         await db.GetService<IMigrator>().MigrateAsync(PreviousMigration);
         Assert.Equal(cash, (await db.Portfolios.AsNoTracking().SingleAsync()).CashBalance);
-        Assert.Equal(user, (await db.Users.AsNoTracking().SingleAsync()).Id);
+        Assert.Equal(user, await db.Users.Select(value => value.Id).SingleAsync());
     }
 
     [LocalDbTheory]

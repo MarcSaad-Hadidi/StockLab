@@ -56,6 +56,7 @@ Market document with a symbol query, for example `/market?symbol=AAPL`.
 | Route | Access | Delivered behavior |
 | --- | --- | --- |
 | `/login`, `/register` | Public | API-backed sign-in and account creation; registration returns to Login. |
+| `/forgot-password`, `/reset-password` | Public | Email reset-link request and one-time password recovery; SMTP must be configured on the backend. |
 | `/market` | Public | Search, quotes, OHLCV charts, movers and company information; saving favorites and submitting orders require a session. |
 | `/dashboard` | Authenticated | Account valuation, positions, recent transactions, saved watchlist and AI performance summary. |
 | `/portfolio` | Authenticated | Persisted cash/holdings enriched with quotes, current valuation and allocation. |
@@ -124,12 +125,31 @@ API. Unsupported profile fields remain unavailable. The password dialog calls
 success only after `204 No Content` confirms persistence. It displays backend
 errors rather than a simulated success.
 
-There is no refresh-token flow, Google OAuth or working forgot-password service.
+There is no refresh-token flow or Google OAuth integration.
 Password changes revoke all previously issued JWTs on the server, including the
 current one. Its next authenticated request receives a 401 and the existing guard
 redirects to Login; sign in with the new password. Local logout clears browser
 state and does not independently revoke tokens on the server. After the session
 version migration is deployed, existing users must sign in again once.
+
+Login links to the public `/forgot-password` and `/reset-password` pages (their
+`/index.html` entries also work in Vite dev and preview). Recovery uses anonymous
+`POST /api/auth/password/forgot` with `{ email, language: 'en' | 'fr' }` and
+`POST /api/auth/password/reset` with `{ userId, token, newPassword, confirmPassword }`.
+Only `202` accepts a link request, with the same generic message for registered
+and unknown addresses; only `204` reports a persisted reset. SMTP must be
+configured on the backend; an unavailable recovery service shows a retryable
+error instead of claiming an email was sent.
+
+Reset emails use `/reset-password#userId=...&token=...`. The entrypoint consumes
+the fragment once into memory and immediately removes it with `replaceState`.
+It never stores the reset secret in local/session storage. Reloading that
+sanitized page requires a new link. Invalid, expired, used and tampered links
+offer a new-link action. Passwords require 8–1024 characters and a matching
+confirmation. Server validation, conflicts, network failures and retry
+countdowns are translated in English and French. Recovery requests preserve
+the signed-in account; a successful reset clears the local session only when
+it belongs to the recovered user and offers a sign-in link.
 
 ## Personal paper trading and decimal amounts
 
@@ -280,7 +300,8 @@ operational verification; Vite startup does not commission an autonomous bot.
   connects it to the backend. Backend alert CRUD and periodic monitoring exist;
   persistent triggering remains [#43](https://github.com/MarcSaad-Hadidi/StockLab/issues/43).
   The UI's email/push options do not provide notification delivery.
-- Google OAuth and password recovery remain incomplete as described above.
+- Google OAuth remains unavailable. Password recovery requires the backend SMTP
+  configuration described above.
 - Controls with no connected service, including unsupported profile fields and
   exports, remain disabled or explicitly unavailable. Market currently enables
   All/Stocks filters; the other asset filters remain disabled. See the

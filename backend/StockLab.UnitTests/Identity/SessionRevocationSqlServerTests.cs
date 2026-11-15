@@ -28,7 +28,8 @@ public sealed class SessionRevocationSqlServerTests
         // Exercise this migration's rollback contract independently of later migrations.
         await db.GetService<IMigrator>().MigrateAsync(SessionVersionMigration);
         Assert.Equal(1, await db.Database.SqlQueryRaw<int>("SELECT COUNT(*) AS [Value] FROM sys.columns WHERE object_id = OBJECT_ID(N'Users') AND name = N'SessionVersion'").SingleAsync());
-        var account = await db.Users.AsNoTracking().SingleAsync();
+        var account = await db.Users.AsNoTracking().Select(user => new
+            { user.SessionVersion, user.PasswordHash, user.PreferredLanguage }).SingleAsync();
         Assert.Equal(0, account.SessionVersion);
         Assert.Equal("test-only-existing-hash", account.PasswordHash);
         Assert.Equal("en", account.PreferredLanguage);
@@ -37,7 +38,7 @@ public sealed class SessionRevocationSqlServerTests
         var rejected = await Assert.ThrowsAsync<SqlException>(() => db.GetService<IMigrator>().MigrateAsync(PreviousMigration));
         Assert.Contains("revocation", rejected.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(SessionVersionMigration, await db.Database.GetAppliedMigrationsAsync());
-        Assert.Equal(1, (await db.Users.AsNoTracking().SingleAsync()).SessionVersion);
+        Assert.Equal(1, await db.Users.Select(user => user.SessionVersion).SingleAsync());
     }
 
     [LocalDbFact]
