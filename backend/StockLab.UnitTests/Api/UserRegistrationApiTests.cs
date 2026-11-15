@@ -115,6 +115,7 @@ public sealed class UserRegistrationApiTests
         Assert.Equal(user.Id, portfolioWithUser.User.Id);
 
         var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>();
+        Assert.NotNull(user.PasswordHash);
         var verification = hasher.VerifyHashedPassword(user, user.PasswordHash, password);
         Assert.Contains(verification, new[]
         {

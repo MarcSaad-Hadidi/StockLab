@@ -36,6 +36,7 @@ public sealed class PasswordController(IUserPasswordService userPasswordService)
             PasswordChangeResult.Changed => NoContent(),
             PasswordChangeResult.UserNotFound => NotFound(new ApiErrorResponse("user_not_found", "The account was not found.")),
             PasswordChangeResult.InvalidCurrentPassword => BadRequest(new ApiErrorResponse("invalid_current_password", "The current password is incorrect.")),
+            PasswordChangeResult.PasswordNotSet => BadRequest(new ApiErrorResponse("password_not_set", "Use password recovery to set a password for this Google account.")),
             _ => Conflict(new ApiErrorResponse("password_update_conflict", "The account changed. Please try again."))
         };
     }

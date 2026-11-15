@@ -693,13 +693,18 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                         .HasMaxLength(254)
                         .HasColumnType("nvarchar(254)");
 
+                    b.Property<string>("GoogleSubject")
+                        .IsConcurrencyToken()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
                     b.Property<string>("NormalizedEmail")
                         .IsRequired()
                         .HasMaxLength(254)
                         .HasColumnType("nvarchar(254)");
 
                     b.Property<string>("PasswordHash")
-                        .IsRequired()
                         .HasMaxLength(1024)
                         .HasColumnType("nvarchar(1024)");
 
@@ -738,18 +743,26 @@ namespace StockLab.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("GoogleSubject")
+                        .IsUnique()
+                        .HasFilter("[GoogleSubject] IS NOT NULL");
+
                     b.HasIndex("NormalizedEmail")
                         .IsUnique();
 
                     b.ToTable("Users", null, t =>
                         {
+                            t.HasCheckConstraint("CK_Users_AuthenticationMethod", "[PasswordHash] IS NOT NULL OR [GoogleSubject] IS NOT NULL");
+
                             t.HasCheckConstraint("CK_Users_DisplayName_NotBlank", "LTRIM(RTRIM([DisplayName])) <> ''");
 
                             t.HasCheckConstraint("CK_Users_Email_NotBlank", "LTRIM(RTRIM([Email])) <> ''");
 
+                            t.HasCheckConstraint("CK_Users_GoogleSubject_NotBlank", "[GoogleSubject] IS NULL OR LTRIM(RTRIM([GoogleSubject])) <> ''");
+
                             t.HasCheckConstraint("CK_Users_NormalizedEmail_NotBlank", "LTRIM(RTRIM([NormalizedEmail])) <> ''");
 
-                            t.HasCheckConstraint("CK_Users_PasswordHash_NotBlank", "LTRIM(RTRIM([PasswordHash])) <> ''");
+                            t.HasCheckConstraint("CK_Users_PasswordHash_NotBlank", "[PasswordHash] IS NULL OR LTRIM(RTRIM([PasswordHash])) <> ''");
 
                             t.HasCheckConstraint("CK_Users_PreferredLanguage", "[PreferredLanguage] IN ('en', 'fr')");
 

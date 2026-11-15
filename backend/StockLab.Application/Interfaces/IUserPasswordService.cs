@@ -1,6 +1,6 @@
 namespace StockLab.Application.Interfaces;
 
-public enum PasswordChangeResult { Changed, UserNotFound, InvalidCurrentPassword, Conflict }
+public enum PasswordChangeResult { Changed, UserNotFound, InvalidCurrentPassword, Conflict, PasswordNotSet }
 
 public interface IUserPasswordService
 {

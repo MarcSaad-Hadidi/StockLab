@@ -114,6 +114,112 @@ LocalDB installed, set `STOCKLAB_TEST_LOCALDB=1` to include SQL Server migration
 single-use token and rowversion concurrency checks. Tests use isolated databases
 and injected email capture transports; browser QA can use the local SMTP sink.
 
+## Google authentication (#299)
+
+Google sign-in uses the real Google Identity Services popup authorization-code
+flow. It is disabled until an operator creates a Google OAuth **Web application**
+client and configures its credentials. Apply migration
+`20261115035556_AddGoogleAuthentication` before enabling it. Existing password
+accounts, profiles, session counters and portfolios are preserved.
+
+Configure these API settings with environment variables or User Secrets:
+
+| `GoogleAuth` setting | Value |
+| --- | --- |
+| `Enabled` | `true` after configuration; committed default is `false` |
+| `ClientId` | The Google Web client ID ending in `.apps.googleusercontent.com`; public |
+| `ClientSecret` | The matching client secret; backend only, never a `VITE_` setting |
+| `AllowedOrigins` | Exact frontend origins, such as `https://stocklab.example` or Development-only `http://localhost:5173` |
+
+Environment variable forms include `GoogleAuth__Enabled`, `GoogleAuth__ClientId`,
+`GoogleAuth__ClientSecret` and `GoogleAuth__AllowedOrigins__0`. Do not commit real
+credentials. Invalid enabled configuration prevents startup. Origins contain no
+trailing slash, path, credentials, query or fragment. HTTPS is required except
+for loopback HTTP origins in the Development environment. Also configure the
+same frontend origin in `Cors:AllowedOrigins` when the browser calls the API
+directly. A proxy must preserve the browser's original `Origin` header.
+
+In Google Cloud Console, configure the consent screen/audience, add your users to
+the test audience while the app is in testing, create a Web application client,
+and add the exact frontend origin to its Authorized JavaScript origins. Local
+`localhost` and `127.0.0.1` origins are different; register whichever the browser
+actually uses. The frontend requests only `openid email profile` through
+`google.accounts.oauth2.initCodeClient` in popup mode. Per Google's
+[code model documentation](https://developers.google.com/identity/oauth2/web/guides/use-code-model),
+the token exchange `redirect_uri` is the **calling page's origin**. StockLab derives
+it exclusively from the allowlisted browser `Origin`, never a submitted redirect
+URL. This implementation does not expose an OAuth redirect callback route.
+
+| Endpoint | Behavior |
+| --- | --- |
+| `GET /api/auth/google/config?origin=<encoded-frontend-origin>` | `{ "enabled": false }` while disabled or for an unapproved origin; otherwise public `enabled` and `clientId` only; no database lookup |
+| `POST /api/auth/google/exchange` | Accepts `{ "code": "...", "language": "en" }`; language is `en` or `fr` |
+| `POST /api/auth/google/link` | Accepts `{ "linkToken": "...", "password": "...", "language": "en" }` to prove ownership of an existing password account |
+
+Both POST requests require an exact allowed `Origin` and
+`X-Requested-With: StockLab.GoogleOAuth`. Responses disable caching. Exchange is
+limited to 10 requests per client IP per 15 minutes; link shares the normal login
+limit (default 5 per minute). Limit responses are **429** with `Retry-After`.
+These limits and temporary linking tickets are local to the API process.
+For multiple instances, use session affinity for the exchange/link pair or a
+shared ticket store; a restart requires starting Google sign-in again.
+
+The backend POSTs the code and secret only to Google's HTTPS token endpoint.
+The entire exchange/validation has a 20-second deadline; transport disables
+redirects and HTTP client logging. Microsoft's OIDC discovery manager caches and
+refreshes Google's public signing keys. The JWT library verifies the RS256
+signature, Google issuer, configured audience, expiration, issued-at time, subject,
+authorized party when present, and verified email. It never accepts a decoded-only
+token or a Google access token as identity. Access/refresh tokens are discarded.
+No production setting or development route accepts a test Google identity.
+Network test doubles and signing keys exist only in the test assembly.
+
+Successful sign-in returns the exact normal `LoginUserResponse` and revocable
+StockLab JWT. An existing Google `sub` identifies the same user even after Google
+email/name changes; later logins preserve the local profile and preferred language.
+First-time Google accounts receive a normal USD 100,000 paper portfolio and the
+chosen language. They have a null password hash rather than a generated password.
+Password login fails safely, and authenticated password change returns **400**
+`password_not_set` with guidance to use password recovery.
+
+An email match alone never links accounts. A collision with an unlinked password
+account returns **409** `google_link_required` plus a random `linkToken` and
+`expiresAtUtc`, without a session. The five-minute ticket binds the Google subject,
+user ID, original normalized email, password hash, session version and origin.
+Link verifies the existing StockLab password, allows at most five guesses, and
+consumes the ticket once. Account changes invalidate the proof. SQL rowversion and
+the unique binary-collated Google subject index prevent concurrent requests from
+reassigning an identity or creating duplicate portfolios. Linking preserves the
+existing account's preferred language and financial data.
+
+All Google accounts with verified email are supported, including external email
+providers. Google's [ID token verification guidance](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token)
+explains that a verified external address does not establish continuing mailbox
+ownership. A successful StockLab **password recovery therefore disconnects Google**
+atomically with the new password, consumed reset token and session revocation.
+The current mailbox owner regains all credentials. Google sign-in can be linked
+again only by proving the newly set StockLab password. An ordinary authenticated
+password change preserves an existing Google binding.
+
+Errors use safe JSON codes: **401** `google_invalid_response` or
+`invalid_credentials`; **503** `google_unavailable`; **409**
+`google_account_conflict`; **400** `google_link_expired` or field-level
+`validation_error`. Disabled POSTs return `google_unavailable` before resolving
+database/provider dependencies. Expired tickets and provider failures never
+create a local session.
+
+Rollback refuses to remove Google authentication while any Google-only account
+has a null password. Set real passwords through recovery first. With password
+accounts only, rollback preserves passwords, sessions and financial data but
+removes Google bindings. Never synthesize password hashes to permit rollback.
+
+Verification uses public API tests with real JWT signature validation, isolated
+Google HTTP fixtures, and SQL Server tests for first-login uniqueness, both
+cross-account linking races, one-time ticket consumption, reset/link concurrency,
+and migration rollback. Enable LocalDB with `STOCKLAB_TEST_LOCALDB=1` and run
+`dotnet test backend/StockLab.sln`. A real Google client, consent screen and browser
+sign-in remain necessary to verify live Google popup/exchange behavior.
+
 ## Entity Framework Core
 
 `StockLab.Infrastructure/Persistence/StockLabDbContext.cs` owns the personal account

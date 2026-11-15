@@ -1,4 +1,33 @@
 {
+  "googleAuth": {
+    "continue": "Continuer avec Google",
+    "loading": "Chargement de la connexion Google…",
+    "working": "Connexion en cours…",
+    "popupHint": "Terminez la connexion dans la fenêtre Google. Vous pouvez annuler et réessayer.",
+    "cancel": "Annuler la connexion Google",
+    "retry": "Réessayer la connexion Google",
+    "link": {
+      "description": "Un compte StockLab existant utilise cette adresse. Entrez son mot de passe StockLab pour associer Google et vous connecter.",
+      "password": "Mot de passe StockLab existant",
+      "submit": "Associer Google et se connecter"
+    },
+    "errors": {
+      "notConfigured": "La connexion Google n’est pas configurée pour ce site. Connectez-vous ou inscrivez-vous par courriel, ou contactez l’administrateur.",
+      "cancelled": "La connexion Google a été annulée. Réessayez ou utilisez votre courriel.",
+      "popupBlocked": "La fenêtre Google n’a pas pu s’ouvrir. Autorisez les fenêtres contextuelles pour StockLab et réessayez.",
+      "refused": "L’autorisation Google n’a pas été accordée. Réessayez ou connectez-vous par courriel.",
+      "sdk": "La connexion Google n’a pas pu se charger. Vérifiez votre connexion ou les blocages du navigateur, puis réessayez.",
+      "unavailable": "La connexion Google est temporairement indisponible. Réessayez plus tard ou utilisez votre courriel.",
+      "offline": "StockLab est inaccessible. Vérifiez votre connexion et réessayez.",
+      "invalidResponse": "La connexion Google n’a pas pu être vérifiée. Recommencez ou utilisez votre courriel.",
+      "invalidRequest": "La connexion Google n’a pas pu aboutir. Vérifiez le mot de passe ou recommencez la connexion Google.",
+      "invalidPassword": "Ce mot de passe StockLab est incorrect. Réessayez ou réinitialisez votre mot de passe.",
+      "passwordRequired": "Entrez le mot de passe du compte StockLab existant pour associer Google.",
+      "expired": "La demande d’association Google a expiré. Recommencez la connexion Google.",
+      "conflict": "Ce compte Google n’a pas pu être associé. Connectez-vous avec votre courriel StockLab ou contactez l’assistance.",
+      "rateLimited": "Trop de tentatives de connexion Google. Patientez avant de réessayer."
+    }
+  },
   "common": {
     "languageLabel": "Choisir la langue",
     "languageSaveError": "La langue est appliquée ici, mais sa synchronisation avec votre compte a échoué. Réessayez.",
@@ -902,6 +931,8 @@
       "close": "Fermer la fenêtre de modification du mot de passe",
       "title": "Modifier le mot de passe",
       "description": "Choisissez un nouveau mot de passe pour votre compte StockLab.",
+      "googleAccountHint": "Si vous vous êtes inscrit avec Google, utilisez la récupération de mot de passe pour créer votre premier mot de passe.",
+      "setPassword": "Créer ou récupérer un mot de passe",
       "currentPassword": "Mot de passe actuel",
       "newPassword": "Nouveau mot de passe",
       "confirmPassword": "Confirmer le mot de passe",
@@ -912,6 +943,7 @@
       "errors": {
         "unauthorized": "Connectez-vous pour modifier votre mot de passe.",
         "invalid_current_password": "Le mot de passe actuel est incorrect.",
+        "password_not_set": "Ce compte n’a pas encore de mot de passe. Utilisez la récupération de mot de passe pour en créer un.",
         "validation_error": "Vérifiez les champs du mot de passe et réessayez.",
         "user_not_found": "Votre compte est introuvable. Reconnectez-vous.",
         "password_update_conflict": "Votre compte a changé pendant la modification. Réessayez.",
@@ -1164,7 +1196,8 @@
       "title": "Réinitialiser le mot de passe",
       "subtitle": "Choisissez un nouveau mot de passe pour votre compte StockLab.",
       "submit": "Réinitialiser le mot de passe",
-      "success": "Votre mot de passe a été réinitialisé. Connectez-vous avec votre nouveau mot de passe."
+      "googleRecoveryNotice": "La réinitialisation dissocie aussi Google s’il était lié au compte. Vous pourrez le relier avec votre nouveau mot de passe.",
+      "success": "Votre mot de passe a été réinitialisé. Connectez-vous avec votre nouveau mot de passe. Si Google était lié, reliez-le à nouveau avec ce nouveau mot de passe."
     },
     "errors": {
       "emailRequired": "Saisissez votre adresse courriel.",

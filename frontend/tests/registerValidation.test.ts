@@ -1,11 +1,16 @@
 import assert from 'node:assert/strict'
-import { test } from 'node:test'
+import { beforeEach, test } from 'node:test'
 import { registerHooks } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { JSDOM } from 'jsdom'
 import React, { act } from 'react'
 import { authApi, createAuthApi } from '../src/api/authApi.ts'
+import { googleAuthApi } from '../src/api/googleAuthApi.ts'
+
+beforeEach(t => {
+  t.mock.method(googleAuthApi, 'getConfig', async () => ({ enabled: false } as const))
+})
 
 registerHooks({ load(url, context, nextLoad) {
   if (url.endsWith('.css')) return { format: 'module', shortCircuit: true, source: 'export default {}' }
