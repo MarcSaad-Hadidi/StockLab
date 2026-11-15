@@ -1,6 +1,9 @@
 {
   "common": {
     "languageLabel": "Choisir la langue",
+    "languageSaveError": "La langue est appliquée ici, mais sa synchronisation avec votre compte a échoué. Réessayez.",
+    "languageSessionExpired": "Votre session n’est plus valide. Reconnectez-vous pour enregistrer votre langue.",
+    "languageSessionStorageError": "Votre langue a été enregistrée dans votre compte, mais la session du navigateur n’a pas pu être actualisée. Reconnectez-vous.",
     "closeNavigation": "Fermer la navigation",
     "primaryNavigation": "Navigation principale",
     "preview": "Aperçu StockLab",
@@ -980,7 +983,8 @@
       "rateLimited": "Trop de tentatives de connexion.",
       "offline": "StockLab est inaccessible. Vérifiez que le backend est démarré.",
       "server": "Le service d’authentification est temporairement indisponible.",
-      "sessionStorage": "Votre navigateur bloque le stockage sécurisé de la session. Activez-le, puis réessayez."
+      "sessionStorage": "Votre navigateur bloque le stockage sécurisé de la session. Activez-le, puis réessayez.",
+      "languageSave": "La connexion n’a pas pu être finalisée, car la langue choisie n’a pas été enregistrée. Réessayez."
     },
     "showPassword": "Afficher le mot de passe",
     "hidePassword": "Masquer le mot de passe"

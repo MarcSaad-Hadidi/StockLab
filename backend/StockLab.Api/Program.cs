@@ -270,7 +270,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .WithExposedHeaders("Retry-After", "Date");
+            .WithExposedHeaders("Retry-After", "Date", "ETag");
     });
 });
 

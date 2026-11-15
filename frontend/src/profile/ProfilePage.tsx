@@ -4,6 +4,7 @@ import { formatCurrency, formatDate } from '../i18n/formatters'
 import { routeFor } from '../navigation/routes'
 import { clearAuthSession } from '../auth/authStorage'
 import { useTranslation } from 'react-i18next'
+import { useLanguageSaving } from '../i18n/languagePreference'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useProfileData } from './useProfileData'
 import type { UpdateProfileRequest, UserProfile } from '../api/profileApi'
@@ -94,6 +95,7 @@ export default function ProfilePage() {
   const { i18n, t } = useTranslation()
   useEffect(() => { document.title = `${t('profile.title')} | StockLab` }, [i18n.language, t])
   const { profile, capital, loading, loadError, saveError, fieldErrors, saving, sessionWarning, save, saveLanguage, reload, clearSaveErrors } = useProfileData()
+  const languageSaving = useLanguageSaving(profile?.id)
   const [languageAttempted, setLanguageAttempted] = useState(false)
   const [languageSaved, setLanguageSaved] = useState<{ userId: string; language: UserProfile['preferredLanguage'] } | null>(null)
   const [draft, setDraft] = useState<UpdateProfileRequest>({ displayName: '', email: '' })
@@ -104,7 +106,7 @@ export default function ProfilePage() {
   const [passwordProfile, setPasswordProfile] = useState<UserProfile | null>(null)
   const passwordOpen = passwordProfile !== null && passwordProfile === profile
   const [passwordSavedProfile, setPasswordSavedProfile] = useState<UserProfile | null>(null)
-  const canEdit = profile !== null && !loading && !saving && loadError === null
+  const canEdit = profile !== null && !loading && !saving && !languageSaving && loadError === null
   const nameError = Object.keys(fieldErrors).some(key => key.toLowerCase() === 'displayname')
   const emailError = saveError === 'email_already_registered' || Object.keys(fieldErrors).some(key => key.toLowerCase() === 'email')
 
@@ -130,7 +132,7 @@ export default function ProfilePage() {
   const logout = () => { clearAuthSession(); window.location.assign(routeFor('logout')) }
 
   return <div className="profile-page stocklab-layout">
-    <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+    <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} languageDisabled={editing || passwordOpen} />
     <main className="profile-main">
       <TopBar onMenuOpen={() => setSidebarOpen(true)} title={t('profile.title')} />
       <div className="profile-content" aria-busy={loading}>

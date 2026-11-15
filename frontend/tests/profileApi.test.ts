@@ -8,7 +8,7 @@ const profile = {
   preferredLanguage: 'en',
 }
 const authorization = () => ({ Authorization: 'Bearer test-token' })
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ETag: '"AQIDBAUGBwg="' } })
 
 test('language updates persist only the preference through an authenticated profile endpoint', async () => {
   let captured: { url: string; init?: RequestInit } | undefined
@@ -20,8 +20,46 @@ test('language updates persist only the preference through an authenticated prof
   assert.equal(saved.preferredLanguage, 'fr')
   assert.equal(captured?.url, '/api/profile/language')
   assert.equal(captured?.init?.method, 'PUT')
+  assert.equal(captured?.init?.keepalive, true, 'the small preference write survives ordinary page navigation')
   assert.equal(new Headers(captured?.init?.headers).get('Authorization'), 'Bearer test-token')
   assert.deepEqual(JSON.parse(String(captured?.init?.body)), { preferredLanguage: 'fr' })
+})
+
+test('an explicit login preference uses the newly authenticated token before a browser session is stored', async () => {
+  const requests: RequestInit[] = []
+  const api = createProfileApi('', async (_url, init) => { requests.push(init!); return json({ ...profile, preferredLanguage: 'fr' }) }, () => null)
+  const saved = await api.updateLanguage('fr', undefined, 'Bearer fresh-login-token')
+  assert.equal(saved.preferredLanguage, 'fr')
+  assert.deepEqual(requests.map(request => request.method), ['GET', 'PUT'])
+  assert.ok(requests.every(request => new Headers(request.headers).get('Authorization') === 'Bearer fresh-login-token'))
+  assert.equal(requests[0].cache, 'no-store')
+  assert.equal(new Headers(requests[1].headers).get('If-Match'), '"AQIDBAUGBwg="')
+  assert.deepEqual(JSON.parse(String(requests[1].body)), { preferredLanguage: 'fr' })
+  await assert.rejects(api.getProfile(), (error: unknown) => error instanceof ProfileApiError && error.code === 'unauthorized')
+})
+
+test('a language write never falls back to unconditional PUT when the profile ETag is missing or malformed', async () => {
+  for (const etag of [null, '""', '"AA=="', 'W/"AQIDBAUGBwg="', '*', 'unquoted', '"not base64"', '"a"', '"AA==", "AA=="']) {
+    const methods: string[] = []
+    const api = createProfileApi('', async (_url, init) => {
+      methods.push(String(init?.method))
+      return new Response(JSON.stringify(profile), { headers: etag ? { ETag: etag } : {} })
+    }, authorization)
+    await assert.rejects(api.updateLanguage('fr'), (error: unknown) => error instanceof ProfileApiError && error.code === 'invalid_response')
+    assert.deepEqual(methods, ['GET'])
+  }
+})
+
+test('conditional language writes retain their original authorization across the version read', async () => {
+  let token = 'Bearer account-a'
+  const calls: Array<{ method?: string; auth: string | null }> = []
+  const api = createProfileApi('', async (_url, init) => {
+    calls.push({ method: init?.method, auth: new Headers(init?.headers).get('Authorization') })
+    token = 'Bearer account-b'
+    return json({ ...profile, preferredLanguage: 'fr' })
+  }, () => ({ Authorization: token }))
+  await api.updateLanguage('fr')
+  assert.deepEqual(calls, [{ method: 'GET', auth: 'Bearer account-a' }, { method: 'PUT', auth: 'Bearer account-a' }])
 })
 
 test('missing or unsupported server preferences cannot be accepted as saved profile data', async () => {

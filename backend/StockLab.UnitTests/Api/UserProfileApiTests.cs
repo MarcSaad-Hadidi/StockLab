@@ -25,6 +25,99 @@ public sealed class UserProfileApiTests
     private const string TestAudience = "StockLab.Tests";
     private const string TestSigningKey = "test-only-signing-key-at-least-32-bytes-long";
 
+    [Fact]
+    public async Task Profile_get_and_successful_puts_return_strong_rowversion_etags()
+    {
+        await using var fixture = await UserProfileFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "Original", "language@example.com");
+        await SetVersionAsync(fixture, account.Id, [0, 0, 0, 0, 0, 0, 0, 1]);
+
+        using var profile = await GetWithTokenAsync(fixture.Client, account.Token);
+        Assert.Equal("\"AAAAAAAAAAE=\"", profile.Headers.ETag?.ToString());
+        using var update = await PutWithTokenAsync(fixture.Client, account.Token,
+            """{"displayName":"Changed","email":"language@example.com"}""");
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        Assert.Equal("\"AAAAAAAAAAE=\"", update.Headers.ETag?.ToString());
+        using var language = await PutLanguageAsync(fixture.Client, account.Token, "fr", "\"AAAAAAAAAAE=\"");
+        Assert.Equal(HttpStatusCode.OK, language.StatusCode);
+        Assert.Equal("\"AAAAAAAAAAE=\"", language.Headers.ETag?.ToString());
+        using var body = JsonDocument.Parse(await language.Content.ReadAsStringAsync());
+        Assert.Equal("fr", body.RootElement.GetProperty("preferredLanguage").GetString());
+    }
+
+    [Theory]
+    [InlineData(" \t")]
+    [InlineData("*")]
+    [InlineData("W/\"AAAAAAAAAAE=\"")]
+    [InlineData("AAAAAAAAAAE=")]
+    [InlineData("\"not-base64!!\"")]
+    [InlineData("\"AAAAAAAAAAA\"")]
+    [InlineData("\"AAAAAAAAAAE=\", \"AAAAAAAAAAI=\"")]
+    [InlineData("\"\"")]
+    [InlineData("\"AA==\"")]
+    [InlineData("\"AAAAAAAAAAB=\"")]
+    [InlineData("\"AAAAAAAAAAE= \"")]
+    public async Task Malformed_if_match_is_rejected_without_changing_language(string ifMatch)
+    {
+        await using var fixture = await UserProfileFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "Original", "language@example.com");
+        using var response = await PutLanguageAsync(fixture.Client, account.Token, "fr", ifMatch);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("validation_error", await ErrorCodeAsync(response));
+        using var profile = await GetWithTokenAsync(fixture.Client, account.Token);
+        using var body = JsonDocument.Parse(await profile.Content.ReadAsStringAsync());
+        Assert.Equal("en", body.RootElement.GetProperty("preferredLanguage").GetString());
+    }
+
+    [Fact]
+    public async Task Multiple_or_oversized_if_match_headers_are_rejected()
+    {
+        await using var fixture = await UserProfileFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "Original", "language@example.com");
+        foreach (var headers in new[] { new[] { "\"AAAAAAAAAAE=\"", "\"AAAAAAAAAAI=\"" }, new[] { "\"" + new string('A', 4096) + "\"" } })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Put, "/api/profile/language")
+            { Content = Json("""{"preferredLanguage":"fr"}""") };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", account.Token);
+            request.Headers.TryAddWithoutValidation("If-Match", headers);
+            using var response = await fixture.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal("validation_error", await ErrorCodeAsync(response));
+        }
+    }
+
+    [Fact]
+    public async Task Delayed_conditional_language_put_preserves_the_newer_preference()
+    {
+        await using var fixture = await UserProfileFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "Original", "language@example.com");
+        await SetVersionAsync(fixture, account.Id, [0, 0, 0, 0, 0, 0, 0, 1]);
+        using var original = await GetWithTokenAsync(fixture.Client, account.Token);
+        // SQLite does not generate rowversions; reproduce a newer committed SQL version.
+        await SetVersionAsync(fixture, account.Id, [0, 0, 0, 0, 0, 0, 0, 2]);
+        using var delayed = await PutLanguageAsync(fixture.Client, account.Token, "fr", original.Headers.ETag?.ToString() ?? "\"AAAAAAAAAAE=\"");
+        Assert.Equal(HttpStatusCode.PreconditionFailed, delayed.StatusCode);
+        Assert.Equal("profile_update_conflict", await ErrorCodeAsync(delayed));
+        using var current = await GetWithTokenAsync(fixture.Client, account.Token);
+        Assert.Equal("\"AAAAAAAAAAI=\"", current.Headers.ETag?.ToString());
+        using var body = JsonDocument.Parse(await current.Content.ReadAsStringAsync());
+        Assert.Equal("en", body.RootElement.GetProperty("preferredLanguage").GetString());
+    }
+
+    [Fact]
+    public async Task Cors_exposes_profile_etag_to_the_frontend()
+    {
+        await using var fixture = await UserProfileFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "Original", "language@example.com");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/profile");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", account.Token);
+        request.Headers.Add("Origin", "https://profile-tests.example");
+        using var response = await fixture.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("ETag", response.Headers.GetValues("Access-Control-Expose-Headers")
+            .SelectMany(value => value.Split(',')).Select(value => value.Trim()), StringComparer.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData("fr")]
     [InlineData("en")]
@@ -84,15 +177,19 @@ public sealed class UserProfileApiTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    [Fact]
-    public async Task Language_update_concurrency_failure_is_not_reported_as_success()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Language_update_concurrency_failure_is_not_reported_as_success(bool conditional)
     {
         await using var fixture = await UserProfileFixture.CreateAsync(new RejectProfileUpdateWithConcurrencyConflict());
         var account = await CreateSignedInAccountAsync(fixture, "Original", "language@example.com");
+        await SetVersionAsync(fixture, account.Id, [0, 0, 0, 0, 0, 0, 0, 1]);
         using var request = new HttpRequestMessage(HttpMethod.Put, "/api/profile/language") { Content = Json("""{"preferredLanguage":"fr"}""") };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", account.Token);
+        if (conditional) request.Headers.TryAddWithoutValidation("If-Match", "\"AAAAAAAAAAE=\"");
         using var response = await fixture.Client.SendAsync(request);
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(conditional ? HttpStatusCode.PreconditionFailed : HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal("profile_update_conflict", await ErrorCodeAsync(response));
     }
 
@@ -377,8 +474,10 @@ public sealed class UserProfileApiTests
         var paths = document.RootElement.GetProperty("paths");
         var getOperation = paths.GetProperty("/api/profile").GetProperty("get");
         var putOperation = paths.GetProperty("/api/profile").GetProperty("put");
+        var languageOperation = paths.GetProperty("/api/profile/language").GetProperty("put");
         AssertStatuses(getOperation, "200", "401", "404", "500");
         AssertStatuses(putOperation, "200", "400", "401", "404", "409", "500");
+        AssertStatuses(languageOperation, "200", "400", "401", "404", "409", "412", "500");
         AssertBearerSecurity(getOperation);
         AssertBearerSecurity(putOperation);
 
@@ -459,6 +558,22 @@ public sealed class UserProfileApiTests
         return client.SendAsync(request);
     }
 
+    private static Task<HttpResponseMessage> PutLanguageAsync(HttpClient client, string token, string language, string ifMatch)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Put, "/api/profile/language")
+        { Content = Json(JsonSerializer.Serialize(new { preferredLanguage = language })) };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.TryAddWithoutValidation("If-Match", ifMatch);
+        return client.SendAsync(request);
+    }
+
+    private static async Task SetVersionAsync(UserProfileFixture fixture, Guid userId, byte[] version)
+    {
+        using var scope = fixture.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE Users SET Version = {version} WHERE Id = {userId}");
+    }
+
     private static string CreateSignedToken(string subject, DateTimeOffset issuedAtUtc, string signingKey = TestSigningKey)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey));
@@ -511,7 +626,8 @@ public sealed class UserProfileApiTests
                         ["Jwt:Issuer"] = TestIssuer,
                         ["Jwt:Audience"] = TestAudience,
                         ["Jwt:SigningKey"] = TestSigningKey,
-                        ["Jwt:AccessTokenMinutes"] = "60"
+                        ["Jwt:AccessTokenMinutes"] = "60",
+                        ["Cors:AllowedOrigins:0"] = "https://profile-tests.example"
                     }));
                 builder.ConfigureTestServices(services =>
                 {

@@ -4,6 +4,8 @@ import { formatSignedPercent } from '../i18n/formatters'
 import { AuthApiError, authApi } from '../api/authApi'
 import { saveAuthSession } from '../auth/authStorage'
 import { setLanguage } from '../i18n/i18n'
+import { clearLoginLanguage, getLoginLanguage, getPendingLanguageIntent, isSupersededLanguageChange, saveLanguagePreference } from '../i18n/languagePreference'
+import { ProfileApiError } from '../api/profileApi'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -114,14 +116,24 @@ export default function LoginPage() {
     setRetrySeconds(0)
     try {
       const session = await authApi.login({ email, password })
+      const explicit = getLoginLanguage()
+      const pending = getPendingLanguageIntent(session.user.id)
+      const language = explicit ?? pending?.language
+      if (language) {
+        const result = await saveLanguagePreference(language, session, undefined, true, explicit ? undefined : pending ?? undefined)
+        session.user = { ...session.user, preferredLanguage: result.preferredLanguage }
+      }
       if (!saveAuthSession(session)) {
         setServerError('login.errors.sessionStorage')
         return
       }
       if (session.user.preferredLanguage) await setLanguage(session.user.preferredLanguage)
+      clearLoginLanguage()
       window.location.assign(routeFor('dashboard'))
     } catch (error) {
-      if (error instanceof AuthApiError) {
+      if (isSupersededLanguageChange(error)) return
+      if (error instanceof ProfileApiError) setServerError('login.errors.languageSave')
+      else if (error instanceof AuthApiError) {
         setServerError(loginErrorKey(error.code))
         setErrors(serverFieldErrors(error.fieldErrors))
         if (error.code === 'rate_limited') {
@@ -165,7 +177,7 @@ export default function LoginPage() {
         <section className="login-card" aria-labelledby="login-heading">
           <div className="card-topline">
             <Brand />
-            <LanguageSelector />
+            <LanguageSelector persistToAccount={false} disabled={isSubmitting} />
           </div>
           <header className="card-heading"><h1 id="login-heading">{t('login.title')}</h1><p>{t('login.subtitle')}</p></header>
           {registrationComplete && <p className="form-success" role="status">{t('login.registrationSuccess')}</p>}
