@@ -73,6 +73,7 @@ const payload = { currentPassword: 'old-password', newPassword: 'new-password', 
 
 for (const [status, body, code] of [
   [400, { error: 'invalid_current_password' }, 'invalid_current_password'],
+  [400, { error: 'password_not_set' }, 'password_not_set'],
   [400, { errors: { NewPassword: ['private backend detail'] } }, 'validation_error'],
   [401, {}, 'unauthorized'], [404, {}, 'user_not_found'], [409, {}, 'password_update_conflict'],
   [429, {}, 'rate_limited'], [500, {}, 'server_error'], [200, { success: true }, 'invalid_response'],
@@ -158,3 +159,21 @@ test('closing an unmounted password form aborts the pending request and ignores 
   await act(async () => resolve(new Response(null, { status: 204 })))
   assert.equal(saved, false)
 })
+
+for (const language of ['en', 'fr']) {
+  test(`Google-only password changes offer recovery instead of a false success in ${language}`, async t => {
+    await i18n.changeLanguage(language)
+    saveAuthSession(session)
+    t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ error: 'password_not_set' }), { status: 400 }))
+    let saved = false
+    const view = await modal(() => { saved = true })
+    try {
+      const recovery = view.container.querySelector<HTMLAnchorElement>('a[href="/forgot-password"]')
+      assert.ok(recovery, 'Google users must have a way to set their first password')
+      await act(async () => view.submit())
+      assert.equal(saved, false)
+      assert.equal(view.container.querySelector('[role="alert"]')!.textContent, i18n.t('profile.passwordModal.errors.password_not_set'))
+      assert.notEqual(view.container.querySelector('[role="alert"]')!.textContent, 'profile.passwordModal.errors.password_not_set')
+    } finally { await view.close(); await i18n.changeLanguage('en') }
+  })
+}

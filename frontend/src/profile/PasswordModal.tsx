@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { authStorageKey, getAuthSession } from '../auth/authStorage'
 import { passwordApi, PasswordApiError, type ChangePasswordRequest } from '../api/passwordApi'
+import { routeFor } from '../navigation/routes'
 
 export function PasswordModal({ onClose, onSave }: { onClose: () => void; onSave: () => void }) {
   const { t } = useTranslation()
@@ -87,7 +88,7 @@ export function PasswordModal({ onClose, onSave }: { onClose: () => void; onSave
       onClick={event => event.stopPropagation()} onKeyDown={event => {
         if (event.key === 'Escape') { event.preventDefault(); close() }
         if (event.key === 'Tab') {
-          const items = dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)')
+          const items = dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), a[href]')
           if (!items?.length) { event.preventDefault(); return }
           const first = items[0], last = items[items.length - 1]
           if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
@@ -97,6 +98,7 @@ export function PasswordModal({ onClose, onSave }: { onClose: () => void; onSave
       <button aria-label={t('profile.passwordModal.close')} className="modal-close" disabled={saving} onClick={close} type="button"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
       <div className="modal-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" /></svg></div>
       <h2 id="password-title">{t('profile.passwordModal.title')}</h2><p>{t('profile.passwordModal.description')}</p>
+      <p>{t('profile.passwordModal.googleAccountHint')}{' '}<a href={routeFor('forgot-password')}>{t('profile.passwordModal.setPassword')}</a></p>
       <form ref={formRef} onSubmit={submit} aria-busy={saving}>
         <label htmlFor="current-password">{t('profile.passwordModal.currentPassword')}</label>
         <input autoComplete="current-password" disabled={saving} aria-invalid={fields.includes('currentpassword')} aria-describedby={error ? 'password-error' : undefined} id="current-password" name="current-password" required type="password" onChange={() => changed('currentpassword')} />

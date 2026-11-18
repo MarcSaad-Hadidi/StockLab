@@ -143,6 +143,7 @@ public sealed partial class UserLoginApiTests
         Assert.Equal(1, await context.Portfolios.CountAsync());
         var user = await context.Users.AsNoTracking().SingleAsync();
         var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>();
+        Assert.NotNull(user.PasswordHash);
         Assert.Contains(hasher.VerifyHashedPassword(user, user.PasswordHash, password), new[]
         {
             PasswordVerificationResult.Success,

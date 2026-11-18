@@ -48,6 +48,7 @@ public class StockLabDbContext(DbContextOptions<StockLabDbContext> options) : Db
         if (Database.IsSqlServer())
         {
             modelBuilder.Entity<User>().Property(user => user.PreferredLanguage).UseCollation("Latin1_General_100_BIN2");
+            modelBuilder.Entity<User>().Property(user => user.GoogleSubject).UseCollation("Latin1_General_100_BIN2");
             AiDecisionConfiguration.ConfigureSqlServerSignal(modelBuilder.Entity<AiDecision>());
             AiRejectedDecisionConfiguration.ConfigureSqlServerReason(modelBuilder.Entity<AiRejectedDecision>());
             AiExecutionAttemptConfiguration.ConfigureSqlServerStatus(modelBuilder.Entity<AiExecutionAttempt>());

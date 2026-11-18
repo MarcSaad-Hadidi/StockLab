@@ -86,6 +86,7 @@ builder.Services.AddHealthChecks().AddCheck<SqlServerReadinessHealthCheck>("sql_
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddUserRegistration();
 builder.Services.AddPasswordRecovery(builder.Configuration, builder.Environment);
+builder.Services.AddGoogleAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddWatchlist();
 builder.Services.AddPriceAlerts();
 builder.Services.AddPriceAlertMonitoring(builder.Configuration);
@@ -213,7 +214,7 @@ builder.Services.AddRateLimiter(options =>
             partitionKey,
             _ => loginRateLimitOptions.CreateLimiterOptions());
     });
-    foreach (var policy in new[] { "PasswordForgot", "PasswordReset" })
+    foreach (var policy in new[] { "PasswordForgot", "PasswordReset", "GoogleOAuth" })
         options.AddPolicy(policy, httpContext =>
         {
             var address = httpContext.Connection.RemoteIpAddress;

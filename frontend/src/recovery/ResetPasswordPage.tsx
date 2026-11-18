@@ -62,6 +62,7 @@ export default function ResetPasswordPage({ initialLink }: { initialLink: ResetL
     {complete ? <p className="form-success" role="status">{t('recovery.reset.success')}</p>
       : invalid ? <><p className="form-error" role="alert">{t('recovery.errors.invalidLink')}</p><p className="recovery-resend"><a href={routeFor('forgot-password')}>{t('recovery.requestNewLink')}</a></p></>
         : <form className="login-form" noValidate onSubmit={handleSubmit} aria-busy={form.busy}>
+          <p className="recovery-hint">{t('recovery.reset.googleRecoveryNotice')}</p>
           <RecoveryFeedback failure={form.failure} retrySeconds={form.retrySeconds} />
           {(['newPassword', 'confirmPassword'] as const).map(field => <div className="field-group" key={field}>
             <label htmlFor={field}>{t(`recovery.${field}Label`)}</label>

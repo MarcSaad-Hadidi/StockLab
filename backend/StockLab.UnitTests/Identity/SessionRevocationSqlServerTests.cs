@@ -63,6 +63,7 @@ public sealed class SessionRevocationSqlServerTests
         await using var fresh = fixture.Context();
         var stored = await fresh.Users.AsNoTracking().SingleAsync();
         Assert.Equal(1, stored.SessionVersion);
+        Assert.NotNull(stored.PasswordHash);
         Assert.Equal(PasswordVerificationResult.Success, hasher.VerifyHashedPassword(stored, stored.PasswordHash, "winner-password"));
         Assert.Equal(PasswordVerificationResult.Failed, hasher.VerifyHashedPassword(stored, stored.PasswordHash, "loser-password"));
         Assert.False(await new UserSessionValidator(fresh).IsCurrentAsync(account.Id, 0, default));

@@ -5,7 +5,7 @@ personal paper trading, portfolios, transactions, watchlists and AI Trader reads
 It uses React 19, TypeScript 6, Vite 8, i18next and MUI/MUI X Charts. English and
 French share the existing language selector and locale-aware formatters.
 
-This document describes the code merged into `develop` as of **31 October 2026**.
+This document describes the current frontend implementation.
 An implemented integration still needs a configured backend and its dependencies;
 running Vite alone does not provide SQL persistence, external quotes or a bot.
 See the [project overview](../README.md), [backend contracts](../backend/README.md)
@@ -55,7 +55,7 @@ Market document with a symbol query, for example `/market?symbol=AAPL`.
 
 | Route | Access | Delivered behavior |
 | --- | --- | --- |
-| `/login`, `/register` | Public | API-backed sign-in and account creation; registration returns to Login. |
+| `/login`, `/register` | Public | Email sign-in/account creation and configured Google sign-in; email registration returns to Login. |
 | `/forgot-password`, `/reset-password` | Public | Email reset-link request and one-time password recovery; SMTP must be configured on the backend. |
 | `/market` | Public | Search, quotes, OHLCV charts, movers and company information; saving favorites and submitting orders require a session. |
 | `/dashboard` | Authenticated | Account valuation, positions, recent transactions, saved watchlist and AI performance summary. |
@@ -86,6 +86,37 @@ account and its initial portfolio in the backend; it does not sign the user in.
 Validation, duplicate email, invalid credentials, rate limits and service errors
 are surfaced through localized messages. Editing the registration email clears
 errors belonging to its previous value while preserving other relevant errors.
+
+Login and Register share [GoogleAuthButton.tsx](src/components/GoogleAuthButton.tsx).
+It reads `GET /api/auth/google/config?origin=<current-page-origin>` before enabling
+Google sign-in. A disabled configuration is shown explicitly; there is no client
+ID placeholder, simulated login or fallback SDK. When enabled, the application
+loads Google's official `https://accounts.google.com/gsi/client` script once,
+with a timeout and manual retry after failure. The prepared popup code client
+requests only `openid email profile`, always offers account selection, and opens
+synchronously from the button click. StockLab does not use One Tap or request
+Google API access beyond those identity scopes.
+
+The one-use code goes to `POST /api/auth/google/exchange` with the current
+`en`/`fr` language. A `google_link_required` response shows a StockLab password
+proof form; `POST /api/auth/google/link` submits that password and the opaque
+link ticket. Both requests send `X-Requested-With: StockLab.GoogleOAuth`; the
+browser supplies `Origin`. The ticket stays in component memory, is discarded
+on cancellation/navigation/expiry, and is never placed in a URL or browser
+storage. A matching email alone never links accounts. Wrong password, expired
+ticket, popup cancellation/blocking, service failures and `Retry-After` limits
+have English/French recovery guidance. Pending attempts block concurrent email
+submissions, and late or duplicate callbacks cannot complete a cancelled login.
+
+Successful Google login uses the same validated StockLab Bearer session,
+language preference priority, browser storage and Dashboard navigation as email
+login. A Google sign-in from Register enters the app directly; manual email
+registration keeps its existing return-to-Login behavior. The browser never
+receives a Google client secret and does not store Google provider tokens. The
+public client ID comes only from server configuration. Configure the Google
+Cloud web client and allowed page origins using the backend setup; until a real
+client exists, successful Google account authentication cannot be tested end to
+end. SDK/client fakes in `tests/google*.test.ts` are isolated test fixtures.
 
 After a login `429`, the page shows a localized countdown from `Retry-After`
 (seconds or an HTTP date), falling back to the response's `retryAfterSeconds`.
@@ -125,7 +156,8 @@ API. Unsupported profile fields remain unavailable. The password dialog calls
 success only after `204 No Content` confirms persistence. It displays backend
 errors rather than a simulated success.
 
-There is no refresh-token flow or Google OAuth integration.
+There is no refresh-token flow. Google sign-in uses the code flow described above
+and requires a configured Google Cloud web client.
 Password changes revoke all previously issued JWTs on the server, including the
 current one. Its next authenticated request receives a 401 and the existing guard
 redirects to Login; sign in with the new password. Local logout clears browser
@@ -300,8 +332,9 @@ operational verification; Vite startup does not commission an autonomous bot.
   connects it to the backend. Backend alert CRUD and periodic monitoring exist;
   persistent triggering remains [#43](https://github.com/MarcSaad-Hadidi/StockLab/issues/43).
   The UI's email/push options do not provide notification delivery.
-- Google OAuth remains unavailable. Password recovery requires the backend SMTP
-  configuration described above.
+- Google sign-in requires the backend Google OAuth configuration and an authorized
+  page origin. Password recovery requires the backend SMTP configuration described
+  above.
 - Controls with no connected service, including unsupported profile fields and
   exports, remain disabled or explicitly unavailable. Market currently enables
   All/Stocks filters; the other asset filters remain disabled. See the

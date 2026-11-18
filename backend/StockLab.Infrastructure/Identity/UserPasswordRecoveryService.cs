@@ -22,6 +22,9 @@ public sealed class UserPasswordRecoveryService(StockLabDbContext dbContext,
             user.PasswordResetExpiresAtUtc is not { } expiry || expiry <= now ||
             !CryptographicOperations.FixedTimeEquals(hash, digest)) return false;
         user.PasswordHash = passwordHasher.HashPassword(user, newPassword);
+        // Recovery proves current mailbox ownership and must reclaim every sign-in credential,
+        // including Google accounts whose third-party email ownership may have changed.
+        user.GoogleSubject = null;
         user.SessionVersion = checked(user.SessionVersion + 1);
         user.PasswordResetTokenHash = null;
         user.PasswordResetExpiresAtUtc = null;

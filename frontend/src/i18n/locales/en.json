@@ -1,4 +1,33 @@
 {
+  "googleAuth": {
+    "continue": "Continue with Google",
+    "loading": "Loading Google sign-in…",
+    "working": "Signing in…",
+    "popupHint": "Complete sign-in in the Google window. You can cancel and try again.",
+    "cancel": "Cancel Google sign-in",
+    "retry": "Retry Google sign-in",
+    "link": {
+      "description": "An existing StockLab account uses this email. Enter its StockLab password to link Google and sign in.",
+      "password": "Existing StockLab password",
+      "submit": "Link Google and sign in"
+    },
+    "errors": {
+      "notConfigured": "Google sign-in is not configured for this site. Sign in or register with email, or contact the administrator.",
+      "cancelled": "Google sign-in was cancelled. You can try again or use email.",
+      "popupBlocked": "The Google window could not open. Allow popups for StockLab and try again.",
+      "refused": "Google permission was not granted. Try again or sign in with email.",
+      "sdk": "Google sign-in could not load. Check your connection or browser blocking settings, then retry.",
+      "unavailable": "Google sign-in is temporarily unavailable. Retry later or use email.",
+      "offline": "StockLab could not be reached. Check your connection and retry.",
+      "invalidResponse": "Google sign-in could not be verified. Restart Google sign-in or use email.",
+      "invalidRequest": "Google sign-in could not be completed. Check the password or restart Google sign-in.",
+      "invalidPassword": "That StockLab password is incorrect. Try again or reset your password.",
+      "passwordRequired": "Enter the existing StockLab account password to link Google.",
+      "expired": "The Google linking request expired. Restart Google sign-in.",
+      "conflict": "This Google account could not be linked. Sign in with your StockLab email or contact support.",
+      "rateLimited": "Too many Google sign-in attempts. Wait before trying again."
+    }
+  },
   "common": {
     "languageLabel": "Choose language",
     "languageSaveError": "The language is applied here, but it could not be synced with your account. Try again.",
@@ -902,6 +931,8 @@
       "close": "Close change password dialog",
       "title": "Change Password",
       "description": "Choose a new password for your StockLab account.",
+      "googleAccountHint": "If you signed up with Google, use password recovery to create your first password.",
+      "setPassword": "Set or recover a password",
       "currentPassword": "Current password",
       "newPassword": "New password",
       "confirmPassword": "Confirm new password",
@@ -912,6 +943,7 @@
       "errors": {
         "unauthorized": "Please sign in to change your password.",
         "invalid_current_password": "The current password is incorrect.",
+        "password_not_set": "This account has no password yet. Use password recovery to create one.",
         "validation_error": "Check the password fields and try again.",
         "user_not_found": "Your account could not be found. Please sign in again.",
         "password_update_conflict": "Your account changed during the operation. Please try again.",
@@ -1164,7 +1196,8 @@
       "title": "Reset your password",
       "subtitle": "Choose a new password for your StockLab account.",
       "submit": "Reset password",
-      "success": "Your password has been reset. Sign in with your new password."
+      "googleRecoveryNotice": "Resetting your password also disconnects Google if linked. You can link it again using your new password.",
+      "success": "Your password has been reset. Sign in with your new password. If Google was linked, link it again using this new password."
     },
     "errors": {
       "emailRequired": "Enter your email address.",

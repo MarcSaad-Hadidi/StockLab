@@ -32,6 +32,7 @@ public sealed class PasswordRecoverySqlServerTests
         await using var fresh = fixture.Context();
         var user = await fresh.Users.AsNoTracking().SingleAsync();
         var hasher = new PasswordHasher<User>();
+        Assert.NotNull(user.PasswordHash);
         Assert.Equal(PasswordVerificationResult.Success, hasher.VerifyHashedPassword(user, user.PasswordHash,
             results[0] ? "first-replacement" : "second-replacement"));
         Assert.Null(user.PasswordResetTokenHash);
@@ -61,6 +62,7 @@ public sealed class PasswordRecoverySqlServerTests
         var user = await fresh.Users.AsNoTracking().SingleAsync();
         Assert.Null(user.PasswordResetTokenHash);
         Assert.Equal(change == "email" ? "new@example.com" : "known@example.com", user.Email);
+        Assert.NotNull(user.PasswordHash);
         Assert.Equal(PasswordVerificationResult.Success, new PasswordHasher<User>().VerifyHashedPassword(user,
             user.PasswordHash, change == "email" ? "original-password" : "authenticated-change"));
     }

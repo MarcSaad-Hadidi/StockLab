@@ -48,7 +48,7 @@ public sealed partial class UserLoginApiTests
         await using var fixture = await LoginFixture.CreateAsync(loginPermitLimit: 100);
         await SignInForPasswordChangeAsync(fixture);
         string hash;
-        using (var scope = fixture.CreateScope()) hash = (await scope.ServiceProvider.GetRequiredService<StockLabDbContext>().Users.AsNoTracking().SingleAsync()).PasswordHash;
+        using (var scope = fixture.CreateScope()) hash = Assert.IsType<string>((await scope.ServiceProvider.GetRequiredService<StockLabDbContext>().Users.AsNoTracking().SingleAsync()).PasswordHash);
         using var response = await fixture.Client.PutAsync("/api/auth/password", Json(JsonSerializer.Serialize(new { currentPassword, newPassword, confirmPassword })));
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var text = await response.Content.ReadAsStringAsync();
@@ -124,7 +124,7 @@ public sealed partial class UserLoginApiTests
         await using var fixture = await LoginFixture.CreateAsync(loginPermitLimit: 2);
         await SignInForPasswordChangeAsync(fixture);
         string hash;
-        using (var scope = fixture.CreateScope()) hash = (await scope.ServiceProvider.GetRequiredService<StockLabDbContext>().Users.AsNoTracking().SingleAsync()).PasswordHash;
+        using (var scope = fixture.CreateScope()) hash = Assert.IsType<string>((await scope.ServiceProvider.GetRequiredService<StockLabDbContext>().Users.AsNoTracking().SingleAsync()).PasswordHash);
         var payload = JsonSerializer.Serialize(new { currentPassword = "wrong-password", newPassword = "new-password", confirmPassword = "new-password" });
         using var first = await fixture.Client.PutAsync("/api/auth/password", Json(payload));
         using var second = await fixture.Client.PutAsync("/api/auth/password", Json(payload));

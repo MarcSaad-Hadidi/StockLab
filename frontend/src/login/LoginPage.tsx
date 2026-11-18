@@ -3,12 +3,12 @@ import { AuthBrand } from '../components/AuthBrand'
 import { LanguageSelector } from '../components/LanguageSelector'
 import { formatSignedPercent } from '../i18n/formatters'
 import { AuthApiError, authApi } from '../api/authApi'
-import { saveAuthSession } from '../auth/authStorage'
-import { setLanguage } from '../i18n/i18n'
-import { clearLoginLanguage, getLoginLanguage, getPendingLanguageIntent, isSupersededLanguageChange, saveLanguagePreference } from '../i18n/languagePreference'
+import { completeLogin, LoginCompletionError } from '../auth/completeLogin'
+import { isSupersededLanguageChange } from '../i18n/languagePreference'
+import { GoogleAuthButton } from '../components/GoogleAuthButton'
 import { ProfileApiError } from '../api/profileApi'
 import { useTranslation } from 'react-i18next'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import './login.css'
 
@@ -36,18 +36,7 @@ function serverFieldErrors(fieldErrors: Record<string, string[]>): FieldErrors {
   return mapped
 }
 
-function Icon({ name }: { name: 'mail' | 'lock' | 'eye' | 'eyeOff' | 'google' }) {
-  if (name === 'google') {
-    return (
-      <svg className="icon google-icon" viewBox="0 0 18 18" aria-hidden="true">
-        <path fill="#4285F4" d="M17.64 9.205c0-.638-.057-1.252-.164-1.841H9v3.482h4.844a4.14 4.14 0 0 1-1.797 2.716v2.258h2.908c1.702-1.568 2.685-3.878 2.685-6.615Z" />
-        <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.955-2.18l-2.908-2.258c-.806.54-1.835.86-3.047.86-2.345 0-4.332-1.584-5.043-3.716H.951v2.332A9 9 0 0 0 9 18Z" />
-        <path fill="#FBBC05" d="M3.957 10.706A5.41 5.41 0 0 1 3.674 9c0-.592.102-1.167.283-1.706V4.962H.951A9 9 0 0 0 0 9c0 1.452.348 2.826.951 4.038l3.006-2.332Z" />
-        <path fill="#EA4335" d="M9 3.578c1.323 0 2.51.455 3.445 1.348l2.584-2.584C13.463.892 11.426 0 9 0A9 9 0 0 0 .951 4.962l3.006 2.332C4.668 5.162 6.655 3.578 9 3.578Z" />
-      </svg>
-    )
-  }
-
+function Icon({ name }: { name: 'mail' | 'lock' | 'eye' | 'eyeOff' }) {
   const paths = {
     mail: <><rect x="3.5" y="5" width="17" height="14" rx="2" /><path d="m4.5 7 7.5 5.5L19.5 7" /></>,
     lock: <><rect x="4.5" y="10" width="15" height="11" rx="2" /><path d="M8 10V7.5a4 4 0 0 1 8 0V10" /></>,
@@ -68,10 +57,24 @@ export default function LoginPage() {
   const [serverError, setServerError] = useState<string>()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submitting = useRef(false)
+  const [googleBusy, setGoogleBusy] = useState(false)
+  const googleActive = useRef(false)
   const [retryUntil, setRetryUntil] = useState<number | null>(null)
   const [retrySeconds, setRetrySeconds] = useState(0)
   const [registrationComplete, setRegistrationComplete] = useState(() =>
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('registered') === '1')
+
+  const handleGoogleBusy = useCallback((busy: boolean) => {
+    googleActive.current = busy
+    setGoogleBusy(busy)
+  }, [])
+  const handleGoogleStart = useCallback(() => {
+    if (submitting.current) return false
+    setRegistrationComplete(false)
+    setServerError(undefined)
+    setErrors({})
+    return true
+  }, [])
 
   useEffect(() => {
     if (retryUntil === null) return
@@ -92,7 +95,7 @@ export default function LoginPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (submitting.current || (retryUntil !== null && Date.now() < retryUntil)) return
+    if (submitting.current || googleActive.current || (retryUntil !== null && Date.now() < retryUntil)) return
     const form = new FormData(event.currentTarget)
     const email = String(form.get('email') ?? '').trim()
     const password = String(form.get('password') ?? '')
@@ -113,23 +116,11 @@ export default function LoginPage() {
     setRetrySeconds(0)
     try {
       const session = await authApi.login({ email, password })
-      const explicit = getLoginLanguage()
-      const pending = getPendingLanguageIntent(session.user.id)
-      const language = explicit ?? pending?.language
-      if (language) {
-        const result = await saveLanguagePreference(language, session, undefined, true, explicit ? undefined : pending ?? undefined)
-        session.user = { ...session.user, preferredLanguage: result.preferredLanguage }
-      }
-      if (!saveAuthSession(session)) {
-        setServerError('login.errors.sessionStorage')
-        return
-      }
-      if (session.user.preferredLanguage) await setLanguage(session.user.preferredLanguage)
-      clearLoginLanguage()
-      window.location.assign(routeFor('dashboard'))
+      await completeLogin(session)
     } catch (error) {
       if (isSupersededLanguageChange(error)) return
-      if (error instanceof ProfileApiError) setServerError('login.errors.languageSave')
+      if (error instanceof LoginCompletionError) setServerError(error.translationKey)
+      else if (error instanceof ProfileApiError) setServerError('login.errors.languageSave')
       else if (error instanceof AuthApiError) {
         setServerError(loginErrorKey(error.code))
         setErrors(serverFieldErrors(error.fieldErrors))
@@ -174,7 +165,7 @@ export default function LoginPage() {
         <section className="login-card" aria-labelledby="login-heading">
           <div className="card-topline">
             <AuthBrand />
-            <LanguageSelector persistToAccount={false} disabled={isSubmitting} />
+            <LanguageSelector persistToAccount={false} disabled={isSubmitting || googleBusy} />
           </div>
           <header className="card-heading"><h1 id="login-heading">{t('login.title')}</h1><p>{t('login.subtitle')}</p></header>
           {registrationComplete && <p className="form-success" role="status">{t('login.registrationSuccess')}</p>}
@@ -186,10 +177,10 @@ export default function LoginPage() {
               : <p className="form-error" role="alert">{t(serverError)}</p>)}
             <div className="field-group"><label htmlFor="email">{t('login.emailLabel')}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={t('login.emailPlaceholder')} autoComplete="email" aria-invalid={Boolean(errors.email)} /></div>{errors.email && <p className="field-error">{t(errors.email)}</p>}</div>
             <div className="field-group"><div className="label-row"><label htmlFor="password">{t('login.passwordLabel')}</label><a href={routeFor('forgot-password')}>{t('login.forgot')}</a></div><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={t('login.passwordPlaceholder')} autoComplete="current-password" aria-invalid={Boolean(errors.password)} /><button className="visibility-button" type="button" aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{t(errors.password)}</p>}</div>
-            <button className="primary-button" disabled={isSubmitting || retrySeconds > 0} aria-describedby={retrySeconds > 0 ? 'login-retry-status' : undefined} type="submit">{t('login.signIn')}</button>
+            <button className="primary-button" disabled={isSubmitting || googleBusy || retrySeconds > 0} aria-describedby={retrySeconds > 0 ? 'login-retry-status' : undefined} type="submit">{t('login.signIn')}</button>
           </form>
           <div className="form-divider"><span>{t('login.divider')}</span></div>
-          <button className="google-button" type="button"><Icon name="google" /><span>{t('login.google')}</span></button>
+          <GoogleAuthButton disabled={isSubmitting} onBusyChange={handleGoogleBusy} onStart={handleGoogleStart} />
           <p className="register-prompt">{t('login.prompt')} <a href={routeFor('register')}>{t('login.register')}</a></p>
         </section>
       </div>
