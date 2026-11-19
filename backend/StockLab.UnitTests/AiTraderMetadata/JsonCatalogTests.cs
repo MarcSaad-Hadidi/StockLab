@@ -30,7 +30,7 @@ public sealed class JsonCatalogTests : IDisposable
         Assert.Equal(.75, result.Recall);
         Assert.Equal(.8571428571428571, result.F1);
         Assert.Equal(new DateOnly(2024, 1, 29), result.TrainingPeriod.StartDate);
-        Assert.Equal(new DateOnly(2024, 5, 16), result.EvaluationPeriod.EndDate);
+        Assert.Equal(new DateOnly(2024, 5, 16), result.EvaluationPeriod!.EndDate);
         var json = JsonSerializer.Serialize(result);
         Assert.DoesNotContain("holdout_sha256", json);
         Assert.DoesNotContain("hyperparameters", json);
@@ -106,6 +106,111 @@ public sealed class JsonCatalogTests : IDisposable
         var error = await Assert.ThrowsAsync<CatalogUnavailableException>(() => Models(root.ToJsonString()).GetAsync());
         Assert.True(error.IsInvalid);
         Assert.DoesNotContain(directory, error.Message);
+    }
+
+    [Theory]
+    [InlineData("annual")]
+    [InlineData("monthly")]
+    public async Task Boosted_registry_projects_pending_snapshot_without_fabricating_holdout(string cadence)
+    {
+        var root = JsonNode.Parse(Fixture("boosted-registry"))!;
+        var metadata = root["models"]![0]!["training_report"]!["snapshot_metadata"]!;
+        if (cadence == "monthly")
+        {
+            metadata["refit_frequency"] = "monthly";
+            metadata["period_key"] = "2024-01";
+            metadata["last_prediction"] = "2024-01-31";
+        }
+        root["models"]!.AsArray().Add(JsonNode.Parse(Fixture("registry"))!["models"]![0]!.DeepClone());
+        var result = await Models(root.ToJsonString()).GetAsync();
+        var model = Assert.Single(result, item => item.ModelType == "hist_gradient_boosting");
+        Assert.Equal("Archived", model.Status);
+        Assert.Null(model.Accuracy);
+        Assert.Null(model.Precision);
+        Assert.Null(model.Recall);
+        Assert.Null(model.F1);
+        Assert.Null(model.EvaluationPeriod);
+        Assert.Equal(new DateOnly(2020, 1, 2), model.TrainingPeriod.StartDate);
+        Assert.Equal(new DateOnly(2023, 11, 20), model.TrainingPeriod.EndDate);
+        var projection = JsonSerializer.SerializeToElement(model);
+        var forecast = projection.GetProperty("Forecast");
+        Assert.Equal("target_20", forecast.GetProperty("TargetName").GetString());
+        Assert.Equal(20, forecast.GetProperty("HorizonSessions").GetInt32());
+        Assert.Equal(cadence, forecast.GetProperty("RefitFrequency").GetString());
+        Assert.Equal("2024-01-02", forecast.GetProperty("FitBoundary").GetString());
+        Assert.Equal("PENDING", forecast.GetProperty("ProspectiveStatus").GetString());
+        Assert.Equal(28, forecast.GetProperty("FeatureColumns").GetArrayLength());
+        Assert.Equal(.875, Assert.Single(result, item => item.ModelType == "logistic_regression").Accuracy);
+        Assert.DoesNotContain("TEST_ONLY_PRIVATE_SOURCE", projection.GetRawText());
+    }
+
+    [Theory]
+    [InlineData("active")]
+    [InlineData("metrics")]
+    [InlineData("holdout")]
+    [InlineData("name")]
+    [InlineData("target")]
+    [InlineData("offset")]
+    [InlineData("feature_order")]
+    [InlineData("feature32")]
+    [InlineData("cadence")]
+    [InlineData("period")]
+    [InlineData("parameter")]
+    [InlineData("parameter_extra")]
+    [InlineData("rows")]
+    [InlineData("identities")]
+    [InlineData("prior")]
+    [InlineData("weighting")]
+    [InlineData("purge")]
+    [InlineData("window")]
+    [InlineData("created_before_known")]
+    [InlineData("created_future")]
+    [InlineData("created_mismatch")]
+    [InlineData("digest")]
+    [InlineData("source_digest")]
+    [InlineData("environment")]
+    [InlineData("pending_metrics")]
+    [InlineData("promotion")]
+    [InlineData("extra")]
+    public async Task Invalid_boosted_snapshot_is_rejected_safely(string kind)
+    {
+        var root = JsonNode.Parse(Fixture("boosted-registry"))!;
+        var model = root["models"]![0]!;
+        var metadata = model["training_report"]!["snapshot_metadata"]!;
+        var fit = metadata["fit_audit"]!;
+        switch (kind)
+        {
+            case "active": model["status"] = "Active"; break;
+            case "metrics": model["metrics"] = new JsonObject(); break;
+            case "holdout": model["holdout_sha256"] = new string('a', 64); break;
+            case "name": model["model_name"] = "hgb_swing20_market32"; break;
+            case "target": fit["label"] = "target_63"; break;
+            case "offset": metadata["known_date_offset_sessions"] = 20; break;
+            case "feature_order": metadata["feature_columns"]![0] = "rsi_14"; break;
+            case "feature32": foreach (var feature in new[] { "spy1", "spy2", "spy3", "spy4" }) metadata["feature_columns"]!.AsArray().Add(feature); break;
+            case "cadence": metadata["refit_frequency"] = "weekly"; break;
+            case "period": metadata["last_prediction"] = "2025-01-02"; break;
+            case "parameter": metadata["parameters"]!["min_samples_leaf"] = 100; break;
+            case "parameter_extra": metadata["parameters"]!["private"] = 1; break;
+            case "rows": fit["train_rows"] = 2; fit["training_rows"] = 2; break;
+            case "identities": fit["training_identities"] = 6; break;
+            case "prior": fit["training_weighted_positive_rate"] = .5; break;
+            case "weighting": fit["date_weighted"] = false; break;
+            case "purge": fit["last_target"] = "2024-01-02"; break;
+            case "window": fit["first_fit"] = "2020-01-01"; break;
+            case "created_before_known": model["trained_at_utc"] = "2020-01-02T00:00:00+00:00"; metadata["trained_at_utc"] = "2020-01-02T00:00:00+00:00"; break;
+            case "created_future": model["trained_at_utc"] = "2099-01-02T00:00:00+00:00"; metadata["trained_at_utc"] = "2099-01-02T00:00:00+00:00"; model["registered_at_utc"] = "2099-01-02T00:00:00+00:00"; break;
+            case "created_mismatch": metadata["trained_at_utc"] = "2026-10-14T13:00:00+00:00"; break;
+            case "digest": model["training_report"]!["estimator_sha256"] = "bad"; break;
+            case "source_digest": metadata["sources_sha256"]!["C:/TEST_ONLY_PRIVATE_SOURCE/market.csv"] = "bad"; break;
+            case "environment": metadata["environment"]!["python"] = "3.14"; break;
+            case "pending_metrics": metadata["evidence"]!["prospective"]!["metrics"] = new JsonObject(); break;
+            case "promotion": metadata["promotion_authorized"] = true; break;
+            case "extra": metadata["extra"] = "unsupported"; break;
+        }
+        var error = await Assert.ThrowsAsync<CatalogUnavailableException>(() => Models(root.ToJsonString()).GetAsync());
+        Assert.True(error.IsInvalid);
+        Assert.DoesNotContain("TEST_ONLY_PRIVATE_SOURCE", error.Message);
     }
 
     [Fact]

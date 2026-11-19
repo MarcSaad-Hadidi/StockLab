@@ -54,6 +54,7 @@ class RetrainingConfig:
     dry_run: bool = False
     persistent_root: Path | None = None
     persistent_volume_id: str | None = None
+    training_profile: str | None = None
 
     def __post_init__(self):
         for name in ["enabled", "aws_enabled", "upload_to_s3", "dry_run"]:
@@ -67,6 +68,8 @@ class RetrainingConfig:
         if (type(self.test_fraction) not in (int, float) or not math.isfinite(self.test_fraction)
                 or not 0 < self.test_fraction < 1):
             raise RetrainingConfigurationError("test_fraction must be finite and strictly between zero and one.")
+        if self.training_profile not in (None, "recent-history-v1"):
+            raise RetrainingConfigurationError("Unsupported training profile.")
         for name in ["symbols", "model_families"]:
             values = getattr(self, name)
             if (not isinstance(values, (list, tuple)) or not values

@@ -1,11 +1,45 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createAiTraderApi, AiTraderApiError } from '../src/api/aiTraderApi.ts'
-import { bodies, id, secondId, overview, position, trade, decision, rejection, performance, equity, model, backtest } from './fixtures/aiTrader.ts'
+import { bodies, id, secondId, overview, position, trade, decision, rejection, performance, equity, model, boostedModel, backtest } from './fixtures/aiTrader.ts'
 
 const auth = () => ({ Authorization: 'Bearer test-token' })
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
 const invalid = (error: unknown) => error instanceof AiTraderApiError && error.code === 'invalid_response'
+
+test('HGBT28 annual and monthly pending records coexist with unchanged legacy models', async () => {
+  for (const cadence of ['annual', 'monthly']) {
+    const body = [model, { ...boostedModel, forecast: { ...boostedModel.forecast, refitFrequency: cadence } }]
+    assert.deepEqual(await createAiTraderApi('', async () => json(body), auth).getModels(), body)
+  }
+  const legacy = { ...model, modelType: 'ExistingCustomText', unrelated: { preserved: true } }
+  assert.deepEqual(await createAiTraderApi('', async () => json([legacy]), auth).getModels(), [legacy])
+})
+
+for (const [name, change] of Object.entries({
+  active: { status: 'Active' }, metrics: { accuracy: 0 }, split: { evaluationPeriod: model.evaluationPeriod },
+  name: { modelName: 'hgb_swing20_market32' }, missing: { forecast: undefined },
+  horizon: { forecast: { ...boostedModel.forecast, horizonSessions: 63 } },
+  features: { forecast: { ...boostedModel.forecast, featureColumns: [...boostedModel.forecast.featureColumns].reverse() } },
+  cadence: { forecast: { ...boostedModel.forecast, refitFrequency: 'weekly' } },
+  boundary: { forecast: { ...boostedModel.forecast, fitBoundary: '2024-02-30' } },
+  trainBoundary: { forecast: { ...boostedModel.forecast, fitBoundary: '2023-11-20' } },
+  status: { forecast: { ...boostedModel.forecast, prospectiveStatus: 'AVAILABLE' } },
+  extra: { forecast: { ...boostedModel.forecast, privatePath: 'DO_NOT_LEAK' } },
+  target: { forecast: { ...boostedModel.forecast, targetDefinition: 'next close' } },
+})) test(`pending HGBT rejects ${name}`, async () => {
+  await assert.rejects(createAiTraderApi('', async () => json([{ ...boostedModel, ...change }]), auth).getModels(), invalid)
+})
+
+test('legacy metrics and evaluation stay mandatory and cannot attach an unvalidated forecast', async () => {
+  for (const change of [{ accuracy: null }, { evaluationPeriod: null }, { forecast: boostedModel.forecast }])
+    await assert.rejects(createAiTraderApi('', async () => json([{ ...model, ...change }]), auth).getModels(), invalid)
+})
+
+test('reserved HGBT model name cannot masquerade as a legacy type with numeric metrics', async () => {
+  const forged = { ...model, modelName: boostedModel.modelName, modelType: 'random_forest', forecast: null }
+  await assert.rejects(createAiTraderApi('', async () => json([forged]), auth).getModels(), invalid)
+})
 
 test('all eleven reads use exact routes, bearer authorization, cancellation and validated DTOs', async () => {
   const urls: string[] = []

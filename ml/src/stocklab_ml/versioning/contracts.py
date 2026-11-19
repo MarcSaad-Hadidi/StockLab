@@ -113,3 +113,48 @@ class ModelVersionRecord:
             "training_report": _thaw(self.training_report), "metrics": asdict(self.metrics),
             "holdout_sha256": self.holdout_sha256,
         }
+
+
+@dataclass(frozen=True)
+class BoostedModelVersionRecord(ModelVersionRecord):
+    """Closed HGBT28 snapshot identity; no fabricated one-day holdout evidence."""
+
+    metrics: None
+    holdout_sha256: None
+
+    @property
+    def feature_columns(self) -> tuple[str, ...]:
+        return self.training_report["snapshot_metadata"]["feature_columns"]
+
+    @property
+    def target_name(self) -> str:
+        return self.training_report["snapshot_metadata"]["fit_audit"]["label"]
+
+    @property
+    def hyperparameters(self) -> Mapping:
+        return self.training_report["snapshot_metadata"]["parameters"]
+
+    @property
+    def train_start(self) -> str:
+        return self.training_report["snapshot_metadata"]["fit_audit"]["first_fit"]
+
+    @property
+    def train_end(self) -> str:
+        return self.training_report["snapshot_metadata"]["fit_audit"]["last_fit"]
+
+    @property
+    def test_start(self) -> str:
+        raise ModelVersionError("A boosted snapshot has no legacy training holdout/split.")
+
+    test_end = test_start
+    split_date = test_start
+
+    def to_dict(self) -> dict:
+        return {
+            "model_name": self.model_name, "model_version": self.model_version,
+            "version_number": self.version_number, "training_run_id": self.training_run_id,
+            "model_type": self.model_type, "trained_at_utc": self.trained_at_utc.isoformat(),
+            "registered_at_utc": self.registered_at_utc.isoformat(), "status": self.status.value,
+            "training_report": _thaw(self.training_report), "metrics": self.metrics,
+            "holdout_sha256": self.holdout_sha256,
+        }

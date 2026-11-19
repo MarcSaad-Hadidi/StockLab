@@ -48,8 +48,13 @@ public sealed class JsonAiModelCatalogReadService(IOptions<AiTraderMetadataOptio
         Require(Timestamp(record, "registered_at_utc") >= trained);
         var status = Text(record, "status");
         Require(status is "Active" or "Archived");
-        Hash(record, "holdout_sha256");
         var type = Text(record, "model_type");
+        if (type == "hist_gradient_boosting")
+        {
+            var (training, forecast) = BoostedSnapshotCatalog.Parse(record, trained, status);
+            return new(name, version, type, run, trained, status, null, null, null, null, training, null, forecast);
+        }
+        Hash(record, "holdout_sha256");
         Require(type is "logistic_regression" or "random_forest" && name == type + "_baseline");
         var metrics = record.GetProperty("metrics");
         ValidateMetrics(metrics, name);

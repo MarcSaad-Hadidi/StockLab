@@ -45,10 +45,15 @@ export type AiTraderEquityResponse = {
   return: number; currency: string; isInitialBaseline: boolean
 }
 export type AiTraderModelPeriodResponse = { startDate: string; endDate: string }
+export type AiTraderForecastResponse = {
+  targetName: 'target_20'; targetDefinition: 'open[t+21]/open[t+1]-1 > .002'; horizonSessions: 20
+  featureColumns: string[]; refitFrequency: 'annual' | 'monthly'; fitBoundary: string; prospectiveStatus: 'PENDING'
+}
 export type AiTraderModelResponse = {
   modelName: string; modelVersion: string; modelType: string; trainingRunId: string; trainedAtUtc: string
-  status: 'Active' | 'Archived'; accuracy: number; precision: number; recall: number; f1: number
-  trainingPeriod: AiTraderModelPeriodResponse; evaluationPeriod: AiTraderModelPeriodResponse
+  status: 'Active' | 'Archived'; accuracy: number | null; precision: number | null; recall: number | null; f1: number | null
+  trainingPeriod: AiTraderModelPeriodResponse; evaluationPeriod: AiTraderModelPeriodResponse | null
+  forecast?: AiTraderForecastResponse | null
 }
 export type AiTraderBacktestResponse = {
   modelName: string; modelVersion: string | null; startDate: string; endDate: string; initialCapital: string
@@ -114,7 +119,17 @@ const performance = shape<AiTraderPerformanceResponse>({ ...overviewFields, real
 const equity = shape<AiTraderEquityResponse>({ valuedAtUtc: utc, cashBalance: nonnegative, positionsValue: nonnegative, totalValue: nonnegative, pnL: isBackendAmount, return: finite, currency, isInitialBaseline: boolean })
 const periodFields = shape<AiTraderModelPeriodResponse>({ startDate: date, endDate: date })
 const period: Validator<AiTraderModelPeriodResponse> = (value): value is AiTraderModelPeriodResponse => periodFields(value) && value.startDate <= value.endDate
-const model = shape<AiTraderModelResponse>({ modelName: text, modelVersion: text, modelType: text, trainingRunId: guid, trainedAtUtc: utc, status: oneOf('Active', 'Archived'), accuracy: fraction, precision: fraction, recall: fraction, f1: fraction, trainingPeriod: period, evaluationPeriod: period })
+const legacyModel = shape<Omit<AiTraderModelResponse, 'forecast'>>({ modelName: text, modelVersion: text, modelType: text, trainingRunId: guid, trainedAtUtc: utc, status: oneOf('Active', 'Archived'), accuracy: fraction, precision: fraction, recall: fraction, f1: fraction, trainingPeriod: period, evaluationPeriod: period })
+const boostedFeatures = ['return_1d', 'rsi_14', 'momentum_10', 'volatility_20', 'close_ma5', 'close_ma20', 'ma_ratio', 'relative_volume', 'monthly_range_9', 'monthly_range_12', 'monthly_range_19', 'monthly_rsi', 'monthly_multiplier', 'momentum_20', 'momentum_63', 'momentum_126', 'momentum_252', 'close_ma50', 'close_ma200', 'volatility_63', 'drawdown_252', 'relative_momentum_20', 'relative_momentum_63', 'relative_momentum_252', 'vix_level', 'vix_change5', 'vix_term_ratio', 'vix_term_change5']
+const forecastFields = shape<AiTraderForecastResponse>({ targetName: oneOf('target_20'), targetDefinition: oneOf('open[t+21]/open[t+1]-1 > .002'), horizonSessions: (value): value is 20 => value === 20, featureColumns: (value): value is string[] => Array.isArray(value) && value.length === boostedFeatures.length && value.every((name, index) => name === boostedFeatures[index]), refitFrequency: oneOf('annual', 'monthly'), fitBoundary: date, prospectiveStatus: oneOf('PENDING') })
+const forecast: Validator<AiTraderForecastResponse> = (value): value is AiTraderForecastResponse => forecastFields(value) && Object.keys(value).length === 7
+const isNull: Validator<null> = (value): value is null => value === null
+const boostedModel = shape<AiTraderModelResponse>({ modelName: oneOf('hgb_swing20_market28'), modelVersion: text, modelType: oneOf('hist_gradient_boosting'), trainingRunId: guid, trainedAtUtc: utc, status: oneOf('Archived'), accuracy: isNull, precision: isNull, recall: isNull, f1: isNull, trainingPeriod: period, evaluationPeriod: isNull, forecast })
+const model: Validator<AiTraderModelResponse> = (value): value is AiTraderModelResponse => {
+  if (record(value) && (value.modelType === 'hist_gradient_boosting' || value.modelName === 'hgb_swing20_market28'))
+    return boostedModel(value) && !!value.forecast && value.trainingPeriod.endDate < value.forecast.fitBoundary
+  return record(value) && value.forecast == null && legacyModel(value)
+}
 const backtestFields = shape<AiTraderBacktestResponse>({ modelName: text, modelVersion: nullable(text), startDate: date, endDate: date, initialCapital: positive, finalValue: nonnegative, totalReturn: finite, winRate: nullable(fraction), maxDrawdown: fraction, executedTrades: nullable(count), benchmarkReturn: nullable(finite), benchmarkMaxDrawdown: nullable(fraction), returnDelta: nullable(finite), evaluationSource: oneOf('backtesting', 'benchmark_comparison', 'model_promotion'), sourceTimestampUtc: nullable(utc) })
 const backtest: Validator<AiTraderBacktestResponse> = (value): value is AiTraderBacktestResponse => backtestFields(value) && value.startDate <= value.endDate
 const array = <T>(valid: Validator<T>, limit = Infinity): Validator<T[]> => (value): value is T[] => Array.isArray(value) && value.length <= limit && value.every(valid)

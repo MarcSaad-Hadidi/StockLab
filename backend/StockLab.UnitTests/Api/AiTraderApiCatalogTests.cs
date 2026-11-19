@@ -110,12 +110,42 @@ public sealed class AiTraderApiCatalogTests : IDisposable
         Assert.Equal(new DateTimeOffset(2026, 10, 14, 14, 0, 0, TimeSpan.Zero), original.GetProperty("trainedAtUtc").GetDateTimeOffset());
         Assert.Equal("2024-01-29", original.GetProperty("trainingPeriod").GetProperty("startDate").GetString());
         Assert.Equal("2024-05-16", original.GetProperty("evaluationPeriod").GetProperty("endDate").GetString());
+        Assert.False(original.TryGetProperty("forecast", out _));
         Assert.Contains(result, model => model.GetProperty("modelType").GetString() == "random_forest"
             && model.GetProperty("modelVersion").GetString() == "v000001"
             && model.GetProperty("status").GetString() == "Active");
         var json = JsonSerializer.Serialize(result);
         foreach (var field in new[] { "training_report", "holdout_sha256", "artifact", "joblib", "registryPath", directory })
             Assert.DoesNotContain(field, json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"Users\"", Assert.Single(f.Observer.Commands));
+        Assert.Equal(0, f.Observer.SaveCalls);
+        Assert.Empty(f.Market.Calls);
+    }
+
+    [Fact]
+    public async Task Boosted_HTTP_catalog_is_archived_pending_and_exposes_only_safe_forecast_metadata()
+    {
+        await using var f = await AiTraderApiFixture.CreateAsync(new()
+        {
+            ["AiTraderMetadata:RegistryPath"] = Write("synthetic-boosted.json", Fixture("boosted-registry"))
+        });
+        var before = await f.Database.StateAsync();
+        var model = Assert.Single((await f.ReadAsync("/api/ai-trader/models", AiTraderApiFixture.Token())).EnumerateArray());
+        Assert.Equal("hgb_swing20_market28", model.GetProperty("modelName").GetString());
+        Assert.Equal("Archived", model.GetProperty("status").GetString());
+        foreach (var key in new[] { "accuracy", "precision", "recall", "f1", "evaluationPeriod" })
+            Assert.Equal(JsonValueKind.Null, model.GetProperty(key).ValueKind);
+        Assert.Equal("2020-01-02", model.GetProperty("trainingPeriod").GetProperty("startDate").GetString());
+        AssertUtc(model, "trainedAtUtc");
+        var forecast = model.GetProperty("forecast");
+        Assert.Equal(new[] { "featureColumns", "fitBoundary", "horizonSessions", "prospectiveStatus", "refitFrequency", "targetDefinition", "targetName" },
+            forecast.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.Equal(28, forecast.GetProperty("featureColumns").GetArrayLength());
+        Assert.Equal("PENDING", forecast.GetProperty("prospectiveStatus").GetString());
+        Assert.Equal("2024-01-02", forecast.GetProperty("fitBoundary").GetString());
+        foreach (var value in new[] { "TEST_ONLY_PRIVATE_SOURCE", "snapshot_metadata", "sha256", "parameters", "environment", "scikit_learn", "joblib", directory })
+            Assert.DoesNotContain(value, model.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(before, await f.Database.StateAsync());
         Assert.Contains("\"Users\"", Assert.Single(f.Observer.Commands));
         Assert.Equal(0, f.Observer.SaveCalls);
         Assert.Empty(f.Market.Calls);

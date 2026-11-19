@@ -5,8 +5,10 @@ namespace StockLab.Api.Operations;
 
 internal sealed record AiTradingCycleJournal(int SchemaVersion, string Database, DateOnly Session,
     string ModelName, string ModelVersion, string[] Symbols, string DatasetSha256, Guid[] DecisionIds,
-    Guid CaptureId, DateTime StartedAtUtc, string Stage, string? FailureCode = null)
+    Guid CaptureId, DateTime StartedAtUtc, string Stage, string? FailureCode = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RiskPolicy = null)
 {
+    internal const string DailyMultiAssetPolicy = "daily-multi-asset-v1";
     private static readonly JsonSerializerOptions Json = new() {
         AllowDuplicateProperties = false, UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, MaxDepth = 4
     };
@@ -17,7 +19,12 @@ internal sealed record AiTradingCycleJournal(int SchemaVersion, string Database,
             throw new InvalidOperationException();
         var value = JsonSerializer.Deserialize<AiTradingCycleJournal>(File.ReadAllBytes(path), Json)
             ?? throw new InvalidOperationException();
-        if (value.SchemaVersion != 1 || value.DecisionIds is null || value.Symbols is null
+        var validPolicy = value.SchemaVersion switch {
+            1 => value.RiskPolicy is null,
+            2 => value.RiskPolicy == DailyMultiAssetPolicy,
+            _ => false
+        };
+        if (!validPolicy || value.DecisionIds is null || value.Symbols is null
             || value.Symbols.Length is < 1 or > 10 || value.Symbols.Distinct(StringComparer.Ordinal).Count() != value.Symbols.Length
             || value.DecisionIds.Length > 10 || value.DecisionIds.Contains(Guid.Empty)
             || value.DecisionIds.Distinct().Count() != value.DecisionIds.Length || value.CaptureId == Guid.Empty

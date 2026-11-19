@@ -1,7 +1,7 @@
 """Strict schema normalization and OHLCV validation, without repairs."""
 
 from dataclasses import asdict
-from datetime import date
+from datetime import UTC, date, datetime
 import math
 import re
 
@@ -37,8 +37,8 @@ def validate_request(symbol: str, start_date: str | date, end_date: str | date) 
     start, end = calendar_date(start_date), calendar_date(end_date)
     if start >= end:
         raise DatasetValidationError("start_date must be before end_date.")
-    if end >= date.today():
-        raise DatasetValidationError("end_date must be before today; current daily bars may be incomplete.")
+    if end >= datetime.now(UTC).date():
+        raise DatasetValidationError("end_date must be before today in UTC; current daily bars may be incomplete.")
     # Calendar days upper-bound daily points even for seven-day trading markets.
     if (end - start).days + 1 >= 5000:
         raise RangeTooLargeError(LIMIT_MESSAGE)
