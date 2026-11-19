@@ -9,10 +9,23 @@ import { GoogleAuthButton } from '../components/GoogleAuthButton'
 import { ProfileApiError } from '../api/profileApi'
 import { useTranslation } from 'react-i18next'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 import './login.css'
 
 type FieldErrors = Partial<Record<'email' | 'password', string>>
+type ValidationState = { errors: FieldErrors; serverError?: string }
+
+function withoutFieldErrors({ errors, serverError }: ValidationState, fields: (keyof FieldErrors)[]): ValidationState {
+  const remaining = { ...errors }
+  const removedError = fields.some(field => Boolean(errors[field]))
+  for (const field of fields) delete remaining[field]
+  return {
+    errors: remaining,
+    serverError: fields.length > 0 && (serverError === 'login.errors.invalidCredentials'
+      || serverError === 'login.errors.invalidRequest' && removedError && Object.keys(remaining).length === 0)
+      ? undefined : serverError,
+  }
+}
 
 function loginErrorKey(code: AuthApiError['code']): string {
   return ({
@@ -53,8 +66,7 @@ export default function LoginPage() {
     document.title = `${t('login.title')} | StockLab`
   }, [i18n.language, t])
   const [showPassword, setShowPassword] = useState(false)
-  const [errors, setErrors] = useState<FieldErrors>({})
-  const [serverError, setServerError] = useState<string>()
+  const [{ errors, serverError }, setValidation] = useState<ValidationState>({ errors: {} })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submitting = useRef(false)
   const [googleBusy, setGoogleBusy] = useState(false)
@@ -71,10 +83,14 @@ export default function LoginPage() {
   const handleGoogleStart = useCallback(() => {
     if (submitting.current) return false
     setRegistrationComplete(false)
-    setServerError(undefined)
-    setErrors({})
+    setValidation({ errors: {} })
     return true
   }, [])
+
+  function handleFieldChange(event: ChangeEvent<HTMLInputElement>) {
+    const field = event.currentTarget.name as keyof FieldErrors
+    setValidation(current => withoutFieldErrors(current, [field]))
+  }
 
   useEffect(() => {
     if (retryUntil === null) return
@@ -96,18 +112,18 @@ export default function LoginPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (submitting.current || googleActive.current || (retryUntil !== null && Date.now() < retryUntil)) return
-    const form = new FormData(event.currentTarget)
+    const formElement = event.currentTarget
+    const form = new FormData(formElement)
     const email = String(form.get('email') ?? '').trim()
     const password = String(form.get('password') ?? '')
     const nextErrors: FieldErrors = {}
 
     setRegistrationComplete(false)
-    setServerError(undefined)
     if (!email) nextErrors.email = 'login.errors.email'
     else if (!/^\S+@\S+\.\S+$/.test(email)) nextErrors.email = 'login.errors.emailInvalid'
     if (!password) nextErrors.password = 'login.errors.password'
 
-    setErrors(nextErrors)
+    setValidation({ errors: nextErrors })
     if (Object.keys(nextErrors).length > 0) return
 
     submitting.current = true
@@ -119,11 +135,15 @@ export default function LoginPage() {
       await completeLogin(session)
     } catch (error) {
       if (isSupersededLanguageChange(error)) return
-      if (error instanceof LoginCompletionError) setServerError(error.translationKey)
-      else if (error instanceof ProfileApiError) setServerError('login.errors.languageSave')
+      if (error instanceof LoginCompletionError) setValidation({ errors: {}, serverError: error.translationKey })
+      else if (error instanceof ProfileApiError) setValidation({ errors: {}, serverError: 'login.errors.languageSave' })
       else if (error instanceof AuthApiError) {
-        setServerError(loginErrorKey(error.code))
-        setErrors(serverFieldErrors(error.fieldErrors))
+        const current = new FormData(formElement)
+        const changed = (['email', 'password'] as const).filter(field =>
+          (field === 'email' ? String(current.get(field) ?? '').trim() : String(current.get(field) ?? ''))
+            !== (field === 'email' ? email : password))
+        // Errors belong to the submitted values, even if the user has edited the form meanwhile.
+        setValidation(withoutFieldErrors({ errors: serverFieldErrors(error.fieldErrors), serverError: loginErrorKey(error.code) }, changed))
         if (error.code === 'rate_limited') {
           // A legacy/proxy response without a hint uses the default one-minute window.
           const seconds = error.retryAfterSeconds ?? 60
@@ -131,7 +151,7 @@ export default function LoginPage() {
           setRetryUntil(seconds > 0 ? Date.now() + seconds * 1000 : null)
         }
       } else {
-        setServerError('login.errors.server')
+        setValidation({ errors: {}, serverError: 'login.errors.server' })
       }
     } finally {
       submitting.current = false
@@ -175,8 +195,8 @@ export default function LoginPage() {
                 ? <p className="form-error" id="login-retry-status" role="alert">{t(serverError)}{' '}<span role="timer" aria-live="off">{t('login.retryCountdown', { count: retrySeconds })}</span></p>
                 : <p className="form-success" role="status">{t('login.retryReady')}</p>
               : <p className="form-error" role="alert">{t(serverError)}</p>)}
-            <div className="field-group"><label htmlFor="email">{t('login.emailLabel')}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={t('login.emailPlaceholder')} autoComplete="email" aria-invalid={Boolean(errors.email)} /></div>{errors.email && <p className="field-error">{t(errors.email)}</p>}</div>
-            <div className="field-group"><div className="label-row"><label htmlFor="password">{t('login.passwordLabel')}</label><a href={routeFor('forgot-password')}>{t('login.forgot')}</a></div><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={t('login.passwordPlaceholder')} autoComplete="current-password" aria-invalid={Boolean(errors.password)} /><button className="visibility-button" type="button" aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{t(errors.password)}</p>}</div>
+            <div className="field-group"><label htmlFor="email">{t('login.emailLabel')}</label><div className={`input-wrap ${errors.email ? 'has-error' : ''}`}><Icon name="mail" /><input id="email" name="email" type="email" placeholder={t('login.emailPlaceholder')} autoComplete="email" aria-invalid={Boolean(errors.email)} onChange={handleFieldChange} /></div>{errors.email && <p className="field-error">{t(errors.email)}</p>}</div>
+            <div className="field-group"><div className="label-row"><label htmlFor="password">{t('login.passwordLabel')}</label><a href={routeFor('forgot-password')}>{t('login.forgot')}</a></div><div className={`input-wrap ${errors.password ? 'has-error' : ''}`}><Icon name="lock" /><input id="password" name="password" type={showPassword ? 'text' : 'password'} placeholder={t('login.passwordPlaceholder')} autoComplete="current-password" aria-invalid={Boolean(errors.password)} onChange={handleFieldChange} /><button className="visibility-button" type="button" aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')} onClick={() => setShowPassword((visible) => !visible)}><Icon name={showPassword ? 'eyeOff' : 'eye'} /></button></div>{errors.password && <p className="field-error">{t(errors.password)}</p>}</div>
             <button className="primary-button" disabled={isSubmitting || googleBusy || retrySeconds > 0} aria-describedby={retrySeconds > 0 ? 'login-retry-status' : undefined} type="submit">{t('login.signIn')}</button>
           </form>
           <div className="form-divider"><span>{t('login.divider')}</span></div>
