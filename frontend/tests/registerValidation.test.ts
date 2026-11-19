@@ -180,3 +180,70 @@ for (const scenario of ['duplicate email', 'email and password validation']) {
     } finally { await view.close() }
   })
 }
+
+for (const language of ['en', 'fr']) {
+  test(`Register clears corrected name, password and confirmation errors independently in ${language}`, async () => {
+    const view = await mount(language)
+    try {
+      await view.submit()
+      for (const [field, value] of [['name', 'Samira Martin'], ['password', 'valid-password'], ['confirmPassword', 'valid-password']]) {
+        await view.fill(field, value)
+        assert.equal(view.input(field).getAttribute('aria-invalid'), 'false', field)
+        assert.ok(!view.input(field).closest('.field-group')!.querySelector('.field-error'))
+        assert.equal(view.input('email').getAttribute('aria-invalid'), 'true', 'unmodified email must keep its error')
+      }
+      await view.fill('email', 'invalid-address')
+      await view.submit()
+      assert.equal(view.container.querySelectorAll('.field-error').length, 1)
+      assert.equal(view.input('email').closest('.field-group')!.querySelector('.field-error')!.textContent,
+        i18n.t('register.errors.emailInvalid'))
+    } finally { await view.close() }
+  })
+}
+
+test('Register recalculates an existing confirmation mismatch when password changes without clearing required fields', async () => {
+  const view = await mount()
+  try {
+    await view.fill('password', 'short'); await view.fill('confirmPassword', 'valid-password'); await view.submit()
+    assert.equal(view.input('confirmPassword').getAttribute('aria-invalid'), 'true')
+    await view.fill('password', 'valid-password')
+    assert.equal(view.input('password').getAttribute('aria-invalid'), 'false')
+    assert.equal(view.input('confirmPassword').getAttribute('aria-invalid'), 'false')
+    assert.equal(view.input('name').getAttribute('aria-invalid'), 'true')
+    await view.fill('confirmPassword', ''); await view.submit()
+    await view.fill('password', 'another-password')
+    assert.equal(view.input('confirmPassword').getAttribute('aria-invalid'), 'true', 'empty confirmation is still invalid')
+    assert.equal(view.input('confirmPassword').closest('.field-group')!.querySelector('.field-error')!.textContent,
+      i18n.t('register.errors.confirm'))
+  } finally { await view.close() }
+})
+
+for (const field of ['name', 'password']) test(`Register clears its server ${field} error and summary after correction`, async t => {
+  t.mock.method(authApi, 'register', createAuthApi('', async () => jsonError(400, 'validation_error',
+    { [field === 'name' ? 'DisplayName' : 'Password']: ['Rejected.'] })).register)
+  const view = await mount()
+  try {
+    await fillValid(view); await view.submit()
+    assert.equal(view.input(field).getAttribute('aria-invalid'), 'true')
+    await view.fill(field, field === 'name' ? 'Samira Moreno' : 'updated-password')
+    assert.equal(view.input(field).getAttribute('aria-invalid'), 'false')
+    assert.ok(!view.container.querySelector('[role="alert"]'))
+  } finally { await view.close() }
+})
+
+for (const field of ['name', 'password']) test(`a delayed Register response cannot restore an old ${field} error or discard unchanged field errors`, async t => {
+  let finish!: (response: Response) => void
+  t.mock.method(authApi, 'register', createAuthApi('', () => new Promise<Response>(resolve => { finish = resolve })).register)
+  const view = await mount()
+  try {
+    await fillValid(view); await view.submit()
+    await view.fill(field, field === 'name' ? 'Samira Moreno' : 'updated-password')
+    await act(async () => finish(jsonError(400, 'validation_error', {
+      DisplayName: ['Rejected.'], Email: ['Rejected.'], Password: ['Rejected.'],
+    })))
+    assert.equal(view.input(field).getAttribute('aria-invalid'), 'false')
+    assert.equal(view.input('email').getAttribute('aria-invalid'), 'true')
+    assert.equal(view.input(field === 'name' ? 'password' : 'name').getAttribute('aria-invalid'), 'true')
+    assert.equal(view.container.querySelector('[role="alert"]')!.textContent, i18n.t('register.errors.invalidRequest'))
+  } finally { await view.close() }
+})
