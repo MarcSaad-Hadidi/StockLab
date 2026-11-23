@@ -124,6 +124,7 @@ public sealed class ReadinessApiTests
                 ["ConnectionStrings:StockLab"] = connection,
                 ["Jwt:Issuer"] = "StockLab.Readiness.Tests", ["Jwt:Audience"] = "StockLab.Readiness.Tests",
                 ["Jwt:SigningKey"] = SigningKey, ["MarketData:Provider"] = "Mock",
+                ["MarketData:AllowSimulatedData"] = "true",
                 ["AiPerformanceCycle:Enabled"] = "false"
             }));
             builder.ConfigureTestServices(services =>

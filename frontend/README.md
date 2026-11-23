@@ -41,10 +41,15 @@ allowed CORS origins. This public Vite variable is bundled into the browser:
 provider keys, JWT signing keys and database credentials belong only in private
 backend configuration. See [configuration and secrets](../README.md#configuration-et-secrets).
 
-The committed backend selects `Mock` market data for offline development. It
-still needs SQL for account persistence. External providers require their own
-configuration and request budgets; a recently fetched response does not itself
-prove that a quote is recent or came from a live provider.
+The backend base configuration selects `TwelveData`; Development explicitly
+selects `Mock` for offline work. Local real-data validation overrides
+`MarketData__Provider=TwelveData` and stores the Website key in .NET User Secrets.
+Production/Staging require the selected key from environment secrets and reject
+Mock unless `MarketData__AllowSimulatedData=true` explicitly marks a simulation.
+SQL is still needed for account persistence. External providers retain their own
+request budgets; a recently fetched response does not itself prove that a quote
+is recent. Key Metrics, quotes and history use the source returned by the API,
+including explicit simulated/unavailable labels and genuine observation dates.
 
 ## Navigation and page status
 

@@ -1945,8 +1945,20 @@ shared budget, null/empty behavior, provider failures and safe 429 JSON.
 
 ## Twelve Data REST provider
 
-The committed default is MarketData:Provider=Mock. A clone runs without credentials
-and makes no external market-data calls. TwelveData must be selected explicitly.
+The committed base default is `MarketData:Provider=TwelveData`. Production,
+Staging and other user-facing environments require the selected Website/Fallback
+credential at startup. A missing/invalid key fails startup; provider failures are
+reported safely and never replace real data with Mock or another credential.
+
+`appsettings.Development.json` explicitly selects `Mock` so the normal Development
+launch profiles remain offline and need no market credential. Select
+`MarketData__Provider=TwelveData` to validate real quotes and histories locally.
+Mock is accepted only in Development/Testing or when an operator explicitly sets
+`MarketData:AllowSimulatedData=true` for a simulation. The committed value is
+false; do not enable it in a user-facing real-data environment. The environment
+variable is `MarketData__AllowSimulatedData`. Changing provider settings requires
+a process restart; cached values and source labels belong to that process.
+
 No startup or health probe contacts Twelve Data. Periodic price-alert monitoring
 can request quotes for active rules through the existing market-data pipeline.
 
@@ -2213,7 +2225,8 @@ Equality never matches.
 `PriceAlertMonitoring__Interval`. Startup validation requires a timer-supported
 interval of 1..4294967294 milliseconds. Configuration changes require a restart.
 With an external terminal, active rules can consume provider quota each cycle;
-the existing cache and limiter still apply. The committed provider is `Mock`.
+the existing cache and limiter still apply. Development explicitly selects `Mock`;
+the base/default production configuration selects `TwelveData`.
 
 `PriceAlertMonitoring:DailyQuoteBudget` defaults to 200 and must be positive at
 startup. It caps **all monitoring quote lookups per UTC day**, shared across users,

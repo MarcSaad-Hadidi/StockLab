@@ -6,7 +6,8 @@ namespace StockLab.Api.Configuration;
 
 public sealed class MarketDataProviderOptions
 {
-    public string Provider { get; set; } = "Mock";
+    public string Provider { get; set; } = "TwelveData";
+    public bool AllowSimulatedData { get; set; }
 }
 
 public static class MarketDataTerminalRegistration
@@ -14,7 +15,11 @@ public static class MarketDataTerminalRegistration
     public static IServiceCollection AddMarketDataTerminal(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<MarketDataProviderOptions>().Bind(configuration.GetSection("MarketData"))
-            .Validate(o => o.Provider is "Mock" or "TwelveData", "Provider must be Mock or TwelveData.").ValidateOnStart();
+            .Validate(o => o.Provider is "Mock" or "TwelveData", "Provider must be Mock or TwelveData.")
+            .Validate<IHostEnvironment>((o, environment) => o.Provider != "Mock" || environment.IsDevelopment()
+                || environment.IsEnvironment("Testing") || o.AllowSimulatedData,
+                "Mock market data requires Development/Testing or an explicit MarketData:AllowSimulatedData simulation setting.")
+            .ValidateOnStart();
         // Bind only non-secret settings. ML and inactive credentials never enter the options object.
         services.AddOptions<TwelveDataOptions>().Configure(o =>
         {
