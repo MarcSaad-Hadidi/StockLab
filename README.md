@@ -59,7 +59,7 @@ Les interfaces disposent de traductions française et anglaise et de mises en pa
 | --- | --- | --- |
 | Frontend | React 19, TypeScript 6, Vite 8, i18next, MUI / MUI X Charts | Application multi-pages et clients API |
 | API backend | ASP.NET Core sur .NET 10, C#, JWT Bearer, OpenAPI | Contrôleurs, validation, services métier et autorisation |
-| Données de marché | Twelve Data, Alpha Vantage, fournisseur local simulé | Le mode simulé est utilisé par défaut ; les adaptateurs externes sont facultatifs |
+| Données de marché | Twelve Data, Alpha Vantage, fournisseur local simulé | Twelve Data par défaut hors Development ; simulation locale explicitement configurée |
 | Apprentissage automatique | Python 3.12, NumPy, pandas, scikit-learn, requests, joblib, boto3 | Modèles, backtests, versionnement et artefacts |
 | Persistance relationnelle | EF Core 10, SQL Server / Azure SQL | Migrations et services de compte, trading et AI Trader implémentés |
 | Tests et automatisation | Node test runner / jsdom, xUnit, pytest, GitHub Actions | Suites frontend, backend, SQL Server et ML séparées |
@@ -108,7 +108,7 @@ défaut. `PriceAlertMonitoring:Interval` configure l'intervalle (par exemple
 - #42 retourne des `PriceAlertMatch` avec l'heure d'observation de la quote et
   ne persiste pas encore `Triggered`. La mutation atomique appartient à #43.
 
-Le fournisseur `Mock` reste le défaut hors ligne. Avec un fournisseur externe,
+Le fournisseur `Mock` reste le défaut hors ligne en Development. Avec un fournisseur externe,
 `PriceAlertMonitoring:DailyQuoteBudget` limite le monitoring à 200 lookups par jour
 UTC par défaut, tous utilisateurs et symboles confondus. Après épuisement, les
 symboles restants sont reportés au prochain jour UTC, en reprenant après le dernier
@@ -330,11 +330,15 @@ Les variables frontend sont intégrées au code du navigateur. Elles ne doivent 
 
 ### Configuration backend
 
-La configuration Development versionnée sélectionne le fournisseur hors ligne :
+La configuration de base sélectionne `TwelveData` et exige la clé du site au démarrage. La configuration Development versionnée sélectionne explicitement le fournisseur hors ligne :
 
     {
       "MarketData": { "Provider": "Mock" }
     }
+
+Pour des cours réels en local, définir `MarketData__Provider=TwelveData` en Development et fournir la clé `TwelveData:Keys:Website` via les user-secrets. En production ou staging, injecter cette clé depuis les secrets de l’environnement : les user-secrets de développement n’y sont pas chargés.
+
+`Mock` est réservé à Development, Testing ou à un scénario explicitement simulé avec `MarketData:AllowSimulatedData=true` (variable `MarketData__AllowSimulatedData`). Ce dernier réglage ne doit pas être activé pour un site destiné à afficher des cours réels. Une clé sélectionnée manquante ou invalide arrête le démarrage ; une erreur Twelve Data reste une indisponibilité et ne déclenche jamais un repli vers Mock ni vers une autre clé.
 
 Pour les secrets locaux, préférez les user-secrets .NET depuis la racine du dépôt :
 
