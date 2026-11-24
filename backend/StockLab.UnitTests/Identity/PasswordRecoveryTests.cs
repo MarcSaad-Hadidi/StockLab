@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using StockLab.Application.Interfaces;
 using StockLab.Infrastructure.Identity;
 
 namespace StockLab.UnitTests.Identity;
@@ -38,14 +39,26 @@ public sealed class PasswordRecoveryTests
     }
 
     [Fact]
-    public void Recovery_queue_refuses_overflow_and_disabled_requests_without_account_lookup()
+    public async Task Recovery_queue_refuses_overflow_and_disabled_requests_without_checking_smtp_when_disabled()
     {
         var configuration = Configured();
-        var queue = new PasswordRecoveryRequestQueue(Options.Create(configuration));
-        for (var i = 0; i < 100; i++) Assert.True(queue.TryEnqueue($"person{i}@example.com", "en"));
-        Assert.False(queue.TryEnqueue("overflow@example.com", "en"));
+        var sender = new TestRecoverySender();
+        var queue = new PasswordRecoveryRequestQueue(Options.Create(configuration), sender);
+        for (var i = 0; i < 100; i++) Assert.True(await queue.TryEnqueueAsync($"person{i}@example.com", "en", default));
+        Assert.False(await queue.TryEnqueueAsync("overflow@example.com", "en", default));
         configuration.Enabled = false;
-        Assert.False(new PasswordRecoveryRequestQueue(Options.Create(configuration)).TryEnqueue("person@example.com", "en"));
+        sender.FailIfChecked = true;
+        Assert.False(await new PasswordRecoveryRequestQueue(Options.Create(configuration), sender)
+            .TryEnqueueAsync("person@example.com", "en", default));
+    }
+
+    private sealed class TestRecoverySender : IPasswordRecoveryEmailSender
+    {
+        public bool FailIfChecked { get; set; }
+        public Task<bool> IsAvailableAsync(CancellationToken cancellationToken) =>
+            FailIfChecked ? throw new InvalidOperationException("Disabled recovery must skip SMTP") : Task.FromResult(true);
+        public Task SendAsync(string email, string language, Guid userId, string token, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private static PasswordRecoveryOptions Configured() => new()
