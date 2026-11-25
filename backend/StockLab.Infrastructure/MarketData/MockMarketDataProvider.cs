@@ -12,18 +12,20 @@ public sealed class MockMarketDataProvider : IMarketDataProvider
     private static readonly DateOnly FirstSessionDate =
         new(2026, 8, 24);
 
-    private static readonly SimulatedStock[] Stocks =
+    private static readonly SimulatedStock[] Assets =
     [
         new("AAPL", "Apple Inc.", 200m, 20_000_000),
         new("MSFT", "Microsoft Corporation", 400m, 15_000_000),
-        new("NVDA", "NVIDIA Corporation", 120m, 30_000_000)
+        new("NVDA", "NVIDIA Corporation", 120m, 30_000_000),
+        new("SPY", "SPDR S&P 500 ETF Trust", 550m, 12_000_000, "NYSE", "ETF", MarketAssetCategory.Etfs),
+        new("SPX", "S&P 500 Index", 5_500m, 0, "INDEX", "Index", MarketAssetCategory.Indices),
+        new("BTC/USD", "Bitcoin US Dollar", 60_000m, 100_000, "BINANCE", "Digital Currency", MarketAssetCategory.Crypto)
     ];
 
     public Task<StockQuote?> GetQuoteAsync(string symbol, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var normalizedSymbol = NormalizeSymbol(symbol);
-        var stock = Array.Find(Stocks, stock => stock.Symbol == normalizedSymbol);
+        var stock = FindAsset(symbol);
         if (stock is null)
         {
             return Task.FromResult<StockQuote?>(null);
@@ -42,7 +44,7 @@ public sealed class MockMarketDataProvider : IMarketDataProvider
             decimal.Round(change / previousClose * 100m, 4),
             last.Volume,
             new DateTimeOffset(2026, 8, 28, 20, 0, 0, TimeSpan.Zero),
-            stock.CompanyName, "NASDAQ", last.Open, last.High, last.Low, previousClose,
+            stock.CompanyName, stock.Exchange, last.Open, last.High, last.Low, previousClose,
             (long)bars.Average(bar => bar.Volume!.Value), false));
     }
 
@@ -55,17 +57,25 @@ public sealed class MockMarketDataProvider : IMarketDataProvider
         var searchTerm = query.Trim();
         var results = new List<StockSearchResult>();
 
-        foreach (var stock in Stocks)
+        foreach (var stock in Assets)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (stock.Symbol.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
                 || stock.CompanyName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
             {
-                results.Add(new StockSearchResult(stock.Symbol, stock.CompanyName, "NASDAQ", "USD"));
+                results.Add(stock.ToSearchResult());
             }
         }
 
         return Task.FromResult<IReadOnlyList<StockSearchResult>>(results.AsReadOnly());
+    }
+
+    public Task<IReadOnlyList<StockSearchResult>> BrowseAssetsAsync(MarketAssetCategory category,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlyList<StockSearchResult>>(Assets.Where(asset => asset.Category == category)
+            .Select(asset => asset.ToSearchResult()).ToArray());
     }
 
     public Task<StockHistory?> GetHistoryAsync(
@@ -74,7 +84,7 @@ public sealed class MockMarketDataProvider : IMarketDataProvider
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(request);
-        var normalizedSymbol = NormalizeSymbol(request.Symbol);
+        var stock = FindAsset(request.Symbol);
 
         request.Validate();
         if (request.Interval != StockHistoryInterval.Day)
@@ -82,7 +92,6 @@ public sealed class MockMarketDataProvider : IMarketDataProvider
             throw new NotSupportedException("The mock provider supports only daily history.");
         }
 
-        var stock = Array.Find(Stocks, stock => stock.Symbol == normalizedSymbol);
         if (stock is null)
         {
             return Task.FromResult<StockHistory?>(null);
@@ -97,15 +106,11 @@ public sealed class MockMarketDataProvider : IMarketDataProvider
             stock.Symbol, "USD", request.Interval, Array.AsReadOnly(bars)));
     }
 
-    private static string NormalizeSymbol(string symbol)
+    private static SimulatedStock? FindAsset(string symbol)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(symbol);
         var normalized = symbol.Trim().ToUpperInvariant();
-        // All local fixtures are NASDAQ listings; other exchanges must remain unknown.
-        const string exchangeSuffix = ":NASDAQ";
-        return normalized.EndsWith(exchangeSuffix, StringComparison.Ordinal)
-            ? normalized[..^exchangeSuffix.Length]
-            : normalized;
+        return Array.Find(Assets, asset => normalized == asset.Symbol || normalized == $"{asset.Symbol}:{asset.Exchange}");
     }
 
     private static StockHistoryBar[] CreateDailyBars(SimulatedStock stock, CancellationToken cancellationToken)
@@ -123,5 +128,9 @@ public sealed class MockMarketDataProvider : IMarketDataProvider
         return bars;
     }
 
-    private sealed record SimulatedStock(string Symbol, string CompanyName, decimal InitialPrice, long InitialVolume);
+    private sealed record SimulatedStock(string Symbol, string CompanyName, decimal InitialPrice, long InitialVolume,
+        string Exchange = "NASDAQ", string InstrumentType = "Common Stock", MarketAssetCategory Category = MarketAssetCategory.Stocks)
+    {
+        public StockSearchResult ToSearchResult() => new(Symbol, CompanyName, Exchange, "USD", InstrumentType);
+    }
 }

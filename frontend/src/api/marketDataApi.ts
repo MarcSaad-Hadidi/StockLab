@@ -92,7 +92,9 @@ export type StockSearchResult = {
   companyName: string;
   exchange: string | null;
   currency: string | null;
+  instrumentType?: string | null;
 };
+export type MarketAssetCategory = "stocks" | "etfs" | "indices" | "crypto";
 export type HistoryInterval = "Minute" | "Hour" | "Day" | "Week" | "Month";
 export type HistoryRange = "1D" | "5D" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "5Y" | "MAX";
 export type HistoryBar = {
@@ -173,9 +175,18 @@ function search(v: unknown): v is StockSearchResult[] {
         typeof s.symbol === "string" &&
         typeof s.companyName === "string" &&
         nullableString(s.exchange) &&
-        nullableString(s.currency),
+        nullableString(s.currency) &&
+        (s.instrumentType === undefined || nullableString(s.instrumentType)),
     )
   );
+}
+function pricingPath(symbol: string, operation: "quote" | "history", query = new URLSearchParams()) {
+  const normalized = symbol.trim().toUpperCase();
+  if (normalized.includes("/")) {
+    query.set("symbol", normalized);
+    return `/api/stocks/by-symbol/${operation}?${query}`;
+  }
+  return `/api/stocks/${encodeURIComponent(normalized)}/${operation}${query.size ? `?${query}` : ""}`;
 }
 function history(v: unknown): v is StockHistory {
   if (
@@ -361,7 +372,7 @@ export function createMarketDataApi(
       );
     },
     quote(symbol: string, signal: AbortSignal, options: { refresh?: boolean } = {}) {
-      const path = `/api/stocks/${encodeURIComponent(symbol.trim().toUpperCase())}/quote`;
+      const path = pricingPath(symbol, "quote");
       return get(
         path,
         quote,
@@ -372,11 +383,13 @@ export function createMarketDataApi(
         received,
       );
     },
-    async search(query: string, signal: AbortSignal) {
+    async search(query: string, signal: AbortSignal, commonStocksOnly = false) {
       signal.throwIfAborted();
       if (!query.trim()) return [];
+      const params = new URLSearchParams({ query: query.trim() });
+      if (commonStocksOnly) params.set("commonStocksOnly", "true");
       const results = await get(
-        `/api/stocks/search?${new URLSearchParams({ query: query.trim() })}`,
+        `/api/stocks/search?${params}`,
         search,
         signal,
         300_000,
@@ -388,12 +401,17 @@ export function createMarketDataApi(
       }
       return results;
     },
+    browse(category: MarketAssetCategory, signal: AbortSignal, query = "") {
+      const params = new URLSearchParams({ category });
+      if (query.trim()) params.set("query", query.trim());
+      return get(`/api/stocks/assets?${params}`, search, signal, 300_000);
+    },
     metadata(symbol: string) {
       return metadata.get(symbol.trim().toUpperCase());
     },
     history(symbol: string, query: HistoryQuery, signal: AbortSignal, range?: HistoryRange) {
       return get(
-        `/api/stocks/${encodeURIComponent(symbol.trim().toUpperCase())}/history?${new URLSearchParams(query)}`,
+        pricingPath(symbol, "history", new URLSearchParams(query)),
         history,
         signal,
         300_000,

@@ -88,11 +88,12 @@ public sealed class ApiValidationTests : IDisposable
         Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var stock = Assert.Single(json.RootElement.EnumerateArray());
-        Assert.Equal(4, stock.EnumerateObject().Count());
+        Assert.Equal(5, stock.EnumerateObject().Count());
         Assert.Equal(symbol, stock.GetProperty("symbol").GetString());
         Assert.Equal(companyName, stock.GetProperty("companyName").GetString());
         Assert.Equal("NASDAQ", stock.GetProperty("exchange").GetString());
         Assert.Equal("USD", stock.GetProperty("currency").GetString());
+        Assert.Equal("Common Stock", stock.GetProperty("instrumentType").GetString());
         Assert.Equal(1, provider.SearchCalls);
     }
 
@@ -103,6 +104,27 @@ public sealed class ApiValidationTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("[]", await response.Content.ReadAsStringAsync());
         Assert.Equal(1, provider.SearchCalls);
+    }
+
+    [Fact]
+    public async Task Index_catalog_search_matches_the_name_and_returns_the_type()
+    {
+        using var response = await client.GetAsync("/api/stocks/assets?category=indices&query=500");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var index = Assert.Single(json.RootElement.EnumerateArray());
+        Assert.Equal("SPX", index.GetProperty("symbol").GetString());
+        Assert.Equal("Index", index.GetProperty("instrumentType").GetString());
+    }
+
+    [Fact]
+    public async Task History_query_route_keeps_the_slash_in_a_crypto_pair()
+    {
+        using var response = await client.GetAsync($"/api/stocks/by-symbol/history?symbol=BTC%2FUSD%3ABINANCE&{FullHistoryQuery}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("BTC/USD", json.RootElement.GetProperty("symbol").GetString());
+        Assert.NotEmpty(json.RootElement.GetProperty("bars").EnumerateArray());
     }
 
     [Theory]
@@ -268,6 +290,8 @@ public sealed class ApiValidationTests : IDisposable
             SearchCalls++;
             return inner.SearchStocksAsync(query, cancellationToken);
         }
+        public Task<IReadOnlyList<StockSearchResult>> BrowseAssetsAsync(MarketAssetCategory category, CancellationToken cancellationToken = default) =>
+            inner.BrowseAssetsAsync(category, cancellationToken);
         public Task<StockHistory?> GetHistoryAsync(StockHistoryRequest request, CancellationToken cancellationToken = default)
         {
             HistoryCalls++;

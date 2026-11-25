@@ -312,6 +312,62 @@ test("read-only alert market search is debounced once and does not enable saving
   }
 });
 
+test("Market filters search by asset class, resets pages, and opens a crypto pair with its type", async () => {
+  Object.assign(globalThis, { React: await import("react") });
+  await i18n.changeLanguage("en");
+  const { MarketPage } = await import("../src/market/MarketPage.tsx");
+  const { marketDataApi } = await import("../src/api/marketDataClient.ts");
+  const original = { browse: marketDataApi.browse, search: marketDataApi.search, quote: marketDataApi.quote, movers: marketDataApi.movers };
+  const asset = (symbol: string, instrumentType: string) => ({ symbol, instrumentType, companyName: symbol, exchange: null, currency: "USD" });
+  const stocks = Array.from({ length: 11 }, (_, i) => asset(`STOCK${i + 1}`, "Common Stock"));
+  const etf = asset("SPY:NYSE", "ETF");
+  const index = asset("000001:SSE", "Index");
+  const indexedSearchResult = asset("NDX:INDEX", "Index");
+  const crypto = asset("BTC/USD:BINANCE", "Digital Currency");
+  const fixtures = { stocks, etfs: [etf], indices: [index], crypto: [crypto] };
+  marketDataApi.browse = async category => fixtures[category];
+  marketDataApi.search = async () => [...stocks, etf, crypto, indexedSearchResult];
+  marketDataApi.quote = async () => { throw new Error("No quote in this fixture"); };
+  marketDataApi.movers = async () => ({ lastUpdated: null, gainers: [], losers: [], mostActive: [] });
+  const opened: Array<[string, string | null | undefined]> = [];
+  const root = createRoot(document.getElementById("root")!);
+  const symbols = () => [...document.querySelectorAll(".market-results-table .market-symbol-cell strong")]
+    .map(node => node.textContent);
+  const filter = async (name: string) => {
+    const button = [...document.querySelectorAll<HTMLButtonElement>(".market-filter-tab")]
+      .find(node => node.textContent === name)!;
+    await act(async () => button.click());
+    assert.equal(button.getAttribute("aria-pressed"), "true");
+  };
+  try {
+    await act(async () => root.render(createElement(MarketPage, { onOpenStock: (symbol, type) => opened.push([symbol, type]) })));
+    await pause();
+    const searchInput = document.querySelector<HTMLInputElement>(".market-search-bar input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(searchInput, "test");
+      searchInput.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    });
+    await pause(520);
+    assert.equal(symbols().length, 10);
+    await act(async () => document.querySelectorAll<HTMLButtonElement>(".market-page-arrow")[1].click());
+    assert.deepEqual(symbols(), ["STOCK11", etf.symbol, crypto.symbol, indexedSearchResult.symbol, index.symbol]);
+
+    await filter("ETFs");
+    assert.deepEqual(symbols(), [etf.symbol]);
+    await filter("Indices");
+    await pause(520);
+    assert.deepEqual(symbols(), [indexedSearchResult.symbol, index.symbol]);
+    await filter("Crypto");
+    await pause(520);
+    assert.deepEqual(symbols(), [crypto.symbol]);
+    await act(async () => document.querySelector<HTMLButtonElement>(".market-results-table .market-symbol-cell")!.click());
+    assert.deepEqual(opened, [[crypto.symbol, crypto.instrumentType]]);
+  } finally {
+    await act(async () => root.unmount());
+    Object.assign(marketDataApi, original);
+  }
+});
+
 for (const mode of ["partial", "total"] as const) {
   test("Market renders " + mode + " featured failure and explicit retry", async () => {
     Object.assign(globalThis, { React: await import("react") });
@@ -319,8 +375,13 @@ for (const mode of ["partial", "total"] as const) {
     const { MarketPage } = await import("../src/market/MarketPage.tsx");
     const { marketDataApi } = await import("../src/api/marketDataClient.ts");
     const { MarketDataError } = await import("../src/api/marketDataApi.ts");
-    const original = { quote: marketDataApi.quote, logo: marketDataApi.logo, movers: marketDataApi.movers };
+    const original = { browse: marketDataApi.browse, quote: marketDataApi.quote, logo: marketDataApi.logo, movers: marketDataApi.movers };
     let recovered = false;
+    marketDataApi.browse = async category => category === "stocks"
+      ? ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"].map(symbol => ({
+          symbol, companyName: symbol, exchange: "NASDAQ", currency: "USD", instrumentType: "Common Stock",
+        }))
+      : [];
     marketDataApi.quote = async symbol => {
       if (!recovered && (mode === "total" || symbol === "NVDA")) throw new MarketDataError(503);
       return { symbol, name: "Real " + symbol, exchange: "NASDAQ", currency: "USD", price: 123.45, priceDecimal: '123.45',
@@ -337,14 +398,14 @@ for (const mode of ["partial", "total"] as const) {
       const popular = document.querySelector(".market-overview-card-popular")!;
       assert.equal(document.querySelectorAll('.market-overview-card-positive .market-overview-row, .market-overview-card-negative .market-overview-row').length, 0, 'Unavailable rankings never fall back to popular quotes');
       assert.ok(popular.querySelector('[role="alert"]'));
-      assert.equal(popular.querySelectorAll(".market-stock-quote strong").length, mode === "total" ? 0 : 5);
+      assert.equal(popular.querySelectorAll(".market-stock-quote strong").length, 5);
       assert.doesNotMatch(popular.textContent!, /191.45|415.60|892.72/);
       if (mode === "partial") {
         assert.match(popular.textContent!, /123.45/);
         const failed = Array.from(popular.querySelectorAll(".market-overview-row")).find(row => row.textContent?.includes("NVDA"))!;
         assert.match(failed.textContent!, /unavailable/i);
         assert.doesNotMatch(failed.textContent!, /123.45/);
-      } else assert.equal(popular.querySelectorAll(".market-overview-row").length, 0);
+      } else assert.doesNotMatch(popular.textContent!, /123\.45/);
       recovered = true;
       const retry = popular.querySelector('[role="alert"] button') as HTMLButtonElement;
       assert.ok(retry);

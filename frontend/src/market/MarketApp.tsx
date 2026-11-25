@@ -4,16 +4,19 @@ import { MarketPage } from './MarketPage'
 import { marketRoute, stockDetailsRoute } from './marketRoutes'
 import { StockDetailsPage } from './StockDetailsPage'
 
-function requestedSymbolFromUrl() {
-  return new URLSearchParams(window.location.search).get('symbol')?.trim() || null
+function requestedAssetFromUrl() {
+  const params = new URLSearchParams(window.location.search)
+  const symbol = params.get('symbol')?.trim()
+  return symbol ? { symbol, instrumentType: params.get('instrumentType') } : null
 }
 
 export function MarketApp() {
   const { i18n, t } = useTranslation()
-  const [requestedSymbol, setRequestedSymbol] = useState<string | null>(requestedSymbolFromUrl)
+  const [requestedAsset, setRequestedAsset] = useState(requestedAssetFromUrl)
+  const requestedSymbol = requestedAsset?.symbol
 
   useEffect(() => {
-    const handlePopState = () => setRequestedSymbol(requestedSymbolFromUrl())
+    const handlePopState = () => setRequestedAsset(requestedAssetFromUrl())
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
@@ -22,20 +25,21 @@ export function MarketApp() {
     document.title = requestedSymbol ? `StockLab — ${requestedSymbol}` : `StockLab — ${t('market.title')}`
   }, [i18n.language, requestedSymbol, t])
 
-  const openStock = (symbol: string) => {
-    window.history.pushState({}, '', stockDetailsRoute(symbol))
-    setRequestedSymbol(symbol)
+  const openStock = (symbol: string, instrumentType?: string | null) => {
+    window.history.pushState({}, '', stockDetailsRoute(symbol, instrumentType))
+    setRequestedAsset({ symbol, instrumentType: instrumentType ?? null })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const goBackToMarket = () => {
     window.history.pushState({}, '', marketRoute)
-    setRequestedSymbol(null)
+    setRequestedAsset(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  if (requestedSymbol) {
-    return <StockDetailsPage onBack={goBackToMarket} requestedSymbol={requestedSymbol} key={requestedSymbol} />
+  if (requestedAsset) {
+    return <StockDetailsPage onBack={goBackToMarket} requestedSymbol={requestedAsset.symbol}
+      instrumentType={requestedAsset.instrumentType} key={requestedAsset.symbol} />
   }
 
   return <MarketPage onOpenStock={openStock} />

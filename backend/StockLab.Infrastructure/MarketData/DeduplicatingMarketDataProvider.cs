@@ -15,8 +15,9 @@ public sealed class DeduplicatingMarketDataProvider(IMarketDataProvider inner) :
     }
     private readonly ConcurrentDictionary<string, Flight<StockQuote?>> quotes = new();
     private readonly ConcurrentDictionary<string, Flight<IReadOnlyList<StockSearchResult>>> searches = new();
+    private readonly ConcurrentDictionary<MarketAssetCategory, Flight<IReadOnlyList<StockSearchResult>>> catalogs = new();
     private readonly ConcurrentDictionary<StockHistoryRequest, Flight<StockHistory?>> histories = new();
-    internal int InFlightCount => quotes.Count + searches.Count + histories.Count;
+    internal int InFlightCount => quotes.Count + searches.Count + catalogs.Count + histories.Count;
 
     public Task<StockQuote?> GetQuoteAsync(string symbol, CancellationToken cancellationToken = default)
     {
@@ -39,6 +40,13 @@ public sealed class DeduplicatingMarketDataProvider(IMarketDataProvider inner) :
         var normalized = request with { Symbol = Normalize(request.Symbol) };
         request.Validate();
         return JoinAsync(histories, normalized, token => inner.GetHistoryAsync(normalized, token), cancellationToken);
+    }
+
+    public Task<IReadOnlyList<StockSearchResult>> BrowseAssetsAsync(MarketAssetCategory category,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return JoinAsync(catalogs, category, token => inner.BrowseAssetsAsync(category, token), cancellationToken);
     }
 
     private static async Task<T> JoinAsync<TKey, T>(ConcurrentDictionary<TKey, Flight<T>> flights,

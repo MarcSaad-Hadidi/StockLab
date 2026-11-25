@@ -4,9 +4,11 @@ import { useTranslation } from "react-i18next";
 export function StockLogo({
   symbol,
   size = "small",
+  instrumentType,
 }: {
   symbol: string;
   size?: "small" | "large";
+  instrumentType?: string | null;
 }) {
   const { t } = useTranslation();
   const [failedUrl, setFailedUrl] = useState<string>();
@@ -14,7 +16,8 @@ export function StockLogo({
   // symbol into a different US company that happens to use the same ticker.
   const parts = symbol.trim().toUpperCase().split(":");
   const [ticker, exchange] = parts;
-  const supported = parts.length <= 2 && /^[A-Z][A-Z0-9.-]{0,14}$/.test(ticker) &&
+  const supported = (!instrumentType || instrumentType === "Common Stock" || instrumentType === "ETF") &&
+    parts.length <= 2 && /^[A-Z][A-Z0-9.-]{0,14}$/.test(ticker) &&
     (!exchange || ["NASDAQ", "NYSE", "AMEX", "NYSEARCA", "NYSE ARCA", "BATS"].includes(exchange));
   const url = supported ? `https://api.elbstream.com/logos/symbol/${encodeURIComponent(ticker)}` : undefined;
   return (

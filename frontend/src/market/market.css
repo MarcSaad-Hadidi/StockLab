@@ -1203,7 +1203,8 @@ input:focus-visible {
 .market-results-table th { font-size: 11px; color: #65738a; padding: 10px 8px; }
 .market-results-table td { font-size: 12px; height: 56px; padding: 10px 8px; }
 .market-symbol-cell, .market-company-cell { font-size: 12px; }
-.market-company-cell { white-space: normal; text-align: left; line-height: 1.4; }
+.market-company-cell { flex-direction: column; align-items: flex-start; gap: 2px; white-space: normal; text-align: left; line-height: 1.4; }
+.market-result-type { display: block; color: #65738a; font-size: 11px; }
 .market-pagination { justify-content: flex-end; gap: 12px; padding-top: 16px; border-top: 1px solid #edf0f5; }
 .market-page-count { font-size: 12px; }
 .market-page-arrow { min-height: 34px; padding: 0 12px; border-color: #e2e8f0; font-size: 12px; background: #fff; }
