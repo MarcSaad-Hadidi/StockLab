@@ -1,0 +1,11 @@
+/* Trebuchet MS draws @ taller than the surrounding lowercase text. */
+@font-face {
+  font-family: "Trebuchet MS Email At";
+  src: local("Trebuchet MS"), local("TrebuchetMS");
+  unicode-range: U+0040;
+  size-adjust: 90%;
+}
+
+:is(.login-page, .register-page) input[type="email"] {
+  font-family: "Avenir Next", "Trebuchet MS Email At", "Trebuchet MS", "Segoe UI", sans-serif;
+}
