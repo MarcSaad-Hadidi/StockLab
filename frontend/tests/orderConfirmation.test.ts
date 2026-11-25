@@ -48,7 +48,7 @@ async function mount(t: TestContext, fetcher?: (sent: SentOrder) => Promise<Resp
   t.mock.method(tradingApi, 'executeTrade', createTradingApi('', globalThis.fetch).executeTrade)
   const container = document.createElement('div'); document.body.append(container)
   const root = createRoot(container)
-  const page = React.createElement(StockDetailsPage, { requestedSymbol: 'AAPL', onBack() {} })
+  const page = React.createElement(StockDetailsPage, { requestedSymbol: 'AAPL', instrumentType: 'Common Stock', onBack() {} })
   await act(async () => root.render(strict ? React.createElement(React.StrictMode, null, page) : page))
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 25)) })
   return { container, sent,

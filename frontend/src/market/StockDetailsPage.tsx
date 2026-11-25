@@ -286,7 +286,6 @@ export function StockDetailsPage({
   const locale = localeForLanguage(i18n.language);
   const symbol = requestedSymbol.trim().toUpperCase();
   const isPair = symbol.includes("/");
-  const canTrade = !isPair && (!instrumentType || instrumentType === "Common Stock");
   const [anchor] = useState(() => new Date());
   const watchlist = useWatchlistData(false);
   const { reload: reloadWatchlist } = watchlist;
@@ -324,7 +323,6 @@ export function StockDetailsPage({
   const [hasUncertainOrder, setHasUncertainOrder] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cashResult, setCashResult] = useState<{ session: AuthSession; balance: string } | null>(null);
-  const orderCash = useOrderCash(canTrade);
   // A trade response is newer than the initial portfolio read, even if that read
   // finishes last. Never show a previous session's result while effects catch up.
   const currentCashResult = cashResult && sameTradeSession(cashResult.session, getAuthSession()) ? cashResult : null;
@@ -378,6 +376,25 @@ export function StockDetailsPage({
     [symbol],
   );
   const quote = useMarketRequest(`quote:${symbol}`, loadQuote);
+  const [ticker, requestedExchange] = symbol.split(":", 2);
+  const loadListings = useCallback(
+    (signal: AbortSignal) => marketDataApi.search(ticker, signal),
+    [ticker],
+  );
+  // Watchlist and direct links can omit the type. Resolve the same listing as
+  // the quote rather than assuming stock or picking a partial/wrong-exchange match.
+  const listings = useMarketRequest(`listing:${symbol}`, loadListings, !isPair && !instrumentType);
+  const listingExchange = requestedExchange || quote.data?.exchange?.trim().toUpperCase();
+  const listing = listingExchange
+    ? listings.data?.find((asset) => asset.symbol.toUpperCase() === `${ticker}:${listingExchange}`)
+      ?? listings.data?.find((asset) => asset.symbol.toUpperCase() === ticker
+        && asset.exchange?.trim().toUpperCase() === listingExchange)
+    : undefined;
+  const assetType = instrumentType || listing?.instrumentType;
+  const canTrade = !isPair && assetType === "Common Stock";
+  const resolvingAssetType = !isPair && !instrumentType &&
+    (listings.loading || (!listings.error && !requestedExchange && quote.loading));
+  const orderCash = useOrderCash(canTrade);
   const [showEnrichment, setShowEnrichment] = useState(false);
   const loadFundamentals = useCallback(
     (signal: AbortSignal) => marketDataApi.fundamentals(symbol, signal),
@@ -422,7 +439,6 @@ export function StockDetailsPage({
     300,
   );
   const metadata = marketDataApi.metadata(symbol);
-  const assetType = instrumentType ?? metadata?.instrumentType;
   const companyName = quote.data?.name ?? metadata?.companyName ?? fundamentals.data?.name ?? symbol;
   const exchange = quote.data?.exchange ?? metadata?.exchange ?? fundamentals.data?.exchange;
   const currency = quote.data?.currency ?? metadata?.currency ?? history.data?.currency ?? fundamentals.data?.currency ?? null;
@@ -853,7 +869,11 @@ export function StockDetailsPage({
               {!canTrade && (
                 <article className="stock-trade-card">
                   <h2>{t("stockDetails.paperTrading")}</h2>
-                  <p>{t("stockDetails.tradeErrors.unsupported_asset")}</p>
+                  {resolvingAssetType || listings.error ? (
+                    <MarketRequestStatus loading={resolvingAssetType} error={listings.error} retry={listings.retry} />
+                  ) : (
+                    <p>{t(isPair || assetType ? "stockDetails.tradeErrors.unsupported_asset" : "marketApi.notAvailable")}</p>
+                  )}
                 </article>
               )}
               {canTrade && !details && (

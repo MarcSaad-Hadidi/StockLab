@@ -204,7 +204,10 @@ test("Stock Details keeps a real supplied quote when enrichment/history fail and
   const { StockDetailsPage } = await import("../src/market/StockDetailsPage.tsx");
   const { marketDataApi } = await import("../src/api/marketDataClient.ts");
   const { MarketDataError } = await import("../src/api/marketDataApi.ts");
-  const original = { quote: marketDataApi.quote, history: marketDataApi.history, logo: marketDataApi.logo, fundamentals: marketDataApi.fundamentals, earnings: marketDataApi.earnings };
+  const original = { search: marketDataApi.search, quote: marketDataApi.quote, history: marketDataApi.history, logo: marketDataApi.logo, fundamentals: marketDataApi.fundamentals, earnings: marketDataApi.earnings };
+  marketDataApi.search = async ticker => ticker === "TSLA"
+    ? [{ symbol: "TSLA:NASDAQ", instrumentType: "Common Stock", exchange: "NASDAQ", companyName: "Test Tesla", currency: "USD" }]
+    : [];
   let quoteCalls = 0;
   marketDataApi.quote = async symbol => {
     quoteCalls++;
@@ -478,7 +481,7 @@ test("trade inputs accept supported fractions and enforce the API precision", as
   marketDataApi.history = async () => { throw new Error("fixture unavailable history"); };
   const root = createRoot(document.getElementById("root")!);
   try {
-    await act(async () => root.render(createElement(StockDetailsPage, { requestedSymbol: "AAPL", onBack() {} })));
+    await act(async () => root.render(createElement(StockDetailsPage, { requestedSymbol: "AAPL", instrumentType: "Common Stock", onBack() {} })));
     await pause();
     const input = document.querySelector<HTMLInputElement>("#stock-quantity");
     assert.ok(input);
@@ -540,7 +543,7 @@ test("Stock Details tabs show distinct real data, with no duplicate Chart or pre
     await pause();
   };
   try {
-    await act(async () => root.render(createElement(StockDetailsPage, { requestedSymbol: 'TEST', onBack() {} })));
+    await act(async () => root.render(createElement(StockDetailsPage, { requestedSymbol: 'TEST', instrumentType: 'Common Stock', onBack() {} })));
     await pause();
     const labels = [...document.querySelectorAll('.stock-detail-tabs button')].map(b => b.textContent);
     assert.ok(!labels.includes('Chart'));
