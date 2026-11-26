@@ -52,6 +52,10 @@ The [return-first eight-stock candidate](docs/boosted-return-first.md) reaches
 20.41% with higher full-period costs and 15.83% on fresh 2021 capital. Its
 first eight-stock diagnostic was recorded before the November 27 opening and
 contains one BUY signal and seven HOLD signals.
+The [quarter-position sale candidate](docs/boosted-staged-sales.md) raises the
+full-window return to **22.36%** and the higher-cost return to **22.16%**. Its
+fresh 2021 return is **18.92%**. It beats SPY from all five start dates, with
+59 partial sales in the full baseline-cost test.
 
 The separate [DCA / S&P 500 research](docs/dca-research.md) compares costed,
 chronological paper portfolios against an external SPY proxy and the user's
