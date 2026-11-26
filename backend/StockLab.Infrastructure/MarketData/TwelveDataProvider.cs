@@ -21,7 +21,7 @@ public sealed class TwelveDataProvider(
         cancellationToken.ThrowIfCancellationRequested();
         symbol = NormalizeSymbol(symbol);
         return ExecuteAsync<StockQuote>("Quote", "quote?symbol=" + Escape(symbol), root =>
-            new StockQuote(Canonical(root, symbol), Required(root, "currency"),
+            new StockQuote(Canonical(root, symbol), Currency(root, symbol) ?? throw new FormatException(),
                 PositivePrice(root, "close"), OptionalNumber(root, "change"), OptionalNumber(root, "percent_change"),
                 Volume(root), DateTimeOffset.FromUnixTimeSeconds(Integer(root, "last_quote_at")),
                 OptionalText(root, "name"), OptionalText(root, "exchange"),
@@ -35,23 +35,43 @@ public sealed class TwelveDataProvider(
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
-        return (await ExecuteAsync<IReadOnlyList<StockSearchResult>>("Search", "symbol_search?symbol=" + Escape(query.Trim()),
-            root =>
-            {
-                var results = new List<StockSearchResult>();
-                var symbols = new HashSet<string>(StringComparer.Ordinal);
-                foreach (var item in root.GetProperty("data").EnumerateArray())
-                {
-                    // Deliberately narrow stock-only allowlist, using the documented instrument type.
-                    if (Required(item, "instrument_type") != "Common Stock") continue;
-                    var exchange = OptionalText(item, "exchange");
-                    var ticker = Required(item, "symbol").Trim().ToUpperInvariant();
-                    var canonical = string.IsNullOrWhiteSpace(exchange) ? ticker : ticker + ":" + exchange.Trim().ToUpperInvariant();
-                    if (symbols.Add(canonical))
-                        results.Add(new StockSearchResult(canonical, Required(item, "instrument_name"), exchange, OptionalText(item, "currency")));
-                }
-                return results.AsReadOnly();
-            }, cancellationToken))!;
+        return (await ExecuteAsync<IReadOnlyList<StockSearchResult>>("Search",
+            "symbol_search?symbol=" + Escape(query.Trim()) + "&outputsize=120",
+            root => ReadAssets(root, "instrument_name", null), cancellationToken))!;
+    }
+
+    public async Task<IReadOnlyList<StockSearchResult>> BrowseAssetsAsync(MarketAssetCategory category,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var (path, nameField, instrumentType) = category switch
+        {
+            MarketAssetCategory.Stocks => ("stocks?country=US&type=Common%20Stock&outputsize=30", "name", "Common Stock"),
+            MarketAssetCategory.Etfs => ("etf?country=US&outputsize=30", "name", "ETF"),
+            // Symbol search does not consistently return indices. Keep the index directory cached for name searches.
+            MarketAssetCategory.Indices => ("indices", "name", "Index"),
+            MarketAssetCategory.Crypto => ("cryptocurrencies?currency_quote=USD&outputsize=30", "currency_base", "Digital Currency"),
+            _ => throw new ArgumentOutOfRangeException(nameof(category))
+        };
+        return (await ExecuteAsync<IReadOnlyList<StockSearchResult>>("Asset catalog", path,
+            root => ReadAssets(root, nameField, instrumentType), cancellationToken)) ?? [];
+    }
+
+    private static IReadOnlyList<StockSearchResult> ReadAssets(JsonElement root, string nameField, string? catalogType)
+    {
+        var results = new List<StockSearchResult>();
+        var symbols = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in root.GetProperty("data").EnumerateArray())
+        {
+            var type = catalogType is null ? Required(item, "instrument_type") : OptionalText(item, "type") ?? catalogType;
+            var exchange = OptionalText(item, "exchange")?.Trim();
+            var ticker = Required(item, "symbol").Trim().ToUpperInvariant();
+            var canonical = string.IsNullOrEmpty(exchange) ? ticker : $"{ticker}:{exchange.ToUpperInvariant()}";
+            if (symbols.Add(canonical))
+                results.Add(new StockSearchResult(canonical, Required(item, nameField),
+                    string.IsNullOrEmpty(exchange) ? null : exchange, Currency(item, ticker), type));
+        }
+        return results.AsReadOnly();
     }
 
     public Task<StockHistory?> GetHistoryAsync(StockHistoryRequest request, CancellationToken cancellationToken = default)
@@ -119,7 +139,7 @@ public sealed class TwelveDataProvider(
             var unique = bars.Distinct().ToArray();
             if (unique.GroupBy(b => (b.OpenTimeUtc, b.PeriodDate)).Any(group => group.Count() > 1))
                 throw new FormatException();
-            return new StockHistory(Canonical(meta, symbol), Required(meta, "currency"), request.Interval,
+            return new StockHistory(Canonical(meta, symbol), Currency(meta, symbol) ?? throw new FormatException(), request.Interval,
                 Array.AsReadOnly(unique.OrderBy(b => b.OpenTimeUtc).ThenBy(b => b.PeriodDate).ToArray()));
         }, cancellationToken);
     }
@@ -210,6 +230,15 @@ public sealed class TwelveDataProvider(
     }
 
     private static string Escape(string value) => Uri.EscapeDataString(value);
+    private static string? Currency(JsonElement root, string symbol)
+    {
+        var currency = OptionalText(root, "currency");
+        if (!string.IsNullOrWhiteSpace(currency)) return currency;
+        var ticker = symbol.Split(':', 2)[0];
+        var separator = ticker.IndexOf('/');
+        return separator >= 0 && separator < ticker.Length - 1 ? ticker[(separator + 1)..] : null;
+    }
+
     private static string NormalizeSymbol(string symbol)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(symbol);

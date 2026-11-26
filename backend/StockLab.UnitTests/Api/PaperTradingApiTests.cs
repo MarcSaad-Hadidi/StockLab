@@ -35,7 +35,7 @@ public sealed class PaperTradingApiTests
     [InlineData("0.0001", "99999999999.99999999", "9999999.999999999999", "limit")]
     public async Task Quotes_orders_and_positions_keep_extreme_decimal_operands(string price, string quantity, string total, string orderType)
     {
-        using var provider = new TwelveDataProviderTests.Fixture(
+        using var provider = CreateMarketFixture(
             ListingQuote("NASDAQ").Replace("\"close\":\"204.50\"", $"\"close\":\"{price}\""));
         await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
         var account = await CreateSignedInAccountAsync(fixture, "operand-api@example.com");
@@ -78,13 +78,49 @@ public sealed class PaperTradingApiTests
     private static string ListingQuote(string exchange) =>
         TwelveDataProviderTests.QuoteJson.Replace("\"currency\":\"USD\"", $"\"currency\":\"USD\",\"exchange\":\"{exchange}\"");
 
+    private static TwelveDataProviderTests.Fixture CreateMarketFixture(string quote) => CreateMarketFixture(_ => quote);
+
+    private static TwelveDataProviderTests.Fixture CreateMarketFixture(Func<HttpRequestMessage, string> quote)
+    {
+        const string commonStockListings = """
+            {"data":[
+              {"symbol":"AAPL","instrument_name":"Apple Inc.","exchange":"NASDAQ","instrument_type":"Common Stock"},
+              {"symbol":"AAPL","instrument_name":"Apple Inc.","exchange":"NYSE","instrument_type":"Common Stock"}
+            ]}
+            """;
+        var fixture = new TwelveDataProviderTests.Fixture("{}");
+        fixture.Handler.Respond = (request, _) => Task.FromResult(TwelveDataProviderTests.Response(
+            request.RequestUri!.AbsolutePath == "/symbol_search" ? commonStockListings : quote(request)));
+        return fixture;
+    }
+
+    [Theory]
+    [InlineData("BUY", "SPY:NYSE")]
+    [InlineData("SELL", "SPX:INDEX")]
+    [InlineData("BUY", "BTC/USD:BINANCE")]
+    public async Task Discoverable_non_stock_assets_cannot_be_traded(string side, string symbol)
+    {
+        await using var fixture = await TradingApiFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "asset-trade@example.com");
+        using var quote = await fixture.Client.GetAsync($"/api/stocks/by-symbol/quote?symbol={Uri.EscapeDataString(symbol)}");
+        Assert.Equal(HttpStatusCode.OK, quote.StatusCode);
+
+        using var order = await PostTradeAsync(fixture.Client, account.Token,
+            new { orderId = Guid.NewGuid(), side, symbol, quantity = 1m });
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, order.StatusCode);
+        Assert.Equal("unsupported_asset", await ErrorCodeAsync(order));
+        using var scope = fixture.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
+        Assert.Empty(await context.Transactions.ToListAsync());
+    }
+
     [Theory]
     [InlineData("1.2345", "1", "0.61725")]
     [InlineData("0.0001", "0.00000002", "0.000000000001")]
     public async Task Fractional_sales_return_exact_amounts_and_preserve_portfolio_cash(
         string price, string buyQuantity, string sellAmount)
     {
-        using var provider = new TwelveDataProviderTests.Fixture(
+        using var provider = CreateMarketFixture(
             ListingQuote("NASDAQ").Replace("\"close\":\"204.50\"", $"\"close\":\"{price}\""));
         await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
         var account = await CreateSignedInAccountAsync(fixture, "fractional-api@example.com");
@@ -144,7 +180,7 @@ public sealed class PaperTradingApiTests
     public async Task Legacy_positions_are_reconciled_atomically_and_old_orders_remain_replayable(
         string side, string symbol, bool hasCanonicalPosition, int quantity)
     {
-        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote("NASDAQ"));
+        using var provider = CreateMarketFixture(ListingQuote("NASDAQ"));
         await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
         var account = await CreateSignedInAccountAsync(fixture, "legacy-owner@example.com");
         var otherAccount = await CreateSignedInAccountAsync(fixture, "legacy-other@example.com");
@@ -221,9 +257,8 @@ public sealed class PaperTradingApiTests
     [InlineData("SELL")]
     public async Task Legacy_positions_are_not_assigned_to_a_different_exchange(string side)
     {
-        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote("NASDAQ"));
-        provider.Handler.Respond = (request, _) => Task.FromResult(TwelveDataProviderTests.Response(
-            ListingQuote(Uri.UnescapeDataString(request.RequestUri!.Query).Contains(":NYSE") ? "NYSE" : "NASDAQ")));
+        using var provider = CreateMarketFixture(request =>
+            ListingQuote(Uri.UnescapeDataString(request.RequestUri!.Query).Contains(":NYSE") ? "NYSE" : "NASDAQ"));
         await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
         var account = await CreateSignedInAccountAsync(fixture, "legacy-exchange@example.com");
         await SeedHoldingAsync(fixture, account.Id, "AAPL", 3m, 150m);
@@ -248,9 +283,8 @@ public sealed class PaperTradingApiTests
     [InlineData("AAPL:NYSE", false)]
     public async Task Legacy_order_alias_retries_resolve_the_original_listing(string symbol, bool matches)
     {
-        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote("NASDAQ"));
-        provider.Handler.Respond = (request, _) => Task.FromResult(TwelveDataProviderTests.Response(
-            ListingQuote(Uri.UnescapeDataString(request.RequestUri!.Query).Contains(":NYSE") ? "NYSE" : "NASDAQ")));
+        using var provider = CreateMarketFixture(request =>
+            ListingQuote(Uri.UnescapeDataString(request.RequestUri!.Query).Contains(":NYSE") ? "NYSE" : "NASDAQ"));
         await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
         var account = await CreateSignedInAccountAsync(fixture, "legacy-replay@example.com");
         await SeedHoldingAsync(fixture, account.Id, "AAPL", 3m, 150m);
@@ -272,11 +306,10 @@ public sealed class PaperTradingApiTests
     [InlineData("different_currency")]
     public async Task Legacy_mapping_must_be_verified_before_any_position_is_changed(string scenario)
     {
-        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote("NASDAQ"));
-        provider.Handler.Respond = (request, _) => Task.FromResult(TwelveDataProviderTests.Response(
+        using var provider = CreateMarketFixture(request =>
             Uri.UnescapeDataString(request.RequestUri!.Query).Contains(":NASDAQ") ? ListingQuote("NASDAQ")
             : scenario == "missing_exchange" ? TwelveDataProviderTests.QuoteJson
-            : ListingQuote("NASDAQ").Replace("\"currency\":\"USD\"", "\"currency\":\"CAD\"")));
+            : ListingQuote("NASDAQ").Replace("\"currency\":\"USD\"", "\"currency\":\"CAD\""));
         await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
         var account = await CreateSignedInAccountAsync(fixture, "legacy-unverified@example.com");
         await SeedHoldingAsync(fixture, account.Id, "AAPL", 3m, 150m);
@@ -307,7 +340,7 @@ public sealed class PaperTradingApiTests
     public async Task Security_aliases_share_one_position_for_buys_and_sells(
         string firstSymbol, string alias, bool useTwelveData)
     {
-        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote("NASDAQ"));
+        using var provider = CreateMarketFixture(ListingQuote("NASDAQ"));
         await using var fixture = await TradingApiFixture.CreateAsync(useTwelveData ? provider.Provider : null);
         var account = await CreateSignedInAccountAsync(fixture, "aliases@example.com");
 
@@ -344,7 +377,7 @@ public sealed class PaperTradingApiTests
     [InlineData("EXCHANGE-NAME-LONGER-THAN-27-CHARACTERS")]
     public async Task Unidentifiable_or_oversized_listings_are_rejected_without_changes(string exchange)
     {
-        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote(exchange));
+        using var provider = CreateMarketFixture(ListingQuote(exchange));
         await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
         var account = await CreateSignedInAccountAsync(fixture, "invalid-listing@example.com");
 
@@ -367,7 +400,7 @@ public sealed class PaperTradingApiTests
     public async Task Canonical_trade_retries_replay_aliases_and_original_requests_during_provider_failure(
         string originalSymbol, string alias)
     {
-        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote("NASDAQ"));
+        using var provider = CreateMarketFixture(ListingQuote("NASDAQ"));
         await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
         var account = await CreateSignedInAccountAsync(fixture, "alias-retry@example.com");
         var orderId = Guid.NewGuid();
@@ -394,9 +427,8 @@ public sealed class PaperTradingApiTests
     [Fact]
     public async Task Same_ticker_on_different_exchanges_keeps_separate_positions_and_rejects_changed_retries()
     {
-        using var provider = new TwelveDataProviderTests.Fixture(ListingQuote("NASDAQ"));
-        provider.Handler.Respond = (request, _) => Task.FromResult(TwelveDataProviderTests.Response(
-            ListingQuote(Uri.UnescapeDataString(request.RequestUri!.Query).Contains(":NYSE") ? "NYSE" : "NASDAQ")));
+        using var provider = CreateMarketFixture(request =>
+            ListingQuote(Uri.UnescapeDataString(request.RequestUri!.Query).Contains(":NYSE") ? "NYSE" : "NASDAQ"));
         await using var fixture = await TradingApiFixture.CreateAsync(provider.Provider);
         var account = await CreateSignedInAccountAsync(fixture, "listings@example.com");
         var orderId = Guid.NewGuid();

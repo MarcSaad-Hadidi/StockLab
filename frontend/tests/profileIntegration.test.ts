@@ -19,7 +19,7 @@ registerHooks({ load(url, context, nextLoad) {
 const dom = new JSDOM('', { url: 'http://localhost/profile/' })
 Object.assign(globalThis, { React, window: dom.window, document: dom.window.document, IS_REACT_ACT_ENVIRONMENT: true })
 const { createRoot } = await import('react-dom/client')
-const { i18n } = await import('../src/i18n/i18n.ts')
+const { i18n, setLanguage } = await import('../src/i18n/i18n.ts')
 await i18n.changeLanguage('en')
 
 const user = { id: 'd4fd8828-1a30-46f7-86c0-8cbbfa644f66', displayName: 'Samira Martin', email: 'samira@example.com' }
@@ -33,6 +33,73 @@ async function mount(component: React.ReactElement) {
   return { container, async close() { await act(async () => root.unmount()); container.remove() } }
 }
 function seed() { window.localStorage.clear(); saveAuthSession(session) }
+
+test('Profile blocks the global language selector while identity fields are being edited', async t => {
+  seed(); await setLanguage('en')
+  t.mock.method(profileApi, 'getProfile', async () => profile)
+  t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+  const { default: Page } = await import('../src/profile/ProfilePage.tsx')
+  const view = await mount(React.createElement(Page))
+  try {
+    await act(async () => view.container.querySelector<HTMLButtonElement>('.row-edit-button:not(:disabled)')!.click())
+    assert.ok(view.container.querySelector('input[type="text"]'), 'the profile draft is open')
+    assert.equal(view.container.querySelector<HTMLButtonElement>('aside button[title="Français"]')!.disabled, true)
+    assert.equal(view.container.querySelector<HTMLSelectElement>('#profile-language')!.disabled, true)
+  } finally { await view.close() }
+})
+
+test('an in-flight global language save blocks competing Profile actions until the saved preference is loaded', async t => {
+  seed(); await setLanguage('en')
+  let persisted = profile
+  t.mock.method(profileApi, 'getProfile', async () => persisted)
+  t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+  let finish!: () => void
+  t.mock.method(profileApi, 'updateLanguage', () => new Promise(resolve => { finish = () => { persisted = { ...profile, preferredLanguage: 'fr' } as typeof profile; resolve(persisted) } }))
+  const { default: Page } = await import('../src/profile/ProfilePage.tsx')
+  const view = await mount(React.createElement(Page))
+  try {
+    await act(async () => view.container.querySelector<HTMLButtonElement>('aside button[title="Français"]')!.click())
+    assert.equal(view.container.querySelector<HTMLButtonElement>('.row-edit-button')!.disabled, true)
+    assert.equal(view.container.querySelector<HTMLSelectElement>('#profile-language')!.disabled, true)
+    await act(async () => finish())
+    assert.equal(view.container.querySelector<HTMLSelectElement>('#profile-language')!.value, 'fr')
+    assert.equal(view.container.querySelector<HTMLSelectElement>('#profile-language')!.disabled, false)
+  } finally { await view.close(); await setLanguage('en') }
+})
+
+for (const delayed of [false, true]) test(`loading Profile cannot overwrite a manual locale ${delayed ? 'chosen during the request' : 'chosen before navigation'}`, async t => {
+  seed(); await setLanguage(delayed ? 'en' : 'fr')
+  let finish!: (value: typeof profile) => void
+  t.mock.method(profileApi, 'getProfile', () => delayed ? new Promise(resolve => { finish = resolve }) : Promise.resolve(profile))
+  t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+  let state!: ReturnType<typeof useProfileData>
+  function Probe() { state = useProfileData(); return null }
+  const view = await mount(React.createElement(Probe))
+  try {
+    if (delayed) await act(async () => { await setLanguage('fr'); finish(profile) })
+    assert.equal(i18n.language, 'fr')
+    assert.equal(state.profile?.preferredLanguage, 'en', 'loading still reports the actual stored account preference')
+  } finally { await view.close(); await setLanguage('en') }
+})
+
+test('an older Profile language save cannot reapply its locale after a newer manual choice', async t => {
+  seed(); await setLanguage('en')
+  t.mock.method(profileApi, 'getProfile', async () => profile)
+  t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+  let finish!: (value: object) => void
+  t.mock.method(profileApi, 'updateLanguage', () => new Promise(resolve => { finish = resolve }))
+  let state!: ReturnType<typeof useProfileData>
+  function Probe() { state = useProfileData(); return null }
+  const view = await mount(React.createElement(Probe))
+  try {
+    let pending!: Promise<boolean>
+    await act(async () => { pending = state.saveLanguage('fr') })
+    await act(async () => setLanguage('en'))
+    await act(async () => { finish({ ...profile, preferredLanguage: 'fr' }); assert.equal(await pending, true) })
+    assert.equal(i18n.language, 'en')
+    assert.equal(getAuthSession()?.user.preferredLanguage, 'fr')
+  } finally { await view.close() }
+})
 
 test('Profile language selection uses the persisted response and translates the interface without a reload', async (t) => {
   seed()

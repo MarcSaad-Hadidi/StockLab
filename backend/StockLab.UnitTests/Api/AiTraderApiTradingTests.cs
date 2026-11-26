@@ -21,7 +21,8 @@ public sealed class AiTraderApiTradingTests
     [InlineData("Staging")]
     public async Task Mock_provider_cannot_publish_invented_current_valuations_outside_development(string environment)
     {
-        await using var f = await AiTraderApiFixture.CreateAsync(environment: environment);
+        await using var f = await AiTraderApiFixture.CreateAsync(
+            settings: new() { ["MarketData:AllowSimulatedData"] = "true" }, environment: environment);
         await f.InitializeAsync();
         var trade = await f.ExecuteAsync();
         await f.CaptureAsync();

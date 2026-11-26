@@ -32,7 +32,7 @@ function result(order: ExecuteTradeRequest, cashBalance = 99000) {
     quantity: order.quantity, executionPrice: '100', totalAmount: tradeProduct('100', order.quantity), cashBalance: String(cashBalance),
     holdingQuantity: order.quantity, averageCost: '100', executedAtUtc: '2026-10-04T12:00:00Z' })
 }
-async function mount(t: TestContext, fetcher?: (sent: SentOrder) => Promise<Response>, price = '100') {
+async function mount(t: TestContext, fetcher?: (sent: SentOrder) => Promise<Response>, price = '100', strict = false) {
   window.localStorage.clear(); saveAuthSession(accountA)
   t.mock.method(marketDataApi, 'quote', async (symbol: string) => ({ symbol, name: 'Audit Stock', exchange: 'NASDAQ', currency: 'USD',
     price: Number(price), priceDecimal: price, change: null, changePercent: null, volume: null, asOfUtc: '2026-10-04T12:00:00Z', open: null,
@@ -48,7 +48,8 @@ async function mount(t: TestContext, fetcher?: (sent: SentOrder) => Promise<Resp
   t.mock.method(tradingApi, 'executeTrade', createTradingApi('', globalThis.fetch).executeTrade)
   const container = document.createElement('div'); document.body.append(container)
   const root = createRoot(container)
-  await act(async () => root.render(React.createElement(StockDetailsPage, { requestedSymbol: 'AAPL', onBack() {} })))
+  const page = React.createElement(StockDetailsPage, { requestedSymbol: 'AAPL', instrumentType: 'Common Stock', onBack() {} })
+  await act(async () => root.render(strict ? React.createElement(React.StrictMode, null, page) : page))
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 25)) })
   return { container, sent,
     dialog: () => container.querySelector('[role="dialog"]'),
@@ -57,6 +58,161 @@ async function mount(t: TestContext, fetcher?: (sent: SentOrder) => Promise<Resp
     async close() { await act(async () => root.unmount()); container.remove() },
   }
 }
+
+async function pressKey(key: string, shiftKey = false) {
+  const event = new window.KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true })
+  await act(async () => document.activeElement!.dispatchEvent(event))
+  return event
+}
+
+for (const language of ['en', 'fr']) {
+  test(`opening an order confirmation moves focus inside and blocks the background in ${language}`, async t => {
+    await i18n.changeLanguage(language)
+    const view = await mount(t, undefined, '100', true)
+    try {
+      const opener = view.container.querySelector<HTMLButtonElement>('form.stock-trade-card button[type="submit"]')!
+      opener.focus()
+      await view.prepare()
+      assert.ok(document.activeElement === view.container.querySelector('.stock-modal-close'), 'opening focuses the close action')
+      assert.equal(view.dialog()!.getAttribute('aria-modal'), 'true')
+      assert.ok(view.container.querySelector('.stock-details-page')!.hasAttribute('inert'))
+      assert.ok(view.container.querySelector('aside')!.hasAttribute('inert'))
+      assert.equal(view.dialog()!.closest('[inert]'), null)
+      assert.equal(view.sent.length, 0, 'opening must never submit the order')
+    } finally { await view.close(); await i18n.changeLanguage('en') }
+  })
+}
+
+test('Tab and Shift+Tab wrap within the confirmation while interior tabbing stays native', async t => {
+  const view = await mount(t)
+  try {
+    await view.prepare()
+    const first = view.container.querySelector<HTMLButtonElement>('.stock-modal-close')!
+    const cancel = view.container.querySelector<HTMLButtonElement>('.stock-modal-actions .stock-secondary-button')!
+    first.focus()
+    assert.equal((await pressKey('Tab', true)).defaultPrevented, true)
+    assert.ok(document.activeElement === view.confirm(), 'Shift+Tab wraps to the last action')
+    assert.equal((await pressKey('Tab')).defaultPrevented, true)
+    assert.ok(document.activeElement === first, 'Tab wraps to the first action')
+    cancel.focus()
+    assert.equal((await pressKey('Tab')).defaultPrevented, false)
+    assert.equal((await pressKey('ArrowDown')).defaultPrevented, false)
+  } finally { await view.close() }
+})
+
+test('focus escaping to another page control is redirected into the confirmation', async t => {
+  const view = await mount(t)
+  const outside = document.createElement('button'); document.body.append(outside)
+  try {
+    await view.prepare()
+    assert.ok(outside.hasAttribute('inert'))
+    // JSDOM does not implement native inert focus blocking.
+    outside.focus()
+    assert.ok(view.dialog()!.contains(document.activeElement))
+  } finally { await view.close(); outside.remove() }
+})
+
+for (const close of ['escape', 'close', 'cancel'] as const) {
+  test(`${close} dismisses the confirmation, restores focus and releases the background`, async t => {
+    const view = await mount(t)
+    const preserved = document.createElement('div'); preserved.setAttribute('inert', ''); document.body.append(preserved)
+    try {
+      const opener = view.container.querySelector<HTMLInputElement>('#stock-quantity')!
+      opener.focus()
+      await view.prepare()
+      if (close === 'escape') assert.equal((await pressKey('Escape')).defaultPrevented, true)
+      else await act(async () => view.container.querySelector<HTMLButtonElement>(close === 'close'
+        ? '.stock-modal-close' : '.stock-modal-actions .stock-secondary-button')!.click())
+      assert.equal(view.dialog(), null)
+      assert.ok(document.activeElement === opener, 'closing restores the original field')
+      assert.equal(view.container.querySelector('.stock-details-page')!.hasAttribute('inert'), false)
+      assert.equal(view.container.querySelector('aside')!.hasAttribute('inert'), false)
+      assert.ok(preserved.hasAttribute('inert'), 'pre-existing inert state must survive')
+      assert.equal((await pressKey('Tab')).defaultPrevented, false, 'closed dialog must stop intercepting keys')
+      assert.equal(view.sent.length, 0)
+    } finally { await view.close(); preserved.remove() }
+  })
+}
+
+test('an in-flight order keeps focus inside even with all actions disabled and ignores Escape', async t => {
+  let release!: () => void
+  const view = await mount(t, ({ order }) => new Promise(resolve => { release = () => resolve(result(order)) }))
+  try {
+    const opener = view.container.querySelector<HTMLButtonElement>('form.stock-trade-card button[type="submit"]')!
+    opener.focus()
+    await view.prepare()
+    await act(async () => { view.confirm().focus(); view.confirm().click() })
+    assert.equal(view.confirm().disabled, true)
+    assert.ok(document.activeElement === view.dialog(), 'disabled actions leave a focusable dialog fallback')
+    for (const shift of [false, true]) {
+      assert.equal((await pressKey('Tab', shift)).defaultPrevented, true)
+      assert.ok(document.activeElement === view.dialog(), 'Tab remains on the dialog while actions are disabled')
+    }
+    await pressKey('Escape')
+    assert.ok(view.dialog(), 'Escape cannot dismiss an order whose outcome is still pending')
+    assert.equal(view.sent[0].signal.aborted, false)
+    await act(async () => release())
+    assert.equal(view.dialog(), null)
+    assert.ok(document.activeElement === opener, 'success restores the order button')
+    assert.equal(opener.disabled, false)
+    assert.equal(view.sent.length, 1)
+  } finally { await view.close() }
+})
+
+test('a rejected order retains keyboard containment and can be dismissed with Escape', async t => {
+  let release!: () => void
+  const view = await mount(t, () => new Promise(resolve => {
+    release = () => resolve(Response.json({ error: 'insufficient_cash' }, { status: 422 }))
+  }))
+  try {
+    const opener = view.container.querySelector<HTMLInputElement>('#stock-quantity')!
+    opener.focus()
+    await view.prepare()
+    await act(async () => { view.confirm().focus(); view.confirm().click() })
+    await act(async () => release())
+    assert.ok(view.dialog()!.contains(document.activeElement))
+    assert.match(view.dialog()!.textContent!, /not enough available cash/i)
+    assert.equal(view.confirm().disabled, false)
+    view.confirm().focus()
+    await pressKey('Tab')
+    assert.ok(document.activeElement === view.container.querySelector('.stock-modal-close'), 'the rejected order keeps wrapping focus')
+    await pressKey('Escape')
+    assert.equal(view.dialog(), null)
+    assert.ok(document.activeElement === opener, 'dismissing a rejection restores the original field')
+    assert.equal(view.sent.length, 1)
+  } finally { await view.close() }
+})
+
+test('reopening and account cancellation release only the current confirmation focus trap', async t => {
+  const view = await mount(t)
+  try {
+    const opener = view.container.querySelector<HTMLInputElement>('#stock-quantity')!
+    opener.focus()
+    await view.prepare(); await pressKey('Escape')
+    opener.focus()
+    await view.prepare()
+    assert.ok(view.dialog()!.contains(document.activeElement))
+    await act(async () => saveAuthSession(accountB))
+    assert.equal(view.dialog(), null)
+    assert.ok(document.activeElement === opener, 'account cancellation restores focus')
+    assert.equal((await pressKey('Tab', true)).defaultPrevented, false)
+    assert.equal(view.sent.length, 0)
+  } finally { await view.close() }
+})
+
+test('unmounting an open confirmation removes its focus guard and background isolation', async t => {
+  const view = await mount(t)
+  const outside = document.createElement('button'); document.body.append(outside)
+  try {
+    await view.prepare()
+    assert.ok(outside.hasAttribute('inert'))
+    await view.close()
+    assert.equal(outside.hasAttribute('inert'), false)
+    outside.focus()
+    assert.ok(document.activeElement === outside, 'unmounted dialogs no longer capture focus')
+    assert.equal((await pressKey('Tab')).defaultPrevented, false)
+  } finally { if (view.container.isConnected) await view.close(); outside.remove() }
+})
 
 test('an unchanged session sends the prepared order once with its original token', async t => {
   const view = await mount(t)

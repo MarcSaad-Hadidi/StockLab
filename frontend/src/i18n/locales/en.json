@@ -1,6 +1,38 @@
 {
+  "googleAuth": {
+    "continue": "Continue with Google",
+    "loading": "Loading Google sign-in…",
+    "working": "Signing in…",
+    "popupHint": "Complete sign-in in the Google window. You can cancel and try again.",
+    "cancel": "Cancel Google sign-in",
+    "retry": "Retry Google sign-in",
+    "link": {
+      "description": "An existing StockLab account uses this email. Enter its StockLab password to link Google and sign in.",
+      "password": "Existing StockLab password",
+      "submit": "Link Google and sign in"
+    },
+    "errors": {
+      "notConfigured": "Google sign-in is not configured for this site. Sign in or register with email, or contact the administrator.",
+      "cancelled": "Google sign-in was cancelled. You can try again or use email.",
+      "popupBlocked": "The Google window could not open. Allow popups for StockLab and try again.",
+      "refused": "Google permission was not granted. Try again or sign in with email.",
+      "sdk": "Google sign-in could not load. Check your connection or browser blocking settings, then retry.",
+      "unavailable": "Google sign-in is temporarily unavailable. Retry later or use email.",
+      "offline": "StockLab could not be reached. Check your connection and retry.",
+      "invalidResponse": "Google sign-in could not be verified. Restart Google sign-in or use email.",
+      "invalidRequest": "Google sign-in could not be completed. Check the password or restart Google sign-in.",
+      "invalidPassword": "That StockLab password is incorrect. Try again or reset your password.",
+      "passwordRequired": "Enter the existing StockLab account password to link Google.",
+      "expired": "The Google linking request expired. Restart Google sign-in.",
+      "conflict": "This Google account could not be linked. Sign in with your StockLab email or contact support.",
+      "rateLimited": "Too many Google sign-in attempts. Wait before trying again."
+    }
+  },
   "common": {
     "languageLabel": "Choose language",
+    "languageSaveError": "The language is applied here, but it could not be synced with your account. Try again.",
+    "languageSessionExpired": "Your session is no longer valid. Sign in again to save your language.",
+    "languageSessionStorageError": "Your language was saved to your account, but the browser session could not be updated. Sign in again.",
     "closeNavigation": "Close navigation",
     "primaryNavigation": "Primary navigation",
     "preview": "StockLab preview",
@@ -134,6 +166,7 @@
     "viewPortfolio": "View portfolio",
     "positionsSubtitle": "Your biggest holdings by value",
     "keyPositions": "Key positions",
+    "exploreMarket": "Explore Market",
     "holdings": "Holdings",
     "transactionsSubtitle": "Your latest activity",
     "recentTransactions": "Recent transactions",
@@ -211,8 +244,8 @@
   "market": {
     "title": "Market",
     "subtitle": "Explore stocks, ETFs and discover investment opportunities.",
-    "searchLabel": "Search for stocks, companies or keywords",
-    "searchPlaceholder": "Search for stocks, companies or keywords...",
+    "searchLabel": "Search by symbol or asset name",
+    "searchPlaceholder": "Search by symbol or asset name...",
     "filtersLabel": "Market filters",
     "filters": {
       "all": "All",
@@ -223,6 +256,7 @@
       "usMarket": "US Market"
     },
     "filterNouns": {
+      "all": "Assets",
       "stocks": "Stocks",
       "etfs": "ETFs",
       "indices": "Indices",
@@ -230,6 +264,10 @@
       "usMarket": "US Market"
     },
     "popular": "Popular {{asset}}",
+    "featured": "Featured {{asset}}",
+    "assetDetails": "Asset Details",
+    "availableAssets": "Available Assets",
+    "noAssetsFound": "No matching assets found.",
     "topGainers": "Top Gainers",
     "topLosers": "Top Losers",
     "topAssetGainers": "Top {{asset}} Gainers",
@@ -246,6 +284,7 @@
     "columns": {
       "symbol": "Symbol",
       "company": "Company",
+      "assetName": "Asset",
       "price": "Price",
       "dailyChange": "Daily Change",
       "marketCap": "Market Cap",
@@ -258,6 +297,7 @@
   "stockDetails": {
     "title": "Stock Details",
     "historicalPriceChart": "{{symbol}} historical price chart for {{range}}",
+    "chartKeyboardInstructions": "Use the arrow keys to explore prices, Home and End to jump to the first and last point, and Escape to clear the selection.",
     "aiConfidence": "{{confidence}} AI confidence",
     "aiInsight": "AI Insight",
     "byStockLabAi": "by StockLab AI",
@@ -342,6 +382,7 @@
       "duplicate_order": "This order conflicts with a previous submission.",
       "concurrency_conflict": "The portfolio changed while the order was executing.",
       "invalid_order": "The order could not be executed.",
+      "unsupported_asset": "Paper trading is available for common stocks only.",
       "limit_not_reached": "The current market price does not meet your limit price.",
       "rate_limited": "Too many requests. Please try again shortly.",
       "offline": "StockLab is unreachable. Check that the backend is running.",
@@ -908,6 +949,8 @@
       "close": "Close change password dialog",
       "title": "Change Password",
       "description": "Choose a new password for your StockLab account.",
+      "googleAccountHint": "If you signed up with Google, use password recovery to create your first password.",
+      "setPassword": "Set or recover a password",
       "currentPassword": "Current password",
       "newPassword": "New password",
       "confirmPassword": "Confirm new password",
@@ -918,6 +961,7 @@
       "errors": {
         "unauthorized": "Please sign in to change your password.",
         "invalid_current_password": "The current password is incorrect.",
+        "password_not_set": "This account has no password yet. Use password recovery to create one.",
         "validation_error": "Check the password fields and try again.",
         "user_not_found": "Your account could not be found. Please sign in again.",
         "password_update_conflict": "Your account changed during the operation. Please try again.",
@@ -989,7 +1033,8 @@
       "rateLimited": "Too many sign-in attempts.",
       "offline": "StockLab is unreachable. Check that the backend is running.",
       "server": "The authentication service is temporarily unavailable.",
-      "sessionStorage": "Your browser blocked secure session storage. Enable storage and try again."
+      "sessionStorage": "Your browser blocked secure session storage. Enable storage and try again.",
+      "languageSave": "Sign-in could not be completed because your chosen language could not be saved. Try again."
     },
     "showPassword": "Show password",
     "hidePassword": "Hide password"
@@ -1047,7 +1092,8 @@
     "newsSource": "Company headlines · Alpha Vantage · Open the publisher to read the article.",
     "noNews": "No recent articles were returned for this company.",
     "financialSource": "Reported company figures · Alpha Vantage · TTM means trailing twelve months. Unavailable fields are shown as —.",
-    "metricsSource": "Quote data: Twelve Data · Company ratios: Alpha Vantage",
+    "quoteData": "Quote data:",
+    "metricsSource": "Company ratios:",
     "forecastSource": "Analyst price target and rating counts · Alpha Vantage",
     "forecastNote": "The target is an external analyst estimate, not a guaranteed future price. The percentage compares that target with the latest quote; no forecast curve is generated.",
     "insightsSource": "Summary calculated from the available quote and company fundamentals.",
@@ -1088,12 +1134,14 @@
     "fundamentalsLabel": "Company fundamentals",
     "noFeaturedMovers": "No matching price moves among the available popular stocks.",
     "partialQuotes": "Some quotes are unavailable. Retry to load missing prices.",
+    "partialCatalog": "Some asset listings could not be loaded.",
+    "watchlistUnavailable": "This symbol cannot be added to the watchlist.",
     "quoteUnavailable": "Quote unavailable",
     "loading": "Loading…",
     "loadingHistory": "Loading price history… If the request limit is reached, this period will load when capacity is available. You can select another period while waiting.",
     "retry": "Retry",
     "invalid": "This request or interval is not supported. Choose another period.",
-    "notFound": "Stock not found.",
+    "notFound": "Asset not found.",
     "rateLimited": "Too many requests. Please try again later.",
     "invalidResponse": "Market data could not be read. Please try again later.",
     "unavailable": "Market data is temporarily unavailable. Please try again later.",
@@ -1101,13 +1149,12 @@
     "serverError": "Market data could not be loaded.",
     "offline": "Cannot reach StockLab. Check that the backend is running.",
     "loadQuote": "Load {{symbol}} quote",
-    "commonStocks": "Common stocks only; other asset classes are not available.",
-    "subtitle": "Search stocks using StockLab market data.",
+    "subtitle": "Explore stocks, ETFs, indices, and crypto.",
     "moversUnavailable": "Market-wide movers are not available yet.",
     "searchHint": "Enter a ticker or company name to search.",
     "exchange": "Exchange",
     "currency": "Currency",
-    "priceOnDetails": "Open stock details to load its price.",
+    "priceOnDetails": "Open asset details to load its price.",
     "latestQuote": "Latest available quote",
     "notAvailable": "Not available yet",
     "aiUnavailable": "AI analysis is not available yet.",
@@ -1146,6 +1193,49 @@
     "downsampled": "{{count}} actual points displayed.",
     "downsampled_other": "{{count}} actual points displayed.",
     "refresh": "Refresh history"
+  },
+  "recovery": {
+    "emailLabel": "Email address",
+    "newPasswordLabel": "New password",
+    "confirmPasswordLabel": "Confirm new password",
+    "passwordHint": "Use at least 8 characters.",
+    "backToLogin": "Back to sign in",
+    "requestNewLink": "Request a new reset link",
+    "submitting": "Please wait…",
+    "retryCountdown": "Try again in {{count}} seconds.",
+    "retryCountdown_one": "Try again in {{count}} second.",
+    "retryCountdown_other": "Try again in {{count}} seconds.",
+    "retryReady": "You can try again now.",
+    "forgot": {
+      "title": "Forgot your password?",
+      "subtitle": "Enter the email address associated with your StockLab account.",
+      "submit": "Request reset link",
+      "accepted": "If an account exists for this email address, we will attempt to send a password reset link. Check your inbox and spam folder, and wait at least one minute before requesting another link."
+    },
+    "reset": {
+      "title": "Reset your password",
+      "subtitle": "Choose a new password for your StockLab account.",
+      "submit": "Reset password",
+      "googleRecoveryNotice": "Resetting your password also disconnects Google if linked. You can link it again using your new password.",
+      "success": "Your password has been reset. Sign in with your new password. If Google was linked, link it again using this new password."
+    },
+    "errors": {
+      "emailRequired": "Enter your email address.",
+      "emailInvalid": "Enter a valid email address.",
+      "passwordRequired": "Enter a new password.",
+      "passwordShort": "Use a password with at least 8 characters.",
+      "passwordLong": "Use a password with at most 1024 characters.",
+      "passwordInvalid": "Use a non-blank password with 8 to 1024 characters.",
+      "confirmRequired": "Confirm your new password.",
+      "mismatch": "The passwords must match.",
+      "validation": "Check the highlighted fields and try again.",
+      "invalidLink": "This reset link is invalid or has expired. Request a new link to continue.",
+      "rateLimited": "Too many attempts. Please wait before trying again.",
+      "unavailable": "Password recovery is temporarily unavailable. Please try again later.",
+      "conflict": "Your password could not be updated because the account changed. Please try again.",
+      "offline": "StockLab could not be reached. Check your connection and try again.",
+      "server": "Your request could not be completed. Please try again later."
+    }
   },
   "businessData": {
     "unavailable": "Not available yet",

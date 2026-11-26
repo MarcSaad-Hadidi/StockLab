@@ -18,7 +18,8 @@ public sealed class TwelveDataProviderTests
     internal const string SearchJson = """
         {"data":[
           {"symbol":"AAPL","instrument_name":"Apple Inc.","exchange":"NASDAQ","currency":"USD","instrument_type":"Common Stock"},
-          {"symbol":"BTC/USD","instrument_name":"Bitcoin","instrument_type":"Digital Currency"},
+          {"symbol":"BTC/USD","instrument_name":"Bitcoin","exchange":"Binance","currency":"","instrument_type":"Digital Currency"},
+          {"symbol":"SPY","instrument_name":"SPDR S&P 500 ETF Trust","exchange":"NYSE","currency":"USD","instrument_type":"ETF"},
           {"symbol":"EUR/USD","instrument_name":"Euro","instrument_type":"Physical Currency"},
           {"symbol":"GC","instrument_name":"Gold","instrument_type":"Agricultural Product"},
           {"symbol":"MSFT","instrument_name":"Microsoft","instrument_type":"Common Stock"},
@@ -62,15 +63,47 @@ public sealed class TwelveDataProviderTests
     }
 
     [Fact]
-    public async Task Search_encodes_query_preserves_relevance_filters_and_deduplicates_canonical_symbols()
+    public async Task Search_encodes_query_preserves_asset_types_and_deduplicates_canonical_symbols()
     {
         using var f = new Fixture(SearchJson);
         var results = await f.Provider.SearchStocksAsync(" Apple & Co ");
-        Assert.Equal(new[] { "AAPL:NASDAQ", "MSFT" }, results.Select(r => r.Symbol));
+        Assert.Equal(new[] { "AAPL:NASDAQ", "BTC/USD:BINANCE", "SPY:NYSE", "EUR/USD", "GC", "MSFT" }, results.Select(r => r.Symbol));
         Assert.Equal("Apple Inc.", results[0].CompanyName);
         Assert.Equal("NASDAQ", results[0].Exchange); Assert.Equal("USD", results[0].Currency);
-        Assert.Null(results[1].Currency);
-        Assert.Equal("/symbol_search?symbol=Apple%20%26%20Co", Assert.Single(f.Handler.Requests).Uri.PathAndQuery);
+        Assert.Equal("USD", results[1].Currency);
+        Assert.Null(results[^1].Currency);
+        Assert.Equal(new[] { "Common Stock", "Digital Currency", "ETF", "Physical Currency", "Agricultural Product", "Common Stock" }, results.Select(r => r.InstrumentType));
+        Assert.Equal("/symbol_search?symbol=Apple%20%26%20Co&outputsize=120", Assert.Single(f.Handler.Requests).Uri.PathAndQuery);
+    }
+
+    [Fact]
+    public async Task Index_catalog_uses_the_provider_listing_name_and_exchange()
+    {
+        using var f = new Fixture("""
+            {"data":[{"symbol":"000001","name":"SSE Composite Index","exchange":"SSE","currency":"CNY"}],"count":1,"status":"ok"}
+            """);
+        var index = Assert.Single(await f.Provider.BrowseAssetsAsync(MarketAssetCategory.Indices));
+        Assert.Equal(new StockSearchResult("000001:SSE", "SSE Composite Index", "SSE", "CNY", "Index"), index);
+        Assert.Equal("/indices", Assert.Single(f.Handler.Requests).Uri.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task Crypto_quote_and_history_use_the_pair_currency_when_the_provider_omits_currency()
+    {
+        using var quote = new Fixture("""
+            {"symbol":"BTC/USD","exchange":"Binance","close":"60000.25","last_quote_at":1787947200}
+            """);
+        var latest = await quote.Provider.GetQuoteAsync("BTC/USD:BINANCE");
+        Assert.Equal("USD", latest!.Currency);
+        Assert.Equal("BTC/USD:BINANCE", latest.Symbol);
+
+        using var history = new Fixture("""
+            {"meta":{"symbol":"BTC/USD","interval":"1day","type":"Digital Currency","currency_quote":"US Dollar"},
+            "values":[{"datetime":"2026-08-24","open":"60000","high":"62000","low":"59000","close":"61000"}]}
+            """);
+        var series = await history.Provider.GetHistoryAsync(Calendar() with { Symbol = "BTC/USD:BINANCE" });
+        Assert.Equal("USD", series!.Currency);
+        Assert.Equal(61000m, Assert.Single(series.Bars).Close);
     }
 
     [Theory]

@@ -1,5 +1,4 @@
 import { StockLogo, LogoAttribution } from '../market/StockLogo'
-import { UnavailableState } from '../components/UnavailableState'
 import { PersonalPerformanceChart } from '../components/charts/PersonalPerformanceChart'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
@@ -205,7 +204,7 @@ export function DashboardPage() {
   const [range, setRange] = useState<PerformanceRange>('1M')
   const [query, setQuery] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { data: portfolio, error: portfolioError, recentTransactions } = usePortfolioData()
+  const { data: portfolio, error: portfolioError, isLoading: portfolioLoading, retry: retryPortfolio, recentTransactions } = usePortfolioData()
   const { items: watchlist, loading: watchlistLoading, error: watchlistError, reload: reloadWatchlist } = useWatchlistData()
   const dashboardUserName = ''
   const [greetingPeriod, setGreetingPeriod] = useState(() => getGreetingPeriod(new Date()))
@@ -213,20 +212,6 @@ export function DashboardPage() {
   useEffect(() => {
     return startDashboardGreetingTimer(() => setGreetingPeriod(getGreetingPeriod(new Date())), dashboardUserName)
   }, [])
-
-  useEffect(() => {
-    // Other pages persist mutations; revalidate when returning to this Dashboard.
-    const onVisible = () => { if (document.visibilityState === 'visible') reloadWatchlist() }
-    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) reloadWatchlist() }
-    window.addEventListener('focus', reloadWatchlist)
-    document.addEventListener('visibilitychange', onVisible)
-    window.addEventListener('pageshow', onPageShow)
-    return () => {
-      window.removeEventListener('focus', reloadWatchlist)
-      document.removeEventListener('visibilitychange', onVisible)
-      window.removeEventListener('pageshow', onPageShow)
-    }
-  }, [reloadWatchlist])
 
   const greeting = t(`businessData.greeting.${greetingPeriod}`)
 
@@ -321,7 +306,21 @@ export function DashboardPage() {
           </div>
 
           <div className="dashboard-grid dashboard-grid-bottom">
-            <section aria-labelledby="positions-title" className="panel positions-panel"><PanelHeading action={t('dashboard.viewPortfolio')} destination="portfolio" id="positions-title" subtitle={t('dashboard.positionsSubtitle')} title={t('dashboard.keyPositions')} /><div className="table-scroll"><table><thead><tr><th>{t('common.asset')}</th><th>{t('dashboard.holdings')}</th><th>{t('common.value')}</th><th>{t('common.allocation')}</th><th>{t('dashboard.today')}</th></tr></thead><tbody>{positions.length === 0 && <tr><td colSpan={5}><UnavailableState message="businessData.portfolio" /></td></tr>}{positions.map((position) => <PositionRow key={position.symbol} position={position} currency={portfolio?.currency ?? 'USD'} />)}</tbody></table></div></section>
+            <section aria-labelledby="positions-title" aria-busy={portfolioLoading} className="panel positions-panel">
+              <PanelHeading action={t('dashboard.viewPortfolio')} destination="portfolio" id="positions-title" subtitle={t('dashboard.positionsSubtitle')} title={t('dashboard.keyPositions')} />
+              {(portfolioLoading || portfolioError) && <div className="positions-feedback" role={portfolioLoading ? 'status' : 'alert'}>
+                <p>{t(portfolioLoading ? 'portfolio.loading' : portfolioError?.code === 'unauthorized'
+                  ? 'stockDetails.tradeErrors.unauthorized' : `portfolio.errors.${portfolioError?.code}`)}</p>
+                {portfolio && <p>{t('portfolio.lastSuccessfulData')}</p>}
+                {!portfolioLoading && portfolioError?.code === 'unauthorized' ? <a href={routeFor('login')}>{t('login.signIn')}</a>
+                  : portfolioError && <button data-retry-portfolio disabled={portfolioLoading} onClick={retryPortfolio} type="button">{t('watchlist.retry')}</button>}
+              </div>}
+              {!portfolioLoading && !portfolioError && portfolio && positions.length === 0 && <div className="positions-empty" role="status">
+                <p>{t('portfolio.emptyPositions')}</p>
+                <a className="text-action" href={routeFor('market')}>{t('dashboard.exploreMarket')}</a>
+              </div>}
+              {positions.length > 0 && <div className="table-scroll"><table><thead><tr><th>{t('common.asset')}</th><th>{t('dashboard.holdings')}</th><th>{t('common.value')}</th><th>{t('common.allocation')}</th><th>{t('dashboard.today')}</th></tr></thead><tbody>{positions.map((position) => <PositionRow key={position.symbol} position={position} currency={portfolio?.currency ?? 'USD'} />)}</tbody></table></div>}
+            </section>
             <section aria-labelledby="transactions-title" aria-busy={!transactionsError && recentTransactions.isLoading} className="panel transactions-panel">
               <PanelHeading action={t('common.viewAll')} destination="transactions" id="transactions-title" subtitle={t('dashboard.transactionsSubtitle')} title={t('dashboard.recentTransactions')} />
               {transactionsError || recentTransactions.isLoading ? <div className="recent-transactions-feedback" role={transactionsError ? 'alert' : 'status'}>

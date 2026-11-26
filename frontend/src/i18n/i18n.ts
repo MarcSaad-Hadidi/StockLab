@@ -6,6 +6,8 @@ import { defaultLanguage, fallbackLanguage, isSupportedLanguage, supportedLangua
 export { defaultLanguage, fallbackLanguage, isSupportedLanguage, supportedLanguages, type Language } from './languages'
 
 export const languageStorageKey = 'stocklab-language'
+let languageRevision = 0
+export const getLanguageRevision = () => languageRevision
 
 export const translationResources = {
   en: { translation: en },
@@ -45,6 +47,7 @@ export function persistLanguage(language: Language, storage: LanguageStorage | u
 }
 
 export async function setLanguage(language: Language, storage: LanguageStorage | undefined = browserStorage()) {
+  languageRevision++
   persistLanguage(language, storage)
   await i18n.changeLanguage(language)
 }
@@ -67,8 +70,10 @@ i18n.on('languageChanged', syncDocumentLanguage)
 
 // A saved preference also updates pages that are already open in another tab.
 if (typeof window !== 'undefined') window.addEventListener('storage', event => {
-  if (event.key === languageStorageKey && isSupportedLanguage(event.newValue))
+  if (event.key === languageStorageKey && isSupportedLanguage(event.newValue)) {
+    languageRevision++
     void i18n.changeLanguage(event.newValue)
+  }
 })
 
 export { i18n }

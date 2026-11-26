@@ -18,10 +18,10 @@ const sections = [
   { key: 'account', items: [{ key: 'profile', label: 'Profile', icon: 'user' }] },
 ] as const
 
-type SidebarProps = { open: boolean; onClose: () => void }
+type SidebarProps = { open: boolean; onClose: () => void; languageDisabled?: boolean }
 
 /** The corrected Alerts sidebar is the shared navigation reference. */
-export function Sidebar({ open, onClose }: SidebarProps) {
+export function Sidebar({ open, onClose, languageDisabled = false }: SidebarProps) {
   const { t } = useTranslation()
   const { panelRef, backdropRef, mobile } = useMobileNavigation(open, onClose)
   const logout = () => {
@@ -52,7 +52,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         </Fragment>)}
         <button className={`${styles.item} ${styles.button}`} onClick={logout} type="button"><SidebarIcon name="logout" size={16} /><span>{t('common.navigation.logout')}</span></button>
       </nav>
-      <div className={styles.footer}><LanguageSelector className="language-switch-sidebar" /><p>{t('common.preview')}</p></div>
+      <div className={styles.footer}><LanguageSelector className="language-switch-sidebar" disabled={languageDisabled} /><p>{t('common.preview')}</p></div>
     </aside>
   </>
 }

@@ -6,11 +6,14 @@ import {
   MarketDataError,
 } from "../src/api/marketDataApi.ts";
 import {
-  featuredSymbols,
   loadFeaturedQuotes,
+  loadMarketCatalog,
 } from "../src/market/marketData.ts";
 import { stockDetailsRoute } from "../src/market/marketRoutes.ts";
 const signal = () => new AbortController().signal;
+const featured = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"].map(symbol => ({
+  symbol, companyName: symbol, exchange: "NASDAQ", currency: "USD", instrumentType: "Common Stock",
+}));
 const quote = {
   symbol: "AAPL",
   price: 204.5, priceDecimal: '204.5',
@@ -65,12 +68,23 @@ test('quote parsing retains the original decimal operand beside an approximate c
     await assert.rejects(bad.quote('AAPL', signal()), (error: unknown) => error instanceof MarketDataError && error.status === 502);
   }
 });
-test("curated list has only five identifiers; routes preserve exchange suffixes", () => {
-  assert.deepEqual(featuredSymbols, ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"]);
+test("details routes preserve exchange suffixes, pairs, and asset types", () => {
   assert.equal(
     stockDetailsRoute("TSLA:NASDAQ"),
     "/market?symbol=tsla%3Anasdaq",
   );
+  assert.equal(stockDetailsRoute("BTC/USD:BINANCE", "Digital Currency"),
+    "/market?symbol=btc%2Fusd%3Abinance&instrumentType=Digital+Currency");
+});
+
+test("the All catalog shows each available category even when one catalog fails", async () => {
+  const catalog = await loadMarketCatalog("all", async category => {
+    if (category === "etfs") throw new MarketDataError(503);
+    return (category === "stocks" ? ["AAPL", "MSFT"] : category === "indices" ? ["SPX"] : ["BTC/USD"])
+      .map(symbol => ({ symbol, companyName: symbol, exchange: null, currency: "USD" }));
+  }, signal());
+  assert.deepEqual(catalog.assets.map(asset => asset.symbol), ["AAPL", "SPX", "BTC/USD", "MSFT"]);
+  assert.equal(catalog.partial, true);
 });
 test("encodes symbols and queries, sends cancellation, never requests search result quotes", async () => {
   const calls: string[] = [];
@@ -88,6 +102,7 @@ test("encodes symbols and queries, sends cancellation, never requests search res
                 companyName: "Berkshire",
                 exchange: "NYSE",
                 currency: null,
+                instrumentType: "Common Stock",
               },
             ]
           : quote,
@@ -101,6 +116,17 @@ test("encodes symbols and queries, sends cancellation, never requests search res
     "http://localhost:5274/api/stocks/search?query=a+%26+b",
   ]);
   assert.equal(api.metadata("BRK.B:NYSE")?.companyName, "Berkshire");
+  assert.equal(api.metadata("BRK.B:NYSE")?.instrumentType, "Common Stock");
+});
+
+test("crypto quotes use a query parameter that preserves the pair through routing", async () => {
+  const api = createMarketDataApi("", async (url) => {
+    const request = new URL(String(url), "http://localhost");
+    assert.equal(request.pathname, "/api/stocks/by-symbol/quote");
+    assert.equal(request.searchParams.get("symbol"), "BTC/USD:BINANCE");
+    return Response.json({ ...quote, symbol: "BTC/USD:BINANCE" });
+  });
+  assert.equal((await api.quote("BTC/USD:BINANCE", signal())).symbol, "BTC/USD:BINANCE");
 });
 test("empty query and previously cached search generate no requests", async () => {
   let count = 0;
@@ -200,7 +226,7 @@ test("five popular quotes use at most three concurrent calls and tolerate one fa
   let active = 0,
     maximum = 0,
     calls = 0;
-  const rows = await loadFeaturedQuotes(async (symbol) => {
+  const rows = await loadFeaturedQuotes([...featured, { ...featured[0], symbol: "EXTRA" }], async (symbol) => {
     calls++;
     active++;
     maximum = Math.max(maximum, active);
@@ -287,7 +313,7 @@ test("logo cache lasts thirty days with no repeated request during its lifetime"
 });
 
 test("all five featured quotes preserve actual upstream values", async () => {
-  const rows = await loadFeaturedQuotes(async symbol => ({ ...quote, symbol }), signal());
+  const rows = await loadFeaturedQuotes(featured, async symbol => ({ ...quote, symbol }), signal());
   assert.equal(rows.length, 5);
   assert.ok(rows.every(row => row.quote?.price === 204.5 && !row.failed));
 });
@@ -295,7 +321,7 @@ test("all five featured quotes preserve actual upstream values", async () => {
 for (const status of [0, 429, 503]) {
   test("total featured failure propagates the safe error, status " + status, async () => {
     const error = new MarketDataError(status);
-    await assert.rejects(loadFeaturedQuotes(async () => { throw error; }, signal()),
+    await assert.rejects(loadFeaturedQuotes(featured, async () => { throw error; }, signal()),
       caught => caught === error);
   });
 }
@@ -306,8 +332,8 @@ test("featured retry recovers from total failure without fake prices", async () 
     if (!available) throw new MarketDataError(503);
     return { ...quote, symbol, price: 123.45, priceDecimal: '123.45' };
   };
-  await assert.rejects(loadFeaturedQuotes(load, signal()));
+  await assert.rejects(loadFeaturedQuotes(featured, load, signal()));
   available = true;
-  const rows = await loadFeaturedQuotes(load, signal());
+  const rows = await loadFeaturedQuotes(featured, load, signal());
   assert.deepEqual(rows.map(row => row.quote?.price), [123.45, 123.45, 123.45, 123.45, 123.45]);
 });

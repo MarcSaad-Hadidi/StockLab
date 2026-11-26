@@ -80,7 +80,7 @@ test("unavailable financial values stay unavailable rather than becoming zero or
 });
 
 for (const [path, label] of [
-  ["dashboard/DashboardPage", "No portfolio data yet"],
+  ["dashboard/DashboardPage", "Your session has expired. Please sign in again."],
   ["portfolio/PortfolioPage", "Your session has expired. Please sign in again."],
   ["transactions/TransactionsPage", "Your session has expired. Please sign in again."],
   ["watchlist/WatchlistPage", "Loading watchlist"],
@@ -93,7 +93,7 @@ for (const [path, label] of [
     const module = await import(`../src/${path}.tsx`);
     const Page = module.default ?? module[path.split("/").at(-1)!];
     const html = renderToStaticMarkup(React.createElement(Page));
-    assert.ok(html.includes(label), `Missing empty state: ${label}`);
+    assert.ok(html.includes(label), `Missing expected state: ${label}`);
     assert.match(html, /<main/);
     assert.match(html, /<nav/);
     assert.doesNotMatch(

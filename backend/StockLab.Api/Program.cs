@@ -93,6 +93,8 @@ builder.Services.AddHealthChecks().AddCheck<SqlServerReadinessHealthCheck>("sql_
     failureStatus: HealthStatus.Unhealthy, tags: ["ready"], timeout: SqlServerReadinessHealthCheck.ProbeTimeout);
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddUserRegistration();
+builder.Services.AddPasswordRecovery(builder.Configuration, builder.Environment);
+builder.Services.AddGoogleAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddWatchlist();
 builder.Services.AddPriceAlerts();
 builder.Services.AddPriceAlertMonitoring(builder.Configuration);
@@ -203,7 +205,7 @@ builder.Services.AddRateLimiter(options =>
         var retryAfterSeconds = (int)Math.Max(1, Math.Ceiling(retryAfter.TotalSeconds));
         context.HttpContext.Response.Headers.RetryAfter = retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
         await context.HttpContext.Response.WriteAsJsonAsync(
-            new ApiRateLimitErrorResponse("too_many_requests", "Too many login attempts. Try again later.", retryAfterSeconds),
+            new ApiRateLimitErrorResponse("too_many_requests", "Too many attempts. Try again later.", retryAfterSeconds),
             cancellationToken);
     };
     options.AddPolicy(LoginRateLimitOptions.PolicyName, httpContext =>
@@ -220,6 +222,17 @@ builder.Services.AddRateLimiter(options =>
             partitionKey,
             _ => loginRateLimitOptions.CreateLimiterOptions());
     });
+    foreach (var policy in new[] { "PasswordForgot", "PasswordReset", "GoogleOAuth" })
+        options.AddPolicy(policy, httpContext =>
+        {
+            var address = httpContext.Connection.RemoteIpAddress;
+            var key = address is null ? "unknown" : address.IsIPv4MappedToIPv6
+                ? address.MapToIPv4().ToString() : address.ToString();
+            return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10, Window = TimeSpan.FromMinutes(15), QueueLimit = 0, AutoReplenishment = true
+            });
+        });
 });
 builder.Services.AddOptions<MarketDataCacheOptions>()
     .Bind(builder.Configuration.GetSection(MarketDataCacheOptions.SectionName))
@@ -278,7 +291,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .WithExposedHeaders("Retry-After", "Date");
+            .WithExposedHeaders("Retry-After", "Date", "ETag");
     });
 });
 

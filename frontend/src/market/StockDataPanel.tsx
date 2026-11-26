@@ -3,6 +3,7 @@ import type { StockFundamentals, StockNews, StockQuote } from '../api/marketData
 import { localeForLanguage } from '../i18n/formatters'
 import { money } from './stockDetailsData'
 import { companyHeadlines } from './companyNews'
+import { MarketDataProvenance } from '../components/market-data/MarketDataProvenance'
 
 export function StockDataPanel({ tab, quote, fundamentals, news }: {
   tab: string; quote?: StockQuote; fundamentals?: StockFundamentals; news?: StockNews
@@ -39,7 +40,10 @@ export function StockDataPanel({ tab, quote, fundamentals, news }: {
         ['stockPanels.earningsGrowth', percent(fundamentals?.quarterlyEarningsGrowthYoy)], ['stockDetails.stats.dividendYield', percent(fundamentals?.dividendYield)],
       ])}
     </> : tab === 'keyMetrics' ? <>
-      <p className="stock-data-source">{t('stockPanels.metricsSource')}</p>
+      <div className="stock-data-source">
+        <p>{t('stockPanels.quoteData')} <MarketDataProvenance {...quote} /></p>
+        <p>{t('stockPanels.metricsSource')} <MarketDataProvenance source={fundamentals ? 'AlphaVantage' : null} sourceOnly /></p>
+      </div>
       {grid([
         ['stockDetails.stats.marketCap', price(fundamentals?.marketCap)], ['stockDetails.stats.peRatio', number(fundamentals?.peRatio)],
         ['stockPanels.peg', number(fundamentals?.pegRatio)], ['stockDetails.metrics.beta', number(fundamentals?.beta)],

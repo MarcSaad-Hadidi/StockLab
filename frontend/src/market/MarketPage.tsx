@@ -1,10 +1,11 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { marketDataApi } from "../api/marketDataClient";
+import type { StockSearchResult } from "../api/marketDataApi";
 import { MarketShell } from "./MarketShell";
 import { MarketIcon } from "./marketIcons";
 import { StockLogo } from "./StockLogo";
-import { loadFeaturedQuotes } from "./marketData";
+import { assetCategories, canWatchSymbol, loadFeaturedQuotes, loadMarketCatalog, matchesAssetFilter, type MarketAssetFilter } from "./marketData";
 import { money } from "./stockDetailsData";
 import { useMarketRequest } from "./useMarketRequest";
 import { MarketRequestStatus } from "./MarketRequestStatus";
@@ -17,22 +18,29 @@ import { MarketDataProvenance } from '../components/market-data/MarketDataProven
 export function MarketPage({
   onOpenStock,
 }: {
-  onOpenStock: (symbol: string) => void;
+  onOpenStock: (symbol: string, instrumentType?: string | null) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const loadPopular = useCallback(
-    (signal: AbortSignal) => loadFeaturedQuotes(marketDataApi.quote, signal),
-    [],
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [assetFilter, setAssetFilter] = useState<MarketAssetFilter>("all");
+  const assetTerm = query.trim();
+  const isSearching = assetTerm.length > 0;
+  const loadCatalog = useCallback(
+    (signal: AbortSignal) => loadMarketCatalog(assetFilter, marketDataApi.browse, signal),
+    [assetFilter],
   );
-  const popular = useMarketRequest("popular", loadPopular);
+  const catalog = useMarketRequest(assetFilter, loadCatalog);
+  const loadPopular = useCallback(
+    (signal: AbortSignal) => loadFeaturedQuotes(catalog.data?.assets ?? [], marketDataApi.quote, signal),
+    [catalog.data],
+  );
+  const popular = useMarketRequest(assetFilter, loadPopular, Boolean(catalog.data?.assets.length));
   const loadMovers = useCallback(
     (signal: AbortSignal) => marketDataApi.movers(signal),
     [],
   );
   const movers = useMarketRequest("movers", loadMovers);
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const [assetFilter, setAssetFilter] = useState("all");
   const watchlist = useWatchlistData(false);
   const { favorites } = watchlist;
   const [watchlistNotice, setWatchlistNotice] = useState<{ symbol: string; key: string; sessionToken: string } | null>(null);
@@ -44,23 +52,28 @@ export function MarketPage({
     if (success && sessionToken) setWatchlistNotice({ symbol, key: removing ? 'watchlist.removedToast' : 'watchlist.addedToast', sessionToken });
   }
   const load = useCallback(
-    (signal: AbortSignal) => marketDataApi.search(query, signal),
-    [query],
+    (signal: AbortSignal) => marketDataApi.search(assetTerm, signal),
+    [assetTerm],
   );
-  const search = useMarketRequest(query, load, query.trim().length > 0, 450);
-  const results = query.trim()
-    ? (search.data ?? [])
-    : (popular.data ?? []).map((item) => ({
-        symbol: item.symbol,
-        companyName: item.quote?.name ?? item.symbol,
-        exchange: item.quote?.exchange ?? null,
-        currency: item.quote?.currency ?? null,
-      }));
+  const search = useMarketRequest(assetTerm, load, isSearching, 450);
+  const loadIndices = useCallback(
+    (signal: AbortSignal) => marketDataApi.browse("indices", signal, assetTerm),
+    [assetTerm],
+  );
+  const indexSearch = useMarketRequest(assetTerm, loadIndices,
+    isSearching && (assetFilter === "all" || assetFilter === "indices"), 450);
+  const matches = [...(search.data ?? []), ...(indexSearch.data ?? [])]
+    .filter(asset => matchesAssetFilter(asset, assetFilter));
+  const results = isSearching
+    ? [...new Map(matches.map(asset => [asset.symbol, asset])).values()]
+    : catalog.data?.assets ?? [];
+  const openAsset = (asset: StockSearchResult) => onOpenStock(asset.symbol, asset.instrumentType);
   const rankedMovers = (positive: boolean) =>
     (positive ? movers.data?.gainers ?? [] : movers.data?.losers ?? [])
       .filter((stock) => positive ? stock.changePercent > 0 : stock.changePercent < 0)
       .sort((a, b) => positive ? b.changePercent - a.changePercent : a.changePercent - b.changePercent);
   const pages = Math.max(1, Math.ceil(results.length / 10));
+  const visiblePage = Math.min(page, pages);
   return (
     <MarketShell>
       <section aria-labelledby="market-title" className="market-intro">
@@ -85,15 +98,13 @@ export function MarketPage({
         />
       </label>
       <div className="market-filter-row">
-        <div className="market-filter-tabs">
-          {["all", "stocks", "etfs", "indices", "crypto"].map((filter) => (
+        <div className="market-filter-tabs" role="group" aria-label={t("market.filtersLabel")}>
+          {(["all", ...assetCategories] as const).map((filter) => (
             <button
               key={filter}
-              disabled={!["all", "stocks"].includes(filter)}
               aria-pressed={assetFilter === filter}
-              onClick={() => setAssetFilter(filter)}
+              onClick={() => { setAssetFilter(filter); setPage(1); }}
               className={`market-filter-tab ${filter === assetFilter ? "market-filter-tab-active" : ""}`}
-              title={t("marketApi.commonStocks")}
               type="button"
             >
               {t(`market.filters.${filter}`)}
@@ -105,49 +116,54 @@ export function MarketPage({
         <section className="market-overview-card market-overview-card-popular">
           <div className="market-overview-heading">
             <h2>
-              {t("market.popular", { asset: t("market.filterNouns.stocks") })}
+              {t("market.featured", { asset: t(`market.filterNouns.${assetFilter}`) })}
             </h2>
           </div>
           <div className="market-overview-list">
+            <MarketRequestStatus {...catalog} />
+            {catalog.data?.partial && <MarketRequestStatus loading={false} error="marketApi.partialCatalog" retry={catalog.retry} />}
             <MarketRequestStatus {...popular} />
             {popular.data?.some((item) => item.failed) && (
               <MarketRequestStatus loading={false} error="marketApi.partialQuotes" retry={popular.retry} />
             )}
-            {(popular.data ?? []).map((item) => (
-              <button
-                className="market-overview-row"
-                key={item.symbol}
-                type="button"
-                onClick={() => onOpenStock(item.symbol)}
-              >
-                <StockLogo symbol={item.symbol} />
-                <span className="market-stock-copy">
-                  <strong>{item.symbol}</strong>
-                  <small>{item.failed ? t("marketApi.quoteUnavailable") : item.quote?.name ?? item.symbol}</small>
-                </span>
-                <div className="market-stock-quote">
-                  <strong>
-                    {money(
-                      item.quote?.price,
-                      item.quote?.currency ?? null,
-                      localeForLanguage(i18n.language),
-                    )}
-                  </strong>
-                  <span
-                    className={
-                      (item.quote?.changePercent ?? 0) >= 0
-                        ? "market-stock-change market-positive"
-                        : "market-stock-change market-negative"
-                    }
-                  >
-                    {item.quote?.changePercent == null
-                      ? "—"
-                      : formatSignedPercent(item.quote.changePercent)}
+            {catalog.data?.assets.slice(0, 5).map((asset) => {
+              const item = popular.data?.find(row => row.symbol === asset.symbol);
+              return (
+                <button
+                  className="market-overview-row"
+                  key={asset.symbol}
+                  type="button"
+                  onClick={() => openAsset(asset)}
+                >
+                  <StockLogo symbol={asset.symbol} instrumentType={asset.instrumentType} />
+                  <span className="market-stock-copy">
+                    <strong>{asset.symbol}</strong>
+                    <small>{item?.failed ? t("marketApi.quoteUnavailable") : asset.companyName}</small>
                   </span>
-                </div>
-                {item.quote && <MarketDataProvenance {...item.quote} compact />}
-              </button>
-            ))}
+                  <div className="market-stock-quote">
+                    <strong>
+                      {money(
+                        item?.quote?.price,
+                        item?.quote?.currency ?? null,
+                        localeForLanguage(i18n.language),
+                      )}
+                    </strong>
+                    <span
+                      className={
+                        (item?.quote?.changePercent ?? 0) >= 0
+                          ? "market-stock-change market-positive"
+                          : "market-stock-change market-negative"
+                      }
+                    >
+                      {item?.quote?.changePercent == null
+                        ? "—"
+                        : formatSignedPercent(item.quote.changePercent)}
+                    </span>
+                  </div>
+                  {item?.quote && <MarketDataProvenance {...item.quote} compact />}
+                </button>
+              );
+            })}
           </div>
         </section>
         {["topGainers", "topLosers"].map((section) => (
@@ -215,14 +231,17 @@ export function MarketPage({
         aria-label={t("market.searchLabel")}
       >
         <div className="market-results-heading">
-          <h2>{t("market.searchResults")}</h2>
+          <h2>{t(isSearching ? "market.searchResults" : "market.availableAssets")}</h2>
           <span>{results.length}</span>
         </div>
         <MarketRequestStatus {...search} />
+        <MarketRequestStatus {...indexSearch} label={assetFilter === "all" ? "market.filters.indices" : undefined} />
 
-        {search.data?.length === 0 && (
+        {results.length === 0 && (isSearching
+          ? !search.loading && !indexSearch.loading && !search.error && !indexSearch.error
+          : Boolean(catalog.data)) && (
           <div className="market-empty-state" role="status">
-            {t("market.noStocksFound")}
+            {t("market.noAssetsFound")}
           </div>
         )}
         {results.length > 0 && (
@@ -231,7 +250,7 @@ export function MarketPage({
               <table className="market-results-table">
                 <thead>
                   <tr>
-                    {["symbol", "company"].map((column) => (
+                    {["symbol", "assetName"].map((column) => (
                       <th key={column}>{t(`market.columns.${column}`)}</th>
                     ))}
                     <th>{t("marketApi.exchange")}</th>
@@ -241,62 +260,66 @@ export function MarketPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {results.slice((page - 1) * 10, page * 10).map((stock) => {
+                  {results.slice((visiblePage - 1) * 10, visiblePage * 10).map((stock) => {
                     const quote = popular.data?.find(item => item.symbol === stock.symbol)?.quote;
+                    const watchable = canWatchSymbol(stock.symbol);
                     return (
-                    <tr key={stock.symbol}>
-                      <td>
-                        <button
-                          className="market-symbol-cell"
-                          type="button"
-                          onClick={() => onOpenStock(stock.symbol)}
-                        >
-                          <StockLogo symbol={stock.symbol} />
-                          <strong>{stock.symbol}</strong>
-                        </button>
-                      </td>
-                      <td>
-                        <button
-                          className="market-company-cell"
-                          type="button"
-                          onClick={() => onOpenStock(stock.symbol)}
-                        >
-                          {stock.companyName}
-                        </button>
-                      </td>
-                      <td>{stock.exchange ?? "—"}</td>
-                      <td>{stock.currency ?? "—"}</td>
-                      <td title={t("marketApi.priceOnDetails")}>
-                        {money(
-                          quote?.price,
-                          stock.currency,
-                          localeForLanguage(i18n.language),
-                        )}
-                        {quote && <MarketDataProvenance {...quote} compact />}
-                      </td>
-                      <td>
-                        <button
-                          className="market-favorite-button"
-                          type="button"
-                          aria-label={t(
-                            favorites.has(stock.symbol)
-                              ? "market.removeFavorite"
-                              : "market.addFavorite",
-                            { symbol: stock.symbol },
+                      <tr key={stock.symbol}>
+                        <td>
+                          <button
+                            className="market-symbol-cell"
+                            type="button"
+                            onClick={() => openAsset(stock)}
+                          >
+                            <StockLogo symbol={stock.symbol} instrumentType={stock.instrumentType} />
+                            <strong>{stock.symbol}</strong>
+                          </button>
+                        </td>
+                        <td>
+                          <button
+                            className="market-company-cell"
+                            type="button"
+                            onClick={() => openAsset(stock)}
+                          >
+                            <span>{stock.companyName}</span>
+                            {stock.instrumentType && <small className="market-result-type">{stock.instrumentType}</small>}
+                          </button>
+                        </td>
+                        <td>{stock.exchange ?? "—"}</td>
+                        <td>{stock.currency ?? "—"}</td>
+                        <td title={t("marketApi.priceOnDetails")}>
+                          {money(
+                            quote?.price,
+                            stock.currency,
+                            localeForLanguage(i18n.language),
                           )}
-                          aria-pressed={favorites.has(stock.symbol)}
-                          disabled={watchlist.loading || Boolean(watchlist.error) || watchlist.pendingSymbols.has(stock.symbol)}
-                          onClick={() => { void toggleFavorite(stock.symbol); }}
-                        >
-                          <MarketIcon
-                            name="star"
-                            filled={favorites.has(stock.symbol)}
-                            size={14}
-                          />
-                        </button>
-                      </td>
-                    </tr>
-                  )})}
+                          {quote && <MarketDataProvenance {...quote} compact />}
+                        </td>
+                        <td>
+                          <button
+                            className="market-favorite-button"
+                            type="button"
+                            aria-label={t(
+                              favorites.has(stock.symbol)
+                                ? "market.removeFavorite"
+                                : "market.addFavorite",
+                              { symbol: stock.symbol },
+                            )}
+                            aria-pressed={favorites.has(stock.symbol)}
+                            disabled={!watchable || watchlist.loading || Boolean(watchlist.error) || watchlist.pendingSymbols.has(stock.symbol)}
+                            title={watchable ? undefined : t("marketApi.watchlistUnavailable")}
+                            onClick={() => { void toggleFavorite(stock.symbol); }}
+                          >
+                            <MarketIcon
+                              name="star"
+                              filled={favorites.has(stock.symbol)}
+                              size={14}
+                            />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -304,19 +327,19 @@ export function MarketPage({
               <button
                 className="market-page-arrow"
                 type="button"
-                disabled={page === 1}
-                onClick={() => setPage((n) => n - 1)}
+                disabled={visiblePage === 1}
+                onClick={() => setPage(visiblePage - 1)}
               >
                 {t("common.previousPage")}
               </button>
               <span className="market-page-count">
-                {page} / {pages}
+                {visiblePage} / {pages}
               </span>
               <button
                 className="market-page-arrow"
                 type="button"
-                disabled={page === pages}
-                onClick={() => setPage((n) => n + 1)}
+                disabled={visiblePage === pages}
+                onClick={() => setPage(visiblePage + 1)}
               >
                 {t("common.nextPage")}
               </button>

@@ -53,6 +53,190 @@ USD
 paper-trading portfolio. Login verifies the stored password hash and returns a
 signed JWT access token whose session version is checked against the account on each protected request.
 
+## Password recovery (#298, #332)
+
+Apply migration `20261115004323_AddPasswordRecovery` before enabling recovery.
+`POST /api/auth/password/forgot` accepts `{ "email": "person@example.com", "language": "en" }`
+(`en` or `fr`). When recovery is enabled and the SMTP check succeeds, it returns
+the same empty **202** for known and unknown accounts. Email lookup and message
+delivery happen in the bounded background queue. A **202** confirms queueing;
+the recipient's mail server can still reject or quarantine the message later.
+
+Before queueing, the API checks the configured connection, TLS, any SMTP login
+and the envelope sender. The check resets the SMTP transaction without passing
+a recipient or message. Concurrent requests share one check, bounded to five
+seconds. The result is reused for 30 seconds per API instance. A connection,
+authentication or sender failure during delivery invalidates a cached success.
+Recipient-specific rejections stay in the background and cannot change the
+public response for future requests.
+The queue holds 100 requests in memory, so restarting the process can discard
+pending requests. Users can explicitly request another email; there is no
+automatic resend. A persisted issuance suppresses further emails to that account
+for 60 seconds, including when SMTP subsequently fails. Multiple API instances
+use SQL rowversion to reject overlapping issuance, but IP limits are per process.
+
+`POST /api/auth/password/reset` accepts `userId`, `token`, `newPassword` and
+`confirmPassword`. Passwords require 8–1024 characters and matching confirmation.
+It returns empty **204** only after persisting the new hash, consuming the token
+and revoking existing JWT sessions together. Expired, used, malformed, incorrect
+and nonexistent-account links return **400** `invalid_reset_token`. Invalid email
+or password fields use **400** `validation_error`. Persistence failures return
+**500**, never success. Forgot and reset each allow 10 requests per client IP per
+15 minutes, independently of login; **429** includes `Retry-After`. Trusted proxy
+configuration applies to these policies as it does to login.
+
+Recovery is disabled until configured. A disabled or unreachable relay, a failed
+SMTP check, or a full queue returns **503** `password_recovery_unavailable` without
+account lookup. Subsequent requests can be accepted again after the relay passes
+the next check.
+Already issued links can still reset passwords while email delivery is disabled.
+When enabled, malformed settings prevent API startup.
+
+Configure these settings on the **backend**. In a deployed environment, inject the
+variables through the host's environment and secret store. For local development,
+use the corresponding `.NET User Secrets` keys such as `PasswordRecovery:SmtpHost`.
+
+| Backend environment variable | Value |
+| --- | --- |
+| `PasswordRecovery__Enabled` | Set to `true` after the relay and application URL are configured |
+| `PasswordRecovery__FrontendBaseUrl` | Deployed HTTPS frontend URL, without query, fragment or credentials |
+| `PasswordRecovery__TokenLifetimeMinutes` | 1–60, default 30 |
+| `PasswordRecovery__SmtpHost`, `PasswordRecovery__SmtpPort` | Provider's SMTP submission host and port |
+| `PasswordRecovery__FromEmail` | Sender address authorized by the SMTP provider |
+| `PasswordRecovery__Username`, `PasswordRecovery__Password` | Secret references for SMTP credentials. Omit both only for a relay explicitly configured to accept this backend without credentials |
+| `PasswordRecovery__Security` | `StartTls` (usually port 587), `SslOnConnect` (usually port 465), or Development loopback `None` |
+
+Unencrypted SMTP (`None`) is accepted only in Development to a loopback host;
+HTTP frontend links are likewise allowed only for Development loopback. Local QA
+can use a real SMTP capture service on `127.0.0.1:1025` with an HTTP frontend at
+`http://127.0.0.1:5189`. For deployment, verify SMTP egress and that the sender is
+authorized, then apply the migration and restart the API with recovery enabled.
+Request a reset using an authorized test mailbox and verify receipt, link origin
+and sign-in with the new password. Include a test mailbox for a Google-created
+account. Recovery revokes existing sessions and removes the old Google link.
+SMTP connection, authentication and delivery have a bounded 20-second deadline.
+Transport warnings include the stage, error type and numeric SMTP status when
+available. They omit SMTP response text, email addresses, credentials, tokens
+and message bodies.
+
+English and French plain-text MIME emails link to
+`<FrontendBaseUrl>/reset-password#userId=<guid>&token=<token>`. Keeping secrets in
+the fragment prevents them from entering HTTP request paths or referrer headers.
+Tokens contain 32 cryptographically random bytes; only their SHA-256 digest and
+expiry are stored. Password or normalized-email edits invalidate issued tokens.
+Requesting a new email after the cooldown invalidates the preceding link.
+
+Run the backend suite with `dotnet test backend/StockLab.sln`. On Windows with
+LocalDB installed, set `STOCKLAB_TEST_LOCALDB=1` to include SQL Server migration,
+single-use token and rowversion concurrency checks. Tests use isolated databases
+and a loopback SMTP peer that captures real MIME messages without external mail.
+
+## Google authentication (#299)
+
+Google sign-in uses the real Google Identity Services popup authorization-code
+flow. It is disabled until an operator creates a Google OAuth **Web application**
+client and configures its credentials. Apply migration
+`20261115035556_AddGoogleAuthentication` before enabling it. Existing password
+accounts, profiles, session counters and portfolios are preserved.
+
+Configure these API settings with environment variables or User Secrets:
+
+| `GoogleAuth` setting | Value |
+| --- | --- |
+| `Enabled` | `true` after configuration; committed default is `false` |
+| `ClientId` | The Google Web client ID ending in `.apps.googleusercontent.com`; public |
+| `ClientSecret` | The matching client secret; backend only, never a `VITE_` setting |
+| `AllowedOrigins` | Exact frontend origins, such as `https://stocklab.example` or Development-only `http://localhost:5173` |
+
+Environment variable forms include `GoogleAuth__Enabled`, `GoogleAuth__ClientId`,
+`GoogleAuth__ClientSecret` and `GoogleAuth__AllowedOrigins__0`. Do not commit real
+credentials. Invalid enabled configuration prevents startup. Origins contain no
+trailing slash, path, credentials, query or fragment. HTTPS is required except
+for loopback HTTP origins in the Development environment. Also configure the
+same frontend origin in `Cors:AllowedOrigins` when the browser calls the API
+directly. A proxy must preserve the browser's original `Origin` header.
+
+In Google Cloud Console, configure the consent screen/audience, add your users to
+the test audience while the app is in testing, create a Web application client,
+and add the exact frontend origin to its Authorized JavaScript origins. Local
+`localhost` and `127.0.0.1` origins are different; register whichever the browser
+actually uses. The frontend requests only `openid email profile` through
+`google.accounts.oauth2.initCodeClient` in popup mode. Per Google's
+[code model documentation](https://developers.google.com/identity/oauth2/web/guides/use-code-model),
+the token exchange `redirect_uri` is the **calling page's origin**. StockLab derives
+it exclusively from the allowlisted browser `Origin`, never a submitted redirect
+URL. This implementation does not expose an OAuth redirect callback route.
+
+| Endpoint | Behavior |
+| --- | --- |
+| `GET /api/auth/google/config?origin=<encoded-frontend-origin>` | `{ "enabled": false }` while disabled or for an unapproved origin; otherwise public `enabled` and `clientId` only; no database lookup |
+| `POST /api/auth/google/exchange` | Accepts `{ "code": "...", "language": "en" }`; language is `en` or `fr` |
+| `POST /api/auth/google/link` | Accepts `{ "linkToken": "...", "password": "...", "language": "en" }` to prove ownership of an existing password account |
+
+Both POST requests require an exact allowed `Origin` and
+`X-Requested-With: StockLab.GoogleOAuth`. Responses disable caching. Exchange is
+limited to 10 requests per client IP per 15 minutes; link shares the normal login
+limit (default 5 per minute). Limit responses are **429** with `Retry-After`.
+These limits and temporary linking tickets are local to the API process.
+For multiple instances, use session affinity for the exchange/link pair or a
+shared ticket store; a restart requires starting Google sign-in again.
+
+The backend POSTs the code and secret only to Google's HTTPS token endpoint.
+The entire exchange/validation has a 20-second deadline; transport disables
+redirects and HTTP client logging. Microsoft's OIDC discovery manager caches and
+refreshes Google's public signing keys. The JWT library verifies the RS256
+signature, Google issuer, configured audience, expiration, issued-at time, subject,
+authorized party when present, and verified email. It never accepts a decoded-only
+token or a Google access token as identity. Access/refresh tokens are discarded.
+No production setting or development route accepts a test Google identity.
+Network test doubles and signing keys exist only in the test assembly.
+
+Successful sign-in returns the exact normal `LoginUserResponse` and revocable
+StockLab JWT. An existing Google `sub` identifies the same user even after Google
+email/name changes; later logins preserve the local profile and preferred language.
+First-time Google accounts receive a normal USD 100,000 paper portfolio and the
+chosen language. They have a null password hash rather than a generated password.
+Password login fails safely, and authenticated password change returns **400**
+`password_not_set` with guidance to use password recovery.
+
+An email match alone never links accounts. A collision with an unlinked password
+account returns **409** `google_link_required` plus a random `linkToken` and
+`expiresAtUtc`, without a session. The five-minute ticket binds the Google subject,
+user ID, original normalized email, password hash, session version and origin.
+Link verifies the existing StockLab password, allows at most five guesses, and
+consumes the ticket once. Account changes invalidate the proof. SQL rowversion and
+the unique binary-collated Google subject index prevent concurrent requests from
+reassigning an identity or creating duplicate portfolios. Linking preserves the
+existing account's preferred language and financial data.
+
+All Google accounts with verified email are supported, including external email
+providers. Google's [ID token verification guidance](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token)
+explains that a verified external address does not establish continuing mailbox
+ownership. A successful StockLab **password recovery therefore disconnects Google**
+atomically with the new password, consumed reset token and session revocation.
+The current mailbox owner regains all credentials. Google sign-in can be linked
+again only by proving the newly set StockLab password. An ordinary authenticated
+password change preserves an existing Google binding.
+
+Errors use safe JSON codes: **401** `google_invalid_response` or
+`invalid_credentials`; **503** `google_unavailable`; **409**
+`google_account_conflict`; **400** `google_link_expired` or field-level
+`validation_error`. Disabled POSTs return `google_unavailable` before resolving
+database/provider dependencies. Expired tickets and provider failures never
+create a local session.
+
+Rollback refuses to remove Google authentication while any Google-only account
+has a null password. Set real passwords through recovery first. With password
+accounts only, rollback preserves passwords, sessions and financial data but
+removes Google bindings. Never synthesize password hashes to permit rollback.
+
+Verification uses public API tests with real JWT signature validation, isolated
+Google HTTP fixtures, and SQL Server tests for first-login uniqueness, both
+cross-account linking races, one-time ticket consumption, reset/link concurrency,
+and migration rollback. Enable LocalDB with `STOCKLAB_TEST_LOCALDB=1` and run
+`dotnet test backend/StockLab.sln`. A real Google client, consent screen and browser
+sign-in remain necessary to verify live Google popup/exchange behavior.
+
 ## Entity Framework Core
 
 `StockLab.Infrastructure/Persistence/StockLabDbContext.cs` owns the personal account
@@ -1232,6 +1416,17 @@ and a rowversion conflict 409 (`profile_update_conflict`). User IDs supplied in
 the body cannot select another account. The existing name/email endpoint leaves
 the language preference unchanged.
 
+Profile GET and successful profile/language PUT responses expose a strong `ETag`
+header containing the quoted base64 SQL rowversion, without changing the JSON
+profile fields. Send that exact token as `If-Match` on language PUT to reject a
+delayed write after a newer profile change: a mismatch or concurrent save returns
+`412 profile_update_conflict`. Refresh the profile before retrying the current
+language choice. Weak tags, wildcards, lists, and malformed or noncanonical
+rowversion tags return `400 validation_error`. Omitting `If-Match` preserves the
+legacy `409` concurrency response. Every successful language choice advances the
+existing rowversion, including choosing the already saved language with an
+unchanged timestamp; no migration is required.
+
 Apply `AddUserPreferredLanguage` before deploying the new API. It backfills existing
 users with `en`, matching the previous application default, and constrains stored
 codes to the supported languages. Rolling this migration back drops the preference
@@ -1239,12 +1434,20 @@ column; identity, password and portfolio data are preserved, and a later upgrade
 defaults the preference to `en` again.
 
 Profile's language setting applies the saved response to i18n without reloading;
-failures retain the previous preference and display localized errors. Login applies
-the account language before redirecting, replacing a previous browser choice.
+failures retain the previous preference and display localized errors. Without an
+explicit Register/Login choice, Login restores the account language. A manual
+choice in that tab takes priority and is saved through the authenticated language
+endpoint with the newly issued token before the browser session is stored.
+Connected global selectors apply the manual display choice immediately and save
+it to the account; failures remain visible with a retry action. Loading Profile
+never reapplies an older stored language over the current display choice.
+
 The shared local language cache is used on every page and storage events update
-already open tabs. The existing public language selectors still control the
-browser display; persistent account preference changes use Profile. This issue
-does not add a mandatory initial-language prompt or a top-bar language button.
+already open tabs. Pending account choices survive page navigation and resume in
+the next authenticated document. The client reads a fresh ETag, checks the latest
+per-account intent before writing, and retries a 412 only for the latest intent
+(three attempts maximum). An old document's completion cannot replace a newer
+intent. Missing or malformed ETags never fall back to an unconditional write.
 
 ## Portfolio API
 
@@ -1759,8 +1962,20 @@ shared budget, null/empty behavior, provider failures and safe 429 JSON.
 
 ## Twelve Data REST provider
 
-The committed default is MarketData:Provider=Mock. A clone runs without credentials
-and makes no external market-data calls. TwelveData must be selected explicitly.
+The committed base default is `MarketData:Provider=TwelveData`. Production,
+Staging and other user-facing environments require the selected Website/Fallback
+credential at startup. A missing/invalid key fails startup; provider failures are
+reported safely and never replace real data with Mock or another credential.
+
+`appsettings.Development.json` explicitly selects `Mock` so the normal Development
+launch profiles remain offline and need no market credential. Select
+`MarketData__Provider=TwelveData` to validate real quotes and histories locally.
+Mock is accepted only in Development/Testing or when an operator explicitly sets
+`MarketData:AllowSimulatedData=true` for a simulation. The committed value is
+false; do not enable it in a user-facing real-data environment. The environment
+variable is `MarketData__AllowSimulatedData`. Changing provider settings requires
+a process restart; cached values and source labels belong to that process.
+
 No startup or health probe contacts Twelve Data. Periodic price-alert monitoring
 can request quotes for active rules through the existing market-data pipeline.
 
@@ -2027,7 +2242,8 @@ Equality never matches.
 `PriceAlertMonitoring__Interval`. Startup validation requires a timer-supported
 interval of 1..4294967294 milliseconds. Configuration changes require a restart.
 With an external terminal, active rules can consume provider quota each cycle;
-the existing cache and limiter still apply. The committed provider is `Mock`.
+the existing cache and limiter still apply. Development explicitly selects `Mock`;
+the base/default production configuration selects `TwelveData`.
 
 `PriceAlertMonitoring:DailyQuoteBudget` defaults to 200 and must be positive at
 startup. It caps **all monitoring quote lookups per UTC day**, shared across users,

@@ -158,7 +158,9 @@ internal sealed class AiCurrentPositionsFixture(string? sqlConnection, SqliteCon
             return Task.FromResult(Quote is null ? new(symbol, "USD", Prices[symbol], null, null, null, Now)
                 : Quote(symbol, cancellationToken));
         }
-        public Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(string query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(string query, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<StockSearchResult>>(Prices.Keys.Where(symbol => symbol == query)
+                .Select(symbol => new StockSearchResult(symbol, symbol, "NASDAQ", "USD", "Common Stock")).ToArray());
         public Task<StockHistory?> GetHistoryAsync(StockHistoryRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 

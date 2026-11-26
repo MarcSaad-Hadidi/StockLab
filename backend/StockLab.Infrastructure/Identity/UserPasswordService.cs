@@ -14,9 +14,12 @@ public sealed class UserPasswordService(StockLabDbContext dbContext, IPasswordHa
     {
         var user = await dbContext.Users.SingleOrDefaultAsync(value => value.Id == userId, cancellationToken);
         if (user is null) return PasswordChangeResult.UserNotFound;
+        if (user.PasswordHash is null) return PasswordChangeResult.PasswordNotSet;
         if (passwordHasher.VerifyHashedPassword(user, user.PasswordHash, currentPassword) == PasswordVerificationResult.Failed)
             return PasswordChangeResult.InvalidCurrentPassword;
         user.PasswordHash = passwordHasher.HashPassword(user, newPassword);
+        user.PasswordResetTokenHash = null;
+        user.PasswordResetExpiresAtUtc = null;
         // Commit the hash and revocation together; failed writes preserve both previous values.
         user.SessionVersion = checked(user.SessionVersion + 1);
         user.UpdatedAtUtc = timeProvider.GetUtcNow().UtcDateTime;

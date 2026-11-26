@@ -6,9 +6,13 @@ public sealed class User
     public string DisplayName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string NormalizedEmail { get; set; } = string.Empty;
-    public string PasswordHash { get; set; } = string.Empty;
+    public string? PasswordHash { get; set; }
+    public string? GoogleSubject { get; set; }
     public string PreferredLanguage { get; set; } = "en";
     public long SessionVersion { get; set; }
+    public byte[]? PasswordResetTokenHash { get; set; }
+    public DateTime? PasswordResetExpiresAtUtc { get; set; }
+    public DateTime? PasswordResetRequestedAtUtc { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
     public byte[] Version { get; set; } = [];

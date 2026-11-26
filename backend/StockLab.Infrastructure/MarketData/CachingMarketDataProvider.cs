@@ -49,6 +49,16 @@ public sealed class CachingMarketDataProvider : IMarketDataProvider
             cancellationToken))!;
     }
 
+    public async Task<IReadOnlyList<StockSearchResult>> BrowseAssetsAsync(MarketAssetCategory category,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return (await GetOrLoadAsync<IReadOnlyList<StockSearchResult>>(
+            (keyNamespace, "assets", category), 0, searchTtl, async () =>
+                Array.AsReadOnly((await inner.BrowseAssetsAsync(category, cancellationToken)).ToArray()),
+            cancellationToken))!;
+    }
+
     public Task<StockHistory?> GetHistoryAsync(StockHistoryRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -89,7 +99,7 @@ public sealed class CachingMarketDataProvider : IMarketDataProvider
     {
         StockQuote quote => 256L + TextSize(quote.Symbol) + TextSize(quote.Currency) + TextSize(quote.Name) + TextSize(quote.Exchange) + TextSize(quote.FiftyTwoWeek?.Range),
         IReadOnlyList<StockSearchResult> stocks => stocks.Sum(stock =>
-            128L + TextSize(stock.Symbol) + TextSize(stock.CompanyName) + TextSize(stock.Exchange) + TextSize(stock.Currency)),
+            128L + TextSize(stock.Symbol) + TextSize(stock.CompanyName) + TextSize(stock.Exchange) + TextSize(stock.Currency) + TextSize(stock.InstrumentType)),
         StockHistory history => 128L + TextSize(history.Symbol) + TextSize(history.Currency) + 128L * history.Bars.Count,
         _ => throw new InvalidOperationException("Unsupported cache result type.")
     };

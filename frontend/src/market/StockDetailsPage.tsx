@@ -1,7 +1,7 @@
 import { normalizeOperand, amountSign, subtractAmounts } from '../api/decimalMath';
 import { isPositiveAmount } from '../api/decimalAmount';
 import { FinancialLineChart } from "../components/charts/FinancialLineChart";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
   formatNumber,
@@ -9,6 +9,7 @@ import {
   localeForLanguage,
 } from "../i18n/formatters";
 import { marketDataApi } from "../api/marketDataClient";
+import type { StockHistory } from "../api/marketDataApi";
 import { TradingApiError, tradingApi } from "../api/tradingApi";
 import { getAuthSession, type AuthSession } from "../auth/authStorage";
 import { subscribeAuthSession, useAuthUser } from "../auth/useAuthUser";
@@ -19,6 +20,7 @@ import { MarketIcon } from "./marketIcons";
 import { StockLogo } from "./StockLogo";
 import { MarketRequestStatus } from "./MarketRequestStatus";
 import { useOrderCash } from "./useOrderCash";
+import { useOrderConfirmationFocus } from "./useOrderConfirmationFocus";
 import type { PortfolioApiError } from "../api/portfolioApi";
 import { StockDataPanel } from "./StockDataPanel";
 import { MarketDataProvenance } from '../components/market-data/MarketDataProvenance';
@@ -26,7 +28,7 @@ import { useMarketRequest } from "./useMarketRequest";
 import {
   calculateTradeTotal,
   chartRanges,
-  historyPoints,
+  stockChartSeries,
   historyQuery,
   money,
   getTradeExecutionPrice,
@@ -273,23 +275,47 @@ function TradeTicket({
   );
 }
 
+const StockHistoryChart = memo(function StockHistoryChart({
+  history, range, locale, currency, ariaLabel, keyboardInstructions,
+}: {
+  history: StockHistory;
+  range: ChartRange;
+  locale: string;
+  currency: string | null;
+  ariaLabel: string;
+  keyboardInstructions: string;
+}) {
+  const chart = stockChartSeries(history, range, locale);
+  return <FinancialLineChart
+    values={chart.values} labels={chart.labels} min={chart.min} max={chart.max}
+    formatAxisLabel={(index) => chart.ticks.get(index) ?? ""}
+    stockCursor={{ tickIndexes: chart.tickIndexes, keyboardInstructions }}
+    ariaLabel={ariaLabel} formatValue={(value) => money(value, currency, locale, 4)}
+    showLatestValue
+  />;
+});
+
 export function StockDetailsPage({
   requestedSymbol,
+  instrumentType,
 }: {
   requestedSymbol: string;
+  instrumentType?: string | null;
   onBack: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const locale = localeForLanguage(i18n.language);
   const symbol = requestedSymbol.trim().toUpperCase();
+  const isPair = symbol.includes("/");
   const [anchor] = useState(() => new Date());
   const watchlist = useWatchlistData(false);
   const { reload: reloadWatchlist } = watchlist;
   const isWatchlisted = watchlist.favorites.has(symbol);
   const watchlistReady = !watchlist.loading && !watchlist.error;
   const watchlistPending = watchlist.pendingSymbols.size > 0;
-  const watchlistDisabled = !watchlistReady || watchlistPending;
-  const watchlistLabel = watchlist.loading ? t("watchlist.loading")
+  const watchable = !isPair && symbol.length <= 32;
+  const watchlistDisabled = !watchable || !watchlistReady || watchlistPending;
+  const watchlistLabel = !watchable ? t("marketApi.watchlistUnavailable") : watchlist.loading ? t("watchlist.loading")
     : watchlist.error ? t("common.navigation.watchlist")
     : t(isWatchlisted ? "stockDetails.removeFromWatchlist" : "stockDetails.addToWatchlist", { symbol });
   const [watchlistAction, setWatchlistAction] = useState<{ symbol: string; accessToken: string } | null>(null);
@@ -304,18 +330,6 @@ export function StockDetailsPage({
     void (isWatchlisted ? watchlist.remove(symbol) : watchlist.add(symbol));
   }
 
-  useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === "visible") reloadWatchlist(); };
-    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) reloadWatchlist(); };
-    window.addEventListener("focus", reloadWatchlist);
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("pageshow", onPageShow);
-    return () => {
-      window.removeEventListener("focus", reloadWatchlist);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("pageshow", onPageShow);
-    };
-  }, [reloadWatchlist]);
   const [tradeSide, setTradeSide] = useState<TradeSide>("BUY");
   const [orderType, setOrderType] = useState<TradeOrderType>("market");
   const [limitPrice, setLimitPrice] = useState("");
@@ -330,7 +344,6 @@ export function StockDetailsPage({
   const [hasUncertainOrder, setHasUncertainOrder] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cashResult, setCashResult] = useState<{ session: AuthSession; balance: string } | null>(null);
-  const orderCash = useOrderCash();
   // A trade response is newer than the initial portfolio read, even if that read
   // finishes last. Never show a previous session's result while effects catch up.
   const currentCashResult = cashResult && sameTradeSession(cashResult.session, getAuthSession()) ? cashResult : null;
@@ -384,6 +397,25 @@ export function StockDetailsPage({
     [symbol],
   );
   const quote = useMarketRequest(`quote:${symbol}`, loadQuote);
+  const [ticker, requestedExchange] = symbol.split(":", 2);
+  const loadListings = useCallback(
+    (signal: AbortSignal) => marketDataApi.search(ticker, signal),
+    [ticker],
+  );
+  // Watchlist and direct links can omit the type. Resolve the same listing as
+  // the quote rather than assuming stock or picking a partial/wrong-exchange match.
+  const listings = useMarketRequest(`listing:${symbol}`, loadListings, !isPair && !instrumentType);
+  const listingExchange = requestedExchange || quote.data?.exchange?.trim().toUpperCase();
+  const listing = listingExchange
+    ? listings.data?.find((asset) => asset.symbol.toUpperCase() === `${ticker}:${listingExchange}`)
+      ?? listings.data?.find((asset) => asset.symbol.toUpperCase() === ticker
+        && asset.exchange?.trim().toUpperCase() === listingExchange)
+    : undefined;
+  const assetType = instrumentType || listing?.instrumentType;
+  const canTrade = !isPair && assetType === "Common Stock";
+  const resolvingAssetType = !isPair && !instrumentType &&
+    (listings.loading || (!listings.error && !requestedExchange && quote.loading));
+  const orderCash = useOrderCash(canTrade);
   const [showEnrichment, setShowEnrichment] = useState(false);
   const loadFundamentals = useCallback(
     (signal: AbortSignal) => marketDataApi.fundamentals(symbol, signal),
@@ -392,7 +424,7 @@ export function StockDetailsPage({
   const fundamentals = useMarketRequest(
     `fundamentals:${symbol}`,
     loadFundamentals,
-    showEnrichment || ["financials", "keyMetrics", "forecast", "insights"].includes(activeTab),
+    canTrade && (showEnrichment || ["financials", "keyMetrics", "forecast", "insights"].includes(activeTab)),
   );
   const loadEarnings = useCallback(
     (signal: AbortSignal) => marketDataApi.earnings(symbol, signal),
@@ -401,10 +433,10 @@ export function StockDetailsPage({
   const earnings = useMarketRequest(
     `earnings:${symbol}`,
     loadEarnings,
-    showEnrichment,
+    canTrade && showEnrichment,
   );
   const loadNews = useCallback((signal: AbortSignal) => marketDataApi.news(symbol, signal), [symbol]);
-  const news = useMarketRequest(`news:${symbol}`, loadNews, activeTab === "news");
+  const news = useMarketRequest(`news:${symbol}`, loadNews, canTrade && activeTab === "news");
 
   // For a closed market, 1D follows the latest observed session rather than an empty weekend.
   const historyAnchorTime =
@@ -433,7 +465,7 @@ export function StockDetailsPage({
   const currency = quote.data?.currency ?? metadata?.currency ?? history.data?.currency ?? fundamentals.data?.currency ?? null;
   const formatPrice = (value: number | string | null | undefined) =>
     money(typeof value === "string" ? normalizeOperand(value, 4) : value, currency, locale, 4);
-  const details: StockDetails | null = quote.data
+  const details: StockDetails | null = canTrade && quote.data
     ? {
         symbol,
         company: companyName,
@@ -560,11 +592,12 @@ export function StockDetailsPage({
     }
   };
   const dismissTrade = () => {
+    if (activeRequest.current) return;
     if (pendingTrade?.outcomeUncertain) setHasUncertainOrder(true);
     setPendingTrade(null);
     setTradeError(null);
   };
-  const points = history.data ? historyPoints(history.data, locale) : [];
+  const confirmationRef = useOrderConfirmationFocus(pendingTrade !== null, isSubmitting, dismissTrade);
   const change = quote.data?.changePercent;
   const tone =
     change == null || change === 0
@@ -574,11 +607,11 @@ export function StockDetailsPage({
         : "stock-negative";
 
   return (
-    <MarketShell breadcrumb={<strong>{t('stockDetails.title')}</strong>}>
+    <MarketShell breadcrumb={<strong>{t(canTrade ? 'stockDetails.title' : 'market.assetDetails')}</strong>}>
       <section aria-labelledby="stock-details-title" className="stock-details-page">
         <header className="stock-details-hero">
           <div className="stock-details-identity">
-            <StockLogo size="large" symbol={symbol} />
+            <StockLogo size="large" symbol={symbol} instrumentType={assetType} />
             <div>
               <div className="stock-title-row">
                 <h1 id="stock-details-title">{companyName}</h1>
@@ -596,7 +629,7 @@ export function StockDetailsPage({
                 </button>
               </div>
               <p className="stock-details-subtitle">
-                {symbol} · {exchange ?? "—"}
+                {[symbol, assetType, exchange].filter(Boolean).join(" · ")}
               </p>
               <MarketRequestStatus {...quote} />
               {quote.data && (
@@ -636,7 +669,7 @@ export function StockDetailsPage({
               type="button"
             >
               <MarketIcon filled={isWatchlisted} name="star" size={15} />{" "}
-              {!watchlistReady ? watchlistLabel : isWatchlisted
+              {!watchable || !watchlistReady ? watchlistLabel : isWatchlisted
                 ? t("stockDetails.inWatchlist")
                 : t("stockDetails.addToWatchlist", { symbol })}
             </button>
@@ -654,7 +687,7 @@ export function StockDetailsPage({
           <WatchlistFeedback loading={watchlist.loading} error={watchlist.error} retry={reloadWatchlist} />
           <WatchlistFeedback error={showWatchlistError ? watchlist.mutationError : null} />
         </div>
-        <nav
+        {canTrade && <nav
           aria-label={t("stockDetails.sectionsLabel")}
           className="stock-detail-tabs"
         >
@@ -669,7 +702,7 @@ export function StockDetailsPage({
               {t(`stockDetails.tabs.${tab}`)}
             </button>
           ))}
-        </nav>
+        </nav>}
         {activeTab !== "overview" ? (
           <>
             {activeTab === "news" ? <MarketRequestStatus {...news} label="stockDetails.tabs.news" /> : <MarketRequestStatus {...fundamentals} label="marketApi.fundamentalsLabel" />}
@@ -708,28 +741,24 @@ export function StockDetailsPage({
                 </div>
                 <div className="stock-price-chart">
                   <MarketRequestStatus {...history} loadingMessage="marketApi.loadingHistory" />
-                  {history.data && !points.length && (
-                    <p role="status">{t("marketApi.noHistory")}</p>
-                  )}
-                  {points.length > 0 && (
-                    <FinancialLineChart
+                  {history.data && (history.data.bars.length ? (
+                    <StockHistoryChart
                       key={`${symbol}:${activeRange}`}
-                      values={points.map((p) => p.value)}
-                      labels={points.map((p) => p.label)}
-                      min={Math.min(...points.map((p) => p.value)) * 0.99}
-                      max={Math.max(...points.map((p) => p.value)) * 1.01}
+                      history={history.data}
+                      range={activeRange}
+                      locale={locale}
+                      currency={currency}
                       ariaLabel={t("stockDetails.historicalPriceChart", {
                         symbol,
                         range: activeRange,
                       })}
-                      formatValue={formatPrice}
-                      showLatestValue
+                      keyboardInstructions={t("stockDetails.chartKeyboardInstructions")}
                     />
-                  )}
+                  ) : <p role="status">{t("marketApi.noHistory")}</p>)}
                 </div>
                 {history.data && <MarketDataProvenance source={history.data.source} sourceOnly />}
               </article>
-              {!showEnrichment && (
+              {canTrade && !showEnrichment && (
                 <button
                   className="stock-outline-button"
                   onClick={() => setShowEnrichment(true)}
@@ -742,7 +771,7 @@ export function StockDetailsPage({
                 aria-label={t("stockDetails.keyStatistics")}
                 className="stock-stats-grid"
               >
-                {[
+                {canTrade && [
                   "marketCap",
                   "peRatio",
                   "eps",
@@ -815,7 +844,7 @@ export function StockDetailsPage({
                   label={t("stockDetails.metrics.previousClose")}
                   value={formatPrice(quote.data?.previousClose)}
                 />
-                {["beta", "analystRating", "analystTarget"].map((key) => (
+                {canTrade && ["beta", "analystRating", "analystTarget"].map((key) => (
                   <StatCard
                     metric
                     key={key}
@@ -841,7 +870,7 @@ export function StockDetailsPage({
               </section>
             </div>
             <aside className="stock-details-side-column">
-              <article className="stock-ai-card">
+              {canTrade && <article className="stock-ai-card">
                 <div className="stock-card-heading">
                   <div className="stock-card-title">
                     <MarketIcon name="robot" size={16} />
@@ -850,10 +879,20 @@ export function StockDetailsPage({
                 </div>
                 <p className="stock-ai-copy">{t("stockPanels.priceFact", { price: formatPrice(quote.data?.priceDecimal), change: quote.data?.changePercent == null ? "—" : formatSignedPercent(quote.data.changePercent) })}</p>
                 <button className="stock-outline-button" type="button" onClick={() => setActiveTab("insights")}>{t("stockPanels.openInsights")}</button>
-              </article>
+              </article>}
               {hasUncertainOrder && <p className="stock-form-error" role="alert">{t("stockDetails.submittedOrderUncertain")}</p>}
               {!pendingTrade && tradeError && <p className="stock-form-error" role="alert">{t(tradeError)}</p>}
-              {!details && (
+              {!canTrade && (
+                <article className="stock-trade-card">
+                  <h2>{t("stockDetails.paperTrading")}</h2>
+                  {resolvingAssetType || listings.error ? (
+                    <MarketRequestStatus loading={resolvingAssetType} error={listings.error} retry={listings.retry} />
+                  ) : (
+                    <p>{t(isPair || assetType ? "stockDetails.tradeErrors.unsupported_asset" : "marketApi.notAvailable")}</p>
+                  )}
+                </article>
+              )}
+              {canTrade && !details && (
                 <article className="stock-trade-card">
                   <h2>{t("stockDetails.paperTrading")}</h2>
                   <p>{t("marketApi.notAvailable")}</p>
@@ -921,10 +960,13 @@ export function StockDetailsPage({
       )}
       {pendingTrade && (
         <div
+          ref={confirmationRef}
           aria-labelledby="trade-confirmation-title"
+          aria-busy={isSubmitting || undefined}
           aria-modal="true"
           className="stock-modal-backdrop"
           role="dialog"
+          tabIndex={-1}
         >
           <section className="stock-modal">
             <button

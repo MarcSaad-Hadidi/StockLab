@@ -54,7 +54,7 @@ async function mount(t: TestContext, fetcher: (request: Request) => Promise<Resp
   const container = document.createElement('div'); document.body.append(container)
   const root = createRoot(container)
   const render = async (requestedSymbol: string) => {
-    await act(async () => root.render(React.createElement(StockDetailsPage, { requestedSymbol, onBack() {} })))
+    await act(async () => root.render(React.createElement(StockDetailsPage, { requestedSymbol, instrumentType: 'Common Stock', onBack() {} })))
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 25)) })
   }
   await render('AAPL')

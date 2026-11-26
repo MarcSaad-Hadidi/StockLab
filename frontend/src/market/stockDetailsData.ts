@@ -58,17 +58,44 @@ export function historyQuery(
     interval: range === "5Y" ? "Week" : "Day",
   };
 }
-export function historyPoints(history: StockHistory, locale: string) {
-  return history.bars.map((bar) => ({
-    value: bar.close,
-    label:
-      bar.periodDate ??
-      new Intl.DateTimeFormat(locale, {
-        dateStyle: "short",
-        timeStyle: "short",
-        timeZone: "UTC",
-      }).format(new Date(bar.openTimeUtc!)) + " UTC",
-  }));
+// Sample labels, not observations: all received closes stay on the plotted curve.
+export function stockChartSeries(history: StockHistory, range: ChartRange, locale: string) {
+  const intraday = history.interval === "Minute" || history.interval === "Hour";
+  const style: Intl.DateTimeFormatOptions = { timeZone: "UTC" };
+  const pointFormat = new Intl.DateTimeFormat(locale, {
+    ...style, dateStyle: "medium", ...(intraday ? { timeStyle: "short" } : {}),
+  });
+  const tickFormat = new Intl.DateTimeFormat(locale, {
+    ...style,
+    ...(range === "1D" ? { hour: "numeric", minute: "2-digit" }
+      : range === "5Y" || range === "MAX" ? { month: "short", year: "numeric" }
+        : { month: "short", day: "numeric" }),
+  });
+  const maxLabels = range === "1D" ? 5 : range === "5D" ? 6 : range === "5Y" || range === "MAX" ? 7 : 6;
+  const values: number[] = [];
+  const labels: string[] = [];
+  const dates: number[] = [];
+  let min = Infinity;
+  let max = -Infinity;
+  for (const bar of history.bars) {
+    const date = Date.parse(bar.periodDate ?? bar.openTimeUtc!);
+    dates.push(date);
+    values.push(bar.close);
+    labels.push(pointFormat.format(date) + (intraday ? " UTC" : ""));
+    min = Math.min(min, bar.close);
+    max = Math.max(max, bar.close);
+  }
+  const tickIndexes: number[] = [];
+  const ticks = new Map<number, string>();
+  const count = Math.min(dates.length, maxLabels);
+  for (let i = 0; i < count; i++) {
+    const index = count === 1 ? 0 : Math.round(i * (dates.length - 1) / (count - 1));
+    const label = tickFormat.format(dates[index]);
+    if (tickIndexes.length && ticks.get(tickIndexes.at(-1)!) === label) continue;
+    tickIndexes.push(index);
+    ticks.set(index, label);
+  }
+  return { values, labels, tickIndexes, ticks, min: min * 0.99, max: max * 1.01 };
 }
 export function money(
   value: number | string | null | undefined,

@@ -38,8 +38,8 @@ function isProfile(value: unknown): value is UserProfile {
 
 export function createProfileApi(baseUrl: string, fetcher: typeof fetch = fetch,
   authorization: () => { Authorization: string } | null = getAuthorizationHeader) {
-  async function request(payload?: UpdateProfileRequest | { preferredLanguage: Language }, signal?: AbortSignal): Promise<UserProfile> {
-    const auth = authorization()
+  async function request(payload?: UpdateProfileRequest | { preferredLanguage: Language }, signal?: AbortSignal, loginAuthorization?: string, version?: string) {
+    const auth = loginAuthorization ? { Authorization: loginAuthorization } : authorization()
     if (!auth) throw new ProfileApiError(401, 'unauthorized')
     let response: Response
     const languageUpdate = payload && 'preferredLanguage' in payload
@@ -49,7 +49,9 @@ export function createProfileApi(baseUrl: string, fetcher: typeof fetch = fetch,
     try {
       response = await fetcher(`${baseUrl.replace(/\/$/, '')}/api/profile${languageUpdate ? '/language' : ''}`, {
         method: payload ? 'PUT' : 'GET', signal,
-        headers: { Accept: 'application/json', ...auth, ...(payload ? { 'Content-Type': 'application/json' } : {}) },
+        ...(!payload ? { cache: 'no-store' as const } : {}),
+        ...(languageUpdate ? { keepalive: true } : {}),
+        headers: { Accept: 'application/json', ...auth, ...(payload ? { 'Content-Type': 'application/json' } : {}), ...(version ? { 'If-Match': version } : {}) },
         ...(payload ? { body } : {}),
       })
     } catch {
@@ -69,19 +71,30 @@ export function createProfileApi(baseUrl: string, fetcher: typeof fetch = fetch,
         : response.status === 404 ? 'profile_not_found'
         : response.status === 400 ? 'validation_error'
         : response.status === 409 && details.error === 'email_already_registered' ? 'email_already_registered'
-        : response.status === 409 ? 'profile_update_conflict' : 'server_error'
+        : response.status === 409 || response.status === 412 ? 'profile_update_conflict' : 'server_error'
       const fields = record(details.errors) ? Object.fromEntries(Object.entries(details.errors)
         .filter((entry): entry is [string, string[]] => Array.isArray(entry[1]) && entry[1].every(text))) : {}
       throw new ProfileApiError(response.status, code, fields)
     }
     if (!isProfile(result)) throw new ProfileApiError(502, 'invalid_response')
     if (languageUpdate && result.preferredLanguage !== payload.preferredLanguage) throw new ProfileApiError(502, 'invalid_response')
-    return result
+    return { profile: result, version: response.headers.get('ETag') }
   }
   return {
-    getProfile: (signal?: AbortSignal) => request(undefined, signal),
-    updateProfile: (payload: UpdateProfileRequest, signal?: AbortSignal) => request(payload, signal),
-    updateLanguage: (preferredLanguage: Language, signal?: AbortSignal) => request({ preferredLanguage }, signal),
+    getProfile: async (signal?: AbortSignal) => (await request(undefined, signal)).profile,
+    updateProfile: async (payload: UpdateProfileRequest, signal?: AbortSignal) => (await request(payload, signal)).profile,
+    async updateLanguage(preferredLanguage: Language, signal?: AbortSignal, loginAuthorization?: string, beforeWrite?: (profile: UserProfile) => boolean) {
+      // Keep GET and PUT bound to the same account even if another tab logs in.
+      const token = loginAuthorization ?? authorization()?.Authorization
+      if (!token) throw new ProfileApiError(401, 'unauthorized')
+      const snapshot = await request(undefined, signal, token)
+      const version = snapshot.version
+      if (!version || version.length > 128 || !/^"[A-Za-z0-9+/]*={0,2}"$/.test(version)) throw new ProfileApiError(502, 'invalid_response')
+      try { const decoded = atob(version.slice(1, -1)); if (decoded.length !== 8 || btoa(decoded) !== version.slice(1, -1)) throw new Error('Invalid ETag') }
+      catch { throw new ProfileApiError(502, 'invalid_response') }
+      if (beforeWrite && !beforeWrite(snapshot.profile)) throw new DOMException('Language choice superseded', 'AbortError')
+      return (await request({ preferredLanguage }, signal, token, version)).profile
+    },
   }
 }
 

@@ -10,14 +10,20 @@ public sealed class UserProfileService(
     StockLabDbContext dbContext,
     TimeProvider timeProvider) : IUserProfileService
 {
-    public async Task<User?> UpdateLanguageAsync(Guid userId, string preferredLanguage, CancellationToken cancellationToken)
+    public async Task<User?> UpdateLanguageAsync(Guid userId, string preferredLanguage, CancellationToken cancellationToken,
+        byte[]? expectedVersion = null)
     {
         if (preferredLanguage is not ("en" or "fr"))
             throw new ArgumentOutOfRangeException(nameof(preferredLanguage));
         var user = await dbContext.Users.SingleOrDefaultAsync(item => item.Id == userId, cancellationToken);
         if (user is null) return null;
+        if (expectedVersion is not null && !user.Version.AsSpan().SequenceEqual(expectedVersion))
+            throw new UserProfileUpdateConflictException();
         user.PreferredLanguage = preferredLanguage;
         user.UpdatedAtUtc = timeProvider.GetUtcNow().UtcDateTime;
+        // A same-language choice is still a newer intent and must advance SQL rowversion,
+        // even when the clock has not advanced and EF sees no changed values.
+        dbContext.Entry(user).Property(item => item.PreferredLanguage).IsModified = true;
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -58,6 +64,11 @@ public sealed class UserProfileService(
         }
 
         user.DisplayName = trimmedDisplayName;
+        if (user.NormalizedEmail != normalizedEmail)
+        {
+            user.PasswordResetTokenHash = null;
+            user.PasswordResetExpiresAtUtc = null;
+        }
         user.Email = trimmedEmail;
         user.NormalizedEmail = normalizedEmail;
         user.UpdatedAtUtc = timeProvider.GetUtcNow().UtcDateTime;

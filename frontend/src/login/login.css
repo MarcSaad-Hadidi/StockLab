@@ -1,3 +1,5 @@
+@import "../auth/email-field.css";
+
 :root {
   --ink: #101426;
   --muted: #7c8398;

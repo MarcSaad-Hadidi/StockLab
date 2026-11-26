@@ -8,5 +8,6 @@ public interface IUserProfileService
 
     Task<User?> UpdateAsync(Guid userId, string displayName, string email, CancellationToken cancellationToken);
 
-    Task<User?> UpdateLanguageAsync(Guid userId, string preferredLanguage, CancellationToken cancellationToken);
+    Task<User?> UpdateLanguageAsync(Guid userId, string preferredLanguage, CancellationToken cancellationToken,
+        byte[]? expectedVersion = null);
 }

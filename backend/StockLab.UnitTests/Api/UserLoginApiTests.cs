@@ -143,6 +143,7 @@ public sealed partial class UserLoginApiTests
         Assert.Equal(1, await context.Portfolios.CountAsync());
         var user = await context.Users.AsNoTracking().SingleAsync();
         var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>();
+        Assert.NotNull(user.PasswordHash);
         Assert.Contains(hasher.VerifyHashedPassword(user, user.PasswordHash, password), new[]
         {
             PasswordVerificationResult.Success,
@@ -525,7 +526,10 @@ public sealed partial class UserLoginApiTests
             string? trustedProxyAddress = null,
             string? remoteProxyAddress = null,
             DateTimeOffset? issuedAtUtc = null,
-            string? databasePath = null)
+            string? databasePath = null,
+            Action<IServiceCollection>? configureServices = null,
+            Dictionary<string, string?>? extraConfiguration = null,
+            TimeProvider? timeProvider = null)
         {
             var connection = new SqliteConnection(databasePath is null ? "Data Source=:memory:"
                 : new SqliteConnectionStringBuilder { DataSource = databasePath, Pooling = false }.ToString());
@@ -556,6 +560,8 @@ public sealed partial class UserLoginApiTests
                         ["ForwardedHeaders:KnownProxies:0"] = trustedProxyAddress
                     };
                     if (accessTokenMinutes is not null) values["Jwt:AccessTokenMinutes"] = accessTokenMinutes;
+                    if (extraConfiguration is not null)
+                        foreach (var pair in extraConfiguration) values[pair.Key] = pair.Value;
                     configuration.AddInMemoryCollection(values);
                 });
                 builder.ConfigureTestServices(services =>
@@ -566,7 +572,7 @@ public sealed partial class UserLoginApiTests
                     services.AddSingleton(options);
                     services.AddScoped<StockLabDbContext, SqliteLoginDbContext>();
                     services.RemoveAll<TimeProvider>();
-                    services.AddSingleton<TimeProvider>(new FixedTimeProvider(expectedUtcNow));
+                    services.AddSingleton(timeProvider ?? new FixedTimeProvider(expectedUtcNow));
                     services.AddControllers().AddApplicationPart(typeof(ProtectedApiProbeController).Assembly);
                     if (passwordHasher is not null)
                     {
@@ -578,6 +584,7 @@ public sealed partial class UserLoginApiTests
                         services.AddSingleton<IStartupFilter>(
                             new FixedRemoteIpStartupFilter(IPAddress.Parse(remoteProxyAddress ?? trustedProxyAddress)));
                     }
+                    configureServices?.Invoke(services);
                 });
             });
 

@@ -1,6 +1,38 @@
 {
+  "googleAuth": {
+    "continue": "Continuer avec Google",
+    "loading": "Chargement de la connexion Google…",
+    "working": "Connexion en cours…",
+    "popupHint": "Terminez la connexion dans la fenêtre Google. Vous pouvez annuler et réessayer.",
+    "cancel": "Annuler la connexion Google",
+    "retry": "Réessayer la connexion Google",
+    "link": {
+      "description": "Un compte StockLab existant utilise cette adresse. Entrez son mot de passe StockLab pour associer Google et vous connecter.",
+      "password": "Mot de passe StockLab existant",
+      "submit": "Associer Google et se connecter"
+    },
+    "errors": {
+      "notConfigured": "La connexion Google n’est pas configurée pour ce site. Connectez-vous ou inscrivez-vous par courriel, ou contactez l’administrateur.",
+      "cancelled": "La connexion Google a été annulée. Réessayez ou utilisez votre courriel.",
+      "popupBlocked": "La fenêtre Google n’a pas pu s’ouvrir. Autorisez les fenêtres contextuelles pour StockLab et réessayez.",
+      "refused": "L’autorisation Google n’a pas été accordée. Réessayez ou connectez-vous par courriel.",
+      "sdk": "La connexion Google n’a pas pu se charger. Vérifiez votre connexion ou les blocages du navigateur, puis réessayez.",
+      "unavailable": "La connexion Google est temporairement indisponible. Réessayez plus tard ou utilisez votre courriel.",
+      "offline": "StockLab est inaccessible. Vérifiez votre connexion et réessayez.",
+      "invalidResponse": "La connexion Google n’a pas pu être vérifiée. Recommencez ou utilisez votre courriel.",
+      "invalidRequest": "La connexion Google n’a pas pu aboutir. Vérifiez le mot de passe ou recommencez la connexion Google.",
+      "invalidPassword": "Ce mot de passe StockLab est incorrect. Réessayez ou réinitialisez votre mot de passe.",
+      "passwordRequired": "Entrez le mot de passe du compte StockLab existant pour associer Google.",
+      "expired": "La demande d’association Google a expiré. Recommencez la connexion Google.",
+      "conflict": "Ce compte Google n’a pas pu être associé. Connectez-vous avec votre courriel StockLab ou contactez l’assistance.",
+      "rateLimited": "Trop de tentatives de connexion Google. Patientez avant de réessayer."
+    }
+  },
   "common": {
     "languageLabel": "Choisir la langue",
+    "languageSaveError": "La langue est appliquée ici, mais sa synchronisation avec votre compte a échoué. Réessayez.",
+    "languageSessionExpired": "Votre session n’est plus valide. Reconnectez-vous pour enregistrer votre langue.",
+    "languageSessionStorageError": "Votre langue a été enregistrée dans votre compte, mais la session du navigateur n’a pas pu être actualisée. Reconnectez-vous.",
     "closeNavigation": "Fermer la navigation",
     "primaryNavigation": "Navigation principale",
     "preview": "Aperçu StockLab",
@@ -134,6 +166,7 @@
     "viewPortfolio": "Voir le portefeuille",
     "positionsSubtitle": "Vos principales positions par valeur",
     "keyPositions": "Positions principales",
+    "exploreMarket": "Explorer le marché",
     "holdings": "Participations",
     "transactionsSubtitle": "Votre activité récente",
     "recentTransactions": "Transactions récentes",
@@ -211,8 +244,8 @@
   "market": {
     "title": "Marché",
     "subtitle": "Explorez les actions et ETF et découvrez des opportunités d’investissement.",
-    "searchLabel": "Rechercher des actions, entreprises ou mots-clés",
-    "searchPlaceholder": "Rechercher des actions, entreprises ou mots-clés...",
+    "searchLabel": "Rechercher par symbole ou nom d’actif",
+    "searchPlaceholder": "Rechercher par symbole ou nom d’actif...",
     "filtersLabel": "Filtres du marché",
     "filters": {
       "all": "Tous",
@@ -223,6 +256,7 @@
       "usMarket": "Marché américain"
     },
     "filterNouns": {
+      "all": "actifs",
       "stocks": "actions",
       "etfs": "ETF",
       "indices": "indices",
@@ -230,6 +264,10 @@
       "usMarket": "marché américain"
     },
     "popular": "{{asset}} populaires",
+    "featured": "À découvrir · {{asset}}",
+    "assetDetails": "Détails de l’actif",
+    "availableAssets": "Actifs disponibles",
+    "noAssetsFound": "Aucun actif correspondant.",
     "topGainers": "Plus fortes hausses",
     "topLosers": "Plus fortes baisses",
     "topAssetGainers": "Plus fortes hausses de {{asset}}",
@@ -246,6 +284,7 @@
     "columns": {
       "symbol": "Symbole",
       "company": "Entreprise",
+      "assetName": "Actif",
       "price": "Prix",
       "dailyChange": "Variation du jour",
       "marketCap": "Capitalisation",
@@ -258,6 +297,7 @@
   "stockDetails": {
     "title": "Détails de l’action",
     "historicalPriceChart": "Graphique historique du prix de {{symbol}} pour {{range}}",
+    "chartKeyboardInstructions": "Utilisez les flèches pour parcourir les prix, Début et Fin pour atteindre le premier ou le dernier point, et Échap pour effacer la sélection.",
     "aiConfidence": "{{confidence}} de confiance de l’IA",
     "aiInsight": "Analyse IA",
     "byStockLabAi": "par StockLab IA",
@@ -337,6 +377,7 @@
       "portfolio_not_found": "Votre portefeuille simulé est introuvable.",
       "stock_not_found": "Cette action est introuvable.",
       "currency_mismatch": "Cette action est cotée dans une devise différente de celle de votre portefeuille.",
+      "unsupported_asset": "Le trading simulé est réservé aux actions ordinaires.",
       "insufficient_cash": "Les liquidités disponibles sont insuffisantes.",
       "insufficient_holdings": "Vous ne détenez pas assez d’actions pour cet ordre.",
       "duplicate_order": "Cet ordre entre en conflit avec une soumission précédente.",
@@ -908,6 +949,8 @@
       "close": "Fermer la fenêtre de modification du mot de passe",
       "title": "Modifier le mot de passe",
       "description": "Choisissez un nouveau mot de passe pour votre compte StockLab.",
+      "googleAccountHint": "Si vous vous êtes inscrit avec Google, utilisez la récupération de mot de passe pour créer votre premier mot de passe.",
+      "setPassword": "Créer ou récupérer un mot de passe",
       "currentPassword": "Mot de passe actuel",
       "newPassword": "Nouveau mot de passe",
       "confirmPassword": "Confirmer le mot de passe",
@@ -918,6 +961,7 @@
       "errors": {
         "unauthorized": "Connectez-vous pour modifier votre mot de passe.",
         "invalid_current_password": "Le mot de passe actuel est incorrect.",
+        "password_not_set": "Ce compte n’a pas encore de mot de passe. Utilisez la récupération de mot de passe pour en créer un.",
         "validation_error": "Vérifiez les champs du mot de passe et réessayez.",
         "user_not_found": "Votre compte est introuvable. Reconnectez-vous.",
         "password_update_conflict": "Votre compte a changé pendant la modification. Réessayez.",
@@ -989,7 +1033,8 @@
       "rateLimited": "Trop de tentatives de connexion.",
       "offline": "StockLab est inaccessible. Vérifiez que le backend est démarré.",
       "server": "Le service d’authentification est temporairement indisponible.",
-      "sessionStorage": "Votre navigateur bloque le stockage sécurisé de la session. Activez-le, puis réessayez."
+      "sessionStorage": "Votre navigateur bloque le stockage sécurisé de la session. Activez-le, puis réessayez.",
+      "languageSave": "La connexion n’a pas pu être finalisée, car la langue choisie n’a pas été enregistrée. Réessayez."
     },
     "showPassword": "Afficher le mot de passe",
     "hidePassword": "Masquer le mot de passe"
@@ -1047,7 +1092,8 @@
     "newsSource": "Actualités de l’entreprise · Alpha Vantage · Ouvrez la source pour lire l’article.",
     "noNews": "Aucun article récent retourné pour cette entreprise.",
     "financialSource": "Chiffres publiés · Alpha Vantage · TTM correspond aux douze derniers mois. Les champs indisponibles sont indiqués par —.",
-    "metricsSource": "Cotations : Twelve Data · Ratios de l’entreprise : Alpha Vantage",
+    "quoteData": "Cotations :",
+    "metricsSource": "Ratios de l’entreprise :",
     "forecastSource": "Objectif de cours et décompte des avis d’analystes · Alpha Vantage",
     "forecastNote": "L’objectif est une estimation externe d’analystes, pas un prix futur garanti. Le pourcentage compare cet objectif à la dernière cotation ; aucune courbe prévisionnelle n’est générée.",
     "insightsSource": "Synthèse calculée à partir de la cotation et des fondamentaux disponibles.",
@@ -1088,12 +1134,14 @@
     "fundamentalsLabel": "Données fondamentales",
     "noFeaturedMovers": "Aucune variation correspondante parmi les actions populaires disponibles.",
     "partialQuotes": "Certaines cotations sont indisponibles. Réessayez pour charger les prix manquants.",
+    "partialCatalog": "Certaines listes d’actifs n’ont pas pu être chargées.",
+    "watchlistUnavailable": "Ce symbole ne peut pas être ajouté à la liste de surveillance.",
     "quoteUnavailable": "Cotation indisponible",
     "loading": "Chargement…",
     "loadingHistory": "Chargement de l’historique… Si la limite de requêtes est atteinte, cette période sera chargée dès qu’un appel sera disponible. Vous pouvez choisir une autre période pendant l’attente.",
     "retry": "Réessayer",
     "invalid": "Cette requête ou cet intervalle est indisponible. Choisissez une autre période.",
-    "notFound": "Action introuvable.",
+    "notFound": "Actif introuvable.",
     "rateLimited": "Trop de requêtes. Réessayez plus tard.",
     "invalidResponse": "Les données de marché sont illisibles. Réessayez plus tard.",
     "unavailable": "Les données de marché sont temporairement indisponibles.",
@@ -1101,8 +1149,7 @@
     "serverError": "Impossible de charger les données de marché.",
     "offline": "StockLab est inaccessible. Vérifiez que le backend est démarré.",
     "loadQuote": "Charger le cours {{symbol}}",
-    "commonStocks": "Actions ordinaires uniquement ; autres classes indisponibles.",
-    "subtitle": "Recherchez des actions via les données de marché StockLab.",
+    "subtitle": "Explorez les actions, les ETF, les indices et les cryptomonnaies.",
     "moversUnavailable": "Les variations du marché global sont indisponibles.",
     "searchHint": "Saisissez un symbole ou un nom de société.",
     "exchange": "Bourse",
@@ -1146,6 +1193,49 @@
     "downsampled": "{{count}} points réels affichés.",
     "downsampled_other": "{{count}} points réels affichés.",
     "refresh": "Actualiser l’historique"
+  },
+  "recovery": {
+    "emailLabel": "Adresse courriel",
+    "newPasswordLabel": "Nouveau mot de passe",
+    "confirmPasswordLabel": "Confirmer le nouveau mot de passe",
+    "passwordHint": "Utilisez au moins 8 caractères.",
+    "backToLogin": "Retour à la connexion",
+    "requestNewLink": "Demander un nouveau lien",
+    "submitting": "Veuillez patienter…",
+    "retryCountdown": "Réessayez dans {{count}} secondes.",
+    "retryCountdown_one": "Réessayez dans {{count}} seconde.",
+    "retryCountdown_other": "Réessayez dans {{count}} secondes.",
+    "retryReady": "Vous pouvez réessayer maintenant.",
+    "forgot": {
+      "title": "Mot de passe oublié ?",
+      "subtitle": "Saisissez l’adresse courriel associée à votre compte StockLab.",
+      "submit": "Demander un lien",
+      "accepted": "Si un compte existe pour cette adresse courriel, nous tenterons d’envoyer un lien de réinitialisation. Vérifiez votre boîte de réception et vos courriels indésirables, puis attendez au moins une minute avant de demander un autre lien."
+    },
+    "reset": {
+      "title": "Réinitialiser le mot de passe",
+      "subtitle": "Choisissez un nouveau mot de passe pour votre compte StockLab.",
+      "submit": "Réinitialiser le mot de passe",
+      "googleRecoveryNotice": "La réinitialisation dissocie aussi Google s’il était lié au compte. Vous pourrez le relier avec votre nouveau mot de passe.",
+      "success": "Votre mot de passe a été réinitialisé. Connectez-vous avec votre nouveau mot de passe. Si Google était lié, reliez-le à nouveau avec ce nouveau mot de passe."
+    },
+    "errors": {
+      "emailRequired": "Saisissez votre adresse courriel.",
+      "emailInvalid": "Saisissez une adresse courriel valide.",
+      "passwordRequired": "Saisissez un nouveau mot de passe.",
+      "passwordShort": "Utilisez un mot de passe d’au moins 8 caractères.",
+      "passwordLong": "Utilisez un mot de passe d’au plus 1024 caractères.",
+      "passwordInvalid": "Utilisez un mot de passe non vide de 8 à 1024 caractères.",
+      "confirmRequired": "Confirmez votre nouveau mot de passe.",
+      "mismatch": "Les mots de passe doivent correspondre.",
+      "validation": "Vérifiez les champs indiqués, puis réessayez.",
+      "invalidLink": "Ce lien est invalide ou a expiré. Demandez un nouveau lien pour continuer.",
+      "rateLimited": "Trop de tentatives. Veuillez patienter avant de réessayer.",
+      "unavailable": "La récupération du mot de passe est temporairement indisponible. Réessayez plus tard.",
+      "conflict": "Le compte a été modifié et le mot de passe n’a pas pu être mis à jour. Réessayez.",
+      "offline": "StockLab est injoignable. Vérifiez votre connexion, puis réessayez.",
+      "server": "Votre demande n’a pas pu être traitée. Réessayez plus tard."
+    }
   },
   "businessData": {
     "unavailable": "Pas encore disponible",

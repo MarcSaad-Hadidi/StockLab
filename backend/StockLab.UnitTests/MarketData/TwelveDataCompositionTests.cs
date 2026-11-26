@@ -205,21 +205,27 @@ public sealed class TwelveDataCompositionTests
 
     private sealed class Clock : ISystemClock { public DateTimeOffset UtcNow { get; set; } = DateTimeOffset.UnixEpoch; }
 
-    internal static WebApplicationFactory<Program> Application(Handler handler, string provider, string active = "Website",
-        string? website = "WEBSITE-TEST-KEY", string? fallback = "FALLBACK-TEST-KEY", int timeout = 10) =>
+    internal static WebApplicationFactory<Program> Application(Handler handler, string? provider, string active = "Website",
+        string? website = "WEBSITE-TEST-KEY", string? fallback = "FALLBACK-TEST-KEY", int timeout = 10,
+        string environment = "Testing", bool allowSimulatedData = false) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
-            builder.UseEnvironment("Testing");
-            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+            builder.UseEnvironment(environment);
+            builder.ConfigureAppConfiguration((_, config) =>
             {
-                ["MarketData:Provider"] = provider, ["TwelveData:ActiveWebsiteKey"] = active,
-                ["TwelveData:TimeoutSeconds"] = timeout.ToString(),
-                ["TwelveData:Keys:Website"] = website, ["TwelveData:Keys:Fallback"] = fallback,
-                ["TWELVE_DATA_ML_API_KEY"] = "ML-TEST-KEY",
-                ["Jwt:Issuer"] = "StockLab.Api.Tests",
-                ["Jwt:Audience"] = "StockLab.Tests",
-                ["Jwt:SigningKey"] = "test-only-signing-key-at-least-32-bytes-long"
-            }));
+                var settings = new Dictionary<string, string?>
+                {
+                    ["MarketData:AllowSimulatedData"] = allowSimulatedData.ToString(), ["TwelveData:ActiveWebsiteKey"] = active,
+                    ["TwelveData:TimeoutSeconds"] = timeout.ToString(),
+                    ["TwelveData:Keys:Website"] = website, ["TwelveData:Keys:Fallback"] = fallback,
+                    ["TWELVE_DATA_ML_API_KEY"] = "ML-TEST-KEY",
+                    ["Jwt:Issuer"] = "StockLab.Api.Tests",
+                    ["Jwt:Audience"] = "StockLab.Tests",
+                    ["Jwt:SigningKey"] = "test-only-signing-key-at-least-32-bytes-long"
+                };
+                if (provider is not null) settings["MarketData:Provider"] = provider;
+                config.AddInMemoryCollection(settings);
+            });
             builder.ConfigureServices(services => services.AddHttpClient(TwelveDataProvider.ClientName)
                 .ConfigurePrimaryHttpMessageHandler(() => handler));
         });

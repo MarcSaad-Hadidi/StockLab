@@ -18,12 +18,18 @@ public interface IMarketDataProvider
     Task<StockQuote?> GetQuoteAsync(string symbol, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Searches by ticker or company name. Returns an empty list when no stocks match,
+    /// Searches by ticker or instrument name. Returns an empty list when no instruments match,
     /// never null. Results contain unique canonical symbols.
     /// </summary>
     Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(
         string query,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Lists provider instruments for discovery in the requested asset category.</summary>
+    Task<IReadOnlyList<StockSearchResult>> BrowseAssetsAsync(
+        MarketAssetCategory category,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<StockSearchResult>>([]);
 
     /// <summary>
     /// Returns historical bars, or null if the symbol is unknown. A known symbol with

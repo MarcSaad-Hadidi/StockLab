@@ -81,7 +81,7 @@ function fieldErrors(value: unknown): Record<string, string[]> {
   }))
 }
 
-function retryDelay(response: Response, body: Record<string, unknown>): number | null {
+export function retryDelay(response: Response, body: Record<string, unknown>): number | null {
   // Match the backend's maximum configured login window; reject invalid or unbounded hints.
   const valid = (value: unknown): value is number => typeof value === 'number'
     && Number.isSafeInteger(value) && value >= 0 && value <= 86400
@@ -107,7 +107,7 @@ function validRegisterResponse(value: unknown): value is RegisterResponse {
     && string(value.createdAtUtc) && Number.isFinite(Date.parse(value.createdAtUtc))
 }
 
-function validLoginResponse(value: unknown): value is AuthSession {
+export function validLoginResponse(value: unknown): value is AuthSession {
   return record(value) && string(value.accessToken) && value.tokenType === 'Bearer'
     && string(value.expiresAtUtc) && Number.isFinite(Date.parse(value.expiresAtUtc))
     && validUser(value.user)

@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { JSDOM } from 'jsdom'
 import React, { act, StrictMode, useState } from 'react'
+import { saveAuthSession } from '../src/auth/authStorage.ts'
+import { profileApi, type UserProfile } from '../src/api/profileApi.ts'
 
 registerHooks({ load(url, context, nextLoad) {
   if (url.endsWith('.css')) return { format: 'module', shortCircuit: true, source: 'export default {}' }
@@ -156,6 +158,24 @@ test('page rerenders and language changes do not restart focus inside an open me
     await view.key('Escape')
     assert.equal(document.activeElement, view.toggle)
   } finally { await view.close() }
+})
+
+test('Tab stays in the mobile menu when a language write disables the focused language control', async t => {
+  const account = { id: '1b7f6c30-8c4f-4fe8-9350-2f6be1f9c2c0', displayName: 'Language account', email: 'language@example.com', preferredLanguage: 'en' as const }
+  saveAuthSession({ accessToken: 'test-token', tokenType: 'Bearer', expiresAtUtc: '2099-01-01T00:00:00Z', user: account })
+  let finish!: (profile: UserProfile) => void
+  t.mock.method(profileApi, 'updateLanguage', () => new Promise(resolve => { finish = resolve }))
+  const view = await mount()
+  try {
+    await view.open()
+    await act(async () => { view.last().focus(); view.last().click() })
+    assert.equal(view.last().disabled, true)
+    assert.equal((await view.key('Tab')).defaultPrevented, true)
+    assert.ok(document.activeElement === view.first(), 'disabled language buttons must not let Tab escape the menu')
+  } finally {
+    if (finish) await act(async () => finish({ ...account, preferredLanguage: 'fr', createdAtUtc: '2026-01-01T00:00:00Z', updatedAtUtc: '2026-11-14T00:00:00Z' }))
+    await view.close(); window.localStorage.clear(); await i18n.changeLanguage('en')
+  }
 })
 
 test('desktop navigation never traps focus or blocks the page', async () => {

@@ -16,7 +16,7 @@ public sealed class UserLoginService(
         User? user = await dbContext.Users.SingleOrDefaultAsync(
             value => value.NormalizedEmail == normalizedEmail,
             cancellationToken);
-        if (user is null)
+        if (user?.PasswordHash is null)
         {
             return null;
         }
@@ -43,7 +43,7 @@ public sealed class UserLoginService(
                 user = await dbContext.Users.SingleOrDefaultAsync(
                     value => value.NormalizedEmail == normalizedEmail,
                     cancellationToken);
-                if (user is null)
+                if (user?.PasswordHash is null)
                 {
                     return null;
                 }

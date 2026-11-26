@@ -341,6 +341,9 @@ test('unsupported quote currency cannot crash the Watchlist or invent a dollar p
 test('Market stars reflect backend membership and toggle only after POST or DELETE success', async t => {
   seed()
   t.mock.method(watchlistApi, 'getWatchlist', async () => [aapl])
+  t.mock.method(marketDataApi, 'browse', async category => category === 'stocks'
+    ? ['AAPL', 'MSFT'].map(symbol => ({ symbol, companyName: symbol, exchange: 'NASDAQ', currency: 'USD', instrumentType: 'Common Stock' }))
+    : [])
   t.mock.method(marketDataApi, 'quote', async symbol => ({ ...quote, symbol }))
   t.mock.method(marketDataApi, 'movers', async () => ({ lastUpdated: null, gainers: [], losers: [], mostActive: [] }))
   let finish!: (item: typeof msft) => void
