@@ -346,22 +346,114 @@ test('profile identity edits preserve the confirmation when account and token ar
   } finally { await view.close() }
 })
 
-test('a rejected order keeps its confirmation and can be retried without a false success', async t => {
+for (const [language, code, field, editLabel] of [
+  ['en', 'insufficient_cash', 'quantity', 'Edit order'],
+  ['fr', 'limit_not_reached', 'limit-price', 'Modifier l’ordre'],
+] as const) {
+  test(`editing ${code} restores the draft, focuses the relevant input and requires confirmation in ${language}`, async t => {
+    await i18n.changeLanguage(language)
+    let attempts = 0
+    const view = await mount(t, request => Promise.resolve(++attempts === 1
+      ? Response.json({ error: code }, { status: 422 }) : result(request.order)))
+    const side = code === 'insufficient_cash' ? 'BUY' : 'SELL'
+    const orderType = view.container.querySelector<HTMLSelectElement>('#stock-order-type')!
+    const input = (name: string) => view.container.querySelector<HTMLInputElement>(`#stock-${name}`)!
+    const reason = i18n.t(`stockDetails.tradeErrors.${code}`)
+    try {
+      await act(async () => {
+        orderType.value = 'limit'
+        orderType.dispatchEvent(new window.Event('change', { bubbles: true }))
+        if (side === 'SELL') view.container.querySelector<HTMLButtonElement>('.stock-trade-tabs button:nth-child(2)')!.click()
+      })
+      await setTradeInput(input('quantity'), '6.25')
+      await setTradeInput(input('limit-price'), '105.00')
+      await view.prepare()
+      await act(async () => view.confirm().click())
+      assert.equal(view.confirm().textContent, editLabel)
+      assert.ok(view.dialog()!.textContent!.includes(reason))
+
+      await act(async () => view.confirm().click())
+      assert.equal(view.dialog(), null)
+      assert.equal(view.sent.length, 1, 'editing does not send another order')
+      assert.equal(orderType.value, 'limit')
+      assert.equal(input('quantity').value, '6.25')
+      assert.equal(input('limit-price').value, '105.00')
+      assert.equal(view.container.querySelector(`.stock-trade-tabs button:nth-child(${side === 'BUY' ? 1 : 2})`)!.getAttribute('aria-pressed'), 'true')
+      assert.equal(document.activeElement, input(field))
+      assert.ok(view.container.querySelector('.stock-trade-card')!.textContent!.includes(reason))
+
+      await setTradeInput(input(field), field === 'quantity' ? '2' : '95')
+      await view.prepare()
+      assert.equal(view.sent.length, 1, 'the corrected order still requires confirmation')
+      assert.ok(!view.dialog()!.textContent!.includes(reason))
+      await act(async () => view.confirm().click())
+      assert.equal(view.sent.length, 2)
+      assert.notEqual(view.sent[0].order.orderId, view.sent[1].order.orderId)
+      assert.equal(view.sent[1].order.side, side)
+      assert.equal(view.sent[1].order.quantity, field === 'quantity' ? '2' : '6.25')
+      assert.equal(view.sent[1].order.limitPrice, field === 'limit-price' ? '95' : '105')
+      assert.equal(view.dialog(), null)
+    } finally { await view.close(); await i18n.changeLanguage('en') }
+  })
+}
+
+async function setTradeInput(input: HTMLInputElement, value: string) {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    input.dispatchEvent(new window.Event('input', { bubbles: true }))
+  })
+}
+
+test('an earlier lost response keeps the original order eligible for retry only, even after a later refusal', async t => {
   let attempts = 0
-  const view = await mount(t, request => Promise.resolve(++attempts === 1
-    ? Response.json({ error: 'insufficient_cash' }, { status: 422 }) : result(request.order)))
+  const view = await mount(t, ({ order }) => {
+    if (++attempts === 1) return Promise.reject(new Error('response lost'))
+    return Promise.resolve(attempts === 2 ? Response.json({ error: 'insufficient_cash' }, { status: 422 }) : result(order))
+  })
   try {
     await view.prepare()
     await act(async () => view.confirm().click())
-    assert.ok(view.dialog())
-    assert.equal(view.confirm().disabled, false)
-    assert.match(view.dialog()!.textContent!, /not enough available cash/i)
-    assert.doesNotMatch(view.container.textContent!, /executed successfully/)
     await act(async () => view.confirm().click())
-    assert.equal(view.sent.length, 2)
-    assert.equal(view.sent[0].order.orderId, view.sent[1].order.orderId)
-    assert.equal(Boolean(view.dialog()), false)
-    assert.match(view.container.textContent!, /executed successfully/)
+    assert.equal(view.confirm().textContent, 'Retry same order')
+    assert.match(view.dialog()!.textContent!, /same order.*original reference/i)
+    assert.match(view.dialog()!.textContent!, /not enough available cash/i)
+    await act(async () => view.confirm().click())
+    assert.equal(view.sent.length, 3)
+    assert.deepEqual(view.sent.map(request => request.order), Array(3).fill(view.sent[0].order))
+  } finally { await view.close() }
+})
+
+for (const [code, status, reason] of [
+  ['duplicate_order', 409, /conflicts with a previous submission/i],
+  ['unsupported_asset', 422, /common stocks only/i],
+] as const) {
+  test(`${code} does not offer to edit the order terms`, async t => {
+    const view = await mount(t, () => Promise.resolve(Response.json({ error: code }, { status })))
+    try {
+      await view.prepare()
+      await act(async () => view.confirm().click())
+      assert.equal(view.confirm().textContent, 'Retry same order')
+      assert.match(view.dialog()!.textContent!, reason)
+      assert.equal(view.sent.length, 1)
+    } finally { await view.close() }
+  })
+}
+
+test('switching accounts while correcting an order clears the previous rejection and its draft', async t => {
+  const view = await mount(t, () => Promise.resolve(Response.json({ error: 'insufficient_cash' }, { status: 422 })))
+  const quantity = view.container.querySelector<HTMLInputElement>('#stock-quantity')!
+  try {
+    await setTradeInput(quantity, '321')
+    await view.prepare()
+    await act(async () => view.confirm().click())
+    await act(async () => view.confirm().click())
+    assert.match(view.container.querySelector('.stock-trade-card')!.textContent!, /not enough available cash/i)
+    await act(async () => saveAuthSession({ ...accountA, accessToken: 'rotated-token' }))
+    assert.equal(quantity.value, '321')
+    await act(async () => saveAuthSession(accountB))
+    assert.equal(quantity.value, '10')
+    assert.doesNotMatch(view.container.querySelector('.stock-trade-card')!.textContent!, /not enough available cash/i)
+    assert.equal(view.sent.length, 1)
   } finally { await view.close() }
 })
 
@@ -434,9 +526,17 @@ for (const [code, message] of [
         await act(async () => saveAuthSession({ ...rotated, accessToken: 'rotated-again' }))
         assert.match(view.dialog()!.textContent!, message)
         assert.doesNotMatch(view.dialog()!.textContent!, /may already have executed/i)
+        assert.equal(view.confirm().textContent, 'Edit order')
+        await act(async () => view.confirm().click())
+        assert.equal(view.dialog(), null)
+        assert.match(view.container.querySelector('.stock-trade-card')!.textContent!, message)
+        assert.equal(view.sent.length, 1)
+        await setTradeInput(view.container.querySelector<HTMLInputElement>('#stock-quantity')!, '2')
+        await view.prepare()
         await act(async () => view.confirm().click())
         assert.equal(view.sent.length, 2)
-        assert.deepEqual(view.sent[1].order, view.sent[0].order)
+        assert.notEqual(view.sent[1].order.orderId, view.sent[0].order.orderId)
+        assert.equal(view.sent[1].order.quantity, '2')
         assert.equal(view.sent[1].authorization, 'Bearer rotated-again')
       } finally { await view.close() }
     })
@@ -476,7 +576,7 @@ test('the local authorization guard cancels an unsubmitted order without claimin
 for (const lostResponse of [false, true]) {
   test(`a retry stopped before fetching ${lostResponse ? 'preserves an earlier lost outcome' : 'keeps an earlier rejection definitive'}`, async t => {
     const view = await mount(t, () => lostResponse ? Promise.reject(new Error('response lost'))
-      : Promise.resolve(Response.json({ error: 'insufficient_cash' }, { status: 422 })))
+      : Promise.resolve(Response.json({ error: 'concurrency_conflict' }, { status: 409 })))
     try {
       await view.prepare()
       await act(async () => view.confirm().click())

@@ -1,7 +1,7 @@
 import { normalizeOperand, amountSign, subtractAmounts } from '../api/decimalMath';
 import { isPositiveAmount } from '../api/decimalAmount';
 import { FinancialLineChart } from "../components/charts/FinancialLineChart";
-import { memo, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
   formatNumber,
@@ -10,7 +10,7 @@ import {
 } from "../i18n/formatters";
 import { marketDataApi } from "../api/marketDataClient";
 import type { StockHistory } from "../api/marketDataApi";
-import { TradingApiError, tradingApi } from "../api/tradingApi";
+import { TradingApiError, tradingApi, type TradingApiErrorCode } from "../api/tradingApi";
 import { getAuthSession, type AuthSession } from "../auth/authStorage";
 import { subscribeAuthSession, useAuthUser } from "../auth/useAuthUser";
 import { useWatchlistData } from "../watchlist/useWatchlistData";
@@ -53,9 +53,15 @@ type PendingTrade = {
   orderType: TradeOrderType;
   quantity: string;
   limitPrice?: string;
+  draft: { quantity: string; limitPrice: string };
   estimatedPrice: string;
   estimatedTotal: string;
 };
+type EditedRejection = { userId: string; reason: TradingApiErrorCode; inputId: "stock-quantity" | "stock-limit-price" };
+const defaultTradeQuantity = "10";
+const editableRejections = new Set<TradingApiErrorCode>([
+  "insufficient_cash", "insufficient_holdings", "limit_not_reached", "validation_error", "invalid_order",
+]);
 function sameTradeSession(expected: AuthSession, current: AuthSession | null) {
   return current !== null && expected.user.id === current.user.id
     && expected.accessToken === current.accessToken;
@@ -85,6 +91,7 @@ function StatCard({
   );
 }
 function TradeTicket({
+  formRef,
   details,
   side,
   quantity,
@@ -99,12 +106,14 @@ function TradeTicket({
   onRetryCash,
   isSubmitting,
   isAuthenticated,
+  rejectionReason,
   onSideChange,
   onQuantityChange,
   onOrderTypeChange,
   onLimitPriceChange,
   onSubmit,
 }: {
+  formRef: RefObject<HTMLFormElement | null>;
   details: StockDetails;
   side: TradeSide;
   quantity: string;
@@ -119,6 +128,7 @@ function TradeTicket({
   onRetryCash: () => void;
   isSubmitting: boolean;
   isAuthenticated: boolean;
+  rejectionReason: TradingApiErrorCode | null;
   onSideChange: (side: TradeSide) => void;
   onQuantityChange: (quantity: string) => void;
   onOrderTypeChange: (orderType: TradeOrderType) => void;
@@ -137,7 +147,7 @@ function TradeTicket({
   const isBuy = side === "BUY";
 
   return (
-    <form className="stock-trade-card" onSubmit={onSubmit}>
+    <form className="stock-trade-card" onSubmit={onSubmit} ref={formRef}>
       <div className="stock-card-heading">
         <div className="stock-card-title">
           <span className="stock-card-icon stock-card-icon-trade">
@@ -149,6 +159,9 @@ function TradeTicket({
           {t("stockDetails.practiceMode")}
         </span>
       </div>
+      {rejectionReason && <p className="stock-form-error" role="alert">
+        {t("stockDetails.previousOrderRejection", { reason: t(`stockDetails.tradeErrors.${rejectionReason}`) })}
+      </p>}
       <div className="stock-trade-tabs">
         <button
           aria-pressed={isBuy}
@@ -333,14 +346,15 @@ export function StockDetailsPage({
   const [tradeSide, setTradeSide] = useState<TradeSide>("BUY");
   const [orderType, setOrderType] = useState<TradeOrderType>("market");
   const [limitPrice, setLimitPrice] = useState("");
-  const [quantity, setQuantity] = useState("10");
+  const [quantity, setQuantity] = useState(defaultTradeQuantity);
   const [quantityError, setQuantityError] = useState("");
   const [limitPriceError, setLimitPriceError] = useState("");
   const [activeRange, setActiveRange] = useState<ChartRange>("3M");
   const [activeTab, setActiveTab] = useState<string>("overview");
   const [toast, setToast] = useState<ToastState | null>(null);
   const [pendingTrade, setPendingTrade] = useState<PendingTrade | null>(null);
-  const [tradeError, setTradeError] = useState<string | null>(null);
+  const [tradeError, setTradeError] = useState<TradingApiErrorCode | null>(null);
+  const [editedRejection, setEditedRejection] = useState<EditedRejection | null>(null);
   const [hasUncertainOrder, setHasUncertainOrder] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cashResult, setCashResult] = useState<{ session: AuthSession; balance: string } | null>(null);
@@ -349,7 +363,9 @@ export function StockDetailsPage({
   const currentCashResult = cashResult && sameTradeSession(cashResult.session, getAuthSession()) ? cashResult : null;
   const activeRequest = useRef<{ controller: AbortController; sent: boolean } | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
-  const isAuthenticated = useAuthUser() !== null;
+  const tradeFormRef = useRef<HTMLFormElement>(null);
+  const authUser = useAuthUser();
+  const isAuthenticated = authUser !== null;
 
   const cancelChangedSession = useCallback((trade: PendingTrade, current: AuthSession | null) => {
     const submitted = trade.submitted || activeRequest.current?.sent === true;
@@ -367,18 +383,27 @@ export function StockDetailsPage({
     setIsSubmitting(false);
     setToast(null);
     if (uncertain) setHasUncertainOrder(true);
-    setTradeError(uncertain ? null : "stockDetails.tradeErrors.session_changed");
+    setTradeError(uncertain ? null : "session_changed");
   }, [setPendingTrade, setIsSubmitting, setToast, setTradeError, setHasUncertainOrder]);
 
   useEffect(() => subscribeAuthSession(() => {
     const current = getAuthSession();
     if (pendingTrade && !sameTradeSession(pendingTrade.session, current)) cancelChangedSession(pendingTrade, current);
+    if (editedRejection && current?.user.id !== editedRejection.userId) {
+      setEditedRejection(null);
+      setTradeSide("BUY");
+      setOrderType("market");
+      setQuantity(defaultTradeQuantity);
+      setLimitPrice("");
+      setQuantityError("");
+      setLimitPriceError("");
+    }
     if (cashResult && !sameTradeSession(cashResult.session, current)) {
       setCashResult(null);
       window.clearTimeout(toastTimer.current);
       setToast(null);
     }
-  }), [pendingTrade, cashResult, cancelChangedSession]);
+  }), [pendingTrade, cashResult, editedRejection, cancelChangedSession]);
 
   useEffect(() => () => {
     activeRequest.current?.controller.abort();
@@ -478,7 +503,7 @@ export function StockDetailsPage({
     if (!details || activeRequest.current || pendingTrade?.submitted) return;
     const session = getAuthSession();
     if (!session) {
-      setTradeError("stockDetails.tradeErrors.unauthorized");
+      setTradeError("unauthorized");
       return;
     }
 
@@ -507,12 +532,14 @@ export function StockDetailsPage({
     setQuantityError("");
     setLimitPriceError("");
     setTradeError(null);
+    setEditedRejection(null);
     setPendingTrade({
       session,
       orderId: crypto.randomUUID(),
       side: tradeSide,
       orderType,
       quantity: parsedQuantity,
+      draft: { quantity, limitPrice },
       ...(orderType === "limit" && parsedLimitPrice !== null ? { limitPrice: parsedLimitPrice } : {}),
       estimatedPrice,
       estimatedTotal: calculateTradeTotal(estimatedPrice, parsedQuantity),
@@ -583,7 +610,7 @@ export function StockDetailsPage({
       setPendingTrade({ ...submittedTrade, session: current,
         outcomeUncertain: pendingTrade.outcomeUncertain || !(error instanceof TradingApiError)
           || error.status === 0 || error.status >= 500 });
-      setTradeError(`stockDetails.tradeErrors.${code}`);
+      setTradeError(code);
     } finally {
       if (activeRequest.current === attempt) {
         activeRequest.current = null;
@@ -597,7 +624,34 @@ export function StockDetailsPage({
     setPendingTrade(null);
     setTradeError(null);
   };
+  const canEditRejectedOrder = details !== null && pendingTrade?.submitted && !pendingTrade.outcomeUncertain
+    && tradeError !== null && editableRejections.has(tradeError);
+  const editRejectedOrder = () => {
+    if (!canEditRejectedOrder || !pendingTrade || !tradeError || activeRequest.current) return;
+    const current = getAuthSession();
+    if (current?.user.id !== pendingTrade.session.user.id) {
+      cancelChangedSession(pendingTrade, current);
+      return;
+    }
+    setTradeSide(pendingTrade.side);
+    setOrderType(pendingTrade.orderType);
+    setQuantity(pendingTrade.draft.quantity);
+    setLimitPrice(pendingTrade.draft.limitPrice);
+    setEditedRejection({
+      userId: current.user.id,
+      reason: tradeError,
+      inputId: tradeError === "limit_not_reached" && pendingTrade.orderType === "limit"
+        ? "stock-limit-price" : "stock-quantity",
+    });
+    dismissTrade();
+  };
   const confirmationRef = useOrderConfirmationFocus(pendingTrade !== null, isSubmitting, dismissTrade);
+  useEffect(() => {
+    // The confirmation has released the background and restored the opener by this point.
+    if (editedRejection && getAuthSession()?.user.id === editedRejection.userId) {
+      tradeFormRef.current?.querySelector<HTMLInputElement>(`#${editedRejection.inputId}`)?.focus();
+    }
+  }, [editedRejection]);
   const change = quote.data?.changePercent;
   const tone =
     change == null || change === 0
@@ -881,7 +935,7 @@ export function StockDetailsPage({
                 <button className="stock-outline-button" type="button" onClick={() => setActiveTab("insights")}>{t("stockPanels.openInsights")}</button>
               </article>}
               {hasUncertainOrder && <p className="stock-form-error" role="alert">{t("stockDetails.submittedOrderUncertain")}</p>}
-              {!pendingTrade && tradeError && <p className="stock-form-error" role="alert">{t(tradeError)}</p>}
+              {!pendingTrade && tradeError && <p className="stock-form-error" role="alert">{t(`stockDetails.tradeErrors.${tradeError}`)}</p>}
               {!canTrade && (
                 <article className="stock-trade-card">
                   <h2>{t("stockDetails.paperTrading")}</h2>
@@ -907,6 +961,7 @@ export function StockDetailsPage({
               )}
               {details && (
                 <TradeTicket
+                  formRef={tradeFormRef}
                   details={details}
                   limitPrice={limitPrice}
                   limitPriceError={limitPriceError}
@@ -932,6 +987,7 @@ export function StockDetailsPage({
                   onRetryCash={orderCash.retry}
                   isSubmitting={isSubmitting}
                   isAuthenticated={isAuthenticated}
+                  rejectionReason={editedRejection && authUser?.id === editedRejection.userId ? editedRejection.reason : null}
                 />
               )}
             </aside>
@@ -995,7 +1051,7 @@ export function StockDetailsPage({
             </div>
             {pendingTrade.outcomeUncertain && <p className="stock-form-error" role="alert">{t("stockDetails.submittedOutcomeUncertain")}</p>}
             {hasUncertainOrder && <p className="stock-form-error" role="alert">{t("stockDetails.submittedOrderUncertain")}</p>}
-            {tradeError && <p className="stock-form-error" role="alert">{t(tradeError)}</p>}
+            {tradeError && <p className="stock-form-error" role="alert">{t(`stockDetails.tradeErrors.${tradeError}`)}</p>}
             <div className="stock-modal-actions">
               <button
                 className="stock-secondary-button"
@@ -1008,10 +1064,11 @@ export function StockDetailsPage({
               <button
                 className={`stock-primary-button ${pendingTrade.side === "SELL" ? "stock-primary-button-sell" : ""}`}
                 disabled={isSubmitting}
-                onClick={confirmTrade}
+                onClick={canEditRejectedOrder ? editRejectedOrder : confirmTrade}
                 type="button"
               >
-                {isSubmitting ? t("stockDetails.submittingOrder") : t(pendingTrade.submitted ? "stockDetails.retryOrderButton" : "stockDetails.confirmOrderButton")}
+                {t(isSubmitting ? "stockDetails.submittingOrder" : canEditRejectedOrder ? "stockDetails.editOrderButton"
+                  : pendingTrade.submitted ? "stockDetails.retryOrderButton" : "stockDetails.confirmOrderButton")}
               </button>
             </div>
           </section>
