@@ -370,6 +370,8 @@
     "submittedOutcomeUncertain": "Le résultat de votre ordre n’a pas pu être confirmé. Il a peut-être déjà été exécuté. Une nouvelle tentative du même ordre conserve sa référence pour éviter un doublon. Vérifiez vos transactions avant de placer un ordre différent.",
     "submittedOrderUncertain": "L’ordre envoyé sous le compte d’origine a peut-être déjà été exécuté. Vérifiez les transactions de ce compte avant de placer un autre ordre.",
     "retryOrderButton": "Réessayer le même ordre",
+    "editOrderButton": "Modifier l’ordre",
+    "previousOrderRejection": "Motif du refus précédent : {{reason}}",
     "tradeErrors": {
       "session_changed": "Votre session de connexion a changé. Veuillez préparer votre ordre à nouveau.",
       "validation_error": "Vérifiez les informations de l’ordre puis réessayez.",

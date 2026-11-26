@@ -370,6 +370,8 @@
     "submittedOutcomeUncertain": "Your order’s result could not be confirmed. It may already have executed. Retrying this same order uses its original reference to avoid a duplicate. Check your transactions before placing a different order.",
     "submittedOrderUncertain": "The order sent under the original account may already have executed. Check that account’s transactions before placing another order.",
     "retryOrderButton": "Retry same order",
+    "editOrderButton": "Edit order",
+    "previousOrderRejection": "Previous order rejected: {{reason}}",
     "tradeErrors": {
       "session_changed": "Your sign-in session changed. Please prepare your order again.",
       "validation_error": "Check the order details and try again.",
