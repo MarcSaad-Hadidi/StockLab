@@ -15,7 +15,8 @@ public sealed class PasswordRecoveryController(IPasswordRecoveryRequestQueue que
     [ProducesResponseType(typeof(ApiValidationErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiRateLimitErrorResponse), StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status503ServiceUnavailable)]
-    public IActionResult Forgot(ForgotPasswordRequest request) => queue.TryEnqueue(request.Email, request.Language)
+    public async Task<IActionResult> Forgot(ForgotPasswordRequest request, CancellationToken cancellationToken) =>
+        await queue.TryEnqueueAsync(request.Email, request.Language, cancellationToken)
         ? Accepted()
         : StatusCode(StatusCodes.Status503ServiceUnavailable, new ApiErrorResponse(
             "password_recovery_unavailable", "Password recovery is temporarily unavailable. Try again later."));

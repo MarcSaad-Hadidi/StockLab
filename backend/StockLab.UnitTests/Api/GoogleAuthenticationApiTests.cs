@@ -1,8 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
-using System.Text;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -305,21 +304,35 @@ public sealed partial class UserLoginApiTests
     [Fact]
     public async Task Google_only_recovery_sets_real_password_disconnects_google_and_revokes_old_session()
     {
-        await using var fixture = await GoogleFixture();
+        await using var smtp = new RecoverySmtpServer();
+        await using var fixture = await GoogleFixture(recoveryConfiguration: SmtpRecoveryConfiguration(smtp.Port));
         using var created = await GooglePost(fixture, "exchange", new { code = "provider-code", language = "en" });
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
         using var body = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
         var accessToken = body.RootElement.GetProperty("accessToken").GetString();
-        Guid id;
-        const string resetToken = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        using (var scope = fixture.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<StockLabDbContext>();
-            var user = await db.Users.SingleAsync(); id = user.Id;
-            user.PasswordResetTokenHash = SHA256.HashData(Encoding.ASCII.GetBytes(resetToken));
-            user.PasswordResetExpiresAtUtc = fixture.ExpectedUtcNow.UtcDateTime.AddMinutes(30);
-            await db.SaveChangesAsync();
-            Assert.True(await scope.ServiceProvider.GetRequiredService<IUserPasswordRecoveryService>().ResetAsync(id, resetToken, "recovered-password", default));
-        }
+        using var passwordBeforeRecovery = await fixture.Client.PostAsync("/api/auth/login",
+            Json("{\"email\":\"person@example.test\",\"password\":\"replacement-password\"}"));
+        Assert.Equal(HttpStatusCode.Unauthorized, passwordBeforeRecovery.StatusCode);
+
+        using var known = await Forgot(fixture, "person@example.test", "fr");
+        using var unknown = await Forgot(fixture, "unknown@example.test", "fr");
+        Assert.Equal(HttpStatusCode.Accepted, known.StatusCode);
+        Assert.Equal(known.StatusCode, unknown.StatusCode);
+        Assert.Empty(await known.Content.ReadAsStringAsync());
+        Assert.Empty(await unknown.Content.ReadAsStringAsync());
+        var message = await smtp.NextMessageAsync();
+        Assert.Equal("person@example.test", Assert.Single(message.To.Mailboxes).Address);
+        Assert.Equal("Réinitialisez votre mot de passe StockLab", message.Subject);
+        var text = Assert.IsType<string>(message.TextBody);
+        var linkLine = text.Split('\n').Select(line => line.Trim()).Single(line => line.StartsWith("http", StringComparison.Ordinal));
+        var link = new Uri(linkLine);
+        Assert.Equal("http://127.0.0.1:5189/reset-password", link.GetLeftPart(UriPartial.Path));
+        Assert.Empty(link.Query);
+        var parameters = QueryHelpers.ParseQuery(link.Fragment[1..]);
+        using var reset = await Reset(fixture, Guid.Parse(parameters["userId"].ToString()), parameters["token"].ToString());
+        Assert.Equal(HttpStatusCode.NoContent, reset.StatusCode);
+        Assert.Equal(1, smtp.RecipientCount);
+
         fixture.Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         using var rejected = await fixture.Client.GetAsync("/tests/auth-protected");
         Assert.Equal(HttpStatusCode.Unauthorized, rejected.StatusCode);
@@ -331,7 +344,7 @@ public sealed partial class UserLoginApiTests
         Assert.Null(stored.GoogleSubject);
         Assert.NotNull(stored.PasswordHash);
         Assert.Equal(1, stored.SessionVersion);
-        await LoginAndReadTokenAsync(fixture, "person@example.test", "recovered-password");
+        await LoginAndReadTokenAsync(fixture, "person@example.test", "replacement-password");
     }
 
     [Fact]
@@ -349,13 +362,19 @@ public sealed partial class UserLoginApiTests
         await AssertGoogleError(limited, "too_many_requests");
     }
 
-    private static Task<LoginFixture> GoogleFixture(GoogleIdentity? identity = null, TestOnlyGoogleProvider? provider = null, TimeProvider? timeProvider = null) =>
-        LoginFixture.CreateAsync(loginPermitLimit: 100, timeProvider: timeProvider, extraConfiguration: GoogleConfiguration(), configureServices: services =>
+    private static Task<LoginFixture> GoogleFixture(GoogleIdentity? identity = null, TestOnlyGoogleProvider? provider = null,
+        TimeProvider? timeProvider = null, Dictionary<string, string?>? recoveryConfiguration = null)
+    {
+        var settings = GoogleConfiguration();
+        if (recoveryConfiguration is not null)
+            foreach (var pair in recoveryConfiguration) settings.Add(pair.Key, pair.Value);
+        return LoginFixture.CreateAsync(loginPermitLimit: 100, timeProvider: timeProvider, extraConfiguration: settings, configureServices: services =>
         {
             // Isolated test assembly only. Production registration always uses the real Google transport and validator.
             services.RemoveAll<IGoogleIdentityProvider>();
             services.AddSingleton<IGoogleIdentityProvider>(provider ?? new TestOnlyGoogleProvider(identity ?? new("test-only-subject", "person@example.test", "Test Person")));
         });
+    }
 
     private static Dictionary<string, string?> GoogleConfiguration() => new()
     {

@@ -2,5 +2,5 @@ namespace StockLab.Application.Interfaces;
 
 public interface IPasswordRecoveryRequestQueue
 {
-    bool TryEnqueue(string email, string language);
+    Task<bool> TryEnqueueAsync(string email, string language, CancellationToken cancellationToken);
 }

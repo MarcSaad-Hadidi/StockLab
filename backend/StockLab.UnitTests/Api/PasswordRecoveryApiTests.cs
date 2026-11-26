@@ -17,6 +17,53 @@ namespace StockLab.UnitTests.Api;
 
 public sealed partial class UserLoginApiTests
 {
+    [Theory]
+    [InlineData("connection", "connect_or_authenticate")]
+    [InlineData("authentication", "connect_or_authenticate")]
+    [InlineData("sender", "sender")]
+    public async Task Unavailable_smtp_returns_the_same_503_without_queueing_known_or_unknown_accounts(string failure, string loggedStage)
+    {
+        await using var smtp = new RecoverySmtpServer { RequireAuthentication = failure == "authentication" };
+        smtp.AcceptConnections = failure != "connection";
+        smtp.AcceptAuthentication = failure != "authentication";
+        smtp.AcceptSender = failure != "sender";
+        var settings = SmtpRecoveryConfiguration(smtp.Port);
+        if (smtp.RequireAuthentication)
+        {
+            settings["PasswordRecovery:Username"] = "test-user";
+            settings["PasswordRecovery:Password"] = "private-test-password";
+        }
+        var logger = new RecoverySmtpLogger();
+        var clock = new RecoveryProbeClock();
+        await using var fixture = await LoginFixture.CreateAsync(extraConfiguration: settings, timeProvider: clock,
+            configureServices: services => services.AddSingleton<ILogger<SmtpPasswordRecoveryEmailSender>>(logger));
+        var id = await RegisterAsync(fixture, "Recovery", "private-mailbox@example.com", "original-password");
+
+        using var known = await Forgot(fixture, "private-mailbox@example.com");
+        using var unknown = await Forgot(fixture, "unknown@example.com");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, known.StatusCode);
+        Assert.Equal(known.StatusCode, unknown.StatusCode);
+        Assert.Equal(await known.Content.ReadAsStringAsync(), await unknown.Content.ReadAsStringAsync());
+        Assert.Equal(1, smtp.ConnectionCount);
+        Assert.Equal(0, smtp.RecipientCount);
+        var log = Assert.Single(logger.Messages);
+        Assert.Contains(loggedStage, log);
+        Assert.DoesNotContain("private-mailbox@example.com", log);
+        Assert.DoesNotContain("private SMTP reply", log);
+        Assert.DoesNotContain("private-test-password", log);
+        using var scope = fixture.CreateScope();
+        Assert.Null((await scope.ServiceProvider.GetRequiredService<StockLabDbContext>().Users.FindAsync(id))!.PasswordResetTokenHash);
+
+        smtp.AcceptConnections = true;
+        smtp.AcceptAuthentication = true;
+        smtp.AcceptSender = true;
+        clock.Advance(TimeSpan.FromSeconds(31));
+        using var retry = await Forgot(fixture, "private-mailbox@example.com");
+        Assert.Equal(HttpStatusCode.Accepted, retry.StatusCode);
+        Assert.Equal("private-mailbox@example.com", Assert.Single((await smtp.NextMessageAsync()).To.Mailboxes).Address);
+    }
+
     [Fact]
     public async Task Failed_email_delivery_keeps_worker_running_and_logs_no_address_token_or_credentials()
     {
@@ -301,17 +348,20 @@ public sealed partial class UserLoginApiTests
 
     private static Task<LoginFixture> RecoveryFixture(RecordingRecoverySender sender, SaveChangesInterceptor? interceptor = null,
         ILogger<PasswordRecoveryWorker>? workerLogger = null) =>
-        LoginFixture.CreateAsync(saveChangesInterceptor: interceptor, extraConfiguration: new()
-        {
-            ["PasswordRecovery:Enabled"] = "true", ["PasswordRecovery:FrontendBaseUrl"] = "http://127.0.0.1:5189/",
-            ["PasswordRecovery:SmtpHost"] = "127.0.0.1", ["PasswordRecovery:SmtpPort"] = "1025",
-            ["PasswordRecovery:FromEmail"] = "no-reply@example.com", ["PasswordRecovery:Security"] = "None"
-        }, configureServices: services =>
+        LoginFixture.CreateAsync(saveChangesInterceptor: interceptor, extraConfiguration: SmtpRecoveryConfiguration(1025), configureServices: services =>
         {
             services.RemoveAll<IPasswordRecoveryEmailSender>();
             services.AddSingleton<IPasswordRecoveryEmailSender>(sender);
             if (workerLogger is not null) services.AddSingleton(workerLogger);
         });
+
+    private static Dictionary<string, string?> SmtpRecoveryConfiguration(int port) => new()
+    {
+        ["PasswordRecovery:Enabled"] = "true", ["PasswordRecovery:FrontendBaseUrl"] = "http://127.0.0.1:5189/",
+        ["PasswordRecovery:SmtpHost"] = "127.0.0.1", ["PasswordRecovery:SmtpPort"] = port.ToString(),
+        ["PasswordRecovery:FromEmail"] = "recovery@example.com", ["PasswordRecovery:Security"] = "None",
+        ["PasswordRecovery:Username"] = "", ["PasswordRecovery:Password"] = ""
+    };
 
     private static Task<HttpResponseMessage> Forgot(LoginFixture fixture, string email, string language = "en") =>
         fixture.Client.PostAsync("/api/auth/password/forgot", Json(JsonSerializer.Serialize(new { email, language })));
@@ -322,11 +372,21 @@ public sealed partial class UserLoginApiTests
         })));
 
     private sealed record RecoveryDelivery(string Email, string Language, Guid UserId, string Token);
+
+    private sealed class RecoveryProbeClock : TimeProvider
+    {
+        private long timestamp;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Interlocked.Read(ref timestamp);
+        public void Advance(TimeSpan elapsed) => Interlocked.Add(ref timestamp, elapsed.Ticks);
+    }
+
     private sealed class RecordingRecoverySender(bool failFirst = false) : IPasswordRecoveryEmailSender
     {
         private readonly Channel<RecoveryDelivery> deliveries = Channel.CreateUnbounded<RecoveryDelivery>();
         private int attempts;
         public bool HasDelivery => deliveries.Reader.TryPeek(out _);
+        public Task<bool> IsAvailableAsync(CancellationToken cancellationToken) => Task.FromResult(true);
         public async Task SendAsync(string email, string language, Guid userId, string token, CancellationToken cancellationToken)
         {
             await deliveries.Writer.WriteAsync(new(email, language, userId, token), cancellationToken);
@@ -336,7 +396,10 @@ public sealed partial class UserLoginApiTests
         public Task<RecoveryDelivery> Next() => deliveries.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
     }
 
-    private sealed class RecoveryWorkerLogger : ILogger<PasswordRecoveryWorker>
+    private sealed class RecoveryWorkerLogger : RecoveryLogger<PasswordRecoveryWorker> { }
+    private sealed class RecoverySmtpLogger : RecoveryLogger<SmtpPasswordRecoveryEmailSender> { }
+
+    private class RecoveryLogger<T> : ILogger<T>
     {
         public System.Collections.Concurrent.ConcurrentQueue<string> Messages { get; } = new();
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;

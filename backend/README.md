@@ -53,13 +53,22 @@ USD
 paper-trading portfolio. Login verifies the stored password hash and returns a
 signed JWT access token whose session version is checked against the account on each protected request.
 
-## Password recovery (#298)
+## Password recovery (#298, #332)
 
 Apply migration `20261115004323_AddPasswordRecovery` before enabling recovery.
 `POST /api/auth/password/forgot` accepts `{ "email": "person@example.com", "language": "en" }`
-(`en` or `fr`) and returns an empty **202** for known and unknown accounts. This
-means the request was accepted for processing; it does not promise email delivery.
-Email lookup and SMTP run in a bounded background queue independently of the HTTP response.
+(`en` or `fr`). When recovery is enabled and the SMTP check succeeds, it returns
+the same empty **202** for known and unknown accounts. Email lookup and message
+delivery happen in the bounded background queue. A **202** confirms queueing;
+the recipient's mail server can still reject or quarantine the message later.
+
+Before queueing, the API checks the configured connection, TLS, any SMTP login
+and the envelope sender. The check resets the SMTP transaction without passing
+a recipient or message. Concurrent requests share one check, bounded to five
+seconds. The result is reused for 30 seconds per API instance. A connection,
+authentication or sender failure during delivery invalidates a cached success.
+Recipient-specific rejections stay in the background and cannot change the
+public response for future requests.
 The queue holds 100 requests in memory, so restarting the process can discard
 pending requests. Users can explicitly request another email; there is no
 automatic resend. A persisted issuance suppresses further emails to that account
@@ -76,31 +85,39 @@ or password fields use **400** `validation_error`. Persistence failures return
 15 minutes, independently of login; **429** includes `Retry-After`. Trusted proxy
 configuration applies to these policies as it does to login.
 
-Recovery is disabled by default. Disabled recovery or a full queue returns **503**
-`password_recovery_unavailable` for every forgot request without account lookup.
+Recovery is disabled until configured. A disabled or unreachable relay, a failed
+SMTP check, or a full queue returns **503** `password_recovery_unavailable` without
+account lookup. Subsequent requests can be accepted again after the relay passes
+the next check.
 Already issued links can still reset passwords while email delivery is disabled.
-When enabled, invalid configuration prevents API startup. Configure all values
-through environment variables or API User Secrets; store SMTP credentials outside
-tracked configuration:
+When enabled, malformed settings prevent API startup.
 
-| `PasswordRecovery` setting | Value |
+Configure these settings on the **backend**. In a deployed environment, inject the
+variables through the host's environment and secret store. For local development,
+use the corresponding `.NET User Secrets` keys such as `PasswordRecovery:SmtpHost`.
+
+| Backend environment variable | Value |
 | --- | --- |
-| `Enabled` | `true` to send recovery email; default `false` |
-| `FrontendBaseUrl` | Trusted absolute HTTPS frontend URL, without query, fragment or credentials; trailing slash is accepted |
-| `TokenLifetimeMinutes` | 1–60, default 30 |
-| `SmtpHost`, `SmtpPort` | Real SMTP host and port; port defaults to 587 |
-| `FromEmail` | Valid sender email address authorized by the SMTP service |
-| `Username`, `Password` | SMTP credentials, either both configured or both omitted for an explicitly configured relay |
-| `Security` | `StartTls` (required upgrade), `SslOnConnect`, or development-only `None` |
+| `PasswordRecovery__Enabled` | Set to `true` after the relay and application URL are configured |
+| `PasswordRecovery__FrontendBaseUrl` | Deployed HTTPS frontend URL, without query, fragment or credentials |
+| `PasswordRecovery__TokenLifetimeMinutes` | 1–60, default 30 |
+| `PasswordRecovery__SmtpHost`, `PasswordRecovery__SmtpPort` | Provider's SMTP submission host and port |
+| `PasswordRecovery__FromEmail` | Sender address authorized by the SMTP provider |
+| `PasswordRecovery__Username`, `PasswordRecovery__Password` | Secret references for SMTP credentials. Omit both only for a relay explicitly configured to accept this backend without credentials |
+| `PasswordRecovery__Security` | `StartTls` (usually port 587), `SslOnConnect` (usually port 465), or Development loopback `None` |
 
-For example, `PasswordRecovery__Enabled=true` sets the environment variable form.
 Unencrypted SMTP (`None`) is accepted only in Development to a loopback host;
 HTTP frontend links are likewise allowed only for Development loopback. Local QA
 can use a real SMTP capture service on `127.0.0.1:1025` with an HTTP frontend at
-`http://127.0.0.1:5189`. Production must use a verified SMTP provider and HTTPS.
+`http://127.0.0.1:5189`. For deployment, verify SMTP egress and that the sender is
+authorized, then apply the migration and restart the API with recovery enabled.
+Request a reset using an authorized test mailbox and verify receipt, link origin
+and sign-in with the new password. Include a test mailbox for a Google-created
+account. Recovery revokes existing sessions and removes the old Google link.
 SMTP connection, authentication and delivery have a bounded 20-second deadline.
-Transport errors are logged generically without email addresses, credentials,
-tokens or message bodies.
+Transport warnings include the stage, error type and numeric SMTP status when
+available. They omit SMTP response text, email addresses, credentials, tokens
+and message bodies.
 
 English and French plain-text MIME emails link to
 `<FrontendBaseUrl>/reset-password#userId=<guid>&token=<token>`. Keeping secrets in
@@ -112,7 +129,7 @@ Requesting a new email after the cooldown invalidates the preceding link.
 Run the backend suite with `dotnet test backend/StockLab.sln`. On Windows with
 LocalDB installed, set `STOCKLAB_TEST_LOCALDB=1` to include SQL Server migration,
 single-use token and rowversion concurrency checks. Tests use isolated databases
-and injected email capture transports; browser QA can use the local SMTP sink.
+and a loopback SMTP peer that captures real MIME messages without external mail.
 
 ## Google authentication (#299)
 
