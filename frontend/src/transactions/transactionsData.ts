@@ -5,7 +5,7 @@ export type TransactionTypeFilter = 'All' | TransactionAssetType
 export type Transaction = {
   id: string
   symbol: string
-  company: string
+  company: string | null
   assetType: TransactionAssetType
   action: TransactionAction
   quantity: string
@@ -39,7 +39,7 @@ export function filterTransactions(items: Transaction[], filters: TransactionFil
 
   return items.filter((transaction) => {
     const matchesQuery = normalizedQuery.length === 0
-      || `${transaction.symbol} ${transaction.company}`.toLowerCase().includes(normalizedQuery)
+      || `${transaction.symbol} ${transaction.company ?? ''}`.toLowerCase().includes(normalizedQuery)
     const matchesAssetType = filters.assetType === 'All' || transaction.assetType === filters.assetType
     const matchesAction = filters.action === 'All' || transaction.action === filters.action
     const transactionDay = transaction.date.slice(0, 10)

@@ -493,6 +493,7 @@
     "weight": "Poids"
   },
   "transactions": {
+    "companyNameUnavailable": "Nom de l’entreprise indisponible",
     "loading": "Chargement des transactions…",
     "loadError": "Impossible de charger les transactions. Vérifiez votre connexion et votre session, puis réessayez.",
     "invalidDates": "La date de fin doit être égale ou postérieure à la date de début.",

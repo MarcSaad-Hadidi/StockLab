@@ -5,6 +5,8 @@ using System.Globalization;
 using StockLab.Api.Authentication;
 using StockLab.Api.DTOs;
 using StockLab.Api.DTOs.Portfolio;
+using StockLab.Application.DTOs.MarketData;
+using StockLab.Application.DTOs.Portfolio;
 using StockLab.Application.DTOs.Trading;
 using StockLab.Application.Exceptions;
 using StockLab.Application.Interfaces;
@@ -22,6 +24,7 @@ public sealed class PortfolioController(
     IMarketDataProvider marketDataProvider) : ControllerBase
 {
     private const decimal MaxMoney = 999_999_999_999_999.9999m;
+    private static readonly TimeSpan TransactionNameLookupTimeout = TimeSpan.FromSeconds(3);
 
     /// <summary>Gets the authenticated user's portfolio valued at acquisition cost.</summary>
     [HttpGet]
@@ -105,14 +108,7 @@ public sealed class PortfolioController(
         var transactions = await portfolioService.GetRecentTransactionsAsync(userId, limit, cancellationToken);
         return transactions is null
             ? NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."))
-            : Ok(transactions.Select(transaction => new PortfolioTransactionResponse(
-                transaction.Id,
-                transaction.Side,
-                transaction.Symbol,
-                transaction.Quantity.ToString("0.############################", CultureInfo.InvariantCulture),
-                transaction.ExecutionPrice.ToString("0.############################", CultureInfo.InvariantCulture),
-                transaction.TotalAmount.ToString("0.############", CultureInfo.InvariantCulture),
-                DateTime.SpecifyKind(transaction.ExecutedAtUtc, DateTimeKind.Utc))).ToArray());
+            : Ok(await MapTransactionsAsync(transactions, cancellationToken));
     }
 
     /// <summary>Gets a filtered page of the full history with all-time aggregates and portfolio currency.</summary>
@@ -130,15 +126,79 @@ public sealed class PortfolioController(
         var history = await portfolioService.GetTransactionHistoryAsync(userId, request.ToQuery(), cancellationToken);
         return history is null
             ? NotFound(new ApiErrorResponse("portfolio_not_found", "The portfolio was not found."))
-            : Ok(new TransactionHistoryResponse(history.Items.Select(row => new PortfolioTransactionResponse(
-                row.Id, row.Side, row.Symbol, row.Quantity.ToString("0.############################", CultureInfo.InvariantCulture), row.ExecutionPrice.ToString("0.############################", CultureInfo.InvariantCulture),
-                row.TotalAmount.ToString("0.############", CultureInfo.InvariantCulture),
-                DateTime.SpecifyKind(row.ExecutedAtUtc, DateTimeKind.Utc))).ToArray(),
+            : Ok(new TransactionHistoryResponse(await MapTransactionsAsync(history.Items, cancellationToken),
                 history.Page, history.PageSize, history.TotalCount, history.Currency,
                 new TransactionHistorySummaryResponse(history.Summary.TotalTrades,
                     history.Summary.TotalInvested.ToString("0.############", CultureInfo.InvariantCulture),
                     history.Summary.TotalProceeds.ToString("0.############", CultureInfo.InvariantCulture))));
     }
+
+    private async Task<PortfolioTransactionResponse[]> MapTransactionsAsync(
+        IReadOnlyList<PortfolioTransaction> transactions, CancellationToken cancellationToken)
+    {
+        // Metadata is optional. Do not wait for a new provider rate-limit window to return the ledger.
+        using var lookupDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        lookupDeadline.CancelAfter(TransactionNameLookupTimeout);
+        var tickers = transactions.Select(transaction => ListingTicker(transaction.Symbol))
+            .Where(ticker => ticker.Length != 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+        var results = await Task.WhenAll(tickers.Select(async ticker =>
+            (Ticker: ticker, Listings: await FindTransactionListingsAsync(ticker, lookupDeadline.Token))));
+        cancellationToken.ThrowIfCancellationRequested();
+        var listingsByTicker = results.ToDictionary(result => result.Ticker, result => result.Listings,
+            StringComparer.OrdinalIgnoreCase);
+
+        return transactions.Select(transaction =>
+        {
+            var ticker = ListingTicker(transaction.Symbol);
+            var companyName = listingsByTicker.TryGetValue(ticker, out var listings)
+                ? ResolveTransactionName(transaction.Symbol, ticker, listings)
+                : null;
+            return new PortfolioTransactionResponse(
+                transaction.Id, transaction.Side, transaction.Symbol, companyName,
+                transaction.Quantity.ToString("0.############################", CultureInfo.InvariantCulture),
+                transaction.ExecutionPrice.ToString("0.############################", CultureInfo.InvariantCulture),
+                transaction.TotalAmount.ToString("0.############", CultureInfo.InvariantCulture),
+                DateTime.SpecifyKind(transaction.ExecutedAtUtc, DateTimeKind.Utc));
+        }).ToArray();
+    }
+
+    private async Task<IReadOnlyList<StockSearchResult>> FindTransactionListingsAsync(
+        string ticker, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await marketDataProvider.SearchStocksAsync(ticker, cancellationToken);
+        }
+        catch (Exception exception) when (exception is MarketDataProviderException or MarketDataRateLimitException
+            || exception is OperationCanceledException && cancellationToken.IsCancellationRequested)
+        {
+            return [];
+        }
+    }
+
+    private static string? ResolveTransactionName(string symbol, string ticker, IReadOnlyList<StockSearchResult> listings)
+    {
+        var hasExchange = symbol.Contains(':');
+        var candidates = listings.Where(listing => hasExchange
+            ? listing.Symbol.Equals(symbol, StringComparison.OrdinalIgnoreCase)
+                || listing.Symbol.Equals(ticker, StringComparison.OrdinalIgnoreCase)
+                    && $"{ticker}:{listing.Exchange}".Equals(symbol, StringComparison.OrdinalIgnoreCase)
+            : ListingTicker(listing.Symbol).Equals(ticker, StringComparison.OrdinalIgnoreCase));
+        var names = candidates.Select(listing =>
+        {
+            var name = listing.CompanyName.Trim();
+            return name.Length == 0 || name.Equals(ticker, StringComparison.OrdinalIgnoreCase)
+                || name.Equals(listing.Symbol, StringComparison.OrdinalIgnoreCase)
+                || name.Equals($"{ticker}:{listing.Exchange}", StringComparison.OrdinalIgnoreCase)
+                ? null : name;
+        }).Distinct(StringComparer.OrdinalIgnoreCase).Take(2).ToArray();
+
+        // An old ticker without an exchange may identify more than one issuer.
+        return names.Length == 1 ? names[0] : null;
+    }
+
+    private static string ListingTicker(string symbol) => symbol.Split(':', 2)[0];
 
     /// <summary>Executes a simulated BUY or SELL order in the authenticated user's portfolio.</summary>
     [HttpPost("trades")]
