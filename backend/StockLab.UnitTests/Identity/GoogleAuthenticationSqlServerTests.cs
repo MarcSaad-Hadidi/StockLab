@@ -52,10 +52,13 @@ public sealed class GoogleAuthenticationSqlServerTests
         await using var db = fixture.Context();
         var failure = await Assert.ThrowsAsync<SqlException>(() => db.GetService<IMigrator>().MigrateAsync(PreviousMigration));
         Assert.Contains("Google-only", failure.Message, StringComparison.OrdinalIgnoreCase);
-        var stored = await db.Users.AsNoTracking().SingleAsync(value => value.Id == user.Id);
+        // Later migrations may already have rolled back successfully. Read only columns
+        // that exist at the Google-auth migration, not the current User model.
+        var stored = await db.Users.AsNoTracking().Where(value => value.Id == user.Id)
+            .Select(value => new { value.GoogleSubject, value.PasswordHash }).SingleAsync();
         Assert.Equal("rollback-subject", stored.GoogleSubject);
         Assert.Null(stored.PasswordHash);
-        Assert.Contains("20261115035556_AddGoogleAuthentication", await db.Database.GetAppliedMigrationsAsync());
+        Assert.Equal("20261115035556_AddGoogleAuthentication", (await db.Database.GetAppliedMigrationsAsync()).Last());
     }
 
     [LocalDbFact]
