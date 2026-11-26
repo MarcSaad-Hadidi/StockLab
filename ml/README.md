@@ -56,6 +56,10 @@ The [quarter-position sale candidate](docs/boosted-staged-sales.md) raises the
 full-window return to **22.36%** and the higher-cost return to **22.16%**. Its
 fresh 2021 return is **18.92%**. It beats SPY from all five start dates, with
 59 partial sales in the full baseline-cost test.
+The [confirmed DCA purchase-priority study](docs/boosted-purchase-research.md)
+reaches **22.53%** full-period annualized and **22.32%** at higher costs.
+The 2021 fresh account earns **18.88%**. The same report records the tested
+purchase filter, cash-funded rotation and higher per-order size variants.
 
 The separate [DCA / S&P 500 research](docs/dca-research.md) compares costed,
 chronological paper portfolios against an external SPY proxy and the user's
