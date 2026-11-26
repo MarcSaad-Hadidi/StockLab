@@ -1,5 +1,9 @@
 # Broader-universe data readiness
 
+The subsequent [eight-stock pilot](boosted-expanded-execution.md) verifies cash
+actions and shared-calendar prices for three individual additions. This assessment
+describes the original frozen panel at the time of its readiness review.
+
 The user requested broader opportunity coverage and >20% long CAGR with lower drawdown. The current frozen training corpus can support broader forecast diagnostics, but it is not yet a defensible total-return execution dataset. No new fits, portfolio returns, provider calls or source changes were made for this assessment.
 
 |Observed cached fact|Implication|

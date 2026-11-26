@@ -94,7 +94,11 @@ restores the Windows paper and retraining paths with RFv7 active and RFv9 archiv
 The [broader-data readiness assessment](docs/broader-data-readiness.md) records
 why the111-name training panel cannot yet substitute for execution data: missing
 cash-event coverage, unresolved identity/terminal information, session gaps and
-zero-volume candles. No broader return is invented from these records.
+zero-volume candles. A [separate eight-stock experiment](docs/boosted-expanded-execution.md)
+verifies tradable research inputs for three additional names and compares the
+same model's immediate and relative-strength sale rules. The relative rule earns
+17.15% annualized with 29.12% maximum drawdown. The retained five-stock reference
+earns 18.63% with 24.77% drawdown.
 
 The user-requested long comparison of the unchanged market-boosted reference
 now covers2018-01-01 through2026-11-11:16.17% CAGR versus SPY14.17%,31.91%
