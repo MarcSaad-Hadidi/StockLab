@@ -3,7 +3,7 @@ import { PortfolioApiError, portfolioApi } from '../api/portfolioApi'
 import { getAuthSession } from '../auth/authStorage'
 import { useAuthSession } from '../auth/useAuthUser'
 
-export function useOrderCash() {
+export function useOrderCash(enabled = true) {
   const session = useAuthSession()
   const userId = session?.user.id ?? null
   const authorization = session ? `${session.tokenType} ${session.accessToken}` : null
@@ -15,7 +15,7 @@ export function useOrderCash() {
 
   useEffect(() => {
     retryQueued.current = false
-    if (!userId || !authorization) return
+    if (!enabled || !userId || !authorization) return
     const controller = new AbortController()
     activeRequest.current = controller
     const active = () => {
@@ -36,7 +36,7 @@ export function useOrderCash() {
       controller.abort()
       if (activeRequest.current === controller) activeRequest.current = null
     }
-  }, [userId, authorization, key])
+  }, [enabled, userId, authorization, key])
 
   function retry() {
     const current = getAuthSession()

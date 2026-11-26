@@ -16,6 +16,10 @@ public sealed class RateLimitedMarketDataProvider(
     public Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(string query, CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => inner.SearchStocksAsync(query, cancellationToken), cancellationToken);
 
+    public Task<IReadOnlyList<StockSearchResult>> BrowseAssetsAsync(MarketAssetCategory category,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(() => inner.BrowseAssetsAsync(category, cancellationToken), cancellationToken);
+
     public Task<StockHistory?> GetHistoryAsync(StockHistoryRequest request, CancellationToken cancellationToken = default) =>
         ExecuteAsync(() => inner.GetHistoryAsync(request, cancellationToken), cancellationToken);
 

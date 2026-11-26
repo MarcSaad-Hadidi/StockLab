@@ -102,7 +102,7 @@ function AlertRow({ alert }: { alert: PriceAlert }) {
 function AlertForm() {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
-  const loadSearch = useCallback((signal: AbortSignal) => marketDataApi.search(search, signal), [search])
+  const loadSearch = useCallback((signal: AbortSignal) => marketDataApi.search(search, signal, true), [search])
   const results = useMarketRequest(search.trim(), loadSearch, search.trim().length > 0, 450)
   return <div className="alert-form" id="create-alert-form">
     <div className="alert-form-field alert-preview-search">

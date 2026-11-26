@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { JSDOM } from 'jsdom'
 import React, { act } from 'react'
+import type { StockSearchResult } from '../src/api/marketDataApi.ts'
 import { marketDataApi } from '../src/api/marketDataClient.ts'
 import { watchlistApi, WatchlistApiError } from '../src/api/watchlistApi.ts'
 import { clearAuthSession, getAuthSession, saveAuthSession } from '../src/auth/authStorage.ts'
@@ -36,6 +37,7 @@ beforeEach(async t => {
   t.mock.method(marketDataApi, 'quote', async symbol => ({ symbol, name: symbol, exchange: 'NASDAQ', currency: 'USD', price: 100,
     priceDecimal: '100', change: null, changePercent: null, volume: null, asOfUtc: '2026-10-26T12:00:00Z', open: null,
     high: null, low: null, previousClose: null, averageVolume: null, isMarketOpen: false, fiftyTwoWeek: null }))
+  t.mock.method(marketDataApi, 'search', async () => [])
   t.mock.method(marketDataApi, 'history', async () => { throw new Error('test history unavailable') })
   t.mock.method(watchlistApi, 'getWatchlist', async () => [...persisted])
   t.mock.method(watchlistApi, 'addToWatchlist', async symbol => { const item = member(symbol); persisted.push(item); return item })
@@ -248,4 +250,50 @@ test('expiry clears selected membership without focus and removes its session ti
     assert.ok(view.feedback()!.querySelector('a[href="/login"]'))
   } finally { await view.close() }
   assert.equal(timers.size, 0)
+})
+
+const listing = (symbol: string, instrumentType: string, exchange = 'NASDAQ'): StockSearchResult =>
+  ({ symbol, instrumentType, exchange, companyName: symbol, currency: 'USD' })
+
+test('a symbol-only ETF never shows a paper order or stock-only enrichment', async t => {
+  const lookup = deferred<StockSearchResult[]>()
+  const search = t.mock.method(marketDataApi, 'search', () => lookup.promise)
+  const view = await mount('SPY:NASDAQ')
+  try {
+    assert.equal(view.container.querySelector('#stock-order-type'), null)
+    assert.equal(search.mock.calls[0].arguments[0], 'SPY')
+    assert.equal(view.container.querySelector('.stock-ai-card'), null)
+    await act(async () => lookup.resolve([listing('SPY:NYSE', 'Common Stock', 'NYSE'), listing('SPY:NASDAQ', 'ETF')]))
+    assert.equal(view.container.querySelector('#stock-order-type'), null)
+    assert.equal(view.container.querySelector('.stock-ai-card'), null)
+    assert.match(view.container.textContent!, /ETF/)
+  } finally { await view.close() }
+})
+
+test('a symbol-only stock shows its ticket only after the listing is identified', async t => {
+  const lookup = deferred<StockSearchResult[]>()
+  t.mock.method(marketDataApi, 'search', () => lookup.promise)
+  const view = await mount('AAPL')
+  try {
+    assert.equal(view.container.querySelector('#stock-order-type'), null)
+    await act(async () => lookup.resolve([listing('AAPL:NASDAQ', 'Common Stock')]))
+    assert.ok(view.container.querySelector('#stock-order-type'))
+    assert.ok(view.container.querySelector('.stock-ai-card'))
+  } finally { await view.close() }
+})
+
+test('a failed lookup and an unrelated listing never enable the ticket', async t => {
+  const search = t.mock.method(marketDataApi, 'search', async (ticker: string) => {
+    if (ticker === 'SPY') throw new Error('lookup unavailable')
+    return [listing('AAPL:NYSE', 'Common Stock', 'NYSE'), listing('AAPLU:NASDAQ', 'Common Stock')]
+  })
+  const view = await mount('SPY')
+  try {
+    assert.equal(view.container.querySelector('#stock-order-type'), null)
+    assert.ok(view.container.querySelector('.stock-trade-card .market-retry-button'))
+    await view.render('AAPL')
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 25)) })
+    assert.equal(search.mock.callCount(), 2)
+    assert.equal(view.container.querySelector('#stock-order-type'), null)
+  } finally { await view.close() }
 })

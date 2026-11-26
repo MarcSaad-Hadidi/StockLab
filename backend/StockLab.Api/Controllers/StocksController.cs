@@ -44,7 +44,7 @@ public sealed class StocksController(IMarketDataProvider marketDataProvider, IOp
                 bar.OpenTimeUtc, bar.PeriodDate, bar.Open, bar.High, bar.Low, bar.Close, bar.Volume)).ToArray(), options.Value.Provider));
     }
 
-    /// <summary>Searches stocks by ticker or company name.</summary>
+    /// <summary>Searches market instruments by ticker or name.</summary>
     [HttpGet("search")]
     [ProducesResponseType(typeof(StockSearchResponse[]), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiValidationErrorResponse), StatusCodes.Status400BadRequest)]
@@ -55,12 +55,45 @@ public sealed class StocksController(IMarketDataProvider marketDataProvider, IOp
     [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status504GatewayTimeout)]
     public async Task<ActionResult<StockSearchResponse[]>> SearchStocksAsync(
         [FromQuery, Required] string query,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        [FromQuery] bool commonStocksOnly = false)
     {
         var results = await marketDataProvider.SearchStocksAsync(query, cancellationToken);
-        return Ok(results.Select(stock => new StockSearchResponse(
-            stock.Symbol, stock.CompanyName, stock.Exchange, stock.Currency)).ToArray());
+        return Ok(results.Where(asset => !commonStocksOnly || asset.InstrumentType == "Common Stock")
+            .Select(ToSearchResponse).ToArray());
     }
+
+    [HttpGet("assets")]
+    public async Task<ActionResult<StockSearchResponse[]>> BrowseAssetsAsync(
+        [FromQuery, Required] MarketAssetCategory? category,
+        [FromQuery, StringLength(200)] string? query,
+        CancellationToken cancellationToken)
+    {
+        var assets = await marketDataProvider.BrowseAssetsAsync(category!.Value, cancellationToken);
+        var term = query?.Trim();
+        if (string.IsNullOrEmpty(term)) return Ok(assets.Take(30).Select(ToSearchResponse).ToArray());
+
+        var matches = assets.Select(asset => (Asset: asset, Ticker: asset.Symbol.Split(':', 2)[0]))
+            .Where(item => item.Asset.Symbol.Contains(term, StringComparison.OrdinalIgnoreCase)
+                || item.Asset.CompanyName.Contains(term, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(item => item.Ticker.Equals(term, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(item => item.Ticker.StartsWith(term, StringComparison.OrdinalIgnoreCase));
+        return Ok(matches.Take(120).Select(item => ToSearchResponse(item.Asset)).ToArray());
+    }
+
+    // Pairs contain a slash, which ASP.NET does not decode inside route segments.
+    [HttpGet("by-symbol/quote")]
+    public Task<ActionResult<StockQuoteResponse>> GetQuoteByQueryAsync(
+        [FromQuery, Required] string symbol, CancellationToken cancellationToken) =>
+        GetQuoteAsync(symbol, cancellationToken);
+
+    [HttpGet("by-symbol/history")]
+    public Task<ActionResult<StockHistoryResponse>> GetHistoryByQueryAsync(
+        [FromQuery, Required] string symbol, [FromQuery] StockHistoryQuery query, CancellationToken cancellationToken) =>
+        GetHistoryAsync(symbol, query, cancellationToken);
+
+    private static StockSearchResponse ToSearchResponse(StockSearchResult asset) =>
+        new(asset.Symbol, asset.CompanyName, asset.Exchange, asset.Currency, asset.InstrumentType);
 
     /// <summary>Gets the latest available quote for a stock symbol.</summary>
     [HttpGet("{symbol}/quote")]

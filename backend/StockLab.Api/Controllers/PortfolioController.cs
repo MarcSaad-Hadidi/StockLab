@@ -212,6 +212,16 @@ public sealed class PortfolioController(
                 : Conflict(new ApiErrorResponse("duplicate_order", "This order conflicts with an existing order."));
         }
 
+        var ticker = tradingSymbol.Split(':', 2)[0];
+        var listings = await marketDataProvider.SearchStocksAsync(ticker, cancellationToken);
+        if (!listings.Any(asset => asset.InstrumentType == "Common Stock"
+            && (asset.Symbol == tradingSymbol || asset.Symbol == ticker
+                && string.Equals(asset.Exchange, quote.Exchange, StringComparison.OrdinalIgnoreCase))))
+        {
+            return UnprocessableEntity(new ApiErrorResponse(
+                "unsupported_asset", "Paper trading is available for common stocks only."));
+        }
+
         var portfolioCurrency = await portfolioService.GetPortfolioCurrencyAsync(userId, cancellationToken);
         if (portfolioCurrency is null)
         {
