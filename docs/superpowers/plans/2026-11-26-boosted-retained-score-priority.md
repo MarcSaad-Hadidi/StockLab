@@ -1,0 +1,8 @@
+# Purchase priority from the retained boosted score
+
+On the known 2024–2026 twenty-session price outcomes, the existing HGBT probability orders 52.33% of comparable pairs correctly. The newly fitted ordinal rank and the matched broad binary classifier order 49.80% and 48.32%, respectively. The original HGBT score remains an absolute price-event estimate. Use the score only to rank eligible purchases and test its portfolio effect with the same benchmark and costs. [Preceding forecast protocol](2026-11-26-boosted-relative-rank-training.md)
+
+- **Retained-score priority** preserves every original BUY. Within the same confirmed DCA zone, rank simultaneous buys by descending existing HGBT score, then ascending ticker.
+- **Retained-score half** keeps the same priority and allows an original BUY only when its existing HGBT score is in the top four across the eight observable stocks at that close. Resolve equal scores by ticker.
+
+Retain the same quarter-position sales and pacing, opening execution order, position caps, shared cash, non-leveraged $100,000 capital, cost schedule and verified dividend actions. Run each variant across the seven identical windows in the preceding study and through the November 25, 2026 close. Compare the results with the verified quarter-sale and DCA portfolios and the newly trained ranking and gating controls. Evaluate the full standard and higher-cost accounts, the median across standard-cost starts and the 2024 fresh-capital account, with drawdown measured separately. Preserve the score and action sidecars and independently check all fourteen added replay ledgers. This follow-up uses fixed pre-existing scores with no new fits, provider requests or active model changes.
