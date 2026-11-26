@@ -37,8 +37,11 @@ zero fits/replays; native acquisition/cycle integration still remains.
 The separate [read-only .NET/Python diagnostic](docs/boosted-diagnostic.md) now
 passes two actual operator invocations against that Archived artifact. Independent
 review finds all40 latest scores/trends bit-exact and all actions/reasons correct,
-with zero fitting/replay/provider calls. This historical bridge does not enable
-the automatic trading cycle or provide prospective evidence.
+with zero fitting/replay/provider calls. The [first fresh observation](docs/boosted-observation.md)
+then records five matching pre-open scores on the November 25 data vintage
+using the archived binary and the updated `develop` build. A local read-only
+checker can resolve those scores against the 21st subsequent observed open.
+The observation outcome is pending and the automated paper cycle uses RFv7.
 
 The separate [DCA / S&P 500 research](docs/dca-research.md) compares costed,
 chronological paper portfolios against an external SPY proxy and the user's
@@ -80,6 +83,13 @@ difference5.82e-11 under the unchanged tolerance. Across seven continuation
 diagnostics:62 synthetic checks,923,083 independent numeric comparisons,
 143 base fits/nine isotonic calibrations/39 accounts. Financial equality is not
 claimed bit-exact for this last study; the20% goal remains unmet.
+
+Two [sell-only follow-up studies](docs/boosted-sell-research.md) keep the exact
+retained BUY intentions. Earlier sales lower full drawdown to 20.12% but lower
+annual growth to 15.32%. Weighting the sell model by price-move magnitude yields
+17.72% growth with 25.64% drawdown and worsens forecast loss. The 18.63% model
+remains the retained historical reference. The [local retraining reconciliation](docs/retraining-reconciliation.md)
+restores the Windows paper and retraining paths with RFv7 active and RFv9 archived.
 
 The [broader-data readiness assessment](docs/broader-data-readiness.md) records
 why the111-name training panel cannot yet substitute for execution data: missing
