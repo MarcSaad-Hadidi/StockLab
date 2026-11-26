@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 using StockLab.Application.DTOs.MarketData;
+using StockLab.Application.Exceptions;
 using StockLab.Application.Interfaces;
 using StockLab.Domain.Entities;
 using StockLab.Infrastructure.MarketData;
@@ -171,6 +172,42 @@ public sealed partial class PortfolioApiTests
         Assert.Equal("MSFT", transaction.GetProperty("symbol").GetString());
         Assert.Equal("BUY", transaction.GetProperty("side").GetString());
         Assert.EndsWith("Z", transaction.GetProperty("executedAtUtc").GetString());
+    }
+
+    [Theory]
+    [InlineData("/api/portfolio/transactions?limit=10")]
+    [InlineData("/api/portfolio/transactions/history")]
+    public async Task Transaction_feeds_resolve_exact_listings_and_preserve_rows_when_names_are_unavailable(string path)
+    {
+        var provider = new TransactionNameMarketDataProvider();
+        await using var fixture = await PortfolioFixture.CreateAsync(provider);
+        var account = await CreateSignedInAccountAsync(fixture, "transaction-names@example.com");
+        var portfolio = await SeedPortfolioAsync(fixture, account.Id, 100_000m, "USD");
+        var expected = new Dictionary<string, string?>
+        {
+            ["ABC:NYSE"] = "American Bearings Corporation",
+            ["ABC:TSX"] = "Atlantic Broadcasting Company",
+            ["ABC"] = null,
+            ["ABC:NASDAQ"] = null,
+            ["AAPL"] = "Apple Inc.",
+            ["EMPTY"] = null,
+            ["UNKNOWN:NYSE"] = null,
+            ["UNAVAILABLE:NYSE"] = null
+        };
+        foreach (var symbol in expected.Keys)
+            await SeedTransactionAsync(fixture, portfolio, symbol, DateTime.UtcNow);
+
+        using var response = await GetWithTokenAsync(fixture.Client, account.Token, path);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var rows = body.RootElement.ValueKind == JsonValueKind.Array ? body.RootElement : body.RootElement.GetProperty("items");
+        var namesBySymbol = rows.EnumerateArray().ToDictionary(row => row.GetProperty("symbol").GetString()!,
+            row => row.GetProperty("companyName").GetString());
+        Assert.Equal(expected.Count, namesBySymbol.Count);
+        foreach (var (symbol, name) in expected)
+            Assert.Equal(name, namesBySymbol[symbol]);
+        Assert.Equal(1, provider.AbcSearches);
     }
 
     [Fact]
@@ -770,6 +807,39 @@ public sealed partial class PortfolioApiTests
             modelBuilder.Entity<Transaction>().Property(transaction => transaction.LimitPrice).HasColumnType("TEXT");
             modelBuilder.Entity<Holding>().Property(holding => holding.Quantity).HasColumnType("TEXT");
         }
+    }
+
+    private sealed class TransactionNameMarketDataProvider : IMarketDataProvider
+    {
+        public int AbcSearches { get; private set; }
+
+        public Task<IReadOnlyList<StockSearchResult>> SearchStocksAsync(
+            string query, CancellationToken cancellationToken = default)
+        {
+            if (query == "ABC")
+            {
+                AbcSearches++;
+                return Task.FromResult<IReadOnlyList<StockSearchResult>>([
+                    new("ABC:TSX", "Atlantic Broadcasting Company", "TSX", "CAD"),
+                    new("ABCD:NASDAQ", "Different business", "NASDAQ", "USD"),
+                    new("ABC", "American Bearings Corporation", "NYSE", "USD")
+                ]);
+            }
+
+            return query switch
+            {
+                "AAPL" => Task.FromResult<IReadOnlyList<StockSearchResult>>([new("AAPL:NASDAQ", "Apple Inc.", "NASDAQ", "USD")]),
+                "EMPTY" => Task.FromResult<IReadOnlyList<StockSearchResult>>([new("EMPTY:NYSE", "EMPTY:NYSE", "NYSE", "USD")]),
+                "UNKNOWN" => Task.FromResult<IReadOnlyList<StockSearchResult>>([]),
+                _ => throw new MarketDataRateLimitException()
+            };
+        }
+
+        public Task<StockQuote?> GetQuoteAsync(string symbol, CancellationToken cancellationToken = default) =>
+            Task.FromResult<StockQuote?>(null);
+
+        public Task<StockHistory?> GetHistoryAsync(StockHistoryRequest request, CancellationToken cancellationToken = default) =>
+            Task.FromResult<StockHistory?>(null);
     }
 
     private sealed class CountingMarketDataProvider(decimal price = 100m, DateTimeOffset? asOf = null) : IMarketDataProvider
