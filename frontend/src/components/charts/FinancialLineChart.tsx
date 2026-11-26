@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { LineChart, lineClasses } from '@mui/x-charts/LineChart'
 import { useDrawingArea, useXScale, useYScale } from '@mui/x-charts/hooks'
+import { StockChartCursor } from './StockChartCursor'
 import './financial-line-chart.css'
 
 type FinancialLineChartProps = {
@@ -19,6 +20,7 @@ type FinancialLineChartProps = {
   showLatestValue?: boolean
   size?: 'default' | 'compact'
   curve?: 'linear' | 'monotoneX'
+  stockCursor?: { tickIndexes: number[]; keyboardInstructions: string }
 }
 
 function NoTooltip() {
@@ -95,6 +97,7 @@ function ChartInteraction({ values, labels, timestamps, formatValue, formatPoint
 
 export function FinancialLineChart(props: FinancialLineChartProps) {
   const { values, labels, timestamps, min, max, ariaLabel, formatValue, formatTick = formatValue, size = 'default' } = props
+  const stockCursor = timestamps ? undefined : props.stockCursor
   const gradientId = useId().replaceAll(':', '')
   const [overlay, setOverlay] = useState<HTMLDivElement | null>(null)
   return (
@@ -108,6 +111,7 @@ export function FinancialLineChart(props: FinancialLineChartProps) {
             valueFormatter: (value: Date) => props.formatAxisLabel?.(value.getTime()) ?? value.toISOString(),
           } : {
             scaleType: 'point' as const, data: values.map((_, index) => index),
+            tickInterval: stockCursor?.tickIndexes,
             valueFormatter: (index: number) => props.formatAxisLabel?.(index) ?? labels[index] ?? '',
           }),
           disableLine: true, disableTicks: true, height: 32,
@@ -142,9 +146,12 @@ export function FinancialLineChart(props: FinancialLineChartProps) {
           </linearGradient>
         </defs>
         {/* Index-based interactions must reset when the series changes length. */}
-        <ChartInteraction key={values.length} {...props} overlay={overlay} />
+        {stockCursor
+          ? <StockChartCursor key={values.length} {...props} overlay={overlay}
+              keyboardInstructions={stockCursor.keyboardInstructions} />
+          : <ChartInteraction key={values.length} {...props} overlay={overlay} />}
       </LineChart>
-      <div className="financial-chart-overlay" ref={setOverlay} />
+      <div className={stockCursor ? "financial-chart-overlay stock-chart-overlay" : "financial-chart-overlay"} ref={setOverlay} />
     </div>
   )
 }

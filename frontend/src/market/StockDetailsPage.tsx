@@ -1,7 +1,7 @@
 import { normalizeOperand, amountSign, subtractAmounts } from '../api/decimalMath';
 import { isPositiveAmount } from '../api/decimalAmount';
 import { FinancialLineChart } from "../components/charts/FinancialLineChart";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import {
   formatNumber,
@@ -9,6 +9,7 @@ import {
   localeForLanguage,
 } from "../i18n/formatters";
 import { marketDataApi } from "../api/marketDataClient";
+import type { StockHistory } from "../api/marketDataApi";
 import { TradingApiError, tradingApi } from "../api/tradingApi";
 import { getAuthSession, type AuthSession } from "../auth/authStorage";
 import { subscribeAuthSession, useAuthUser } from "../auth/useAuthUser";
@@ -27,7 +28,7 @@ import { useMarketRequest } from "./useMarketRequest";
 import {
   calculateTradeTotal,
   chartRanges,
-  historyPoints,
+  stockChartSeries,
   historyQuery,
   money,
   getTradeExecutionPrice,
@@ -273,6 +274,26 @@ function TradeTicket({
     </form>
   );
 }
+
+const StockHistoryChart = memo(function StockHistoryChart({
+  history, range, locale, currency, ariaLabel, keyboardInstructions,
+}: {
+  history: StockHistory;
+  range: ChartRange;
+  locale: string;
+  currency: string | null;
+  ariaLabel: string;
+  keyboardInstructions: string;
+}) {
+  const chart = stockChartSeries(history, range, locale);
+  return <FinancialLineChart
+    values={chart.values} labels={chart.labels} min={chart.min} max={chart.max}
+    formatAxisLabel={(index) => chart.ticks.get(index) ?? ""}
+    stockCursor={{ tickIndexes: chart.tickIndexes, keyboardInstructions }}
+    ariaLabel={ariaLabel} formatValue={(value) => money(value, currency, locale, 4)}
+    showLatestValue
+  />;
+});
 
 export function StockDetailsPage({
   requestedSymbol,
@@ -577,7 +598,6 @@ export function StockDetailsPage({
     setTradeError(null);
   };
   const confirmationRef = useOrderConfirmationFocus(pendingTrade !== null, isSubmitting, dismissTrade);
-  const points = history.data ? historyPoints(history.data, locale) : [];
   const change = quote.data?.changePercent;
   const tone =
     change == null || change === 0
@@ -721,24 +741,20 @@ export function StockDetailsPage({
                 </div>
                 <div className="stock-price-chart">
                   <MarketRequestStatus {...history} loadingMessage="marketApi.loadingHistory" />
-                  {history.data && !points.length && (
-                    <p role="status">{t("marketApi.noHistory")}</p>
-                  )}
-                  {points.length > 0 && (
-                    <FinancialLineChart
+                  {history.data && (history.data.bars.length ? (
+                    <StockHistoryChart
                       key={`${symbol}:${activeRange}`}
-                      values={points.map((p) => p.value)}
-                      labels={points.map((p) => p.label)}
-                      min={Math.min(...points.map((p) => p.value)) * 0.99}
-                      max={Math.max(...points.map((p) => p.value)) * 1.01}
+                      history={history.data}
+                      range={activeRange}
+                      locale={locale}
+                      currency={currency}
                       ariaLabel={t("stockDetails.historicalPriceChart", {
                         symbol,
                         range: activeRange,
                       })}
-                      formatValue={formatPrice}
-                      showLatestValue
+                      keyboardInstructions={t("stockDetails.chartKeyboardInstructions")}
                     />
-                  )}
+                  ) : <p role="status">{t("marketApi.noHistory")}</p>)}
                 </div>
                 {history.data && <MarketDataProvenance source={history.data.source} sourceOnly />}
               </article>

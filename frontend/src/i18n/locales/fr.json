@@ -297,6 +297,7 @@
   "stockDetails": {
     "title": "Détails de l’action",
     "historicalPriceChart": "Graphique historique du prix de {{symbol}} pour {{range}}",
+    "chartKeyboardInstructions": "Utilisez les flèches pour parcourir les prix, Début et Fin pour atteindre le premier ou le dernier point, et Échap pour effacer la sélection.",
     "aiConfidence": "{{confidence}} de confiance de l’IA",
     "aiInsight": "Analyse IA",
     "byStockLabAi": "par StockLab IA",

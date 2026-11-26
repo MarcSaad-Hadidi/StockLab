@@ -297,6 +297,7 @@
   "stockDetails": {
     "title": "Stock Details",
     "historicalPriceChart": "{{symbol}} historical price chart for {{range}}",
+    "chartKeyboardInstructions": "Use the arrow keys to explore prices, Home and End to jump to the first and last point, and Escape to clear the selection.",
     "aiConfidence": "{{confidence}} AI confidence",
     "aiInsight": "AI Insight",
     "byStockLabAi": "by StockLab AI",
