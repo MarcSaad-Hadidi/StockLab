@@ -1,5 +1,7 @@
 # Learning to rank the boosted model's eligible purchases
 
+The subsequent standalone-Alcoa correction gives 21.56% annualized for the learned eight-stock priority on this same period. The confirmed eight-stock DCA priority remains the reference at 21.80%. The original experiment and its 21.86% result are recorded below. [Corrected comparison and broader replay](boosted-sixteen-universe.md)
+
 The new learned purchase priority earns **21.86% annualized** from January 2018 through November 25, 2026. The confirmed DCA reference earns **21.80%** and SPY earns **13.36%** on the same dates. The new portfolio finishes at $580,675.89 after 315 buys and 59 quarter-position sales. Its maximum drawdown is 30.08%. The 2021 fresh account rises from **17.84% to 19.77% annualized**, while its drawdown falls from 21.91% to 18.77%. The best result from a fresh 2024 start is **16.67%** with the retained-score filter, compared with **16.73% for SPY**. [Ranking model protocol](../../docs/superpowers/plans/2026-11-26-boosted-relative-rank-training.md) · [Retained score protocol](../../docs/superpowers/plans/2026-11-26-boosted-retained-score-priority.md)
 
 ## Learning and forecast results
