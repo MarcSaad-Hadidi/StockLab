@@ -923,6 +923,14 @@
     "preferredCurrency": "Devise préférée",
     "preferredCurrencyDescription": "Choisissez la devise par défaut de la plateforme.",
     "darkMode": "Mode sombre",
+    "preferenceStatus": {
+      "loading": "Chargement des préférences…",
+      "saving": "Enregistrement des préférences…",
+      "saved": "Préférences enregistrées.",
+      "loadError": "Impossible de charger les préférences.",
+      "saveError": "Impossible de confirmer la modification. Les préférences enregistrées seront rechargées.",
+      "conflict": "Une autre demande a modifié le profil. Vérifiez les préférences actuelles et réessayez."
+    },
     "darkModeDescription": "Basculez entre les thèmes clair et sombre.",
     "accountSecurity": "Sécurité du compte",
     "accountSecurityDescription": "Surveillez et gérez la sécurité de votre compte.",

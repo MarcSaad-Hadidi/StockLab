@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url'
 import { JSDOM } from 'jsdom'
 import React, { act } from 'react'
 import { profileApi, ProfileApiError } from '../src/api/profileApi.ts'
+import { preferencesApi } from '../src/api/preferencesApi.ts'
+import { preferencesChangedKey } from '../src/preferences/preferencesContext.ts'
 import { portfolioApi } from '../src/api/portfolioApi.ts'
 import { saveAuthSession, getAuthSession, clearAuthSession, authStorageKey } from '../src/auth/authStorage.ts'
 import { useProfileData } from '../src/profile/useProfileData.ts'
@@ -538,3 +540,66 @@ for (const operation of ['load', 'save'] as const) {
     })
   }
 }
+
+test('profile preferences load, save, roll back on failure, and refresh after same-account tab changes', async t => {
+  seed()
+  await setLanguage('en')
+  t.mock.method(profileApi, 'getProfile', async () => profile)
+  t.mock.method(portfolioApi, 'getPortfolio', async () => capital)
+  let remote = { userId: user.id, emailNotifications: false, tradeAlerts: false, marketingCommunications: false, darkMode: false }
+  const get = t.mock.method(preferencesApi, 'get', async () => remote)
+  let finish!: () => void
+  t.mock.method(preferencesApi, 'update', (_token, id, patch) => {
+    assert.equal(id, user.id)
+    assert.deepEqual(patch, { darkMode: true })
+    return new Promise(resolve => { finish = () => { remote = { ...remote, ...patch }; resolve(remote) } })
+  })
+  const { AccountPreferences } = await import('../src/preferences/AccountPreferences.tsx')
+  const { default: Page } = await import('../src/profile/ProfilePage.tsx')
+  const view = await mount(React.createElement(AccountPreferences, null, React.createElement(Page)))
+  const switches = () => Array.from(view.container.querySelectorAll<HTMLInputElement>('input[role="switch"]'))
+  try {
+    assert.equal(switches().length, 4)
+    assert.ok(switches().every(input => !input.disabled && !input.checked))
+    await act(async () => switches()[3].click())
+    assert.equal(document.documentElement.dataset.stocklabTheme, 'dark')
+    assert.ok(switches().every(input => input.disabled))
+    await act(async () => finish())
+    assert.match(view.container.textContent!, /Preferences saved/)
+    assert.ok(window.localStorage.getItem(preferencesChangedKey)?.startsWith(user.id + ':'))
+
+    const priorCalls = get.mock.callCount()
+    remote = { ...remote, darkMode: false, marketingCommunications: true }
+    await act(async () => window.dispatchEvent(new dom.window.StorageEvent('storage',
+      { key: preferencesChangedKey, newValue: 'different-account:1' })))
+    assert.equal(get.mock.callCount(), priorCalls)
+    assert.equal(switches()[3].checked, true)
+    await act(async () => window.dispatchEvent(new dom.window.StorageEvent('storage',
+      { key: preferencesChangedKey, newValue: user.id + ':2' })))
+    assert.equal(document.documentElement.dataset.stocklabTheme, undefined)
+    assert.equal(switches()[2].checked, true)
+
+    t.mock.method(preferencesApi, 'update', async () => { throw new Error('offline') })
+    await act(async () => switches()[3].click())
+    assert.equal(switches()[3].checked, false)
+    assert.equal(document.documentElement.dataset.stocklabTheme, undefined)
+    assert.match(view.container.textContent!, /Could not confirm the change/)
+  } finally { await view.close() }
+})
+
+test('switching accounts clears dark mode and ignores preferences from the old token', async t => {
+  seed()
+  let returnOld!: () => void
+  const other = { ...user, id: 'second-account' }
+  const values = { emailNotifications: false, tradeAlerts: false, marketingCommunications: false, darkMode: false }
+  t.mock.method(preferencesApi, 'get', (_auth, userId) => userId === user.id
+    ? new Promise(resolve => { returnOld = () => resolve({ userId, ...values, darkMode: true }) })
+    : Promise.resolve({ userId, ...values }))
+  const { AccountPreferences } = await import('../src/preferences/AccountPreferences.tsx')
+  const view = await mount(React.createElement(AccountPreferences, null, React.createElement('div')))
+  try {
+    await act(async () => { saveAuthSession({ ...session, user: other, accessToken: 'another-token' }) })
+    await act(async () => returnOld())
+    assert.equal(document.documentElement.dataset.stocklabTheme, undefined)
+  } finally { await view.close() }
+})

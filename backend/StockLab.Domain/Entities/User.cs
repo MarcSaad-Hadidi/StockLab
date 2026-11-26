@@ -9,6 +9,10 @@ public sealed class User
     public string? PasswordHash { get; set; }
     public string? GoogleSubject { get; set; }
     public string PreferredLanguage { get; set; } = "en";
+    public bool EmailNotifications { get; set; }
+    public bool TradeAlerts { get; set; }
+    public bool MarketingCommunications { get; set; }
+    public bool DarkMode { get; set; }
     public long SessionVersion { get; set; }
     public byte[]? PasswordResetTokenHash { get; set; }
     public DateTime? PasswordResetExpiresAtUtc { get; set; }

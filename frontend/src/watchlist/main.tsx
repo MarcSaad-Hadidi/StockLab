@@ -1,3 +1,4 @@
+import '../preferences/theme.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RequireAuth } from '../auth/RequireAuth'

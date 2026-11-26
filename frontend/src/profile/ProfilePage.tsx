@@ -8,6 +8,8 @@ import { useLanguageSaving } from '../i18n/languagePreference'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useProfileData } from './useProfileData'
 import type { UpdateProfileRequest, UserProfile } from '../api/profileApi'
+import type { PreferenceKey } from '../api/preferencesApi'
+import { usePreferences } from '../preferences/preferencesContext'
 import { PasswordModal } from './PasswordModal'
 import './profile.css'
 type IconName =
@@ -85,10 +87,31 @@ function ProfileField({ label, value, editing = false, type = 'text', onChange, 
   </div>
 }
 
-function UnavailablePreference({ label, description }: { label: string; description: string }) {
+function PreferenceControl({ preference }: { preference: PreferenceKey }) {
   const { t } = useTranslation()
-  return <div className="preference-row"><div><strong>{label}</strong><small>{description}</small></div>
-    <span aria-label={t('businessData.unavailable')} className="profile-unavailable">—</span></div>
+  const preferences = usePreferences()
+  const label = `profile.${preference}`
+  const descriptionId = `preference-${preference}-description`
+  return <label className="preference-row preference-toggle">
+    <span><strong>{t(label)}</strong><small id={descriptionId}>{t(`${label}Description`)}</small></span>
+    <input type="checkbox" role="switch" aria-label={t(label)} aria-describedby={descriptionId}
+      checked={preferences?.values?.[preference] ?? false}
+      disabled={!preferences?.values || preferences.status === 'loading' || preferences.status === 'saving'}
+      onChange={event => preferences?.save(preference, event.target.checked)} />
+  </label>
+}
+
+function PreferenceFeedback() {
+  const { t } = useTranslation()
+  const preferences = usePreferences()
+  if (!preferences || preferences.status === 'idle') return null
+  const { status, retry } = preferences
+  const error = status === 'loadError' || status === 'saveError' || status === 'conflict'
+  return <div className={error ? 'profile-feedback form-error' : 'profile-feedback'}
+    role={error ? 'alert' : 'status'}>
+    <p>{t(`profile.preferenceStatus.${status}`)}</p>
+    {status === 'loadError' && <button type="button" className="cancel-button" onClick={retry}>{t('marketApi.retry')}</button>}
+  </div>
 }
 
 export default function ProfilePage() {
@@ -200,12 +223,13 @@ export default function ProfilePage() {
                   <option disabled value="">—</option><option value="en">English</option><option value="fr">Français</option>
                 </select><Icon name="chevron-down" size={12} /></span>
               </div>
-              <UnavailablePreference description={t('profile.emailNotificationsDescription')} label={t('profile.emailNotifications')} />
-              <UnavailablePreference description={t('profile.tradeAlertsDescription')} label={t('profile.tradeAlerts')} />
-              <UnavailablePreference description={t('profile.marketingCommunicationsDescription')} label={t('profile.marketingCommunications')} />
+              <PreferenceControl preference="emailNotifications" />
+              <PreferenceControl preference="tradeAlerts" />
+              <PreferenceControl preference="marketingCommunications" />
               <div className="preference-row select-row"><div><strong>{t('profile.accountCurrency')}</strong><small>{t('profile.accountCurrencyDescription')}</small></div><strong>{capital?.currency ?? '—'}</strong></div>
-              <UnavailablePreference description={t('profile.darkModeDescription')} label={t('profile.darkMode')} />
+              <PreferenceControl preference="darkMode" />
             </div>
+            <PreferenceFeedback />
             {languageAttempted && saving && <p className="profile-feedback" role="status">{t('profile.saving')}</p>}
             {languageAttempted && saveError && <div className="profile-feedback form-error" role="alert" data-language-feedback>
               <p>{t(`profile.errors.${saveError}`)}</p>

@@ -683,6 +683,11 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("datetime2(7)");
 
+                    b.Property<bool>("DarkMode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -693,11 +698,21 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                         .HasMaxLength(254)
                         .HasColumnType("nvarchar(254)");
 
+                    b.Property<bool>("EmailNotifications")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("GoogleSubject")
                         .IsConcurrencyToken()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
                         .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<bool>("MarketingCommunications")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("NormalizedEmail")
                         .IsRequired()
@@ -731,6 +746,11 @@ namespace StockLab.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
                         .HasDefaultValue(0L);
+
+                    b.Property<bool>("TradeAlerts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2(7)");

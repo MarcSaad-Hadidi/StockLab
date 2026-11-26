@@ -26,6 +26,61 @@ public sealed class UserProfileApiTests
     private const string TestSigningKey = "test-only-signing-key-at-least-32-bytes-long";
 
     [Fact]
+    public async Task Preferences_are_private_persistent_and_patch_only_the_requested_settings()
+    {
+        await using var fixture = await UserProfileFixture.CreateAsync();
+        var account = await CreateSignedInAccountAsync(fixture, "Original", "preferences@example.com");
+        var other = await CreateSignedInAccountAsync(fixture, "Other", "other-prefs@example.com");
+
+        using var anonymous = await fixture.Client.GetAsync("/api/profile/preferences");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        using var anonymousPatch = await SendPreferencesAsync(fixture.Client, null, """{"darkMode":true}""");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousPatch.StatusCode);
+        using var rejected = await SendPreferencesAsync(fixture.Client, account.Token,
+            JsonSerializer.Serialize(new { userId = other.Id, darkMode = true }));
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        using var empty = await SendPreferencesAsync(fixture.Client, account.Token, "{}");
+        Assert.Equal(HttpStatusCode.BadRequest, empty.StatusCode);
+        using var malformed = await SendPreferencesAsync(fixture.Client, account.Token, """{"darkMode":"true"}""");
+        Assert.Equal(HttpStatusCode.BadRequest, malformed.StatusCode);
+
+        using var changed = await SendPreferencesAsync(fixture.Client, account.Token,
+            """{"emailNotifications":true,"tradeAlerts":true,"marketingCommunications":true,"darkMode":true}""");
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+        using var partial = await SendPreferencesAsync(fixture.Client, account.Token, """{"tradeAlerts":false}""");
+        Assert.Equal(HttpStatusCode.OK, partial.StatusCode);
+
+        using var login = await LoginAsync(fixture.Client, "preferences@example.com");
+        using var loginBody = JsonDocument.Parse(await login.Content.ReadAsStringAsync());
+        var newToken = loginBody.RootElement.GetProperty("accessToken").GetString();
+        using var saved = await SendPreferencesAsync(fixture.Client, newToken);
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        Assert.True(saved.Headers.CacheControl?.NoStore);
+        using var body = JsonDocument.Parse(await saved.Content.ReadAsStringAsync());
+        Assert.Equal(account.Id, body.RootElement.GetProperty("userId").GetGuid());
+        Assert.True(body.RootElement.GetProperty("emailNotifications").GetBoolean());
+        Assert.False(body.RootElement.GetProperty("tradeAlerts").GetBoolean());
+        Assert.True(body.RootElement.GetProperty("marketingCommunications").GetBoolean());
+        Assert.True(body.RootElement.GetProperty("darkMode").GetBoolean());
+        using var otherResult = await SendPreferencesAsync(fixture.Client, other.Token);
+        using var otherBody = JsonDocument.Parse(await otherResult.Content.ReadAsStringAsync());
+        foreach (var key in new[] { "emailNotifications", "tradeAlerts", "marketingCommunications", "darkMode" })
+            Assert.False(otherBody.RootElement.GetProperty(key).GetBoolean());
+        using var profile = await GetWithTokenAsync(fixture.Client, account.Token);
+        using var profileBody = JsonDocument.Parse(await profile.Content.ReadAsStringAsync());
+        Assert.Equal("Original", profileBody.RootElement.GetProperty("displayName").GetString());
+        Assert.Equal("en", profileBody.RootElement.GetProperty("preferredLanguage").GetString());
+    }
+
+    private static async Task<HttpResponseMessage> SendPreferencesAsync(HttpClient client, string? token, string? json = null)
+    {
+        using var request = new HttpRequestMessage(json is null ? HttpMethod.Get : HttpMethod.Patch, "/api/profile/preferences");
+        if (token is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (json is not null) request.Content = Json(json);
+        return await client.SendAsync(request);
+    }
+
+    [Fact]
     public async Task Profile_get_and_successful_puts_return_strong_rowversion_etags()
     {
         await using var fixture = await UserProfileFixture.CreateAsync();
