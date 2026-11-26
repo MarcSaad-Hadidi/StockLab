@@ -47,6 +47,12 @@ local Windows installation checks the November 25 observation daily at 21:45 and
 records the first observed result when all 21 following sessions are available.
 [Prospective scoring from the local cache](docs/boosted-observation.md)
 
+The [return-first eight-stock candidate](docs/boosted-return-first.md) reaches
+**21.00% full-period annualized return** against SPY at **14.17%**. It earns
+20.41% with higher full-period costs and 15.83% on fresh 2021 capital. Its
+first eight-stock diagnostic was recorded before the November 27 opening and
+contains one BUY signal and seven HOLD signals.
+
 The separate [DCA / S&P 500 research](docs/dca-research.md) compares costed,
 chronological paper portfolios against an external SPY proxy and the user's
 20% annualized target. It records both favorable and unfavorable periods;
@@ -56,8 +62,8 @@ the original-five upside candidate to **18.63% CAGR / 24.77% maximum drawdown**
 on 2018–2026, with 223 buys/29 sales, versus SPY 14.17%/33.72%. A fresh 2021
 start earns 17.58%. Continuous-return regression and minimum-leaf regularization
 perform worse and remain documented. All 24 synthetic checks and 98,283 independent
-ledger comparisons pass with zero ledger error. The >20% target remains unmet;
-probability calibration is weak and production remains RFv7.
+ledger comparisons pass with zero ledger error. The original-five studies report
+weak probability calibration. Production uses RFv7.
 
 The [subsequent horizon, exit, SPY-context and cadence controls](docs/boosted-exit-controls.md)
 record the remaining tradeoffs: five-session exit confirmation reaches19.14%
