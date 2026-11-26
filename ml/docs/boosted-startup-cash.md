@@ -1,4 +1,6 @@
-# Invested startup cash for the boosted portfolio
+# Archived startup cash experiment
+
+The AI Trader portfolio is restricted to individual stocks, with SPY used exclusively as a benchmark. This archived experiment allocated portfolio cash to SPY, so its 21.91% full-period and 18.61% fresh-2024 results are excluded from candidate selection. The eight-stock DCA reference is the eligible comparison. [Stock-only portfolio results](boosted-sixteen-universe.md)
 
 Temporarily investing idle cash in SPY lifts the eight-stock boosted DCA portfolio from **16.51% to 18.61% annualized** with a fresh January 2024 start, against **16.73% for SPY**. Maximum drawdown is **19.72%** for the candidate and **18.76%** for SPY. From January 2018, the candidate earns **21.91% annualized** with a **30.07%** drawdown, compared with **13.36%** and **33.72%** for SPY. All accounts end on November 25, 2026. The quarter startup rule uses the existing stock model, eight-symbol universe, DCA purchase priority and quarter-sale rules. [Frozen replay protocol](../../docs/superpowers/plans/2026-11-26-boosted-startup-cash.md) · [Reference portfolio](boosted-sixteen-universe.md)
 

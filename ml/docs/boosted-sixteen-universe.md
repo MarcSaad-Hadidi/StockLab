@@ -19,7 +19,7 @@ At 25 basis points each, the DCA priority earns 21.59%, the corrected learned pr
 
 In the separate January 2024 start, the retained DCA strategy's maximum drawdown is 19.80%. The matched SPY drawdown is **18.76%**, with its trough on April 8, 2025.
 
-The follow-up test temporarily invests idle startup cash in SPY while stock positions accumulate. The 2024 fresh-start CAGR rises to 18.61%, with 19.72% maximum drawdown on the same dates. [Startup cash test](boosted-startup-cash.md)
+The AI Trader portfolio is restricted to individual stocks. SPY is the performance benchmark. The temporary ETF allocation experiment is archived outside the eligible strategy comparisons. [Archived startup cash experiment](boosted-startup-cash.md)
 
 ## Matched breadth test through November 11, 2026
 
