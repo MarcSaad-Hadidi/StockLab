@@ -19,6 +19,8 @@ At 25 basis points each, the DCA priority earns 21.59%, the corrected learned pr
 
 In the separate January 2024 start, the retained DCA strategy's maximum drawdown is 19.80%. The matched SPY drawdown is **18.76%**, with its trough on April 8, 2025.
 
+The follow-up test temporarily invests idle startup cash in SPY while stock positions accumulate. The 2024 fresh-start CAGR rises to 18.61%, with 19.72% maximum drawdown on the same dates. [Startup cash test](boosted-startup-cash.md)
+
 ## Matched breadth test through November 11, 2026
 
 The broader panel adds the next eight names on the fixed 2017 median dollar-volume screen. The same account rules allow up to 10 holdings. Verified quote histories cover 2,228 shared sessions. The accounting adds 164 reconciled cash events to the original 246.
