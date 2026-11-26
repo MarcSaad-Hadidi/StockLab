@@ -63,12 +63,11 @@ def read_csv(root, name):
     return frame
 
 
-@pytest.fixture(scope="module")
-def template(tmp_path_factory):
-    root = tmp_path_factory.mktemp("synthetic-vintage-template")
-    dates = pd.bdate_range("2010-01-04", "2014-03-14").astype("datetime64[ns]")
-    sessions = dates[dates != pd.Timestamp("2014-03-10")]  # Explicit synthetic closure.
-    cutoff = sessions[sessions < pd.Timestamp(AS_OF.date())]
+def build_template(root, *, as_of=AS_OF, coverage_end=None, closed_dates=("2014-03-10",)):
+    coverage_end = coverage_end or as_of.date().isoformat()
+    dates = pd.bdate_range("2010-01-04", coverage_end).astype("datetime64[ns]")
+    sessions = dates.difference(pd.to_datetime(list(closed_dates)))
+    cutoff = sessions[sessions < pd.Timestamp(as_of.date())]
 
     def bars(days, symbols):
         frames = []
@@ -82,12 +81,14 @@ def template(tmp_path_factory):
 
     write_csv(root, "stocks.csv", bars(cutoff, SYMBOLS))
     write_csv(root, "spy.csv", bars(cutoff, ["SPY"]))
-    write_csv(root, "monthly.csv", bars(pd.date_range("2010-01-01", "2014-02-01", freq="MS"), SYMBOLS))
+    last_month = (cutoff[-1].to_period("M") - 1).start_time
+    write_csv(root, "monthly.csv", bars(pd.date_range("2010-01-01", last_month, freq="MS"), SYMBOLS))
     write_csv(root, "expected-sessions.csv", pd.DataFrame({"date": sessions}))
     for name, level in [("vix.csv", 18.), ("vix3m.csv", 25.)]:
-        positions = np.arange(len(dates) - 1, dtype=float)
+        macro_dates = dates[dates < pd.Timestamp(as_of.date())]
+        positions = np.arange(len(macro_dates), dtype=float)
         close = level + positions * .004 + np.sin(positions / 9) * .3
-        write_csv(root, name, pd.DataFrame({"date": dates[:-1], "open": close - .1,
+        write_csv(root, name, pd.DataFrame({"date": macro_dates, "open": close - .1,
             "high": close + .5, "low": close - .5, "close": close}))
     identities = {symbol: {"mic": "XNAS" if symbol in {"AAPL", "MSFT"} else "XNYS",
         "kind": "Common Stock", "currency": "USD", "timezone": "America/New_York"} for symbol in SYMBOLS}
@@ -98,11 +99,16 @@ def template(tmp_path_factory):
             "vix.csv": "1day", "vix3m.csv": "1day"}, "macro_units": "index_points",
         "prefixes": {"daily": "2010-01-04", "monthly": "2010-01-01"},
         "recursive_prefix_attestation": "complete_recursive_prefixes_supplied",
-        "calendar": {"coverage_start": "2010-01-01", "coverage_end": "2014-03-14",
+        "calendar": {"coverage_start": "2010-01-01", "coverage_end": coverage_end,
             "attestation": "independently_supplied_expected_us_sessions"}, "files": {}}
     (root / "manifest.json").write_text(json.dumps(value))
     rebind(root)
     return root
+
+
+@pytest.fixture(scope="module")
+def template(tmp_path_factory):
+    return build_template(tmp_path_factory.mktemp("synthetic-vintage-template"))
 
 
 @pytest.fixture

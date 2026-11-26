@@ -42,6 +42,10 @@ then records five matching pre-open scores on the November 25 data vintage
 using the archived binary and the updated `develop` build. A local read-only
 checker can resolve those scores against the 21st subsequent observed open.
 The observation outcome is pending and the automated paper cycle uses RFv7.
+The checker now scores against a verified completed paper-cycle snapshot. The
+local Windows installation checks the November 25 observation daily at 21:45 and
+records the first observed result when all 21 following sessions are available.
+[Prospective scoring from the local cache](docs/boosted-observation.md)
 
 The separate [DCA / S&P 500 research](docs/dca-research.md) compares costed,
 chronological paper portfolios against an external SPY proxy and the user's
@@ -99,6 +103,12 @@ verifies tradable research inputs for three additional names and compares the
 same model's immediate and relative-strength sale rules. The relative rule earns
 17.15% annualized with 29.12% maximum drawdown. The retained five-stock reference
 earns 18.63% with 24.77% drawdown.
+
+The [volatility-sizing research](docs/boosted-volatility-position-sizing.md) tests
+stricter purchase caps and partial risk sales. Partial sales reduce the full
+five-stock maximum drawdown to 23.17% with 18.00% annualized growth. The caps
+alone add 0.0056 percentage point to full growth, and the eight-stock portability
+check weakens both full-period measures.
 
 The user-requested long comparison of the unchanged market-boosted reference
 now covers2018-01-01 through2026-11-11:16.17% CAGR versus SPY14.17%,31.91%
