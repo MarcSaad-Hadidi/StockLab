@@ -6,16 +6,18 @@ The eight-stock HGBT with confirmed DCA purchase priority remains the reference.
 
 Each replay starts with $100,000 in cash, executes eligible decisions at the next recorded open, and charges 5 basis points each for fees and slippage. Maximum drawdown is the largest closing-equity decline from a preceding closing-equity high. The final column is a separate $100,000 replay started in January 2024.
 
-| Strategy | CAGR since 2018 | Max drawdown since 2018 | Ending value | CAGR from fresh 2024 start |
-| --- | ---: | ---: | ---: | ---: |
-| SPY total-return proxy | 13.36% | 33.72% | $305,091.91 | 16.73% |
-| HGBT with confirmed DCA priority | **21.80%** | 30.07% | $578,177.24 | 16.51% |
-| HGBT with quarter sales and relative-strength priority | 21.64% | 30.08% | $571,338.18 | 16.12% |
-| HGBT with corrected learned purchase priority | 21.56% | 31.27% | $568,098.44 | 16.14% |
-| HGBT with the retained-score top-half purchase filter | 21.52% | 30.18% | $566,628.13 | 16.67% |
-| HGBT with previously reported learned priority, before the AA correction | 21.86% | 30.08% | $580,675.89 | 16.15% |
+| Strategy | CAGR since 2018 | Strategy max drawdown | SPY max drawdown | Ending value | CAGR from fresh 2024 start |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| SPY total-return proxy | 13.36% | 33.72% | **33.72%** | $305,091.91 | 16.73% |
+| HGBT with confirmed DCA priority | **21.80%** | 30.07% | 33.72% | $578,177.24 | 16.51% |
+| HGBT with quarter sales and relative-strength priority | 21.64% | 30.08% | 33.72% | $571,338.18 | 16.12% |
+| HGBT with corrected learned purchase priority | 21.56% | 31.27% | 33.72% | $568,098.44 | 16.14% |
+| HGBT with the retained-score top-half purchase filter | 21.52% | 30.18% | 33.72% | $566,628.13 | 16.67% |
+| HGBT with previously reported learned priority, before the AA correction | 21.86% | 30.08% | 33.72% | $580,675.89 | 16.15% |
 
 At 25 basis points each, the DCA priority earns 21.59%, the corrected learned priority earns 21.35%, and SPY earns 13.30% on the full period. The previously reported model and SPY both reach their deepest trough on March 23, 2020, after their February 19 peak. The model's drawdown is 3.64 percentage points smaller. It recovers its pre-drawdown value on June 5, 2020. SPY recovers on August 10, 2020.
+
+In the separate January 2024 start, the retained DCA strategy's maximum drawdown is 19.80%. The matched SPY drawdown is **18.76%**, with its trough on April 8, 2025.
 
 ## Matched breadth test through November 11, 2026
 
