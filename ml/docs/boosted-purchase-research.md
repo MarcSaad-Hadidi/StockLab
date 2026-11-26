@@ -17,6 +17,18 @@ The test applies the user's existing monthly 2×, 3× and 4× zones only when th
 
 The full-window priority run executes 19, six and one purchase in the 2×, 3× and 4× zones, respectively. It beats SPY in all five standard-cost windows and clears 20% from two. The higher per-purchase limit changes zero fills across six matched buy tapes. The combined and priority-only trade files also match exactly in all six windows. The measured gain comes from changing which eligible buy receives scarce cash first. Full-window drawdown is 30.07%. The quarter-sale reference stays in the local observer while more prospective evidence is gathered.
 
+## Fresh capital in separate calendar blocks
+
+Both already fixed portfolios start with new $100,000 capital inside each block. The six replays use standard fees and slippage and preserve the original signals. SPY starts on the same dates and 2026 ends on November 11.
+
+| Separate period | Quarter-sale reference | DCA priority | SPY |
+|---|---:|---:|---:|
+| 2018–2020 | 29.25% | 29.21% | 13.83% |
+| 2021–2023 | 15.43% | 15.29% | 9.80% |
+| 2024–2026 | 18.34% | 18.79% | 19.38% |
+
+Both portfolios trail SPY in the latest block. That window exposes a return weakness obscured by the full-period result. The separate-block replay verifies 30,038 additional ledger values and has summary SHA-256 `153bac797cd3c3c16cd34a500a9b34080f615ddd2bad4cd0814c6bffa2317574`.
+
 ## Filtering and rotating invested capital
 
 The quarter-sale reference holds under 1% average cash in each of the fresh 2020, 2021 and 2022 accounts. The first experiment therefore removes a BUY when both its 63- and 252-session returns lag SPY. The rotation arm instead keeps the original BUY set and can trim a separate weak holding to fund an eligible new purchase. It spends the actual sale proceeds and makes at most one funded rotation per month. The combined arm tests these rules together. [Capital rotation protocol](../../docs/superpowers/plans/2026-11-26-boosted-capital-rotation.md)
