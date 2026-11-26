@@ -21,6 +21,7 @@ export type PortfolioApiTransaction = {
   id: string
   side: 'BUY' | 'SELL'
   symbol: string
+  companyName?: string | null
   quantity: string
   executionPrice: string
   totalAmount: string
@@ -113,6 +114,7 @@ function validTransaction(value: unknown): value is PortfolioApiTransaction {
     && nonEmptyString(value.id)
     && (value.side === 'BUY' || value.side === 'SELL')
     && nonEmptyString(value.symbol)
+    && (value.companyName === undefined || value.companyName === null || nonEmptyString(value.companyName))
     && isPositiveAmount(value.quantity)
     && isPositiveAmount(value.executionPrice)
     && isPositiveAmount(value.totalAmount)

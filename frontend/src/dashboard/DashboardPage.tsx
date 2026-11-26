@@ -141,7 +141,7 @@ function TransactionRow({ transaction, currency }: { transaction: Transaction; c
   return (
     <li className="transaction-row">
       <StockMark size="small" symbol={transaction.symbol} />
-      <div className="transaction-name"><strong>{transaction.symbol}</strong><small>{transaction.company}</small></div>
+      <div className="transaction-name"><strong>{transaction.symbol}</strong><small>{transaction.company ?? t('transactions.companyNameUnavailable')}</small></div>
       <div className={`transaction-type ${transaction.type.toLowerCase()}`}><span className="transaction-dot" />{t(`common.${transaction.type.toLowerCase()}`)}</div>
       <div className="transaction-amount"><strong>{formatTradeAmount(transaction.amount, i18n.language, 2, currency)}</strong><small>{t('dashboard.shares', { replace: { count: formatQuantity(transaction.shares, i18n.language) } })}</small></div>
       <small className="transaction-time">{transaction.executedAtUtc ? localizedTime : transaction.timeKey ? t(transaction.timeKey, { time: localizedTime }) : localizedTime}</small>
@@ -271,7 +271,7 @@ export function DashboardPage() {
   const transactions: Transaction[] = useMemo(() => portfolio?.transactions.map((transaction) => ({
     id: transaction.id,
     symbol: transaction.symbol,
-    company: transaction.symbol,
+    company: transaction.companyName ?? null,
     type: transaction.side === 'BUY' ? 'Buy' : 'Sell',
     shares: transaction.quantity,
     amount: transaction.totalAmount,

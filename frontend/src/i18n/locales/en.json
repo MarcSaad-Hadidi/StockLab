@@ -504,6 +504,7 @@
       "allTypes": "All Types"
     },
     "searchLabel": "Search transactions by symbol",
+    "companyNameUnavailable": "Company name unavailable",
     "searchPlaceholder": "Search by symbol...",
     "fromDate": "From date",
     "toDate": "To date",

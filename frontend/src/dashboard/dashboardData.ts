@@ -55,7 +55,7 @@ export type Position = {
 export type Transaction = {
   id: string
   symbol: string
-  company: string
+  company: string | null
   type: 'Buy' | 'Sell'
   shares: string
   amount: string

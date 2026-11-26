@@ -109,7 +109,7 @@ function toTransaction(transaction: PortfolioApiTransaction): Transaction {
   return {
     id: transaction.id,
     symbol: transaction.symbol,
-    company: transaction.symbol,
+    company: transaction.companyName ?? null,
     assetType: 'Stock',
     action: transaction.side,
     quantity: transaction.quantity,
@@ -122,7 +122,7 @@ function toTransaction(transaction: PortfolioApiTransaction): Transaction {
 function TransactionRow({ transaction, currency }: { transaction: Transaction; currency: string }) {
   const { i18n, t } = useTranslation()
   const dateParts = formatDateParts(transaction.date, i18n.language)
-  return <tr><td><time className="date-cell" dateTime={transaction.date}><span>{dateParts.day}</span><small>{dateParts.time}</small></time></td><td><strong className="symbol-cell">{transaction.symbol}</strong></td><td className="company-cell">{transaction.company}</td><td><span className={`action-pill action-${transaction.action.toLowerCase()}`}>{t(`common.${transaction.action === 'BUY' ? 'buy' : 'sell'}`)}</span></td><td className="number-cell">{formatNumber(transaction.quantity, i18n.language, 8)}</td><td className="money-cell">{formatCurrency(transaction.executionPrice, i18n.language, 4, currency)}</td><td className="money-cell"><strong>{formatTradeAmount(transaction.totalAmount, i18n.language, 4, currency)}</strong></td></tr>
+  return <tr><td><time className="date-cell" dateTime={transaction.date}><span>{dateParts.day}</span><small>{dateParts.time}</small></time></td><td><strong className="symbol-cell">{transaction.symbol}</strong></td><td className="company-cell">{transaction.company ?? t('transactions.companyNameUnavailable')}</td><td><span className={`action-pill action-${transaction.action.toLowerCase()}`}>{t(`common.${transaction.action === 'BUY' ? 'buy' : 'sell'}`)}</span></td><td className="number-cell">{formatNumber(transaction.quantity, i18n.language, 8)}</td><td className="money-cell">{formatCurrency(transaction.executionPrice, i18n.language, 4, currency)}</td><td className="money-cell"><strong>{formatTradeAmount(transaction.totalAmount, i18n.language, 4, currency)}</strong></td></tr>
 }
 
 const defaultFilters: TransactionFilters = {

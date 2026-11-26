@@ -90,6 +90,7 @@ test('portfolio api reads the authenticated recent transaction feed', async () =
       id: 'transaction-id',
       side: 'BUY',
       symbol: 'AAPL:NASDAQ',
+      companyName: 'Apple Inc.',
       quantity: '2',
       executionPrice: '200',
       totalAmount: '400',
@@ -100,11 +101,12 @@ test('portfolio api reads the authenticated recent transaction feed', async () =
   const transactions = await api.getRecentTransactions(3)
 
   assert.equal(transactions[0]?.symbol, 'AAPL:NASDAQ')
+  assert.equal(transactions[0]?.companyName, 'Apple Inc.')
   assert.equal(transactions[0]?.side, 'BUY')
 })
 
 const validHistory = {
-  items: [{ id: 'old-trade', side: 'SELL', symbol: 'AAPL:NASDAQ', quantity: '0.25',
+  items: [{ id: 'old-trade', side: 'SELL', symbol: 'AAPL:NASDAQ', companyName: null, quantity: '0.25',
     executionPrice: '1.2345', totalAmount: '0.3086', executedAtUtc: '2026-01-01T23:59:59Z' }],
   page: 2, pageSize: 10, totalCount: 11, currency: 'CAD',
   summary: { totalTrades: 61, totalInvested: '2000', totalProceeds: '3000' },
