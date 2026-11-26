@@ -1,4 +1,4 @@
-"""One synchronous Twelve Data request using the ML credential exclusively."""
+"""Synchronous Twelve Data requests using the ML credential exclusively."""
 
 import json
 import os
@@ -12,6 +12,7 @@ from .models import (
 )
 
 ENDPOINT = "https://api.twelvedata.com/time_series"
+STOCKS_ENDPOINT = "https://api.twelvedata.com/stocks"
 
 
 def _provider_error(code: object) -> None:
@@ -26,6 +27,15 @@ def _provider_error(code: object) -> None:
 
 
 def fetch_historical(request: HistoricalRequest) -> dict:
+    return _get_json(ENDPOINT, request.params)
+
+
+def fetch_us_stock_catalog(*, include_delisted: bool = False) -> dict:
+    return _get_json(STOCKS_ENDPOINT, {"type": "Common Stock", "country": "United States",
+                                      "include_delisted": str(include_delisted).lower(), "show_plan": "true"})
+
+
+def _get_json(endpoint: str, params: dict) -> dict:
     key = os.environ.get("TWELVE_DATA_ML_API_KEY", "").strip()
     if not key:
         raise ConfigurationError("TWELVE_DATA_ML_API_KEY is not configured.")
@@ -35,7 +45,7 @@ def fetch_historical(request: HistoricalRequest) -> dict:
             session.trust_env = False  # no .netrc authentication or ambient proxy credentials
             session.mount("https://", requests.adapters.HTTPAdapter(max_retries=0))
             with session.get(
-                ENDPOINT, params=request.params,
+                endpoint, params=params,
                 headers={"Authorization": f"apikey {key}"},
                 timeout=20, allow_redirects=False,
             ) as response:
