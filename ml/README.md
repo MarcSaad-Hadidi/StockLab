@@ -60,6 +60,9 @@ The [confirmed DCA purchase-priority study](docs/boosted-purchase-research.md)
 reaches **22.53%** full-period annualized and **22.32%** at higher costs.
 The 2021 fresh account earns **18.88%**. The same report records the tested
 purchase filter, cash-funded rotation and higher per-order size variants.
+The [learned purchase rank](docs/boosted-relative-rank.md) reaches **21.86%**
+through the November 25 close and **19.77%** from a fresh 2021 start. The
+fresh 2024 comparisons still trail SPY. The pre-open comparison is pending.
 
 The separate [DCA / S&P 500 research](docs/dca-research.md) compares costed,
 chronological paper portfolios against an external SPY proxy and the user's
