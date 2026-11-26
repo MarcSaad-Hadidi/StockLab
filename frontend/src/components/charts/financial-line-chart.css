@@ -23,3 +23,9 @@
   .financial-line-chart .MuiChartsAxis-tickLabel { font-size: 12px !important; }
   .financial-chart-date { font-size: 12px; }
 }
+
+/* Chromium resolves touch-action on the HTML/SVG viewport ancestors of an SVG hit target. */
+.stock-chart-overlay, .stock-chart-overlay > svg { touch-action: pan-y pinch-zoom; }
+.stock-chart-cursor { cursor: crosshair; touch-action: pan-y pinch-zoom; }
+.stock-chart-cursor:focus { outline: none; }
+.stock-chart-cursor:focus-visible { stroke: #174e9e; stroke-width: 1.5; }

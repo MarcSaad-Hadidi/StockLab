@@ -6,7 +6,7 @@ import {
 } from "../src/api/marketDataApi.ts";
 import {
   historyQuery,
-  historyPoints,
+  stockChartSeries,
   money,
   calculateTradeTotal,
   getTradeExecutionPrice,
@@ -56,10 +56,11 @@ test("all enabled ranges have honest half-open boundaries; MAX uses bounded dail
   assert.equal(historyQuery("YTD", now)?.from, "2026-01-01");
 });
 test("preserves calendar dates and genuine bar count without synthetic points", () => {
-  assert.deepEqual(historyPoints(data, "en-US"), [
-    { label: "2026-09-07", value: 204 },
-  ]);
-  assert.deepEqual(historyPoints({ ...data, bars: [] }, "fr-FR"), []);
+  const daily = stockChartSeries(data, "3M", "en-US");
+  assert.deepEqual(daily.values, [204]);
+  assert.deepEqual(daily.labels, ["Sep 7, 2026"]);
+  assert.deepEqual(daily.tickIndexes, [0]);
+  assert.deepEqual(stockChartSeries({ ...data, bars: [] }, "3M", "fr-FR").values, []);
   const intraday: StockHistory = {
     ...data,
     interval: "Hour",
@@ -71,7 +72,9 @@ test("preserves calendar dates and genuine bar count without synthetic points", 
       },
     ],
   };
-  assert.match(historyPoints(intraday, "en-US")[0].label, /UTC$/);
+  const point = stockChartSeries(intraday, "1D", "en-US");
+  assert.match(point.labels[0], /2:00 PM UTC$/);
+  assert.equal(point.ticks.get(0), "2:00 PM");
 });
 
 test("MAX reads actual daily prices across a split instead of accepting an inconsistent monthly aggregate", async () => {
@@ -86,9 +89,9 @@ test("MAX reads actual daily prices across a split instead of accepting an incon
     return Response.json({ symbol: 'AAPL', currency: 'USD', interval: 'Day', bars: splitBars });
   });
   const history = await api.history('AAPL', historyQuery('MAX', now)!, new AbortController().signal, 'MAX');
-  assert.deepEqual(historyPoints(history, 'en-US'), [
-    { label: '2014-06-06', value: 645.57 }, { label: '2014-06-09', value: 93.7 },
-  ]);
+  const plotted = stockChartSeries(history, 'MAX', 'en-US');
+  assert.deepEqual(plotted.values, [645.57, 93.7]);
+  assert.deepEqual(plotted.labels, ['Jun 6, 2014', 'Jun 9, 2014']);
   assert.equal(calls, 1);
 });
 test("range switching fetches once per uncached range and no prefetch", async () => {
@@ -211,4 +214,25 @@ test("reopening the same symbol and range reuses history until its TTL expires",
     await api.history("TSLA", historyQuery("5D", new Date(time))!, signal, "5D");
     assert.equal(calls, 3);
   } finally { Date.now = originalNow; }
+});
+
+
+test("dense intraday keeps all bars while the period changes the label cadence and format", () => {
+  const history: StockHistory = { ...data, interval: "Minute",
+    bars: Array.from({ length: 1200 }, (_, index) => ({
+      ...data.bars[0], periodDate: null, close: 100 + index / 100,
+      openTimeUtc: new Date(Date.UTC(2026, 10, 24, 3, index)).toISOString(),
+    })) };
+  const day = stockChartSeries(history, "1D", "en-CA");
+  const week = stockChartSeries({ ...history, interval: "Hour", bars: history.bars.slice(0, 120).map((bar, index) => ({
+    ...bar, openTimeUtc: new Date(Date.UTC(2026, 10, 20, index)).toISOString(),
+  })) }, "5D", "en-CA");
+  assert.equal(day.values.length, 1200);
+  assert.equal(day.labels.length, 1200);
+  assert.equal(day.tickIndexes.length, 5);
+  assert.equal(week.tickIndexes.length, 5);
+  assert.equal(new Set(week.ticks.values()).size, 5);
+  assert.deepEqual([day.tickIndexes[0], day.tickIndexes.at(-1)], [0, 1199]);
+  assert.notEqual(day.ticks.get(0), week.ticks.get(0));
+  assert.match(stockChartSeries(history, "1D", "fr-CA").labels[0], /03 h 00 UTC$/);
 });
