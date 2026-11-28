@@ -177,7 +177,7 @@ Installez les dépendances et démarrez le serveur de développement Vite :
     npm --prefix frontend ci
     npm --prefix frontend run dev -- --host 127.0.0.1
 
-Ouvrez [http://127.0.0.1:5173/](http://127.0.0.1:5173/) lorsque Vite a démarré ; si le port est occupé, utilisez celui indiqué dans le terminal. La racine redirige vers `/login`. Les autres routes comprennent `/register`, `/market`, `/dashboard`, `/portfolio`, `/transactions`, `/watchlist`, `/alerts`, `/ai-trader` et `/profile`.
+Ouvrez [http://127.0.0.1:5173/](http://127.0.0.1:5173/) lorsque Vite a démarré. Si le port est occupé, utilisez celui indiqué dans le terminal. La racine ouvre `/dashboard` si une session non expirée est présente dans le navigateur, et `/login` sinon. Les autres routes comprennent `/register`, `/market`, `/portfolio`, `/transactions`, `/watchlist`, `/alerts`, `/ai-trader` et `/profile`.
 
 Login et Register utilisent réellement le backend. Une interface démarrée seule ne suffit pas à créer un compte ou à charger les données privées : configurez aussi l’API et SQL ci-dessous.
 
