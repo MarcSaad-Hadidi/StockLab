@@ -7,7 +7,7 @@ import { JSDOM } from 'jsdom'
 import React, { act } from 'react'
 import { createAiTraderApi } from '../src/api/aiTraderApi.ts'
 import { saveAuthSession, clearAuthSession } from '../src/auth/authStorage.ts'
-import { bodies, performance, model, backtest, decision, trade, rejection, secondId } from './fixtures/aiTrader.ts'
+import { bodies, performance, model, boostedModel, backtest, decision, trade, rejection, secondId } from './fixtures/aiTrader.ts'
 
 registerHooks({ load(url, context, nextLoad) {
   if (url.endsWith('.css')) return { format: 'module', shortCircuit: true, source: 'export default {}' }
@@ -40,6 +40,31 @@ async function mount(overrides: Record<string, unknown> = {}) {
   }
   return { container, paths, click, close: async () => { await act(async () => root.unmount()); container.remove() } }
 }
+test('archived HGBT renders genuine pending evidence alongside legacy models in English and French', async () => {
+  const view = await mount({ 'performance/history': [], models: [model, boostedModel] })
+  try {
+    await view.click('Model')
+    const panel = view.container.querySelector('.model-panel')!
+    assert.match(panel.textContent!, /hgb_swing20_market28/)
+    assert.match(panel.textContent!, /Prospective evaluation pending/)
+    assert.match(panel.textContent!, /20 observed sessions/)
+    assert.match(panel.textContent!, /Historical fit boundary/)
+    const boosted = [...panel.querySelectorAll('.ai-model-family')].find(section => section.textContent?.includes('hgb_swing20_market28'))!
+    assert.match(boosted.textContent!, /—/)
+    assert.match(boosted.textContent!, /Annual/)
+    assert.match(boosted.textContent!, /return_1d, rsi_14/)
+    assert.match(boosted.textContent!, /vix_term_change5/)
+    assert.match(boosted.textContent!, /Jan 2, 2024/)
+    assert.match(boosted.textContent!, /Oct 20, 2026/)
+    assert.doesNotMatch(boosted.textContent!, /72.0%|0.0%/)
+    await act(async () => { await i18n.changeLanguage('fr') })
+    assert.match(panel.textContent!, /Évaluation prospective en attente/)
+    assert.match(panel.textContent!, /20 séances observées/)
+    assert.match(panel.textContent!, /Annuelle/)
+    assert.ok([...panel.querySelectorAll('button')].every(button => !/activate|retrain|run backtest/i.test(button.textContent ?? '')))
+  } finally { await view.close() }
+})
+
 test('Overview renders only real API metrics and separates unavailable catalogs from empty histories', async () => {
   const view = await mount({ 'performance/history': [], models: new Response('{}', { status: 503 }), trades: [] })
   try {

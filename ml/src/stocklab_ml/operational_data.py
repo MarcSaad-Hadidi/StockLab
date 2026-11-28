@@ -1,8 +1,10 @@
 """Fresh, immutable US-equity inputs for the explicitly launched paper cycle."""
 from datetime import date, timedelta
 import hashlib
+import os
 from pathlib import Path
 import re
+from time import sleep as _publication_sleep
 from uuid import uuid4
 
 import pandas as pd
@@ -21,6 +23,7 @@ HOLIDAYS = set("""
 2027-01-01 2027-01-18 2027-02-15 2027-03-26 2027-05-31 2027-06-18 2027-07-05 2027-09-06 2027-11-25 2027-12-24
 2028-01-17 2028-02-21 2028-04-14 2028-05-29 2028-06-19 2028-07-04 2028-09-04 2028-11-23 2028-12-25
 """.split())
+_WINDOWS = os.name == "nt"
 
 
 def latest_closed_session(as_of_utc_date: date) -> date:
@@ -36,6 +39,30 @@ def _fingerprint(path):
     if path.is_symlink() or path.stat().st_size > 64 * 1024 * 1024:
         raise ValueError("Invalid snapshot file.")
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _publish_snapshot(partial: Path, directory: Path) -> None:
+    """Publish once without replacement; four Windows attempts, waits .02/.04/.08s."""
+    if partial.parent != directory.parent:
+        raise ValueError("Snapshot publication must stay in the same parent.")
+    original_denial = None
+    for attempt in range(4):
+        if directory.exists() or directory.is_symlink() or directory.is_junction():
+            raise FileExistsError("Snapshot destination already exists; no replacement performed.")
+        if not partial.is_dir() or partial.is_symlink() or partial.is_junction():
+            raise ValueError("The original partial snapshot directory is required.")
+        try:
+            partial.rename(directory)
+            return
+        except PermissionError as error:
+            if (not _WINDOWS or getattr(error, "winerror", None) not in {5, 32}
+                    or not partial.is_dir() or directory.exists() or directory.is_symlink() or directory.is_junction()):
+                raise
+            if original_denial is None:
+                original_denial = error
+            if attempt == 3:
+                raise original_denial
+            _publication_sleep(.02 * 2**attempt)
 
 
 def _validated_snapshot(directory, *, session, symbols, history_start, today):
@@ -106,7 +133,7 @@ def prepare_cycle_dataset(root: Path, *, symbols: tuple[str, ...], history_start
             files = {p.relative_to(partial).as_posix(): _fingerprint(p) for p in partial.rglob("*") if p.is_file()}
             save_raw(partial / "manifest.json", {"schema_version": 1, "decision_date": session.isoformat(),
                 "symbols": list(symbols), "history_start": history_start, "sha256": files["cleaned.csv"], "files": files})
-            partial.rename(directory)
+            _publish_snapshot(partial, directory)
             sync_directory(root)
         return _validated_snapshot(directory, session=session, symbols=symbols, history_start=history_start,
                                    today=as_of_utc_date)

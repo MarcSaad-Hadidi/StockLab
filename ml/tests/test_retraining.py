@@ -16,7 +16,7 @@ import pytest
 
 from stocklab_ml.data.storage import save_processed
 from stocklab_ml.features import engineer_features
-from stocklab_ml.modeling import train_random_forest
+from stocklab_ml.modeling import build_supervised_dataset, train_random_forest
 from stocklab_ml.versioning import ModelStatus, ModelVersionRegistry
 
 NOW = datetime(2024, 7, 1, 16, tzinfo=UTC)
@@ -83,6 +83,64 @@ def test_config_is_immutable_and_paths_cannot_alias(config):
         config.enabled = False
     with pytest.raises(api().RetrainingConfigurationError):
         replace(config, state_path=config.dataset_path)
+
+
+@pytest.mark.parametrize("profile", [False, 0, "", "unknown", [], {}])
+def test_invalid_training_profile_fails_before_any_side_effect(config, profile):
+    before = config.dataset_path.read_bytes()
+    with pytest.raises(api().RetrainingConfigurationError):
+        replace(config, training_profile=profile)
+    assert config.dataset_path.read_bytes() == before
+    assert not config.state_path.exists() and not config.registry_path.exists()
+
+
+def test_legacy_config_identity_and_journal_do_not_gain_an_unset_profile(config):
+    from stocklab_ml.retraining.state import config_identity, read_state
+    assert "training_profile" not in config_identity(config)
+    assert run(config, history()).status == "SKIPPED_NO_NEW_DATA"
+    before = config.state_path.read_bytes()
+    journal = read_state(config.state_path)
+    assert "training_profile" not in journal["runs"][0]["config"]
+    assert config.state_path.read_bytes() == before
+
+
+def test_recent_profile_publishes_a_causal_four_year_model_and_keeps_full_input(config):
+    frame = history(1600)
+    frame["date"] = pd.bdate_range("2020-01-01", periods=len(frame)).as_unit("ns")
+    save_processed(config.dataset_path, frame.iloc[:-3], overwrite=True)
+    selected = replace(config, training_profile="recent-history-v1", model_families=("random_forest",))
+    observed = build_supervised_dataset(engineer_features(frame).dataframe).dataframe
+    boundary = observed.date.drop_duplicates().iloc[-50]
+    now = frame.date.max().to_pydatetime().replace(tzinfo=UTC) + timedelta(days=1, hours=16)
+    result = api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(local_data=frame), now_utc=now)
+    assert result.status == "COMPLETED"
+    model = result.report["model_results"]["random_forest"]
+    registry = ModelVersionRegistry(config.registry_path)
+    record = registry.get_version(model["model_name"], model["model_version"])
+    eligible = observed.loc[observed.date >= boundary - pd.DateOffset(years=4), "date"]
+    assert record.train_start == eligible.min().date().isoformat()
+    assert record.train_end < boundary.date().isoformat() == record.test_start
+    assert record.to_dict()["training_report"]["split"]["test_rows"] == 50
+    assert record.status == ModelStatus.ARCHIVED
+    assert len(pd.read_csv(config.dataset_path)) == len(frame)
+    from stocklab_ml.retraining.state import read_state
+    state = read_state(config.state_path)
+    assert state["runs"][-1]["config"]["training_profile"] == "recent-history-v1"
+    before = config.registry_path.read_bytes(), config.state_path.read_bytes()
+    replay = api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(local_data=frame),
+        now_utc=now, retry_run_id=result.run_id)
+    assert replay.status == "SKIPPED_ALREADY_PROCESSED"
+    assert before == (config.registry_path.read_bytes(), config.state_path.read_bytes())
+
+
+def test_recent_profile_skips_insufficient_history_without_publishing(config):
+    frame = history(60)
+    save_processed(config.dataset_path, frame.iloc[:-3], overwrite=True)
+    selected = replace(config, training_profile="recent-history-v1")
+    now = frame.date.max().to_pydatetime().replace(tzinfo=UTC) + timedelta(days=1, hours=16)
+    result = api().run_retraining_check(selected, dependencies=api().RetrainingDependencies(local_data=frame), now_utc=now)
+    assert result.status == "SKIPPED_INSUFFICIENT_DATA"
+    assert not config.registry_path.exists() and not config.artifacts_path.exists()
 
 
 def test_no_data_skips_without_fit_version_or_artifact(config, monkeypatch):

@@ -97,7 +97,8 @@ public sealed class ReadinessSqlServerTests
     private sealed class DatabaseFixture : IAsyncDisposable
     {
         private readonly string name = $"StockLabReadinessTests_{Guid.NewGuid():N}";
-        public string Connection => $"Server=(localdb)\\MSSQLLocalDB;Database={name};Integrated Security=true;TrustServerCertificate=true;Connect Timeout=2";
+        // Each phase creates/drops this database; cached login failures must not mask its current state.
+        public string Connection => $"Server=(localdb)\\MSSQLLocalDB;Database={name};Integrated Security=true;TrustServerCertificate=true;Pooling=false;ConnectRetryCount=0;Connect Timeout=30";
         public StockLabDbContext Context() => new(new DbContextOptionsBuilder<StockLabDbContext>().UseSqlServer(Connection).Options);
         public async Task<bool> ExistsAsync()
         {

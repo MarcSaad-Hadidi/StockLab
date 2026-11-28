@@ -1,7 +1,7 @@
 """Contract and failure tests for ingestion, without external API calls."""
 
 from copy import deepcopy
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 import json
 import traceback
 from urllib.parse import parse_qs, urlsplit
@@ -61,8 +61,8 @@ def test_pipeline_contract(tmp_path, transport, payload):
     {"start_date": "2024-02-30"}, {"start_date": "20240101"},
     {"start_date": "2024-01-01T00:00:00"}, {"start_date": None},
     {"start_date": "2024-01-09"}, {"start_date": "2024-01-10"},
-    {"end_date": date.today().isoformat()},
-    {"end_date": (date.today() + timedelta(days=1)).isoformat()},
+    {"end_date": datetime.now(UTC).date().isoformat()},
+    {"end_date": (datetime.now(UTC).date() + timedelta(days=1)).isoformat()},
     {"start_date": "1990-01-01"},
 ])
 def test_bad_arguments_do_not_spend_credits(tmp_path, transport, kwargs):
@@ -71,6 +71,34 @@ def test_bad_arguments_do_not_spend_credits(tmp_path, transport, kwargs):
         run(tmp_path, **kwargs)
     assert not transport.calls
     assert not list(tmp_path.rglob("*.csv"))
+
+
+@pytest.mark.parametrize("local_day,end,allowed", [
+    ("2026-11-05", "2026-11-05", True),
+    ("2026-11-05", "2026-11-06", False),
+    ("2026-11-07", "2026-11-06", False),
+])
+def test_request_cutoff_uses_utc_day_independently_of_host_timezone(monkeypatch, local_day, end, allowed):
+    from stocklab_ml.data import validation
+    from stocklab_ml.data.models import DatasetValidationError
+
+    class LocalDate(date):
+        @classmethod
+        def today(cls):
+            return date.fromisoformat(local_day)
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 11, 6, 4, 30, tzinfo=UTC)
+
+    monkeypatch.setattr(validation, "date", LocalDate)
+    monkeypatch.setattr(validation, "datetime", Clock, raising=False)
+    if allowed:
+        assert validation.validate_request("AAPL", "2021-01-01", end).end_date.isoformat() == end
+    else:
+        with pytest.raises(DatasetValidationError):
+            validation.validate_request("AAPL", "2021-01-01", end)
 
 
 @pytest.mark.parametrize("symbol,provider_symbol,exchange,encoded", [

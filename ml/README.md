@@ -2,8 +2,8 @@
 
 ## Purpose
 
-StockLab's independent Python ML module will receive historical data, clean it,
-prepare features, train models, and produce prediction probabilities followed by
+StockLab's independent Python ML module receives historical data, cleans it,
+prepares features, trains models, and produces prediction probabilities followed by
 BUY / SELL / HOLD signals with confidence. It will never execute a trade.
 The frontend and .NET backend are not required to install or test this module.
 
@@ -24,6 +24,153 @@ uses `python -m stocklab_ml.operational_cycle --config <private-config.json>` wi
 `--once`, `--loop` or `--stop`. It requires an explicitly promoted fitted model,
 fresh immutable inputs and the exact existing database. The runner never trains
 or promotes automatically.
+
+The [experimental boosted28 snapshot workflow](docs/boosted-snapshot.md) adds real
+fitted HGBT reproduction, immutable save/load and explicit Archived registration
+through the existing artifact APIs. It preserves genuine scores and binds policy
+context to its prediction version. Historical evidence and prospective PENDING
+remain separate; this path does not activate or commission the native worker.
+The [source-bound target-free input preparer](docs/boosted-vintage.md) now builds
+the exact28 inputs from explicit closed local vintages. Its real Archived-artifact
+proof matches457,660 feature cells and all1,085 retained2026 scores/actions with
+zero fits/replays; native acquisition/cycle integration still remains.
+The separate [read-only .NET/Python diagnostic](docs/boosted-diagnostic.md) now
+passes two actual operator invocations against that Archived artifact. Independent
+review finds all40 latest scores/trends bit-exact and all actions/reasons correct,
+with zero fitting/replay/provider calls. The [first fresh observation](docs/boosted-observation.md)
+then records five matching pre-open scores on the November 25 data vintage
+using the archived binary and the updated `develop` build. A local read-only
+checker can resolve those scores against the 21st subsequent observed open.
+The observation outcome is pending and the automated paper cycle uses RFv7.
+The checker now scores against a verified completed paper-cycle snapshot. The
+local Windows installation checks the November 25 observation daily at 21:45 and
+records the first observed result when all 21 following sessions are available.
+[Prospective scoring from the local cache](docs/boosted-observation.md)
+
+The [return-first eight-stock candidate](docs/boosted-return-first.md) reaches
+**21.00% full-period annualized return** against SPY at **14.17%**. It earns
+20.41% with higher full-period costs and 15.83% on fresh 2021 capital. Its
+first eight-stock diagnostic was recorded before the November 27 opening and
+contains one BUY signal and seven HOLD signals.
+The [quarter-position sale candidate](docs/boosted-staged-sales.md) raises the
+full-window return to **22.36%** and the higher-cost return to **22.16%**. Its
+fresh 2021 return is **18.92%**. It beats SPY from all five start dates, with
+59 partial sales in the full baseline-cost test.
+The [confirmed DCA purchase-priority study](docs/boosted-purchase-research.md)
+reaches **22.53%** full-period annualized and **22.32%** at higher costs.
+The 2021 fresh account earns **18.88%**. The same report records the tested
+purchase filter, cash-funded rotation and higher per-order size variants.
+The [learned purchase rank](docs/boosted-relative-rank.md) reaches **21.86%**
+through the November 25 close and **19.77%** from a fresh 2021 start. The
+fresh 2024 comparisons still trail SPY. The pre-open comparison is pending.
+
+The separate [DCA / S&P 500 research](docs/dca-research.md) compares costed,
+chronological paper portfolios against an external SPY proxy and the user's
+20% annualized target. It records both favorable and unfavorable periods;
+research results do not activate a strategy or replace promotion evidence.
+The [subsequent boosted improvement studies](docs/boosted-improvement.md) raise
+the original-five upside candidate to **18.63% CAGR / 24.77% maximum drawdown**
+on 2018–2026, with 223 buys/29 sales, versus SPY 14.17%/33.72%. A fresh 2021
+start earns 17.58%. Continuous-return regression and minimum-leaf regularization
+perform worse and remain documented. All 24 synthetic checks and 98,283 independent
+ledger comparisons pass with zero ledger error. The original-five studies report
+weak probability calibration. Production uses RFv7.
+
+The [subsequent horizon, exit, SPY-context and cadence controls](docs/boosted-exit-controls.md)
+record the remaining tradeoffs: five-session exit confirmation reaches19.14%
+CAGR with29.67% drawdown, while direct SPY inputs reach17.97%/23.10% and
+underperform SPY on a fresh2021 start. The63-session horizon also fails to
+improve the retained original28 reference. Monthly refitting also worsens both
+full measures to16.67%/33.85%. Entry-quarter exits earn18.93%/30.91% full and
+19.39%/14.04% from fresh2021 capital, improving the recent interval but failing20%.
+All40 new synthetic checks and403,169
+independent ledger comparisons pass with zero ledger error; none of these
+studies meets the full20%/lower-drawdown objective or activates a model.
+
+The following [upside-only isotonic diagnostic](docs/boosted-upside-calibration.md)
+earns19.28% full CAGR but worsens drawdown to32.57% and loses to SPY from fresh2021
+capital(13.77% versus14.25%). It executes only one sale and is not retained as a
+replacement. Eleven synthetic checks and251,937 independent zero-error ledger
+comparisons pass. Across these six continuation diagnostics there are51 synthetic
+checks and655,106 independent numeric ledger comparisons,134 base-model fits,
+nine additional isotonic calibrations and33 new accounts; the separate snapshot
+reproduction remains one further fit/no account. The joint20%/risk objective fails.
+
+The subsequent [relative-to-SPY event study](docs/boosted-excess-target.md) earns
+only8.06% full CAGR despite252 buys/51 sales, versus SPY14.17%. Its fresh2021
+account also fails, so the18.63% reference remains retained. All eleven synthetic
+checks and267,977 independent numeric comparisons pass, with maximum absolute
+difference5.82e-11 under the unchanged tolerance. Across seven continuation
+diagnostics:62 synthetic checks,923,083 independent numeric comparisons,
+143 base fits/nine isotonic calibrations/39 accounts. Financial equality is not
+claimed bit-exact for this last study; the20% goal remains unmet.
+
+Two [sell-only follow-up studies](docs/boosted-sell-research.md) keep the exact
+retained BUY intentions. Earlier sales lower full drawdown to 20.12% but lower
+annual growth to 15.32%. Weighting the sell model by price-move magnitude yields
+17.72% growth with 25.64% drawdown and worsens forecast loss. The 18.63% model
+remains the retained historical reference. The [local retraining reconciliation](docs/retraining-reconciliation.md)
+restores the Windows paper and retraining paths with RFv7 active and RFv9 archived.
+
+The [broader-data readiness assessment](docs/broader-data-readiness.md) records
+why the111-name training panel cannot yet substitute for execution data: missing
+cash-event coverage, unresolved identity/terminal information, session gaps and
+zero-volume candles. A [separate eight-stock experiment](docs/boosted-expanded-execution.md)
+verifies tradable research inputs for three additional names and compares the
+same model's immediate and relative-strength sale rules. The relative rule earns
+17.15% annualized with 29.12% maximum drawdown. The retained five-stock reference
+earns 18.63% with 24.77% drawdown.
+
+The [volatility-sizing research](docs/boosted-volatility-position-sizing.md) tests
+stricter purchase caps and partial risk sales. Partial sales reduce the full
+five-stock maximum drawdown to 23.17% with 18.00% annualized growth. The caps
+alone add 0.0056 percentage point to full growth, and the eight-stock portability
+check weakens both full-period measures.
+
+The user-requested long comparison of the unchanged market-boosted reference
+now covers2018-01-01 through2026-11-11:16.17% CAGR versus SPY14.17%,31.91%
+versus33.72% maximum drawdown,and88 buys/8 sales.100000USD grows to377444USD
+versus323443USD. The earlier20.90% applied only to2018-2020. This diagnostic
+extension preserves the old rejected admissions and does not promote a model;
+the20% target remains unmet. See the [full comparison](docs/long-horizon-ml.md).
+
+The [v50 next-open DCA port and 25% trim study](docs/dca-next-open-trim25.md)
+uses the user-chosen same 100,000 USD initial capital, Standard24 monthly 2x–4x
+signals and the same fees/dividends. Funded buy-only earns 13.05% CAGR; entry-only
+trim25 earns 12.77%, both with 17.28% maximum drawdown, versus boosted 16.17%/31.91%
+and SPY 14.17%/33.72%. The new funded strategy is explicitly distinct from
+original v50's variable external deposits. All 91 source tests, 109 targeted Python
+tests and 353,216 independent exact ledger checks pass; no model is promoted.
+
+The [longer-history calibrated study](docs/long-horizon-ml.md) extends inputs to
+2010, evaluates 2018–2026, and accounts for verified cash dividends. Its selected
+recipe reaches 19.40% CAGR versus 14.17% for SPY; the 20% compound-growth target
+remains unmet and the live model is unchanged. A fresh-capital restart exposes
+missing entries in 2021-2025. The latest dedicated-downside ML trial produces
+17 simulated sales at17.10% CAGR/22.54% drawdown, but loses its selection-period
+advantage and underperforms SPY on the later reset. The report preserves these
+failures, costed comparisons and broader-universe data limits; no research
+candidate is promoted.
+An opt-in monthly refit of both heads is also tested and rejected on2018-2020
+selection (19.70% control/18.74% dual CAGR); no later monthly returns are inferred.
+The same research runner now accepts a source-validated broader training-only panel,
+with per-identity observed episodes and date-balanced annual fitting. The frozen
+256-identity collection yields111 usable current-survivor histories. Its2018-2020
+selection reaches22.60% control/20.69% dual CAGR, but fails sales/incremental risk
+gates; no later/full broader result is calculated or promoted.
+An opt-in fixed boosted learner on that corpus reaches20.01% control/8.12% dual
+CAGR on2018-2020, with33.25%/22.40% drawdown. Both fail unchanged admission gates,
+so that gated trial produces no later/full results. Adding four fixed lagged VIX/VIX3M
+features reaches20.90%/31.91% drawdown for control without sales; dual makes15
+sales at13.49%/22.12%,below20% and SPY. Both fail admission; their original gated
+trial stops before later/full evaluation. Separate risk-only isotonic calibration
+falls to9.91% CAGR/22.12% drawdown with14 genuine sales and still fails the
+unchanged forecast gate. No later/full calibration result is calculated.
+Keeping raw risk but fitting only original-five histories reduces drawdown
+to18.10% while losing return to7.98% with29 sales; its Brier is worse than
+the unchanged broader reference. Both admissions fail; no later/full result.
+The same report preserves the
+forecast/participation failures and audited account evidence.
 
 ## Requirements
 
@@ -136,7 +283,11 @@ Python ML only. Never commit its value or any other secret.
 The Twelve Data Website key (`TwelveData:Keys:Website`) belongs exclusively to
 the .NET backend's Market / Stock Details features. Python ML must not use it,
 and the Website backend must not use `TWELVE_DATA_ML_API_KEY`.
-There is no fallback between the two keys.
+There is no automatic fallback between the two keys. The operational runner also
+supports explicitly authorized quota sharing as documented in the
+[local paper-cycle procedure](../frontend/AI_TRADER_OPERATIONS.md#run-the-full-local-paper-cycle-273).
+For an operator-authorized Fallback credential, supply it only through the Python
+process's `TWELVE_DATA_ML_API_KEY`; never put it in command arguments or config files.
 
 ## Architecture invariant
 
@@ -144,15 +295,31 @@ There is no fallback between the two keys.
 - **Risk Manager = WHETHER + HOW MUCH**: decide whether a trade is allowed and its size.
 - **Paper Trading Engine = EXECUTE**: execute approved simulated trades.
 
-ML never executes trades. These responsibilities are documented only at this stage.
+ML never executes trades. The explicit local runner invokes the existing backend
+services, which retain risk approval and paper settlement responsibilities.
 
 ## Current status
 
-**#54 provides the environment; #56 adds historical ingestion; #58 adds a separate
-local cleaning stage; #60 adds deterministic feature engineering.** Imputation, scaling, train/test splits,
-training, predictions, risk management, backtesting, frontend/API integration,
-AWS, and Azure remain outside this module's current implementation. Installation
-downloads Python packages; pytest needs no external service, real API key, or credit.
+The implemented Python pipeline covers historical ingestion, cleaning, feature
+engineering, chronological training/evaluation, Logistic Regression and Random
+Forest, signals/confidence, backtesting, Buy & Hold comparison, versioned model
+artifacts, retraining checks and audited promotion. The local operational runner
+connects inference to backend risk, paper execution and persisted performance.
+
+These are distinct operator workflows: starting the HTTP server does not launch
+the paper-cycle loop, the retraining CLI performs one check for an external
+scheduler, and new candidates remain Archived until an audited promotion is
+applied. Local commissioning does not establish an AWS/Azure deployment or a
+profitable strategy. The sections below document each implemented contract.
+
+Run `python -m pytest ml` from the repository root or `python -m pytest` from
+`ml/`. Collection excludes private data/model/result directories, including
+cyclic junctions deliberately created by storage tests. Tests remain offline and
+need no real API key or credit.
+
+For the Windows operator setup, supervised local loop, scheduled retraining,
+stop/restart commands and acceptance checks, see
+[local ML operation](docs/local-operation.md).
 
 ## Historical data pipeline (#56)
 
@@ -202,7 +369,8 @@ the qualified identifier stays in the dataset and is checked against metadata.
 Numeric international tickers are supported without guessing exchange mappings.
 
 Dates accept Python `date` or strict `YYYY-MM-DD` strings. Require
-`start_date < end_date < date.today()` using the machine's local date. Today is
+`start_date < end_date < datetime.now(UTC).date()`, independently of the machine's
+local timezone, matching the operational cycle's UTC clock. The current UTC day is
 excluded to avoid current daily bars; callers remain responsible for provider
 publication delays and selecting a completed session in the relevant exchange.
 Returned dates must lie inside the requested boundaries. Daily dates are calendar
