@@ -576,6 +576,8 @@
     "savedAssets": "Saved assets",
     "topGainer": "Top gainer",
     "topLoser": "Top loser",
+    "smallestGain": "Smallest gain",
+    "lowestPerformer": "Lowest performer",
     "gainersToday": "Gainers today",
     "averageMove": "Average move",
     "acrossWatched": "Across watched assets",

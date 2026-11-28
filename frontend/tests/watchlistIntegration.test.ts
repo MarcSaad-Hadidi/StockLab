@@ -238,6 +238,40 @@ test('Watchlist renders persisted rows, partial quotes, currency and real dates 
   } finally { await view.close() }
 })
 
+const lowestMoveCases = [
+  { name: 'all gains', changes: [2, 0.5], labels: ['Smallest gain', 'Moins forte hausse'],
+    symbol: 'MSFT', tone: 'positive', percentages: ['+0.50%', '+0,50 %'] },
+  { name: 'a loss', changes: [2, -0.5], labels: ['Top loser', 'Plus forte baisse'],
+    symbol: 'MSFT', tone: 'negative', percentages: ['-0.50%', '-0,50 %'] },
+  { name: 'a flat quote', changes: [2, 0], labels: ['Lowest performer', 'Variation la plus faible'],
+    symbol: 'MSFT', tone: 'neutral', percentages: ['0.00%', '0,00 %'] },
+  { name: 'unavailable moves', changes: [null, null], labels: ['Lowest performer', 'Variation la plus faible'],
+    symbol: '—', tone: 'neutral', percentages: ['—', '—'] },
+]
+
+for (const { name, changes, labels, symbol, tone, percentages } of lowestMoveCases) {
+  test(`Watchlist labels and colors the lowest move with ${name} in both languages`, async t => {
+    seed()
+    t.mock.method(watchlistApi, 'getWatchlist', async () => [aapl, msft])
+    t.mock.method(marketDataApi, 'quote', async ticker => ({
+      ...quote, symbol: ticker, changePercent: ticker === 'AAPL' ? changes[0] : changes[1],
+    }))
+    const { default: Page } = await import('../src/watchlist/WatchlistPage.tsx')
+    const view = await mount(React.createElement(Page))
+    try {
+      for (const [index, language] of ['en', 'fr'].entries()) {
+        await act(async () => i18n.changeLanguage(language))
+        const card = view.container.querySelectorAll('.watchlist-summary .summary-card')[2]
+        assert.equal(card.querySelector('.summary-card-label')?.textContent, labels[index])
+        assert.equal(card.querySelector('strong')?.textContent, symbol)
+        const move = card.querySelector('small span')
+        assert.equal(move?.className, tone)
+        assert.equal(move?.textContent?.replace(/\s/g, ' '), percentages[index])
+      }
+    } finally { await view.close(); await i18n.changeLanguage('en') }
+  })
+}
+
 test('Watchlist Refresh prices fetches fresh quotes within the cache lifetime on every click', async t => {
   seed()
   const now = Date.now()
