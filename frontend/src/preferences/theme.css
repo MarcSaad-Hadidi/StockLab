@@ -1,0 +1,35 @@
+/* Only dark mode defines these overrides; the existing light palette stays intact. */
+:root[data-stocklab-theme="dark"] {
+  color-scheme: dark;
+  --sl-dark-page: #101827;
+  --sl-dark-surface: #182336;
+  --sl-dark-surface-rgb: 24, 35, 54;
+  --sl-dark-surface-raised: #222f45;
+  --sl-dark-stroke: #34435d;
+  --sl-dark-text: #edf2fc;
+  --sl-dark-muted: #b0bfd5;
+  --sl-dark-accent: #b2c2ff;
+  --sl-dark-accent-bg: #28385d;
+  --sl-dark-green: #6de2b0;
+  --sl-dark-green-bg: #173d35;
+  --sl-dark-red: #ffacc0;
+  --sl-dark-red-bg: #4a2637;
+  --sl-dark-amber: #ffd28a;
+  --sl-dark-amber-bg: #433522;
+  --sl-dark-language-shadow: none;
+  background: var(--sl-dark-page);
+  color: var(--sl-dark-text);
+}
+
+:root[data-stocklab-theme="dark"] body {
+  background: var(--sl-dark-page);
+}
+
+/* Dark chart chrome; data series keep their existing colors and behavior. */
+:root[data-stocklab-theme="dark"] .MuiChartsAxis-tickLabel {
+  fill: var(--sl-dark-muted);
+}
+
+:root[data-stocklab-theme="dark"] .MuiChartsGrid-line {
+  stroke: var(--sl-dark-stroke);
+}

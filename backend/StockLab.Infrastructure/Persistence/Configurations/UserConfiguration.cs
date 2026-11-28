@@ -27,6 +27,10 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.PasswordHash).HasMaxLength(1024);
         builder.Property(user => user.GoogleSubject).HasMaxLength(255).IsConcurrencyToken();
         builder.Property(user => user.PreferredLanguage).HasMaxLength(2).HasDefaultValue("en").IsRequired();
+        builder.Property(user => user.EmailNotifications).HasDefaultValue(false);
+        builder.Property(user => user.TradeAlerts).HasDefaultValue(false);
+        builder.Property(user => user.MarketingCommunications).HasDefaultValue(false);
+        builder.Property(user => user.DarkMode).HasDefaultValue(false);
         builder.Property(user => user.SessionVersion).HasDefaultValue(0L).IsConcurrencyToken();
         builder.Property(user => user.PasswordResetTokenHash).HasColumnType("varbinary(32)").HasMaxLength(32);
         builder.Property(user => user.PasswordResetExpiresAtUtc).HasColumnType("datetime2(7)");

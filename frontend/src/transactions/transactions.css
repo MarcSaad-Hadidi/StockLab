@@ -1,18 +1,18 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap');
 
 :root {
-  --page: #f6f8fc;
-  --surface: #fff;
-  --ink: #172541;
-  --muted: #8d99ac;
-  --faint: #a5afbd;
-  --line: #e8edf4;
+  --page: var(--sl-dark-page, #f6f8fc);
+  --surface: var(--sl-dark-surface, #fff);
+  --ink: var(--sl-dark-text, #172541);
+  --muted: var(--sl-dark-muted, #8d99ac);
+  --faint: var(--sl-dark-muted, #a5afbd);
+  --line: var(--sl-dark-stroke, #e8edf4);
   --blue: #435cf0;
-  --blue-soft: #edf1ff;
-  --green: #20aa78;
-  --green-soft: #e7f8f0;
-  --red: #eb6b74;
-  --red-soft: #fff0f1;
+  --blue-soft: var(--sl-dark-surface-raised, #edf1ff);
+  --green: var(--sl-dark-green, #20aa78);
+  --green-soft: var(--sl-dark-surface-raised, #e7f8f0);
+  --red: var(--sl-dark-red, #eb6b74);
+  --red-soft: var(--sl-dark-surface-raised, #fff0f1);
 }
 
 html,
@@ -80,7 +80,7 @@ select:focus-visible {
   align-items: center;
   gap: 20px;
   padding: 0 30px;
-  background: rgba(255, 255, 255, 0.94);
+  background: rgba(var(--sl-dark-surface-rgb, 255, 255, 255), 0.94);
   border-bottom: 1px solid var(--line);
 }
 
@@ -94,16 +94,16 @@ select:focus-visible {
 }
 
 .breadcrumb strong {
-  color: #18243a;
+  color: var(--sl-dark-text, #18243a);
   font-weight: 800;
 }
 
 .breadcrumb span {
-  color: #b0bac9;
+  color: var(--sl-dark-muted, #b0bac9);
 }
 
 .breadcrumb a {
-  color: #476cf2;
+  color: var(--sl-dark-accent, #476cf2);
   font-weight: 600;
   text-decoration: none;
 }
@@ -122,9 +122,9 @@ select:focus-visible {
   align-items: center;
   gap: 8px;
   padding: 0 10px;
-  color: #8a98ad;
-  background: #f8fafc;
-  border: 1px solid #e6ebf3;
+  color: var(--sl-dark-muted, #8a98ad);
+  background: var(--sl-dark-surface-raised, #f8fafc);
+  border: 1px solid var(--sl-dark-stroke, #e6ebf3);
   border-radius: 8px;
 }
 
@@ -132,7 +132,7 @@ select:focus-visible {
   width: 100%;
   min-width: 0;
   padding: 0;
-  color: #2d3e58;
+  color: var(--sl-dark-text, #2d3e58);
   background: transparent;
   border: 0;
   outline: 0;
@@ -140,7 +140,7 @@ select:focus-visible {
 }
 
 .global-search input::placeholder {
-  color: #a9b4c5;
+  color: var(--sl-dark-muted, #a9b4c5);
 }
 
 .icon-button,
@@ -157,14 +157,14 @@ select:focus-visible {
   width: 32px;
   height: 32px;
   padding: 0;
-  color: #8693a8;
+  color: var(--sl-dark-muted, #8693a8);
   border-radius: 50%;
 }
 
 .icon-button:hover,
 .topbar-account:hover {
   color: var(--blue);
-  background: #f1f4ff;
+  background: var(--sl-dark-surface-raised, #f1f4ff);
 }
 
 .notification-button i {
@@ -177,7 +177,7 @@ select:focus-visible {
   place-items: center;
   color: #fff;
   background: #4664e9;
-  border: 2px solid #fff;
+  border: 2px solid var(--sl-dark-stroke, #fff);
   border-radius: 50%;
   font-size: 8px;
   font-style: normal;
@@ -187,7 +187,7 @@ select:focus-visible {
 .topbar-account {
   gap: 7px;
   padding: 0 0 0 4px;
-  color: #75849b;
+  color: var(--sl-dark-muted, #75849b);
   border-radius: 20px;
 }
 
@@ -199,7 +199,7 @@ select:focus-visible {
   justify-content: center;
   color: #fff;
   background: linear-gradient(140deg, #e7a283, #5575c4 72%);
-  border: 2px solid #fff;
+  border: 2px solid var(--sl-dark-stroke, #fff);
   border-radius: 50%;
   box-shadow: 0 2px 7px rgba(45, 65, 120, 0.16);
   font-size: 9px;
@@ -226,7 +226,7 @@ select:focus-visible {
 
 .transactions-heading h1 {
   margin: 0;
-  color: #172541;
+  color: var(--sl-dark-text, #172541);
   font-family: Manrope, sans-serif;
   font-size: clamp(22px, 2vw, 27px);
   letter-spacing: -0.8px;
@@ -250,7 +250,7 @@ select:focus-visible {
 .panel {
   min-width: 0;
   background: var(--surface);
-  border: 1px solid #edf0f5;
+  border: 1px solid var(--sl-dark-stroke, #edf0f5);
   border-radius: 10px;
   box-shadow: 0 4px 15px rgba(34, 70, 123, 0.025);
 }
@@ -276,14 +276,14 @@ select:focus-visible {
   border-radius: 7px;
 }
 
-.summary-icon-blue { color: #6376ee; background: #edf0ff; }
-.summary-icon-purple { color: #8c6ae9; background: #f1ecff; }
-.summary-icon-orange { color: #e99a4c; background: #fff3e6; }
-.summary-icon-green { color: #23a579; background: #e6f8f0; }
+.summary-icon-blue { color: var(--sl-dark-accent, #6376ee); background: var(--sl-dark-surface-raised, #edf0ff); }
+.summary-icon-purple { color: var(--sl-dark-accent, #8c6ae9); background: var(--sl-dark-surface-raised, #f1ecff); }
+.summary-icon-orange { color: var(--sl-dark-red, #e99a4c); background: var(--sl-dark-amber-bg, #fff3e6); }
+.summary-icon-green { color: var(--sl-dark-green, #23a579); background: var(--sl-dark-surface-raised, #e6f8f0); }
 
 .summary-card p {
   margin: 0 0 4px;
-  color: #8b97aa;
+  color: var(--sl-dark-muted, #8b97aa);
   font-size: 9px;
   font-weight: 600;
 }
@@ -291,7 +291,7 @@ select:focus-visible {
 .summary-card > strong {
   display: block;
   overflow-wrap: anywhere;
-  color: #24314a;
+  color: var(--sl-dark-text, #24314a);
   font-family: Manrope, sans-serif;
   font-size: 17px;
   letter-spacing: -0.45px;
@@ -301,7 +301,7 @@ select:focus-visible {
 .summary-detail {
   display: block;
   margin-top: 5px;
-  color: #a0aabc;
+  color: var(--sl-dark-muted, #a0aabc);
   font-size: 8px;
 }
 
@@ -355,9 +355,9 @@ select:focus-visible {
   display: flex;
   min-width: 0;
   align-items: center;
-  color: #a0adbe;
-  background: #f8fafc;
-  border: 1px solid #eef1f5;
+  color: var(--sl-dark-muted, #a0adbe);
+  background: var(--sl-dark-surface-raised, #f8fafc);
+  border: 1px solid var(--sl-dark-stroke, #eef1f5);
 }
 
 .table-search {
@@ -369,7 +369,7 @@ select:focus-visible {
   width: 100%;
   min-width: 0;
   padding: 0;
-  color: #34425c;
+  color: var(--sl-dark-text, #34425c);
   background: transparent;
   border: 0;
   outline: 0;
@@ -377,7 +377,7 @@ select:focus-visible {
 }
 
 .table-search input::placeholder {
-  color: #a5afbd;
+  color: var(--sl-dark-muted, #a5afbd);
 }
 
 .date-range-control {
@@ -395,7 +395,7 @@ select:focus-visible {
 
 .date-field > span {
   overflow: hidden;
-  color: #5d6b80;
+  color: var(--sl-dark-muted, #5d6b80);
   font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -415,12 +415,12 @@ select:focus-visible {
 }
 
 .date-range-control:focus-within {
-  border-color: #cbd3ff;
+  border-color: var(--sl-dark-stroke, #cbd3ff);
   box-shadow: 0 0 0 2px rgba(67, 92, 240, 0.08);
 }
 
 .date-separator {
-  color: #a4aebe;
+  color: var(--sl-dark-muted, #a4aebe);
 }
 
 .type-select {
@@ -432,7 +432,7 @@ select:focus-visible {
   width: 100%;
   height: 100%;
   padding: 0;
-  color: #68758a;
+  color: var(--sl-dark-muted, #68758a);
   background: transparent;
   border: 0;
   outline: 0;
@@ -444,7 +444,7 @@ select:focus-visible {
   position: absolute;
   right: 8px;
   pointer-events: none;
-  color: #8592a6;
+  color: var(--sl-dark-muted, #8592a6);
 }
 
 .action-filters {
@@ -490,9 +490,9 @@ select:focus-visible {
   justify-content: center;
   gap: 6px;
   padding: 0 8px;
-  color: #68758a;
-  background: #fff;
-  border: 1px solid #e7ebf2;
+  color: var(--sl-dark-muted, #68758a);
+  background: var(--sl-dark-surface, #fff);
+  border: 1px solid var(--sl-dark-stroke, #e7ebf2);
   font-size: 9px;
   font-weight: 700;
 }
@@ -500,8 +500,8 @@ select:focus-visible {
 .filter-button:hover,
 .filter-button.has-active-filter {
   color: var(--blue);
-  background: #f7f8ff;
-  border-color: #cfd6ff;
+  background: var(--sl-dark-page, #f7f8ff);
+  border-color: var(--sl-dark-stroke, #cfd6ff);
 }
 
 .filter-button b {
@@ -523,21 +523,21 @@ select:focus-visible {
   z-index: 30;
   width: 220px;
   padding: 12px;
-  background: #fff;
-  border: 1px solid #e7ebf2;
+  background: var(--sl-dark-surface, #fff);
+  border: 1px solid var(--sl-dark-stroke, #e7ebf2);
   border-radius: 8px;
   box-shadow: 0 12px 28px rgba(31, 55, 91, 0.13);
 }
 
 .filter-menu strong {
   display: block;
-  color: #26344d;
+  color: var(--sl-dark-text, #26344d);
   font-size: 10px;
 }
 
 .filter-menu p {
   margin: 5px 0 10px;
-  color: #8d99ac;
+  color: var(--sl-dark-muted, #8d99ac);
   font-size: 9px;
   line-height: 1.4;
 }
@@ -546,7 +546,7 @@ select:focus-visible {
   width: 100%;
   height: 27px;
   color: var(--blue);
-  background: #f1f3ff;
+  background: var(--sl-dark-surface-raised, #f1f3ff);
   border: 0;
   border-radius: 5px;
   font-size: 9px;
@@ -554,7 +554,7 @@ select:focus-visible {
 }
 
 .filter-menu button:hover {
-  background: #e8ecff;
+  background: var(--sl-dark-accent-bg, #e8ecff);
 }
 
 .table-scroll {
@@ -571,7 +571,7 @@ select:focus-visible {
 
 .transactions-table th {
   padding: 0 8px 9px;
-  color: #a4aebe;
+  color: var(--sl-dark-muted, #a4aebe);
   font-size: 8px;
   font-weight: 700;
   text-align: left;
@@ -605,8 +605,8 @@ select:focus-visible {
 .transactions-table td {
   height: 45px;
   padding: 7px 8px;
-  color: #67758b;
-  border-top: 1px solid #f0f2f6;
+  color: var(--sl-dark-muted, #67758b);
+  border-top: 1px solid var(--sl-dark-stroke, #f0f2f6);
   font-size: 9px;
   white-space: nowrap;
 }
@@ -616,7 +616,7 @@ select:focus-visible {
 }
 
 .transactions-table tbody tr:hover {
-  background: #fbfdff;
+  background: var(--sl-dark-surface-raised, #fbfdff);
 }
 
 .date-cell {
@@ -627,19 +627,19 @@ select:focus-visible {
 }
 
 .date-cell span {
-  color: #54627a;
+  color: var(--sl-dark-muted, #54627a);
   font-size: 8px;
   font-weight: 700;
 }
 
 .date-cell small {
   margin-top: 3px;
-  color: #9ca7b6;
+  color: var(--sl-dark-muted, #9ca7b6);
   font-size: 7px;
 }
 
 .symbol-cell {
-  color: #34425c;
+  color: var(--sl-dark-text, #34425c);
   font-family: Manrope, sans-serif;
   font-size: 9px;
   font-weight: 800;
@@ -647,7 +647,7 @@ select:focus-visible {
 
 .company-cell {
   overflow: hidden;
-  color: #66758b;
+  color: var(--sl-dark-muted, #66758b);
   text-overflow: ellipsis;
 }
 
@@ -674,17 +674,17 @@ select:focus-visible {
 }
 
 .number-cell {
-  color: #59677e;
+  color: var(--sl-dark-muted, #59677e);
 }
 
 .money-cell {
-  color: #53627a;
+  color: var(--sl-dark-muted, #53627a);
   font-family: Manrope, sans-serif;
   font-size: 8px;
 }
 
 .money-cell strong {
-  color: #3d4a62;
+  color: var(--sl-dark-muted, #3d4a62);
   font-weight: 800;
 }
 
@@ -701,13 +701,13 @@ select:focus-visible {
   justify-content: space-between;
   gap: 12px;
   padding: 0 8px;
-  color: #a1abbb;
-  border-top: 1px solid #f0f2f6;
+  color: var(--sl-dark-muted, #a1abbb);
+  border-top: 1px solid var(--sl-dark-stroke, #f0f2f6);
   font-size: 8px;
 }
 
 .table-footer strong {
-  color: #7b899d;
+  color: var(--sl-dark-muted, #7b899d);
 }
 
 .pagination {
@@ -723,7 +723,7 @@ select:focus-visible {
   height: 22px;
   align-items: center;
   justify-content: center;
-  color: #93a0b2;
+  color: var(--sl-dark-muted, #93a0b2);
   background: transparent;
   border: 0;
   border-radius: 4px;
@@ -733,7 +733,7 @@ select:focus-visible {
 .pagination button:hover:not(:disabled),
 .pagination button.current {
   color: var(--blue);
-  background: #edf1ff;
+  background: var(--sl-dark-surface-raised, #edf1ff);
 }
 
 .pagination button:disabled {
@@ -752,7 +752,7 @@ select:focus-visible {
   justify-content: center;
   flex-direction: column;
   gap: 7px;
-  color: #9aa6b7;
+  color: var(--sl-dark-muted, #9aa6b7);
   text-align: center;
 }
 
@@ -762,13 +762,13 @@ select:focus-visible {
   height: 34px;
   align-items: center;
   justify-content: center;
-  color: #7888ec;
-  background: #eef1ff;
+  color: var(--sl-dark-accent, #7888ec);
+  background: var(--sl-dark-surface-raised, #eef1ff);
   border-radius: 9px;
 }
 
 .empty-state strong {
-  color: #3d4b63;
+  color: var(--sl-dark-muted, #3d4b63);
   font-size: 11px;
 }
 
@@ -778,7 +778,7 @@ select:focus-visible {
 }
 
 .transactions-feedback { padding: 18px; gap: 12px; }
-.transactions-feedback .filter-button { min-width: 96px; color: var(--blue); background: #f4f7ff; border-color: #dce5ff; text-decoration: none; }
+.transactions-feedback .filter-button { min-width: 96px; color: var(--blue); background: var(--sl-dark-surface-raised, #f4f7ff); border-color: var(--sl-dark-stroke, #dce5ff); text-decoration: none; }
 
 .simulation-note {
   display: flex;
@@ -786,7 +786,7 @@ select:focus-visible {
   justify-content: center;
   gap: 5px;
   margin: 14px 0 0;
-  color: #a1adbd;
+  color: var(--sl-dark-muted, #a1adbd);
   font-size: 8px;
 }
 

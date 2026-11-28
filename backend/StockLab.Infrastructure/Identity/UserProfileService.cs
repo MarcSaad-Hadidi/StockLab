@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using StockLab.Application.DTOs;
 using StockLab.Application.Exceptions;
 using StockLab.Application.Interfaces;
 using StockLab.Domain.Entities;
@@ -32,6 +33,32 @@ public sealed class UserProfileService(
         {
             throw new UserProfileUpdateConflictException();
         }
+        return user;
+    }
+
+    public async Task<User?> UpdatePreferencesAsync(Guid userId, UserPreferencesPatch patch,
+        CancellationToken cancellationToken)
+    {
+        if (!patch.HasChanges) throw new ArgumentException("Supply at least one preference.", nameof(patch));
+
+        var user = await dbContext.Users.SingleOrDefaultAsync(item => item.Id == userId, cancellationToken);
+        if (user is null) return null;
+        if (patch.EmailNotifications is { } emailNotifications) user.EmailNotifications = emailNotifications;
+        if (patch.TradeAlerts is { } tradeAlerts) user.TradeAlerts = tradeAlerts;
+        if (patch.MarketingCommunications is { } marketing) user.MarketingCommunications = marketing;
+        if (patch.DarkMode is { } darkMode) user.DarkMode = darkMode;
+
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        if (now > user.UpdatedAtUtc) user.UpdatedAtUtc = now;
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new UserProfileUpdateConflictException();
+        }
+
         return user;
     }
 

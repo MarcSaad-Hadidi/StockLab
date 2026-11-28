@@ -1,5 +1,5 @@
 .language-control { min-width: 0; }
-.language-control .language-save-error { color: #b42335; font-size: 12px; line-height: 1.5; margin: 0 0 12px; }
+.language-control .language-save-error { color: var(--sl-dark-red, #b42335); font-size: 12px; line-height: 1.5; margin: 0 0 12px; }
 .language-save-error button { background: transparent; border: 0; color: inherit; cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
 .language-switch button:disabled { cursor: wait; opacity: .65; }
 
@@ -8,10 +8,10 @@
   flex: none;
   gap: 3px;
   padding: 4px;
-  border: 1px solid #dce3f2;
+  border: 1px solid var(--sl-dark-stroke, #dce3f2);
   border-radius: 11px;
-  background: linear-gradient(145deg, #fbfcff, #f3f6fd);
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.95), 0 5px 12px rgba(54, 73, 128, 0.08);
+  background: linear-gradient(145deg, var(--sl-dark-surface-raised, #fbfcff), var(--sl-dark-surface, #f3f6fd));
+  box-shadow: var(--sl-dark-language-shadow, inset 0 1px rgba(255, 255, 255, 0.95), 0 5px 12px rgba(54, 73, 128, 0.08));
 }
 
 .language-switch button {
@@ -20,7 +20,7 @@
   padding: 0;
   border: 0;
   border-radius: 7px;
-  color: #8a92a7;
+  color: var(--sl-dark-muted, #8a92a7);
   background: transparent;
   font-size: 10px;
   font-weight: 800;
@@ -30,8 +30,8 @@
 }
 
 .language-switch button:hover {
-  color: #5264dc;
-  background: #e9eeff;
+  color: var(--sl-dark-accent, #5264dc);
+  background: var(--sl-dark-accent-bg, #e9eeff);
 }
 
 .language-switch button[aria-pressed="true"] {

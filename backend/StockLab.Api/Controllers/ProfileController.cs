@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using StockLab.Api.Authentication;
 using StockLab.Api.DTOs;
 using StockLab.Api.DTOs.Profile;
+using StockLab.Application.DTOs;
 using StockLab.Application.Exceptions;
 using StockLab.Application.Interfaces;
 using StockLab.Domain.Entities;
@@ -102,6 +103,51 @@ public sealed class ProfileController(IUserProfileService userProfileService) : 
                 new ApiErrorResponse("profile_update_conflict", "The profile was modified by another request."));
         }
     }
+
+    /// <summary>Gets account-owned theme and notification preferences.</summary>
+    [HttpGet("preferences")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType(typeof(UserPreferencesResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<UserPreferencesResponse>> GetPreferencesAsync(CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+            return Unauthorized(new ApiErrorResponse("unauthorized", "Authentication is required."));
+
+        var user = await userProfileService.GetAsync(userId, cancellationToken);
+        return user is null ? NotFound(ProfileNotFound()) : Ok(ToPreferencesResponse(user));
+    }
+
+    /// <summary>Updates only the supplied preferences of the authenticated account.</summary>
+    [HttpPatch("preferences")]
+    [Consumes("application/json")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [ProducesResponseType(typeof(UserPreferencesResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<UserPreferencesResponse>> UpdatePreferencesAsync(
+        [FromBody] UpdateUserPreferencesRequest request, CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId))
+            return Unauthorized(new ApiErrorResponse("unauthorized", "Authentication is required."));
+
+        var patch = new UserPreferencesPatch(request.EmailNotifications, request.TradeAlerts,
+            request.MarketingCommunications, request.DarkMode);
+        if (!patch.HasChanges)
+            return BadRequest(new ApiValidationErrorResponse("validation_error", "The request contains invalid data.",
+                new Dictionary<string, string[]> { ["preferences"] = ["Supply at least one boolean preference."] }));
+
+        try
+        {
+            var user = await userProfileService.UpdatePreferencesAsync(userId, patch, cancellationToken);
+            return user is null ? NotFound(ProfileNotFound()) : Ok(ToPreferencesResponse(user));
+        }
+        catch (UserProfileUpdateConflictException)
+        {
+            return Conflict(new ApiErrorResponse(
+                "profile_update_conflict", "The profile was modified by another request."));
+        }
+    }
+
+    private static UserPreferencesResponse ToPreferencesResponse(User user) =>
+        new(user.Id, user.EmailNotifications, user.TradeAlerts, user.MarketingCommunications, user.DarkMode);
 
     private ActionResult<UserProfileResponse> ProfileResult(User user)
     {

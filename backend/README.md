@@ -1449,6 +1449,25 @@ per-account intent before writing, and retries a 412 only for the latest intent
 (three attempts maximum). An old document's completion cannot replace a newer
 intent. Missing or malformed ETags never fall back to an unconditional write.
 
+### Account preferences (#325)
+
+`GET /api/profile/preferences` reads the signed-in user's preferences.
+`PATCH /api/profile/preferences` accepts one or more of `emailNotifications`,
+`tradeAlerts`, `marketingCommunications`, and `darkMode` as booleans. For example,
+`{"darkMode":true}` changes only the theme. Both return the account ID and all
+four saved values. The authenticated principal supplies the account ID; do not
+send one in the request. On a 409, reload the current values before retrying.
+Apply the EF migration before starting the updated API.
+
+Notification consumers can read these flags from the account before delivery.
+For example, a trade-alert email requires both `TradeAlerts` and
+`EmailNotifications`. Promotional communications require the separate
+`MarketingCommunications` opt-in. New and existing accounts default to false.
+These preferences do not change price-alert monitoring or block transactional
+security messages such as password resets. This feature does not add a
+notification or marketing sender.
+
+
 ## Portfolio API
 
 Human trade responses (`POST /api/portfolio/trades`, recent transactions and

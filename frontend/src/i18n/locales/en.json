@@ -925,6 +925,14 @@
     "preferredCurrency": "Preferred Currency",
     "preferredCurrencyDescription": "Choose a default currency for the platform.",
     "darkMode": "Dark Mode",
+    "preferenceStatus": {
+      "loading": "Loading preferences…",
+      "saving": "Saving preferences…",
+      "saved": "Preferences saved.",
+      "loadError": "Could not load preferences.",
+      "saveError": "Could not confirm the change. Your saved preferences will be reloaded.",
+      "conflict": "Preferences changed in another request. Review the current settings and try again."
+    },
     "darkModeDescription": "Switch between light and dark themes.",
     "accountSecurity": "Account Security",
     "accountSecurityDescription": "Monitor and manage your account security.",
