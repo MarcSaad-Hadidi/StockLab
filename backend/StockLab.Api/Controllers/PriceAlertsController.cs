@@ -62,6 +62,25 @@ public sealed class PriceAlertsController(IPriceAlertService priceAlertService) 
         catch (PriceAlertUpdateConflictException) { return Conflict(UpdateConflictError()); }
     }
 
+    /// <summary>Re-enables a disabled alert; repeating this operation leaves it unchanged.</summary>
+    [HttpPost("{id:guid}/enable")]
+    [ProducesResponseType(typeof(PriceAlertResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<PriceAlertResponse>> EnableAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var userId)) return Unauthorized(UnauthorizedError());
+        try
+        {
+            var alert = await priceAlertService.EnableAsync(userId, id, cancellationToken);
+            return alert is null ? NotFound(NotFoundError()) : Ok(ToResponse(alert));
+        }
+        catch (PriceAlertAlreadyTriggeredException) { return Conflict(TriggeredError()); }
+        catch (PriceAlertUpdateConflictException) { return Conflict(UpdateConflictError()); }
+    }
+
     /// <summary>Disables an active alert; repeating this operation leaves it unchanged.</summary>
     [HttpPost("{id:guid}/disable")]
     [ProducesResponseType(typeof(PriceAlertResponse), StatusCodes.Status200OK)]

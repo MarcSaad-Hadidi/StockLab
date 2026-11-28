@@ -52,13 +52,19 @@ public sealed class PriceAlertService(StockLabDbContext dbContext, TimeProvider 
         return alert;
     }
 
-    public async Task<PriceAlert?> DisableAsync(Guid userId, Guid alertId, CancellationToken cancellationToken)
+    public Task<PriceAlert?> EnableAsync(Guid userId, Guid alertId, CancellationToken cancellationToken) =>
+        SetStatusAsync(userId, alertId, "Active", cancellationToken);
+
+    public Task<PriceAlert?> DisableAsync(Guid userId, Guid alertId, CancellationToken cancellationToken) =>
+        SetStatusAsync(userId, alertId, "Disabled", cancellationToken);
+
+    private async Task<PriceAlert?> SetStatusAsync(Guid userId, Guid alertId, string status, CancellationToken cancellationToken)
     {
         var alert = await FindOwnedAsync(userId, alertId, cancellationToken);
         if (alert is null) return null;
         EnsureMutable(alert);
-        if (alert.Status == "Disabled") return alert;
-        alert.Status = "Disabled";
+        if (alert.Status == status) return alert;
+        alert.Status = status;
         alert.UpdatedAtUtc = UpdateTime(alert);
         await SaveMutationAsync(alert, cancellationToken);
         return alert;

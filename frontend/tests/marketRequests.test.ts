@@ -8,6 +8,7 @@ import { createElement, act, StrictMode } from "react";
 
 import { useMarketRequest } from "../src/market/useMarketRequest.ts";
 import { createMarketDataApi } from "../src/api/marketDataApi.ts";
+import type { AlertTerms } from "../src/alerts/alertsData.ts";
 const dom = new JSDOM('<!doctype html><div id="root"></div>');
 Object.assign(globalThis, {
   window: dom.window,
@@ -286,32 +287,45 @@ test("chart clicks debounce to the selected period and cancel abandoned queued h
   }
 });
 
-test("read-only alert market search is debounced once and does not enable saving", async () => {
+test("alert market search is debounced, limits results to USD, and requires a selected stock and valid target", async t => {
   Object.assign(globalThis, { React: await import("react") });
-  const { default: AlertsPage } = await import("../src/alerts/AlertsPage.tsx");
+  const { AlertForm } = await import("../src/alerts/AlertForm.tsx");
   const { marketDataApi } = await import("../src/api/marketDataClient.ts");
-  const original = marketDataApi.search;
-  let calls = 0;
-  marketDataApi.search = async () => { calls++; return [{ symbol: "TSLA", companyName: "Test Tesla", exchange: "NASDAQ", currency: "USD" }]; };
+  const search = t.mock.method(marketDataApi, "search", async () => [
+    { symbol: "TSLA", companyName: "Test Tesla", exchange: "NASDAQ", currency: "USD" },
+    { symbol: "TSLA:TSX", companyName: "Test Canadian Listing", exchange: "TSX", currency: "CAD" },
+  ]);
+  const onSave = t.mock.fn<(terms: AlertTerms & { symbol: string }) => Promise<boolean>>(async () => true);
   const root = createRoot(document.getElementById("root")!);
+  const fill = (selector: string, value: string) => act(async () => {
+    const input = document.querySelector<HTMLInputElement>(selector);
+    assert.ok(input, selector);
+    Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+  });
   try {
-    await act(async () => root.render(createElement(AlertsPage)));
-    assert.ok(document.querySelector('#create-alert-form'));
-    const input = document.querySelector('#create-alert-form input[aria-label]') as HTMLInputElement;
-    assert.ok(input);
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value')!.set!.call(input, 'tesla');
-      input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-    });
+    await act(async () => root.render(createElement(AlertForm, {
+      editing: null, disabled: false, saving: false, onCancel: () => {}, onSave,
+    })));
+    const form = document.querySelector<HTMLFormElement>("#create-alert-form")!;
+    const submit = () => act(async () => form.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
+    await fill("#alert-market-search", "tesla");
+    await submit();
+    assert.equal(onSave.mock.callCount(), 0);
     await pause(520);
-    assert.match(document.querySelector('#create-alert-form')!.textContent!, /Test Tesla/);
-    assert.equal(calls, 1);
-    await pause(1000);
-    assert.equal(calls, 1);
-    assert.ok(document.querySelector('#create-alert-form button.modal-primary[disabled]'));
+    assert.match(form.textContent!, /Test Tesla/);
+    assert.doesNotMatch(form.textContent!, /Test Canadian Listing/);
+    assert.equal(search.mock.callCount(), 1);
+    await act(async () => form.querySelector<HTMLButtonElement>(".alert-search-results button")!.click());
+    await submit();
+    assert.equal(onSave.mock.callCount(), 0);
+    await fill("#inline-alert-target", "180,1234");
+    await submit();
+    assert.deepEqual(onSave.mock.calls[0].arguments[0], { symbol: "TSLA", condition: "above", targetPrice: "180.1234" });
+    await pause(520);
+    assert.equal(search.mock.callCount(), 1);
   } finally {
     await act(async () => root.unmount());
-    marketDataApi.search = original;
   }
 });
 

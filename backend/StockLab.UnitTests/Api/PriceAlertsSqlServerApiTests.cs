@@ -23,6 +23,13 @@ public sealed class PriceAlertsSqlServerApiTests
     }
 
     [SqlSmokeFact]
+    public async Task Sql_decimal_text_preserves_the_maximum_target_after_reload()
+    {
+        await using var f = await CreateSqlFixtureAsync();
+        await VerifyDecimalTargetAsync(f, "999999999999999.9999", "999999999999999.9998");
+    }
+
+    [SqlSmokeFact]
     public async Task Sql_login_CRUD_and_disabled_persistence_survive_restart()
     {
         await using var f = await CreateSqlFixtureAsync();
