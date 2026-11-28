@@ -70,7 +70,7 @@ Market document with a symbol query, for example `/market?symbol=AAPL`.
 | `/watchlist` | Authenticated | Load, add, remove and manually refresh saved symbols and their quotes. |
 | `/profile` | Authenticated | Load/save the name and email, display account dates/capital/currency, and change the password. |
 | `/ai-trader` | Authenticated | Seven sections backed by the system AI Trader's read APIs. |
-| `/alerts` | Authenticated | Read-only preview and market search with disabled creation controls; alert persistence is not connected to this screen yet. |
+| `/alerts` | Authenticated | Create, edit, pause, reactivate and delete saved USD price alerts. Filter by asset, condition or status and view recorded trigger prices and dates. |
 | `/not-found` | Public | Fallback for unknown page paths. |
 
 Trailing slashes and legacy HTML entry URLs remain supported, including their
@@ -333,11 +333,8 @@ operational verification; Vite startup does not commission an autonomous bot.
 
 ## Remaining integrations
 
-- Alerts keeps an informational preview and read-only market search, with creation, condition, target and
-  notification controls disabled until [#57](https://github.com/MarcSaad-Hadidi/StockLab/issues/57)
-  connects it to the backend. Backend alert CRUD and periodic monitoring exist;
-  persistent triggering remains [#43](https://github.com/MarcSaad-Hadidi/StockLab/issues/43).
-  The UI's email/push options do not provide notification delivery.
+- The Alerts page shows trigger details saved by the backend. Recording triggers
+  automatically from monitoring is tracked in [#43](https://github.com/MarcSaad-Hadidi/StockLab/issues/43).
 - Google sign-in requires the backend Google OAuth configuration and an authorized
   page origin. Password recovery requires the backend SMTP configuration described
   above.

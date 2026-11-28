@@ -17,6 +17,7 @@ public sealed class UpdatePriceAlertRequest : IValidatableObject
         init => condition = value?.Trim() ?? string.Empty;
     }
 
+    [JsonNumberHandling(JsonNumberHandling.AllowReadingFromString)]
     public decimal TargetPrice { get; init; }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)

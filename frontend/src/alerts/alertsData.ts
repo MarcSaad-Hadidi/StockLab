@@ -1,18 +1,28 @@
+import { isPositiveAmount } from '../api/decimalAmount'
+
 export type AlertStatus = 'active' | 'triggered' | 'disabled'
 export type AlertCondition = 'above' | 'below'
 
-export type PriceAlert = {
-  id: string
-  symbol: string
-  name: string
-  exchange: string
+export type AlertTerms = {
   condition: AlertCondition
-  targetPrice: number
-  lastPrice: number
-  status: AlertStatus
-  createdAt: string
+  targetPrice: string
 }
 
-export const assetOptions: { symbol: string; name: string; exchange: string; lastPrice: number | null }[] = []
+export type PriceAlert = AlertTerms & {
+  id: string
+  symbol: string
+  currency: string
+  status: AlertStatus
+  triggeredPrice: string | null
+  triggeredAtUtc: string | null
+  createdAtUtc: string
+}
 
-export const initialAlerts: PriceAlert[] = []
+export function isAlertPrice(value: unknown): value is string {
+  return isPositiveAmount(value) && /^\d{1,15}(?:\.\d{1,4})?$/.test(value)
+}
+
+export function parseAlertTarget(input: string): string | null {
+  const price = input.trim().replace(',', '.').replace(/^0+(?=\d)/, '').replace(/^\./, '0.')
+  return isAlertPrice(price) ? price : null
+}

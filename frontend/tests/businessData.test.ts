@@ -9,7 +9,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import * as dashboard from "../src/dashboard/dashboardData.ts";
 import * as portfolio from "../src/portfolio/portfolioData.ts";
 import * as transactions from "../src/transactions/transactionsData.ts";
-import * as alerts from "../src/alerts/alertsData.ts";
 import {
   formatCurrency,
   formatSignedCurrency,
@@ -45,14 +44,12 @@ Object.assign(globalThis, {
   document: dom.window.document,
 });
 
-test("unconnected business services contain no manufactured holdings, orders, alerts or AI results", () => {
+test("unconnected business services contain no manufactured holdings, orders or AI results", () => {
   for (const rows of [
     dashboard.positions,
     dashboard.transactions,
     portfolio.positions,
     transactions.transactions,
-    alerts.initialAlerts,
-    alerts.assetOptions,
   ])
     assert.deepEqual(rows, []);
   for (const metric of dashboard.metrics) {
@@ -84,7 +81,7 @@ for (const [path, label] of [
   ["portfolio/PortfolioPage", "Your session has expired. Please sign in again."],
   ["transactions/TransactionsPage", "Your session has expired. Please sign in again."],
   ["watchlist/WatchlistPage", "Loading watchlist"],
-  ["alerts/AlertsPage", "No alerts"],
+  ["alerts/AlertsPage", "Your session has expired. Please sign in again."],
   ["ai-trader/AITraderPage", "Your session has expired. Please sign in again."],
 ] as const)
   test(`${path} renders its original sections without fake business data`, async () => {

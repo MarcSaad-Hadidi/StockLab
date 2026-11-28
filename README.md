@@ -44,7 +44,7 @@ Le produit aide l’utilisateur à explorer les données de marché et à s’ex
 | Trading personnel | Ordres BUY/SELL `market` et `limit`, contrôles de cash/positions, confirmation, déduplication par `orderId`, persistance transactionnelle et gestion des changements de session. |
 | Dashboard, Portfolio, Transactions | Données du compte, valorisation actuelle avec cotations, observations de performance personnelles persistées, transactions récentes et historique filtré/paginé. Chargement, absence de données et erreurs restent des états distincts. |
 | Watchlist | API et intégration frontend livrées. |
-| Alertes de prix | CRUD privé et monitoring livrés ; intégration frontend (#57) et déclenchement persistant (#43) restants. |
+| Alertes de prix | Gestion des alertes depuis l’interface et surveillance des seuils livrées. L’enregistrement automatique des déclenchements reste suivi dans #43. |
 | AI Trader backend | Portefeuille système indépendant, Risk Manager, exécution simulée, historiques persistés et calcul des métriques. Treize endpoints GET protégés, capture périodique optionnelle et contexte historique des trades/modèles ; aucune route d’exécution. |
 | AI Trader frontend | Sept sections connectées aux API de lecture (#59/#241), avec états de chargement, erreurs, données indisponibles et rafraîchissement manuel. Le résumé Dashboard (#251) lit les performances réelles et se réactualise au retour sur la page. Les services et exports privés doivent être configurés. |
 | ML | Ingestion/nettoyage/features, régression logistique et Random Forest, évaluation, signaux BUY/SELL/HOLD avec confiance, backtesting et comparaison Buy & Hold livrés. |
@@ -253,7 +253,7 @@ En environnement `Development`, OpenAPI est disponible à `/openapi/v1.json`. Le
 | GET | `/api/portfolio/transactions`, `/api/portfolio/transactions/history` | Transactions récentes et historique paginé |
 | GET | `/api/portfolio/performance/history?range=1M` | Observations de valorisation personnelles persistées, par période UTC |
 | GET / POST / DELETE | /api/watchlist et /api/watchlist/{symbol} | Liste, ajout et suppression de symboles |
-| GET / POST / PUT / DELETE | /api/alerts et /api/alerts/{id} | Gestion des alertes ; désactivation par POST /api/alerts/{id}/disable |
+| GET / POST / PUT / DELETE | /api/alerts et /api/alerts/{id} | Gestion des alertes. Les routes POST /api/alerts/{id}/enable et /api/alerts/{id}/disable changent leur état. |
 | GET | /api/ai-trader/* | Treize lectures protégées : portefeuille, performances/cycles, décisions, transactions, modèles et backtests |
 
 Après connexion, les routes privées utilisent `Authorization: Bearer <token>`. La session frontend est conservée dans `localStorage`, vérifiée à l’expiration et actualisée lors des changements de session. La déconnexion efface la session locale. Chaque requête privée vérifie aussi la version de session du compte en base : un changement ou une réinitialisation de mot de passe révoque tous ses anciens JWT, y compris celui de la session courante. Une nouvelle connexion avec le nouveau mot de passe fournit un token valide. Appliquer les migrations avant le déploiement ; les sessions émises avant `AddUserSessionVersion` doivent se reconnecter une fois.
@@ -293,7 +293,7 @@ L’`orderId` rend une soumission identique rejouable sans seconde exécution. A
 
 #### Alertes et AI Trader
 
-L’[API Price Alerts](backend/README.md#price-alerts-api-41) isole les alertes par utilisateur, valide les conditions `Above`/`Below` en USD et gère les conflits de concurrence. Son écran frontend reste non connecté.
+L’[API Price Alerts](backend/README.md#price-alerts-api-41) isole les alertes par utilisateur, valide les conditions `Above`/`Below` en USD et gère les conflits de concurrence. La page Alertes permet de créer, modifier, désactiver, réactiver et supprimer les alertes du compte. L’onglet Déclenchées affiche le prix et la date de chaque déclenchement enregistré.
 
 Les [onze routes AI Trader](backend/README.md#ai-trader-http-api-80) exposent un portefeuille système partagé entre utilisateurs authentifiés, séparé des portefeuilles personnels. Les GET ne créent pas de capital, n’exécutent aucun ordre et ne capturent pas de point de performance. Les montants, prix et quantités sont des chaînes décimales ; les taux sont des fractions numériques (`0.12` signifie 12 %).
 
@@ -452,7 +452,7 @@ Ne poussez pas directement vers main ou develop. Gardez les changements liés à
 
 ## Limites et feuille de route
 
-- Connecter l’interface Alerts à l’API (#57), persister le déclenchement des alertes (#43) et compléter les tests dédiés watchlist/alertes (#89).
+- Persister le déclenchement des alertes (#43) et compléter les tests dédiés watchlist/alertes (#89).
 - Déployer les commandes d’inférence (#257) et de risque/exécution simulée (#258), puis compléter la synchronisation des données et exports, la planification périodique et les captures de performance (#259). Un bot autonome opérationnel reste à déployer.
 - Intégrer les événements de domaine/Azure Service Bus et les tâches AWS SQS/Lambda. Le stockage S3 des modèles est déjà disponible ; les autres usages cloud et leur exploitation doivent être traités séparément.
 - Lever, si nécessaire, le plafond de vingt cotations de la page Portfolio. Au-delà, ses agrégats de marché restent indisponibles ; les positions et les montants comptables restent consultables.

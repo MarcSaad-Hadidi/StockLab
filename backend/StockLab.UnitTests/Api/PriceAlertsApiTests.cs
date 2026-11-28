@@ -26,6 +26,7 @@ public sealed class PriceAlertsApiTests
     [InlineData("POST", "/api/alerts")]
     [InlineData("PUT", "/api/alerts/00000000-0000-0000-0000-000000000001")]
     [InlineData("POST", "/api/alerts/00000000-0000-0000-0000-000000000001/disable")]
+    [InlineData("POST", "/api/alerts/00000000-0000-0000-0000-000000000001/enable")]
     [InlineData("DELETE", "/api/alerts/00000000-0000-0000-0000-000000000001")]
     public async Task Endpoints_require_authentication(string method, string path)
     {
@@ -59,6 +60,7 @@ public sealed class PriceAlertsApiTests
             ("POST", "/api/alerts", """{"symbol":"AAPL","condition":"Above","targetPrice":250}"""),
             ("PUT", $"/api/alerts/{id}", """{"condition":"Below","targetPrice":180}"""),
             ("POST", $"/api/alerts/{id}/disable", "{}"),
+            ("POST", $"/api/alerts/{id}/enable", "{}"),
             ("DELETE", $"/api/alerts/{id}", "{}")
         })
         {
@@ -266,6 +268,51 @@ public sealed class PriceAlertsApiTests
     }
 
     [Fact]
+    public async Task Decimal_text_preserves_fractional_targets_on_create_and_update()
+    {
+        await using var f = await PriceAlertsFixture.CreateAsync();
+        await VerifyDecimalTargetAsync(f, "250.1234", "180.1234");
+    }
+
+    internal static async Task VerifyDecimalTargetAsync(PriceAlertsFixture f, string initialPrice, string updatedPrice)
+    {
+        using var create = await SendAsync(f.Client, "POST", "/api/alerts", f.TokenA,
+            JsonSerializer.Serialize(new { symbol = "AAPL", condition = "Above", targetPrice = initialPrice }));
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var alert = await BodyAsync(create);
+        Assert.Equal(initialPrice, alert.GetProperty("targetPriceDecimal").GetString());
+        var id = alert.GetProperty("id").GetGuid();
+        using var update = await SendAsync(f.Client, "PUT", $"/api/alerts/{id}", f.TokenA,
+            JsonSerializer.Serialize(new { condition = "Below", targetPrice = updatedPrice }));
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        Assert.Equal(updatedPrice, (await BodyAsync(update)).GetProperty("targetPriceDecimal").GetString());
+        Assert.Equal(updatedPrice,
+            Assert.Single(await GetAlertsAsync(f, f.TokenA)).GetProperty("targetPriceDecimal").GetString());
+    }
+
+    [Fact]
+    public async Task Enable_restores_a_disabled_alert_and_is_idempotent()
+    {
+        await using var f = await PriceAlertsFixture.CreateAsync();
+        var id = await CreateAlertAsync(f, f.TokenA);
+        f.Clock.Now = f.Clock.Now.AddMinutes(1);
+        using var disable = await SendAsync(f.Client, "POST", $"/api/alerts/{id}/disable", f.TokenA);
+        Assert.Equal(HttpStatusCode.OK, disable.StatusCode);
+        f.Clock.Now = f.Clock.Now.AddMinutes(1);
+        using var enable = await SendAsync(f.Client, "POST", $"/api/alerts/{id}/enable", f.TokenA);
+        Assert.Equal(HttpStatusCode.OK, enable.StatusCode);
+        var active = await BodyAsync(enable);
+        Assert.Equal("Active", active.GetProperty("status").GetString());
+        Assert.NotEqual((await BodyAsync(disable)).GetProperty("updatedAtUtc").GetString(), active.GetProperty("updatedAtUtc").GetString());
+        f.Clock.Now = f.Clock.Now.AddMinutes(1);
+        using var repeat = await SendAsync(f.Client, "POST", $"/api/alerts/{id}/enable", f.TokenA);
+        Assert.Equal(HttpStatusCode.OK, repeat.StatusCode);
+        var stored = Assert.Single(await GetAlertsAsync(f, f.TokenA));
+        Assert.Equal("Active", stored.GetProperty("status").GetString());
+        Assert.Equal(active.GetProperty("updatedAtUtc").GetString(), stored.GetProperty("updatedAtUtc").GetString());
+    }
+
+    [Fact]
     public async Task Disable_is_idempotent_and_keeps_trigger_fields_empty()
     {
         await using var f = await PriceAlertsFixture.CreateAsync();
@@ -287,6 +334,7 @@ public sealed class PriceAlertsApiTests
     [Theory]
     [InlineData("PUT", "")]
     [InlineData("POST", "/disable")]
+    [InlineData("POST", "/enable")]
     [InlineData("DELETE", "")]
     public async Task Mutations_hide_missing_and_other_users_alerts(string method, string suffix)
     {
@@ -318,7 +366,7 @@ public sealed class PriceAlertsApiTests
     }
 
     [Fact]
-    public async Task Triggered_alerts_are_readable_and_deletable_but_cannot_be_modified_or_disabled()
+    public async Task Triggered_alerts_are_readable_and_deletable_but_cannot_be_updated_or_toggled()
     {
         await using var f = await PriceAlertsFixture.CreateAsync();
         var id = await CreateAlertAsync(f, f.TokenA);
@@ -330,7 +378,7 @@ public sealed class PriceAlertsApiTests
             alert.TriggeredAtUtc = f.Clock.Now.UtcDateTime;
             await db.SaveChangesAsync();
         }
-        foreach (var (method, suffix) in new[] { ("PUT", ""), ("POST", "/disable") })
+        foreach (var (method, suffix) in new[] { ("PUT", ""), ("POST", "/disable"), ("POST", "/enable") })
         {
             using var response = await SendAsync(f.Client, method, $"/api/alerts/{id}{suffix}", f.TokenA,
                 """{"condition":"Below","targetPrice":180}""");
@@ -340,6 +388,7 @@ public sealed class PriceAlertsApiTests
         var triggered = Assert.Single(await GetAlertsAsync(f, f.TokenA));
         Assert.Equal("Triggered", triggered.GetProperty("status").GetString());
         Assert.Equal(251m, triggered.GetProperty("triggeredPrice").GetDecimal());
+        Assert.Equal("251", triggered.GetProperty("triggeredPriceDecimal").GetString());
         Assert.EndsWith("Z", triggered.GetProperty("triggeredAtUtc").GetString());
         using var delete = await SendAsync(f.Client, "DELETE", $"/api/alerts/{id}", f.TokenA);
         Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
@@ -378,6 +427,7 @@ public sealed class PriceAlertsApiTests
             ("/api/alerts", "post", new[] { "201", "400", "401", "500" }),
             ("/api/alerts/{id}", "put", new[] { "200", "400", "401", "404", "409", "500" }),
             ("/api/alerts/{id}/disable", "post", new[] { "200", "401", "404", "409", "500" }),
+            ("/api/alerts/{id}/enable", "post", new[] { "200", "401", "404", "409", "500" }),
             ("/api/alerts/{id}", "delete", new[] { "204", "401", "404", "409", "500" })
         })
         {
@@ -468,7 +518,7 @@ public sealed class PriceAlertsApiTests
     }
 
     private static readonly string[] PublicFields = ["id", "symbol", "currency", "condition", "targetPrice", "status",
-        "triggeredPrice", "triggeredAtUtc", "createdAtUtc", "updatedAtUtc"];
+        "triggeredPrice", "triggeredAtUtc", "createdAtUtc", "updatedAtUtc", "targetPriceDecimal", "triggeredPriceDecimal"];
     private static void AssertPublicFields(JsonElement alert) => Assert.Equal(PublicFields, alert.EnumerateObject().Select(p => p.Name));
 
     internal static async Task<Guid> CreateAlertAsync(PriceAlertsFixture f, string token, string symbol = "AAPL", string condition = "Above", decimal targetPrice = 250m)

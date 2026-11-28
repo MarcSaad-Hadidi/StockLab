@@ -1123,12 +1123,14 @@ and alerts owned by another account return the same `404 alert_not_found`.
 | POST | `/api/alerts` | 201, created alert | 400, 401, 500 |
 | PUT | `/api/alerts/{id}` | 200, updated alert | 400, 401, 404, 409, 500 |
 | POST | `/api/alerts/{id}/disable` | 200, disabled alert | 401, 404, 409, 500 |
+| POST | `/api/alerts/{id}/enable` | 200, active alert | 401, 404, 409, 500 |
 | DELETE | `/api/alerts/{id}` | 204, empty body | 401, 404, 409, 500 |
 
 Create accepts exactly `symbol`, `condition`, and `targetPrice`. Symbols are trimmed,
 uppercased, required, and limited to 32 characters after normalization. Conditions
 are trimmed and case-insensitive at input, then stored as `Above` or `Below`.
-Prices are rounded to four decimals using `MidpointRounding.AwayFromZero`; the
+Submit `targetPrice` as a JSON number or a decimal string using a period as the decimal
+separator. Prices are rounded to four decimals using `MidpointRounding.AwayFromZero`. The
 rounded value must be positive and at most `999999999999999.9999` (`decimal(19,4)`).
 For example, `0.00005` becomes `0.0001`, while `0.000049` is rejected.
 Invalid bodies return `400 validation_error`, including unsupported fields.
@@ -1143,6 +1145,8 @@ Content-Type: application/json
 
 The response contains `id`, `symbol`, `currency`, `condition`, `targetPrice`,
 `status`, `triggeredPrice`, `triggeredAtUtc`, `createdAtUtc`, and `updatedAtUtc`.
+It also supplies the exact prices as `targetPriceDecimal` and `triggeredPriceDecimal`.
+The latter is null until a trigger is recorded.
 It omits user identifiers, navigation properties, and the internal rowversion.
 Timestamps are UTC. Creation always uses USD, Active status, and null trigger
 fields. The two initial timestamps come from the same `TimeProvider` instant.
@@ -1165,16 +1169,21 @@ Content-Type: application/json
 ```
 
 Updates preserve the symbol, currency, creation time, and status. Both Active and
-Disabled alerts can be updated. Disable changes Active to Disabled and updates
-the timestamp; disabling an already Disabled alert succeeds without a write or
-timestamp change.
+Disabled alerts can be updated. Disable changes Active to Disabled. Enable
+changes Disabled to Active. Both update the timestamp only when the status
+changes.
 
 ```http
 POST /api/alerts/<id>/disable
 Authorization: Bearer <token>
 ```
 
-Triggered is terminal for editing and disabling: both return
+```http
+POST /api/alerts/<id>/enable
+Authorization: Bearer <token>
+```
+
+For a Triggered alert, editing, disabling and enabling return
 `409 alert_already_triggered`. Create a new alert to rearm it. All owned alerts,
 including Triggered alerts, can be deleted:
 
@@ -1183,11 +1192,11 @@ DELETE /api/alerts/<id>
 Authorization: Bearer <token>
 ```
 
-EF uses the existing SQL Server rowversion for writes. A concurrent update,
-disable, or delete returns `409 alert_update_conflict` with a controlled message.
-No migration, polling, market-price lookup, automatic triggering, activation
-endpoint, or frontend integration is included. Monitoring and triggering remain
-scoped to #42/#43, with the frontend integration in #57.
+EF uses the existing SQL Server rowversion for writes. A concurrent change that conflicts
+with an update, status change or delete returns `409 alert_update_conflict`.
+The frontend uses these routes for its alert list and management form.
+The periodic monitoring service (#42) identifies matches. Recording the resulting
+triggers is tracked in #43.
 
 `PriceAlertsApiTests` exercises real JWT authentication and relational SQLite
 persistence, validation, user isolation, lifecycle, application restart, terminal
