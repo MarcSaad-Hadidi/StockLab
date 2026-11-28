@@ -2,7 +2,7 @@ import { StockLogo, LogoAttribution } from '../market/StockLogo'
 import { routeFor } from '../navigation/routes'
 import { Sidebar } from '../components/layout/Sidebar'
 import { TopBar } from '../components/layout/TopBar'
-import { formatCurrency, formatNumber, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
+import { formatCurrency, formatNumber, formatPercent, formatSignedCurrency, formatSignedPercent } from '../i18n/formatters'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { WatchlistItem } from './watchlistData'
@@ -10,6 +10,7 @@ import { useWatchlistData } from './useWatchlistData'
 import { WatchlistFeedback } from './WatchlistFeedback'
 import { getAuthSession } from '../auth/authStorage'
 import { MarketDataProvenance } from '../components/market-data/MarketDataProvenance'
+import { getTrendTone } from '../components/trend/trend'
 import './watchlist.css'
 
 type IconName =
@@ -130,7 +131,11 @@ export default function WatchlistPage() {
 
   const pricedItems = items.filter((item): item is WatchlistItem & { changePercent: number } => item.changePercent !== null)
   const topGainer = pricedItems.length > 0 ? pricedItems.reduce((top, item) => item.changePercent > top.changePercent ? item : top) : undefined
-  const topLoser = pricedItems.length > 0 ? pricedItems.reduce((bottom, item) => item.changePercent < bottom.changePercent ? item : bottom) : undefined
+  const lowestMove = pricedItems.length > 0 ? pricedItems.reduce((bottom, item) => item.changePercent < bottom.changePercent ? item : bottom) : undefined
+  const lowestChange = lowestMove?.changePercent
+  const lowestTone = getTrendTone(lowestChange)
+  const lowestLabel = lowestTone === 'negative' ? 'watchlist.topLoser'
+    : lowestTone === 'positive' ? 'watchlist.smallestGain' : 'watchlist.lowestPerformer'
   const averageChange = pricedItems.length > 0 ? pricedItems.reduce((total, item) => total + item.changePercent, 0) / pricedItems.length : null
   const ready = !loading && !error
   const visibleToast = ready && toast?.sessionToken === getAuthSession()?.accessToken ? toast : null
@@ -148,7 +153,11 @@ export default function WatchlistPage() {
           <section aria-label={t('watchlist.summaryLabel')} className="watchlist-summary">
             <div className="summary-card"><span className="summary-card-label">{t('watchlist.savedAssets')}</span><strong>{formatNumber(ready ? items.length : null, undefined, 0)}</strong><small>{ready ? t('watchlist.assetsShown', { shown: items.length, total: items.length }) : '—'}</small></div>
             <div className="summary-card"><span className="summary-card-label">{t('watchlist.topGainer')}</span><strong>{topGainer?.symbol ?? '—'}</strong><small className="positive">{topGainer ? formatSignedPercent(topGainer.changePercent) : '—'}</small></div>
-            <div className="summary-card"><span className="summary-card-label">{t('watchlist.topLoser')}</span><strong>{topLoser?.symbol ?? '—'}</strong><small className="negative">{topLoser ? formatSignedPercent(topLoser.changePercent) : '—'}</small></div>
+            <div className="summary-card">
+              <span className="summary-card-label">{t(lowestLabel)}</span>
+              <strong>{lowestMove?.symbol ?? '—'}</strong>
+              <small><span className={lowestTone}>{lowestChange === 0 ? formatPercent(0) : formatSignedPercent(lowestChange)}</span></small>
+            </div>
             <div className="summary-card"><span className="summary-card-label">{t('watchlist.averageMove')}</span><strong className={averageChange === null ? '' : averageChange >= 0 ? 'positive' : 'negative'}>{formatSignedPercent(averageChange)}</strong><small>{t('watchlist.acrossWatched')}</small></div>
           </section>
 

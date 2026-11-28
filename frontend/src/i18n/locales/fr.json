@@ -576,6 +576,8 @@
     "savedAssets": "Actifs enregistrés",
     "topGainer": "Plus forte hausse",
     "topLoser": "Plus forte baisse",
+    "smallestGain": "Moins forte hausse",
+    "lowestPerformer": "Variation la plus faible",
     "gainersToday": "Hausses du jour",
     "averageMove": "Variation moyenne",
     "acrossWatched": "Pour les actifs surveillés",
