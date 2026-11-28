@@ -21,8 +21,9 @@ npm --prefix frontend ci
 npm --prefix frontend run dev -- --host 127.0.0.1
 ```
 
-Open `http://127.0.0.1:5173/login`, or the port printed by Vite if 5173 is occupied.
-The root `/` redirects to `/login`. Register an account, then sign in to load its
+Open `http://127.0.0.1:5173/`, or the port printed by Vite if 5173 is occupied.
+The root `/` opens `/dashboard` when an unexpired browser session exists and
+`/login` otherwise. Register an account, then sign in to load its
 private pages.
 
 Start the API in another terminal after completing the

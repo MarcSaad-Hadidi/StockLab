@@ -60,11 +60,26 @@ for (const config of ['vite.config.ts', 'vite.dashboard.config.ts']) {
           const unknown = await fetch(new URL('/unknown/nested/?symbol=aapl', base))
           const notFound = await fetch(new URL('/not-found?symbol=aapl', base))
           assert.equal(await unknown.text(), await notFound.text())
-          const rootResponse = await fetch(base)
-          assert.equal(rootResponse.status, 200)
-          const rootHtml = await rootResponse.text()
-          assert.match(rootHtml, /http-equiv="refresh"/i)
-          assert.match(rootHtml, /window\.location\.replace\(['"]\/login['"]\)/)
+          for (const path of ['/', '/index.html']) {
+            const homeUrl = new URL(path, base)
+            const rootResponse = await fetch(homeUrl)
+            assert.equal(rootResponse.status, 200)
+            assert.equal(rootResponse.url, homeUrl.href)
+            const rootHtml = await rootResponse.text()
+            const modulePaths = [...rootHtml.matchAll(/<script\b[^>]*\btype="module"[^>]*\bsrc="([^"]+)"/g)]
+              .map(match => match[1])
+            if (mode === 'dev') {
+              assert.ok(modulePaths.includes('/src/navigation/redirectHome.ts'))
+            } else {
+              const entry = modulePaths.find(path => path.startsWith('/assets/'))
+              assert.ok(entry, 'the built root document loads its redirect module')
+              const moduleResponse = await fetch(new URL(entry, base))
+              assert.equal(moduleResponse.status, 200)
+              assert.match(moduleResponse.headers.get('content-type') ?? '', /javascript/i)
+            }
+            assert.match(rootHtml, /<noscript>\s*<meta http-equiv="refresh" content="0; url=\/login"\s*\/>\s*<\/noscript>/i)
+            assert.doesNotMatch(rootHtml.replace(/<noscript>[\s\S]*?<\/noscript>/gi, ''), /http-equiv="refresh"|window\.location\.replace/i)
+          }
         })
 
         await t.test('missing static assets and Vite modules never fall back to an HTML document', async () => {
